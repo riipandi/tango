@@ -1,10 +1,10 @@
-import { Link, Text } from 'react-email'
-import { BaseTemplate } from '../components/base-layout'
-import { Button } from '../components/button'
-import { CardHeader } from '../components/card'
+import { Hr } from 'react-email'
+import { Link, Button, CardFooter, CardHeader, Text } from '../components'
 import { sharedPreviewProps, sharedTemplateProps } from '../constants'
+import { BaseTemplate } from '../layouts'
 
 interface OneTimeAccessData {
+  name: string
   code: string
   loginLink: string
   buttonCodeLink: string
@@ -17,33 +17,42 @@ interface OneTimeAccessEmailProps {
   data: OneTimeAccessData
 }
 
-export const OneTimeAccessEmail = ({ logoURL, appName, data }: OneTimeAccessEmailProps) => (
-  <BaseTemplate logoURL={logoURL} appName={appName}>
-    <CardHeader title='Your Login Code' />
+export const OneTimeAccessEmail = ({ logoURL, appName, data }: OneTimeAccessEmailProps) => {
+  return (
+    <BaseTemplate logoURL={logoURL} appName={appName}>
+      <CardHeader title='Your Login Code' />
+      <Hr style={{ marginTop: '16px' }} />
 
-    <Text>
-      Click the button below to sign in to {appName} with a login code.
-      <br />
-      Or visit{' '}
-      <Link href={data.loginLink} style={linkStyle}>
-        {data.loginLink}
-      </Link>{' '}
-      and enter the code <strong>{data.code}</strong>.
-      <br />
-      <br />
-      This code expires in {data.expirationString}.
-    </Text>
+      <Text style={{ marginTop: '18px' }}>
+        Click the button below to sign in to {appName} with a login code.
+      </Text>
 
-    <Button href={data.buttonCodeLink}>Sign In</Button>
-  </BaseTemplate>
-)
+      <Button href={data.buttonCodeLink}>Sign In</Button>
 
-export default OneTimeAccessEmail
+      <Text style={{ marginTop: '20px' }}>
+        Or visit: <Link href={data.loginLink}>{data.loginLink}</Link>
+      </Text>
 
-const linkStyle = {
-  color: '#000',
-  textDecoration: 'underline',
-  fontFamily: 'Arial, sans-serif'
+      <Text>
+        then enter the one-time code: <strong>{data.code}</strong>
+      </Text>
+
+      <Hr style={{ marginTop: '24px' }} />
+
+      <Text style={{ marginTop: '24px' }}>
+        <strong>Important:</strong> This code will expire in {data.expirationString}.
+      </Text>
+
+      <Text>If you did not make this request, please ignore this email.</Text>
+
+      <CardFooter>
+        <Text size='sm' style={{ marginBottom: '4px' }}>
+          You&apos;re receiving this email because you have an account in {appName}. <br />
+          If you are not sure why you&apos;re receiving this, please contact us.
+        </Text>
+      </CardFooter>
+    </BaseTemplate>
+  )
 }
 
 OneTimeAccessEmail.TemplateProps = {
@@ -60,8 +69,10 @@ OneTimeAccessEmail.PreviewProps = {
   ...sharedPreviewProps,
   data: {
     code: '123456',
-    loginLink: 'https://example.com/login',
+    loginLink: 'https://example.com/signin?method=onetimecode',
     buttonCodeLink: 'https://example.com/login?code=123456',
     expirationString: '15 minutes'
   }
 }
+
+export default OneTimeAccessEmail

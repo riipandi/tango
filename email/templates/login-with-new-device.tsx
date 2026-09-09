@@ -1,7 +1,8 @@
-import { Column, Heading, Row, Text } from 'react-email'
-import { BaseTemplate } from '../components/base-layout'
-import { CardHeader } from '../components/card'
+import type { CSSProperties } from 'react'
+import { Column, Heading, Hr, Row } from 'react-email'
+import { CardFooter, CardHeader, Text } from '../components'
 import { sharedPreviewProps, sharedTemplateProps } from '../constants'
+import { BaseTemplate } from '../layouts'
 
 interface SignInData {
   location: string
@@ -16,62 +17,63 @@ interface NewSignInEmailProps {
   data: SignInData
 }
 
-export const NewSignInEmail = ({ logoURL, appName, data }: NewSignInEmailProps) => (
-  <BaseTemplate logoURL={logoURL} appName={appName}>
-    <CardHeader title='New Sign-In Detected' warning />
-    <Text>
-      Your {appName} account was recently accessed from a new IP address or browser. If you
-      recognize this activity, no further action is required.
-    </Text>
-    <Heading
-      style={{
-        fontSize: '1rem',
-        fontWeight: 'bold',
-        margin: '30px 0 10px 0'
-      }}
-      as='h4'
-    >
-      Details
-    </Heading>
+export const NewSignInEmail = ({ logoURL, appName, data }: NewSignInEmailProps) => {
+  const detailsBoxStyle = { width: '225px', padding: '12px' } satisfies CSSProperties
+  const detailsLabelStyle = { margin: 0, color: '#747474' } satisfies CSSProperties
+  const detailsBoxValueStyle = { margin: 0, fontSize: '14px' } satisfies CSSProperties
 
-    <Row>
-      <Column style={detailsBoxStyle}>
-        <Text style={detailsLabelStyle}>Approximate Location</Text>
-        <Text style={detailsBoxValueStyle}>{data.location}</Text>
-      </Column>
-      <Column style={detailsBoxStyle}>
-        <Text style={detailsLabelStyle}>IP Address</Text>
-        <Text style={detailsBoxValueStyle}>{data.ipAddress}</Text>
-      </Column>
-    </Row>
+  return (
+    <BaseTemplate logoURL={logoURL} appName={appName}>
+      <CardHeader title='New Sign-In Detected' warning />
+      <Hr style={{ marginTop: '16px' }} />
 
-    <Row style={{ marginTop: '10px' }}>
-      <Column style={detailsBoxStyle}>
-        <Text style={detailsLabelStyle}>Device</Text>
-        <Text style={detailsBoxValueStyle}>{data.device}</Text>
-      </Column>
-      <Column style={detailsBoxStyle}>
-        <Text style={detailsLabelStyle}>Sign-In Time</Text>
-        <Text style={detailsBoxValueStyle}>{data.dateTime}</Text>
-      </Column>
-    </Row>
-  </BaseTemplate>
-)
+      <Text>
+        Your {appName} account was recently accessed from a new IP address or browser. If you
+        recognize this activity, no further action is required.
+      </Text>
 
-export default NewSignInEmail
+      <Heading as='h4' style={{ fontSize: '1rem', fontWeight: 'bold', margin: '10px 0' }}>
+        Details
+      </Heading>
 
-const detailsBoxStyle = {
-  width: '225px'
-}
+      <Row style={{ backgroundColor: '#f6f6f6', borderRadius: '12px 12px 0 0' }}>
+        <Column style={detailsBoxStyle}>
+          <Text size='sm' style={detailsLabelStyle}>
+            Location
+          </Text>
+          <Text style={detailsBoxValueStyle}>{data.location}</Text>
+        </Column>
+        <Column style={detailsBoxStyle}>
+          <Text size='sm' style={detailsLabelStyle}>
+            IP Address
+          </Text>
+          <Text style={detailsBoxValueStyle}>{data.ipAddress}</Text>
+        </Column>
+      </Row>
 
-const detailsLabelStyle = {
-  margin: 0,
-  fontSize: '12px',
-  color: 'gray'
-}
+      <Row style={{ backgroundColor: '#f6f6f6', borderRadius: '0 0 12px 12px', marginTop: '4px' }}>
+        <Column style={detailsBoxStyle}>
+          <Text size='sm' style={detailsLabelStyle}>
+            Device
+          </Text>
+          <Text style={detailsBoxValueStyle}>{data.device}</Text>
+        </Column>
+        <Column style={detailsBoxStyle}>
+          <Text size='sm' style={detailsLabelStyle}>
+            Timestamp
+          </Text>
+          <Text style={detailsBoxValueStyle}>{data.dateTime}</Text>
+        </Column>
+      </Row>
 
-const detailsBoxValueStyle = {
-  margin: 0
+      <CardFooter>
+        <Text size='sm' style={{ marginBottom: '4px' }}>
+          You&apos;re receiving this email because you have an account in {appName}. <br />
+          If you are not sure why you&apos;re receiving this, please contact us.
+        </Text>
+      </CardFooter>
+    </BaseTemplate>
+  )
 }
 
 NewSignInEmail.TemplateProps = {
@@ -94,3 +96,5 @@ NewSignInEmail.PreviewProps = {
     dateTime: '2024-01-01 12:00 PM UTC'
   }
 }
+
+export default NewSignInEmail

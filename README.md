@@ -93,6 +93,7 @@ Read the [Deployment Guidelines](./docs/deployment.md) for detailed documentatio
 - [Choosing the Right Go Web Framework](https://brunoscheufler.com/blog/2019-04-26-choosing-the-right-go-web-framework)
 - [How To Structure A Golang Project](https://blog.boot.dev/golang/golang-project-structure)
 - [How to Structure Your Project in Golang](https://medium.com/geekculture/how-to-structure-your-project-in-golang-the-backend-developers-guide-31be05c6fdd9)
+- [What's the best way to do authentication in modern applications](https://neciudan.dev/most-secure-way-to-store-auth-token)
 
 ## 🪪 License
 
