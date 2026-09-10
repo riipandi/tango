@@ -13,11 +13,10 @@
     "type": "module",
     "scripts": {
         "dev": "vite dev",
-        "build": "pnpm --silent email:build && vite build",
+        "build": "vite build",
         "build:release": "goreleaser build --clean --auto-snapshot",
         "start": "kill-port 3000 && ./build/release/$npm_package_name serve --port 3000",
         "email:dev": "email dev --dir ./email/templates --port 3030",
-        "email:build": "dotenv -e .env.local -- tsx ./email/compile.ts",
         "docker:build": "pnpm --silent run docker-build -t $npm_package_config_image:latest-dev -t $npm_package_config_image:$npm_package_version-dev",
         "docker:push": "docker push $npm_package_config_image:latest-dev && docker push $npm_package_config_image:$npm_package_version-dev",
         "docker:run": "pnpm --silent run docker-run --name $npm_package_name $npm_package_config_image:$npm_package_version-dev",

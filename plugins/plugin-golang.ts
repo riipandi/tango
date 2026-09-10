@@ -62,7 +62,7 @@ const defaults: GoPluginDefaults = {
   stopOnError: false,
   excludeDir: [".git", "vendor", "node_modules", "web/output", "temp", "tmp", "build", "dist"],
   excludeRegex: ["_test\\.go$"],
-  extensions: ["go"],
+  extensions: ["go", "tmpl"],
   log: true,
   build: {
     args: [],

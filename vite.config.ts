@@ -1,7 +1,8 @@
+import { resolve } from "node:path";
 import { defineConfig, type ProxyOptions } from "vite";
 import pkg from "./package.json" with { type: "json" };
+import email from "./plugins/plugin-email.ts";
 import golang from "./plugins/plugin-golang.ts";
-import { resolve } from "node:path";
 
 // Must match the module path in go.mod.
 const goModule = "github.com/riipandi/tango";
@@ -24,6 +25,9 @@ const viteProxy: Record<string, string | ProxyOptions> = {
 
 export default defineConfig({
   plugins: [
+    // Must be registered before the go plugin: its closeBundle compiles
+    // the email templates that web/embed.go pulls into the go binary.
+    email({ templateDir: "email/templates", outputDir: "web/email" }),
     golang({
       packageName: pkg.name,
       packagePath: "./cmd",
