@@ -3,8 +3,8 @@ package routes
 import (
 	"github.com/go-chi/chi/v5"
 
-	"tango/internal/transport/handler"
-	"tango/internal/transport/responder"
+	"github.com/riipandi/tango/internal/transport/handler"
+	"github.com/riipandi/tango/internal/transport/responder"
 )
 
 func RegisterAPI(r chi.Router) {

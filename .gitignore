@@ -82,6 +82,7 @@ compose.env*
 storybook-static/
 
 # Application data
+/.storage/
 /storage/
 web/dist/*
 web/email/*

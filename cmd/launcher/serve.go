@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"tango/internal/config"
-	"tango/internal/transport"
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/transport"
 )
 
 var serveHost string

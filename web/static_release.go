@@ -10,8 +10,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-
-	"tango/internal/transport/responder"
+	"github.com/riipandi/tango/internal/transport/responder"
 )
 
 //go:embed all:dist
@@ -26,7 +25,7 @@ func spaHandler() http.HandlerFunc {
 	fileServer := http.FileServer(http.FS(distSub))
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		// API, RPC, Well-Known, and Static endpoints should return JSON 404
+		// API, Well-Known, and Static endpoints should return JSON 404
 		if strings.HasPrefix(r.URL.Path, "/api") ||
 			strings.HasPrefix(r.URL.Path, "/rpc") ||
 			strings.HasPrefix(r.URL.Path, "/.well-known") ||

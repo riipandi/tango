@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"tango/internal/config"
+	"github.com/riipandi/tango/internal/config"
 )
 
 var argVersionShort bool

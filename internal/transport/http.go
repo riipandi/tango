@@ -7,10 +7,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"tango/internal/transport/handler"
-	"tango/internal/transport/middleware"
-	"tango/internal/transport/routes"
-	"tango/web"
+	"github.com/riipandi/tango/internal/transport/handler"
+	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/internal/transport/routes"
+	"github.com/riipandi/tango/web"
 )
 
 type HTTPServer struct {
@@ -30,7 +30,6 @@ func NewHTTPServer() *HTTPServer {
 	r.Get("/.well-known/version", handler.NotImplementedHandler)   // Get current application version
 
 	r.Route("/api", routes.RegisterAPI)
-	r.Mount("/rpc", http.StripPrefix("/rpc", DefineRPCHandler()))
 	r.Get("/static/*", handler.StaticAssetsHandler)
 
 	// Render frontend SPA (must be last)

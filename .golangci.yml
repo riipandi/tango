@@ -39,7 +39,6 @@ linters:
         # - ^github.com/testcontainers/testcontainers-go.FromDockerfile$
         # - ^github.com/ory/dockertest/v3.*$
         # - ^golang.org/x/tools/go/analysis.Analyzer$
-        # - ^google.golang.org/protobuf/.+Options$
         # - ^gopkg.in/yaml.v3.Node$
         # - ^github.com/urfave/cli/v3.*$
         # - ^github.com/ClickHouse/clickhouse-go/v2.*$

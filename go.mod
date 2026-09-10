@@ -1,17 +1,15 @@
-module tango
+module github.com/riipandi/tango
 
-go 1.26.0
+go 1.27.0
 
-toolchain go1.26.1
+toolchain go1.27.1
 
 require (
-	connectrpc.com/connect v1.19.1
-	github.com/go-chi/chi/v5 v5.2.5
+	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-chi/cors v1.2.2
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	google.golang.org/protobuf v1.36.11
 	resty.dev/v3 v3.0.0-beta.6
 )
 
@@ -30,9 +28,4 @@ require (
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
-)
-
-tool (
-	connectrpc.com/connect/cmd/protoc-gen-connect-go
-	google.golang.org/protobuf/cmd/protoc-gen-go
 )

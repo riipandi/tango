@@ -12,8 +12,8 @@
     },
     "type": "module",
     "scripts": {
-        "dev": "pnpm -s generate:proto && vite dev",
-        "build": "pnpm -s generate:proto && pnpm -s email:build && vite build",
+        "dev": "vite dev",
+        "build": "pnpm --silent email:build && vite build",
         "build:release": "goreleaser build --clean --auto-snapshot",
         "start": "kill-port 3000 && ./build/release/$npm_package_name serve --port 3000",
         "email:dev": "email dev --dir ./email/templates --port 3030",
@@ -37,7 +37,6 @@
         "cleanup:dist": "pnpm dlx del-cli .{tanstack,wrangler} build web/dist storybook-static",
         "cleanup:deps": "pnpm dlx del-cli pnpm-lock.yaml node_modules vendor",
         "generate:key": "dotenv -e .env.local -- sh ./scripts/prepare.sh",
-        "generate:proto": "buf lint && buf generate --config buf.yaml",
         "preinstall": "npx only-allow pnpm",
         "postinstall": "go mod download && go mod tidy",
         "release": "goreleaser release --clean --auto-snapshot",
@@ -56,9 +55,6 @@
         "typecheck": "tsc -b --noEmit"
     },
     "dependencies": {
-        "@connectrpc/connect": "^2.1.1",
-        "@connectrpc/connect-query": "^2.2.0",
-        "@connectrpc/connect-web": "^2.1.1",
         "@lonik/themer": "^0.5.4",
         "@tanstack/react-form": "^1.29.1",
         "@tanstack/react-query": "^5.100.0",
@@ -75,9 +71,6 @@
         "zod": "^4.3.6"
     },
     "devDependencies": {
-        "@bufbuild/protobuf": "^2.11.0",
-        "@bufbuild/protoc-gen-es": "^2.11.0",
-        "@connectrpc/protoc-gen-connect-query": "^2.2.0",
         "@react-email/ui": "^6.0.0",
         "@tailwindcss/vite": "^4.2.4",
         "@tanstack/devtools-vite": "^0.6.0",
@@ -106,7 +99,7 @@
         "image": "ghcr.io/riipandi/tango"
     },
     "engines": {
-        "node": ">=24.12.0"
+        "node": ">=24.21.0"
     },
-    "packageManager": "pnpm@10.33.2"
+    "packageManager": "pnpm@12.3.4"
 }

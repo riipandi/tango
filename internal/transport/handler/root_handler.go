@@ -8,8 +8,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"resty.dev/v3"
 
-	"tango/internal/config"
-	"tango/internal/transport/responder"
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/transport/responder"
 )
 
 func NotImplementedHandler(w http.ResponseWriter, r *http.Request) {

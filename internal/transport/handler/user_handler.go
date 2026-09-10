@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"tango/internal/transport/responder"
+	"github.com/riipandi/tango/internal/transport/responder"
 )
 
 type createUserRequest struct {

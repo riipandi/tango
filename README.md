@@ -19,8 +19,7 @@ create awesome app without having to bother with the initial setup.
 pnpm dlx tiged riipandi/tango myapp-name
 ```
 
-In this repo I'm using [go-chi][go-chi] and [Connect RPC][connect-rpc], but you can change it with whatever
-library you want.
+In this repo I'm using [go-chi][go-chi] but you can change it with whatever library you want.
 
 ## 🏁 Quick Start
 
@@ -45,8 +44,7 @@ go install github.com/anchore/grype/cmd/grype@latest
 3. Install the required application dependencies: `pnpm install`
 4. Create env file for development: `cp .env.example .env.local`
 5. Geneate application secret key: `pnpm generate:key --apply`
-6. Geneate Connect RPC proto: `pnpm generate:proto`
-7. Run project in development mode: `pnpm dev`
+6. Run project in development mode: `pnpm dev`
 
 Vite serves the frontend on `:3000` and proxies `/api/*` and `/rpc/*` to Go on `:3080`.
 
@@ -61,12 +59,6 @@ Go files are watched and auto-rebuilt.
 | `pnpm start` | Run the production binary                       |
 | `pnpm cmd`   | Run Go server directly (`go run -tags debug .`) |
 | `pnpm test`  | Run tests (frontend and backend)                |
-
-### Test ConnectRPC
-```sh
-alias fetch-rpc='curl -SLi -H "Content-Type: application/json" -X POST'
-fetch-rpc -s http://localhost:3000/rpc/api.v1.GreetService/Greet -d '{"name": "John"}'
-```
 
 ## 🐳 Publishing Docker Image
 
@@ -113,7 +105,6 @@ See the [LICENSE-APACHE](./LICENSE-APACHE) and [LICENSE-MIT](./LICENSE-MIT) file
 [![Creator Badge](https://badgen.net/badge/icon/by%20Aris%20Ripandi?label&color=black&labelColor=black)][riipandi-x]
 
 [cobra]: https://cobra.dev/
-[connect-rpc]: https://connectrpc.com/docs/introduction
 [docker]: https://docs.docker.com/engine/install/
 [go-chi]: https://github.com/go-chi/chi
 [golang]: https://go.dev/doc/install
