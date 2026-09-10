@@ -42,7 +42,7 @@ go install github.com/anchore/grype/cmd/grype@latest
 2. Find and replace `tango`, `Tango`, and `MyApplication` strings in the source files.
 3. Install the required application dependencies: `pnpm install`
 4. Create env file for development: `cp .env.example .env.local`
-5. Geneate application secret key: `task generate:key -- --apply`
+5. Generate application secrets: `task secrets:generate -- --apply`
 6. Run project in development mode: `task dev`
 
 Vite serves the frontend on `:3000` and proxies `/api/*` to Go on `:3080`.

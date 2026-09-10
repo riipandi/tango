@@ -25,7 +25,7 @@ tasks:
 
   run:
     desc: Run the Go backend directly (debug build)
-    cmd: go run -tags debug ./cmc {{.CLI_ARGS}}
+    cmd: go run -tags debug ./cmd {{.CLI_ARGS}}
 
   email:dev:
     desc: Run React Email dev UI (:3030)
@@ -59,9 +59,9 @@ tasks:
     desc: Run database migrations
     cmd: pnpm exec dotenv -e .env.local -- sh ./scripts/migrator.sh
 
-  generate:key:
-    desc: Generate app secret and auth keys
-    cmd: pnpm exec dotenv -e .env.local -- sh ./scripts/prepare.sh {{.CLI_ARGS}}
+  secrets:generate:
+    desc: Generate application secrets (dev only)
+    cmd: go run -tags debug ./cmd secrets {{.CLI_ARGS}}
 
   # ----------------------------------------------------------------------------
   # Test
