@@ -22,8 +22,8 @@ jobs:
     strategy:
       matrix:
         # @ref: https://github.com/actions/runner-images
-        os: [ubuntu-24.04, macos-14]
-        go-version: ["1.26.1"]
+        os: [ubuntu-24.04, macos-15]
+        go-version: ["1.27.x"]
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -38,17 +38,14 @@ jobs:
         with:
           goVersion: ${{ matrix.go-version }}
 
-      - name: Install required toolchain
-        run: |
-          go install github.com/swaggo/swag/cmd/swag@latest
-          # go install github.com/pressly/goose/v3/cmd/goose@latest
-          # go install github.com/a-h/templ/cmd/templ@latest
-
       - if: ${{ steps.pnpm-cache.outputs.cache-hit != 'true' }}
         name: Install dependencies
         run: |
           pnpm install --ignore-scripts --frozen-lockfile
           go mod download && go mod tidy
+          go install github.com/go-task/task/v3/cmd/task@latest
+          go install gotest.tools/gotestsum@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
           # templ generate
 
       - name: Setup golangci-lint toolchain
@@ -58,31 +55,25 @@ jobs:
           install-mode: binary
           version: v2.11
 
-      - name: Check code quality (frontend)
-        run: |
-          pnpm exec oxfmt --check
-          pnpm exec oxfmt --write .
-          pnpm exec oxlint --fix .
-
-      - name: Check code quality (backend)
-        run: |
-          go vet ./...
-          golangci-lint run -c .golangci.yml ./...
+      - name: Check code quality
+        run: task check lint
         env:
           GOEXPERIMENT: jsonv2
           NODE_ENV: production
 
-      # - name: Run unit tests (frontend)
-      #   run: pnpm exec vitest run
+      - name: Run unit tests (frontend)
+        run: task test:ui
+        env:
+          NODE_ENV: production
 
       - name: Run unit tests (backend)
-        run: go test -v ./...
+        run: task test:go
         env:
           GOEXPERIMENT: jsonv2
           NODE_ENV: production
 
       - name: Build application binaries
-        run: pnpm run build
+        run: task build
         env:
           GOEXPERIMENT: jsonv2
           NODE_ENV: production

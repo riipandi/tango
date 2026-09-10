@@ -36,7 +36,7 @@ export default defineConfig({
         embedDir: "web/output",
         outputDir: "build/release",
         buildTags: ["release"],
-        buildFlags: ["-trimpath", "-a", "-buildmode=pie", "-buildvcs=false"],
+        buildFlags: ["-trimpath", "-buildmode=pie", "-buildvcs=false"],
         ldflags: [
           "-w -s -extldflags -static",
           `-X ${goModule}/internal/config.AppVersion=${pkg.version}`,

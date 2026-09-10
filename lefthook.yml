@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://lefthook.dev/schema/lefthook.json
+
+pre-commit:
+  commands:
+    format-js:
+      glob: "*.{ts,tsx,js,jsx,css,md,json,yml,yaml}"
+      run: pnpm exec oxfmt --write {staged_files}
+      stage_fixed: true
+    format-go:
+      glob: "*.go"
+      run: gofmt -w {staged_files}
+      stage_fixed: true
+    lint-js:
+      glob: "*.{ts,tsx,js,jsx}"
+      run: pnpm exec oxlint {staged_files}

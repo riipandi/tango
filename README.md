@@ -30,7 +30,6 @@ Also, you need to install the following tools:
 
 ```sh
 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-go install github.com/bufbuild/buf/cmd/buf@latest
 go install github.com/swaggo/swag/cmd/swag@latest
 go install github.com/pressly/goose/v3/cmd/goose@latest
 go install github.com/goreleaser/goreleaser/v2@latest
@@ -43,8 +42,8 @@ go install github.com/anchore/grype/cmd/grype@latest
 2. Find and replace `tango`, `Tango`, and `MyApplication` strings in the source files.
 3. Install the required application dependencies: `pnpm install`
 4. Create env file for development: `cp .env.example .env.local`
-5. Geneate application secret key: `pnpm generate:key --apply`
-6. Run project in development mode: `pnpm dev`
+5. Geneate application secret key: `task generate:key -- --apply`
+6. Run project in development mode: `task dev`
 
 Vite serves the frontend on `:3000` and proxies `/api/*` to Go on `:3080`.
 
@@ -52,13 +51,14 @@ Go files are watched and auto-rebuilt.
 
 ### Available tasks for this project
 
-| Command      | Description                                     |
-| ------------ | ----------------------------------------------- |
-| `pnpm dev`   | Vite dev server (:3000) + Go API server (:3080) |
-| `pnpm build` | Build frontend + Go binary (single file)        |
-| `pnpm start` | Run the production binary                       |
-| `pnpm cmd`   | Run Go server directly (`go run -tags debug .`) |
-| `pnpm test`  | Run tests (frontend and backend)                |
+| Command       | Description                                     |
+| ------------- | ----------------------------------------------- |
+| `task`        | List all available tasks                        |
+| `task dev`    | Vite dev server (:3000) + Go API server (:3080) |
+| `task build`  | Build frontend + Go binary (single file)        |
+| `task start`  | Run the production binary                       |
+| `task dev:go` | Run Go server directly (`go run -tags debug .`) |
+| `task test`   | Run tests (frontend and backend)                |
 
 ## 🐳 Publishing Docker Image
 

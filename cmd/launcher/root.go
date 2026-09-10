@@ -25,13 +25,13 @@ var versionCmd = &cobra.Command{
 	Short: "Show the application version",
 	Run: func(cmd *cobra.Command, args []string) {
 		if argVersionShort {
-			fmt.Printf("%s (%s)\n", config.AppVersion, config.BuildHash)
+			cmd.Printf("%s (%s)\n", config.AppVersion, config.BuildHash)
 			return
 		} else if argVersionSemantic {
-			fmt.Printf("%s\n", config.AppVersion)
+			cmd.Printf("%s\n", config.AppVersion)
 			return
 		} else {
-			fmt.Printf("%s %s %s (%s %s)\n", config.AppName, config.AppVersion, config.Platform, config.BuildHash, config.BuildDate)
+			cmd.Printf("%s %s %s (%s %s)\n", config.AppName, config.AppVersion, config.Platform, config.BuildHash, config.BuildDate)
 		}
 	},
 }

@@ -25,23 +25,22 @@ var healthCmd = &cobra.Command{
 			checkLive()
 			return
 		}
-		checkStatic()
+		checkStatic(cmd)
 	},
 }
 
-func checkStatic() {
+func checkStatic(cmd *cobra.Command) {
 	exe, _ := os.Executable()
 	info, err := os.Stat(exe)
 	var size string
 	if err == nil {
 		size = formatSize(info.Size())
 	}
-
-	fmt.Printf("runtime:   %s\n", runtime.Version())
-	fmt.Printf("platform:  %s/%s\n", runtime.GOOS, runtime.GOARCH)
-	fmt.Printf("binary:    %s\n", exe)
-	fmt.Printf("size:      %s\n", size)
-	fmt.Println("status:    healthy")
+	cmd.Printf("runtime:   %s\n", runtime.Version())
+	cmd.Printf("platform:  %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	cmd.Printf("binary:    %s\n", exe)
+	cmd.Printf("size:      %s\n", size)
+	cmd.Println("status:    healthy")
 }
 
 func checkLive() {

@@ -14,7 +14,7 @@ inputs:
   goVersion:
     description: "Golang version"
     required: false
-    default: ">=1.26.1"
+    default: ">=1.27.0"
 
 runs:
   using: composite
