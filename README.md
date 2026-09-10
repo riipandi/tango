@@ -53,7 +53,7 @@ Go files are watched and auto-rebuilt.
 ### Available tasks for this project
 
 | Command      | Description                                     |
-|--------------|-------------------------------------------------|
+| ------------ | ----------------------------------------------- |
 | `pnpm dev`   | Vite dev server (:3000) + Go API server (:3080) |
 | `pnpm build` | Build frontend + Go binary (single file)        |
 | `pnpm start` | Run the production binary                       |

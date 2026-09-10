@@ -4,8 +4,8 @@ name: Test
 
 on:
   push:
-    branches: ['**']
-    tags-ignore: ['*']
+    branches: ["**"]
+    tags-ignore: ["*"]
   pull_request:
 
 permissions: read-all
@@ -23,7 +23,7 @@ jobs:
       matrix:
         # @ref: https://github.com/actions/runner-images
         os: [ubuntu-24.04, macos-14]
-        go-version: ['1.26.1']
+        go-version: ["1.26.1"]
       fail-fast: false
 
     runs-on: ${{ matrix.os }}

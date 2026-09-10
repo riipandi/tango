@@ -14,7 +14,7 @@ export default defineConfig({
       packagePath: "./cmd",
       binArgs: ["serve"],
       build: {
-        embedDir: "web/dist",
+        embedDir: "web/output",
         outputDir: "build/release",
         buildTags: ["release"],
         buildFlags: ["-trimpath", "-a", "-buildmode=pie", "-buildvcs=false"],
@@ -36,7 +36,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 1024 * 4,
     minify: isProduction ? "oxc" : false,
     reportCompressedSize: false,
-    outDir: "web/dist",
+    outDir: "web/output",
   },
   server: {
     port: 3000,

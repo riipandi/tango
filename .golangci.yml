@@ -1,22 +1,22 @@
 # yaml-language-server: $schema=https://golangci-lint.run/jsonschema/golangci.jsonschema.json
 
-version: '2'
+version: "2"
 
 linters:
   default: none
   enable:
-    - errcheck      # Ensure errors are checked and handled
-    - govet         # Go's official vet tool for catching suspicious constructs
-    - staticcheck   # Advanced static analysis, catches bugs and code smells
-    - ineffassign   # Detects assignments to variables that are never used
-    - unused        # Finds unused variables, functions, and imports
-    - gosec         # Basic security checks (recommended to keep enabled)
+    - errcheck # Ensure errors are checked and handled
+    - govet # Go's official vet tool for catching suspicious constructs
+    - staticcheck # Advanced static analysis, catches bugs and code smells
+    - ineffassign # Detects assignments to variables that are never used
+    - unused # Finds unused variables, functions, and imports
+    - gosec # Basic security checks (recommended to keep enabled)
   settings:
     errcheck:
       check-type-assertions: true
     staticcheck:
       checks:
-        - 'all' # Use all staticcheck checks for best coverage
+        - "all" # Use all staticcheck checks for best coverage
     exhaustive:
       check:
         - switch
@@ -32,8 +32,8 @@ linters:
         - ^net/url.URL$
         - ^os/exec.Cmd$
         - ^reflect.StructField$
-        - ^tango/pkg/.*$
-        - ^tango/modules/.*$
+        - ^github.com/riipandi/tango/pkg/.*$
+        - ^github.com/riipandi/tango/modules/.*$
         # - ^github.com/prometheus/client_golang/.+Opts$
         # - ^github.com/testcontainers/testcontainers-go.+Request$
         # - ^github.com/testcontainers/testcontainers-go.FromDockerfile$

@@ -60,7 +60,7 @@ const defaults: GoPluginDefaults = {
   delay: 1000,
   killDelay: 300,
   stopOnError: false,
-  excludeDir: [".git", "vendor", "node_modules", "web/dist", "temp", "tmp", "build", "dist"],
+  excludeDir: [".git", "vendor", "node_modules", "web/output", "temp", "tmp", "build", "dist"],
   excludeRegex: ["_test\\.go$"],
   extensions: ["go"],
   log: true,
@@ -69,12 +69,14 @@ const defaults: GoPluginDefaults = {
     packagePath: ".",
     outputDir: "",
     outputBin: "",
-    embedDir: "web/dist",
+    embedDir: "web/output",
     buildTags: [],
     buildFlags: [],
     ldflags: [],
   },
 };
+
+const isProduction = () => process.env.NODE_ENV === "production";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -82,26 +84,22 @@ function formatDuration(ms: number): string {
 }
 
 function formatFileSize(bytes: number): string {
-  const mb = (bytes / (1024 * 1024)).toFixed(2);
-  const kb = (bytes / (1024 * 1024)).toFixed(1);
-  return bytes >= 1024 * 1024 ? `${mb} MB` : `${kb} KB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 function formatBuildInfo(buildOpts: ResolvedBuildOptions): string[] {
-  const isProduction = process.env.NODE_ENV === "production";
-  const mode = isProduction ? "release" : "debug";
+  const mode = isProduction() || buildOpts.buildTags.includes("release") ? "release" : "debug";
   const tags = buildOpts.buildTags.length > 0 ? buildOpts.buildTags.join(", ") : "none";
 
-  const lines: string[] = [];
-  lines.push(`  mode     ${mode}`);
-  lines.push(`  tags     ${tags}`);
+  const lines: string[] = [`  mode     ${mode}`, `  tags     ${tags}`];
 
   if (buildOpts.buildFlags.length > 0) {
     lines.push(`  flags    ${buildOpts.buildFlags.join(" ")}`);
   }
 
-  if (buildOpts.ldflags.length > 0) {
-    lines.push(`  ldflags  ${buildOpts.ldflags.join(" ")}`);
+  for (const flag of buildOpts.ldflags) {
+    lines.push(`  ldflags:  ${flag}`);
   }
 
   lines.push(`  embed    ${buildOpts.embedDir}`);
@@ -115,11 +113,9 @@ function resolveBuildOptions(
   userPkg: string,
   packageName: string,
 ): ResolvedBuildOptions {
-  const isProduction = process.env.NODE_ENV === "production";
-
-  const outputDir = userBuild?.outputDir || (isProduction ? "build/release" : "build/debug");
+  const outputDir = userBuild?.outputDir || (isProduction() ? "build/release" : "build/debug");
   const outputBin = userBuild?.outputBin || packageName;
-  const embedDir = userBuild?.embedDir || "web/dist";
+  const embedDir = userBuild?.embedDir || "web/output";
   const buildFlags = userBuild?.buildFlags || [];
   const ldflags = userBuild?.ldflags || [];
   const buildTags = userBuild?.buildTags || defaults.build.buildTags;
@@ -143,6 +139,28 @@ function resolveBuildOptions(
   }
 
   return { outputDir, outputBin, embedDir, args: buildArgs, buildFlags, ldflags, buildTags };
+}
+
+interface GoBuildResult {
+  code: number | null;
+  stderr: string;
+  duration: number;
+}
+
+function runGoBuild(cmd: string, args: string[]): Promise<GoBuildResult> {
+  return new Promise((resolve) => {
+    const startTime = Date.now();
+    const buildProcess = spawn(cmd, args, { stdio: "pipe" });
+    let stderr = "";
+
+    buildProcess.stderr?.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    buildProcess.on("close", (code) => {
+      resolve({ code, stderr, duration: Date.now() - startTime });
+    });
+  });
 }
 
 export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
@@ -176,13 +194,13 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     ...opts.excludeRegex.map((r) => new RegExp(r)),
   ];
 
+  const buildOpts = resolveBuildOptions(userOptions.build, pkgPath, name);
+
   let goProcess: ChildProcess | null = null;
   let buildTimer: ReturnType<typeof setTimeout> | null = null;
   let isBuilding = false;
   let hasPendingChanges = false;
   let disposed = false;
-
-  const buildOpts = resolveBuildOptions(userOptions.build, pkgPath, name);
 
   function log(msg: string) {
     if (opts.log) console.log(`\x1b[36m[go]\x1b[0m ${msg}`);
@@ -220,32 +238,24 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     });
   }
 
-  function runBuild(
+  async function runBuild(
     onSuccess: () => void,
     onFailure: (code: number | null, stderr: string) => void,
   ) {
     isBuilding = true;
     log("building...");
 
-    const buildProcess = spawn(opts.cmd, opts.args, { stdio: "pipe" });
-    let stderr = "";
+    const { code, stderr } = await runGoBuild(opts.cmd, opts.args);
+    isBuilding = false;
 
-    buildProcess.stderr?.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    buildProcess.on("close", (code) => {
-      isBuilding = false;
-
-      if (code === 0) {
-        log("built successfully");
-        onSuccess();
-      } else {
-        log(`build failed (exit code ${code})`);
-        if (stderr) console.error(stderr);
-        onFailure(code, stderr);
-      }
-    });
+    if (code === 0) {
+      log("built successfully");
+      onSuccess();
+    } else {
+      log(`build failed (exit code ${code})`);
+      if (stderr) console.error(stderr);
+      onFailure(code, stderr);
+    }
   }
 
   function buildAndStart() {
@@ -326,10 +336,9 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     closeBundle: {
       sequential: true,
       order: "post",
-      handler() {
-        const embedDir = buildOpts.embedDir;
-        if (!fs.existsSync(embedDir)) {
-          log(`embed directory "${embedDir}" not found, skipping go build`);
+      async handler() {
+        if (!fs.existsSync(buildOpts.embedDir)) {
+          log(`embed directory "${buildOpts.embedDir}" not found, skipping go build`);
           return;
         }
 
@@ -340,32 +349,19 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
           log(line);
         }
 
-        const startTime = Date.now();
-        const buildProcess = spawn(opts.cmd, buildOpts.args, { stdio: "pipe" });
-        let stderr = "";
+        const { code, stderr, duration } = await runGoBuild(opts.cmd, buildOpts.args);
+        const binPath = `${buildOpts.outputDir}/${buildOpts.outputBin}`;
 
-        buildProcess.stderr?.on("data", (data: Buffer) => {
-          stderr += data.toString();
-        });
-
-        return new Promise<void>((resolve) => {
-          buildProcess.on("close", (code) => {
-            const duration = Date.now() - startTime;
-
-            if (code === 0) {
-              const binPath = `${buildOpts.outputDir}/${buildOpts.outputBin}`;
-              const stat = fs.statSync(binPath);
-              log(
-                `binary built → ${binPath} (${formatFileSize(stat.size)}) in ${formatDuration(duration)}`,
-              );
-            } else {
-              log(`build failed (exit code ${code}) in ${formatDuration(duration)}`);
-              if (stderr) console.error(stderr);
-              process.exitCode = 1;
-            }
-            resolve();
-          });
-        });
+        if (code === 0) {
+          const stat = fs.statSync(binPath);
+          log(
+            `binary built → ${binPath} (${formatFileSize(stat.size)}) in ${formatDuration(duration)}`,
+          );
+        } else {
+          log(`build failed (exit code ${code}) in ${formatDuration(duration)}`);
+          if (stderr) console.error(stderr);
+          process.exitCode = 1;
+        }
       },
     },
   };

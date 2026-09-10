@@ -36,5 +36,5 @@
         }
     },
     "include": ["**/*.ts", "**/*.tsx"],
-    "exclude": ["node_modules", "build", "web/dist", "tests-results"]
+    "exclude": ["node_modules", "build", "web/output", "tests-results"]
 }

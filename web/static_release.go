@@ -13,16 +13,16 @@ import (
 	"github.com/riipandi/tango/internal/transport/responder"
 )
 
-//go:embed all:dist
-var distFS embed.FS
+//go:embed all:output
+var webFS embed.FS
 
 func SetupStatic(r chi.Router) {
 	r.NotFound(spaHandler())
 }
 
 func spaHandler() http.HandlerFunc {
-	distSub, _ := fs.Sub(distFS, "dist")
-	fileServer := http.FileServer(http.FS(distSub))
+	webArtifact, _ := fs.Sub(webFS, "output")
+	fileServer := http.FileServer(http.FS(webArtifact))
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		// API, Well-Known, and Static endpoints should return JSON 404
@@ -39,7 +39,7 @@ func spaHandler() http.HandlerFunc {
 		if reqPath != "" {
 			cleanPath := filepath.Clean(reqPath)
 			if !strings.HasPrefix(cleanPath, ".") {
-				if f, err := distSub.Open(cleanPath); err == nil {
+				if f, err := webArtifact.Open(cleanPath); err == nil {
 					f.Close()
 					fileServer.ServeHTTP(w, r)
 					return
@@ -47,6 +47,6 @@ func spaHandler() http.HandlerFunc {
 			}
 		}
 
-		http.ServeFileFS(w, r, distSub, "index.html")
+		http.ServeFileFS(w, r, webArtifact, "index.html")
 	}
 }

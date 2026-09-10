@@ -1,2 +1,9 @@
+# yaml-language-server: $schema=https://www.schemastore.org/pnpm-workspace.json
+
 allowBuilds:
   esbuild: true
+  lefthook: true
+
+verifyDepsBeforeRun: false
+
+minimumReleaseAge: 0
