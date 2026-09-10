@@ -46,7 +46,7 @@ go install github.com/anchore/grype/cmd/grype@latest
 5. Geneate application secret key: `pnpm generate:key --apply`
 6. Run project in development mode: `pnpm dev`
 
-Vite serves the frontend on `:3000` and proxies `/api/*` and `/rpc/*` to Go on `:3080`.
+Vite serves the frontend on `:3000` and proxies `/api/*` to Go on `:3080`.
 
 Go files are watched and auto-rebuilt.
 

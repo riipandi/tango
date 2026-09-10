@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/riipandi/tango/internal/config"
+	"github.com/spf13/cobra"
 )
 
 var (

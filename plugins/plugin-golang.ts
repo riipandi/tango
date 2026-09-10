@@ -76,6 +76,16 @@ const defaults: GoPluginDefaults = {
   },
 };
 
+const C = {
+  reset: "\x1b[0m",
+  dim: "\x1b[2m",
+  green: "\x1b[32m",
+  red: "\x1b[31m",
+  cyan: "\x1b[36m",
+} as const;
+
+const PREFIX = `${C.cyan}[go]${C.reset}`;
+
 const isProduction = () => process.env.NODE_ENV === "production";
 
 function formatDuration(ms: number): string {
@@ -88,22 +98,25 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-function formatBuildInfo(buildOpts: ResolvedBuildOptions): string[] {
+function formatBuildInfo(buildOpts: ResolvedBuildOptions): Array<{ label: string; value: string }> {
   const mode = isProduction() || buildOpts.buildTags.includes("release") ? "release" : "debug";
   const tags = buildOpts.buildTags.length > 0 ? buildOpts.buildTags.join(", ") : "none";
 
-  const lines: string[] = [`  mode     ${mode}`, `  tags     ${tags}`];
+  const lines: Array<{ label: string; value: string }> = [
+    { label: "mode", value: mode },
+    { label: "tags", value: tags },
+  ];
 
   if (buildOpts.buildFlags.length > 0) {
-    lines.push(`  flags    ${buildOpts.buildFlags.join(" ")}`);
+    lines.push({ label: "flags", value: buildOpts.buildFlags.join(" ") });
   }
 
-  for (const flag of buildOpts.ldflags) {
-    lines.push(`  ldflags:  ${flag}`);
+  for (const [index, flag] of buildOpts.ldflags.entries()) {
+    lines.push({ label: `ldflags[${index}]`, value: flag });
   }
 
-  lines.push(`  embed    ${buildOpts.embedDir}`);
-  lines.push(`  output   ${buildOpts.outputDir}/${buildOpts.outputBin}`);
+  lines.push({ label: "embed", value: buildOpts.embedDir });
+  lines.push({ label: "output", value: `${buildOpts.outputDir}/${buildOpts.outputBin}` });
 
   return lines;
 }
@@ -143,22 +156,26 @@ function resolveBuildOptions(
 
 interface GoBuildResult {
   code: number | null;
-  stderr: string;
+  output: string;
   duration: number;
 }
 
-function runGoBuild(cmd: string, args: string[]): Promise<GoBuildResult> {
+function runGoBuild(cmd: string, args: string[], cwd: string): Promise<GoBuildResult> {
   return new Promise((resolve) => {
     const startTime = Date.now();
-    const buildProcess = spawn(cmd, args, { stdio: "pipe" });
-    let stderr = "";
+    const buildProcess = spawn(cmd, args, { stdio: "pipe", cwd });
+    let output = "";
+
+    buildProcess.stdout?.on("data", (data: Buffer) => {
+      output += data.toString();
+    });
 
     buildProcess.stderr?.on("data", (data: Buffer) => {
-      stderr += data.toString();
+      output += data.toString();
     });
 
     buildProcess.on("close", (code) => {
-      resolve({ code, stderr, duration: Date.now() - startTime });
+      resolve({ code, output, duration: Date.now() - startTime });
     });
   });
 }
@@ -196,14 +213,29 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
 
   const buildOpts = resolveBuildOptions(userOptions.build, pkgPath, name);
 
+  let viteRoot = process.cwd();
+  let command: "serve" | "build" = "serve";
   let goProcess: ChildProcess | null = null;
   let buildTimer: ReturnType<typeof setTimeout> | null = null;
   let isBuilding = false;
   let hasPendingChanges = false;
+  let onSignal: (() => void) | null = null;
   let disposed = false;
 
   function log(msg: string) {
-    if (opts.log) console.log(`\x1b[36m[go]\x1b[0m ${msg}`);
+    if (opts.log) console.log(`${PREFIX} ${msg}`);
+  }
+
+  function logInfo(label: string, value: string, width?: number) {
+    // Default gutter fits the longest common label; callers may pass an exact width.
+    const w = width ?? (label.endsWith(":") ? 10 : 9);
+    log(`${C.dim}${label.padEnd(w)}${C.reset}${value}`);
+  }
+
+  function logOutput(output: string) {
+    for (const line of output.split("\n")) {
+      if (line.trim()) console.error(`${PREFIX} ${C.red}${line}${C.reset}`);
+    }
   }
 
   function killGo() {
@@ -222,11 +254,18 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     disposed = true;
     if (buildTimer) clearTimeout(buildTimer);
     killGo();
+    if (onSignal) {
+      process.removeListener("SIGINT", onSignal);
+      process.removeListener("SIGTERM", onSignal);
+      onSignal = null;
+    }
     log("stopped");
   }
 
   function startBinary() {
-    const proc = spawn(opts.bin, opts.binArgs, {
+    const binPath = path.resolve(viteRoot, opts.bin);
+    const proc = spawn(binPath, opts.binArgs, {
+      cwd: viteRoot,
       stdio: "inherit",
       detached: true,
     });
@@ -236,26 +275,34 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
       log(`failed to start binary: ${err.message}`);
       goProcess = null;
     });
+
+    proc.on("exit", (code, signal) => {
+      // goProcess was already cleared by killGo() → expected shutdown, no log.
+      if (goProcess !== proc) return;
+      goProcess = null;
+      if (!disposed) log(`binary exited unexpectedly (${signal ?? `exit code ${code}`})`);
+    });
+
+    if (proc.pid) log(`started (pid ${proc.pid})`);
   }
 
-  async function runBuild(
-    onSuccess: () => void,
-    onFailure: (code: number | null, stderr: string) => void,
-  ) {
+  async function runBuild(stage: "initial" | "rebuild"): Promise<boolean> {
     isBuilding = true;
-    log("building...");
+    log(stage === "rebuild" ? "rebuilding..." : "building debug binary...");
 
-    const { code, stderr } = await runGoBuild(opts.cmd, opts.args);
+    const { code, output, duration } = await runGoBuild(opts.cmd, opts.args, viteRoot);
     isBuilding = false;
 
-    if (code === 0) {
-      log("built successfully");
-      onSuccess();
-    } else {
-      log(`build failed (exit code ${code})`);
-      if (stderr) console.error(stderr);
-      onFailure(code, stderr);
+    if (code !== 0) {
+      log(`${C.red}build failed (exit code ${code}) in ${formatDuration(duration)}${C.reset}`);
+      logOutput(output);
+      return false;
     }
+
+    log(
+      `${C.green}${stage === "rebuild" ? "rebuilt" : "built"} in ${formatDuration(duration)}${C.reset}`,
+    );
+    return true;
   }
 
   function buildAndStart() {
@@ -263,43 +310,32 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     if (buildTimer) clearTimeout(buildTimer);
 
     buildTimer = setTimeout(() => {
-      runBuild(
-        () => {
-          buildTimer = null;
+      runBuild("rebuild").then((ok) => {
+        buildTimer = null;
 
-          if (hasPendingChanges) {
-            hasPendingChanges = false;
-            buildAndStart();
-            return;
-          }
+        if (!ok && opts.stopOnError) killGo();
 
+        if (hasPendingChanges) {
+          hasPendingChanges = false;
+          buildAndStart();
+          return;
+        }
+
+        if (ok) {
           setTimeout(() => {
             if (disposed) return;
             killGo();
             startBinary();
           }, opts.killDelay);
-        },
-        (_code, _stderr) => {
-          buildTimer = null;
-          if (opts.stopOnError) killGo();
-
-          if (hasPendingChanges) {
-            hasPendingChanges = false;
-            buildAndStart();
-          }
-        },
-      );
+        }
+      });
     }, opts.delay);
   }
 
-  function initialBuild() {
-    runBuild(
-      () => {
-        if (disposed) return;
-        startBinary();
-      },
-      () => {},
-    );
+  async function initialBuild() {
+    const ok = await runBuild("initial");
+    if (disposed || !ok) return;
+    startBinary();
   }
 
   function shouldWatch(filePath: string): boolean {
@@ -311,6 +347,10 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
 
   return {
     name: "vite-plugin-go",
+    configResolved(config) {
+      viteRoot = config.root;
+      command = config.command;
+    },
     configureServer(_server: ViteDevServer) {
       initialBuild();
 
@@ -326,7 +366,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
         buildAndStart();
       });
 
-      const onSignal = () => {
+      onSignal = () => {
         dispose();
         process.exit(0);
       };
@@ -337,31 +377,47 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
       sequential: true,
       order: "post",
       async handler() {
-        if (!fs.existsSync(buildOpts.embedDir)) {
-          log(`embed directory "${buildOpts.embedDir}" not found, skipping go build`);
+        // Vite also fires closeBundle when the dev server shuts down or
+        // restarts — only run the production build for `vite build`.
+        if (command !== "build") {
+          dispose();
           return;
         }
 
-        fs.mkdirSync(buildOpts.outputDir, { recursive: true });
+        const embedPath = path.resolve(viteRoot, buildOpts.embedDir);
+        if (!fs.existsSync(embedPath)) {
+          log(`embed directory "${buildOpts.embedDir}" not found, skipping go build`);
+          process.exitCode = 1;
+          return;
+        }
+
+        fs.mkdirSync(path.resolve(viteRoot, buildOpts.outputDir), { recursive: true });
 
         log("building binary...");
-        for (const line of formatBuildInfo(buildOpts)) {
-          log(line);
+        const infoLines = formatBuildInfo(buildOpts);
+        const gutter = Math.max(...infoLines.map((line) => line.label.length)) + 1;
+        for (const line of infoLines) {
+          logInfo(line.label, line.value, gutter);
         }
 
-        const { code, stderr, duration } = await runGoBuild(opts.cmd, buildOpts.args);
+        const { code, output, duration } = await runGoBuild(opts.cmd, buildOpts.args, viteRoot);
         const binPath = `${buildOpts.outputDir}/${buildOpts.outputBin}`;
 
-        if (code === 0) {
-          const stat = fs.statSync(binPath);
-          log(
-            `binary built → ${binPath} (${formatFileSize(stat.size)}) in ${formatDuration(duration)}`,
-          );
-        } else {
-          log(`build failed (exit code ${code}) in ${formatDuration(duration)}`);
-          if (stderr) console.error(stderr);
+        if (code !== 0) {
+          log(`${C.red}build failed (exit code ${code}) in ${formatDuration(duration)}${C.reset}`);
+          logOutput(output);
           process.exitCode = 1;
+          return;
         }
+
+        let size = "";
+        try {
+          size = ` (${formatFileSize(fs.statSync(path.resolve(viteRoot, binPath)).size)})`;
+        } catch {
+          // binary missing after a successful build is highly unlikely; keep summary short
+        }
+
+        log(`${C.green}binary built → ${binPath}${size} in ${formatDuration(duration)}${C.reset}`);
       },
     },
   };

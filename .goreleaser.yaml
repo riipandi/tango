@@ -38,9 +38,9 @@ builds:
     flags: ["-trimpath", "-buildvcs=false"]
     ldflags:
       - -w -s -extldflags '-static'
-      - -X 'tango/internal/config.AppVersion={{.Tag}}'
-      - -X 'tango/internal/config.BuildHash={{.ShortCommit}}'
-      - -X 'tango/internal/config.BuildDate={{.Date}}'
+      - -X 'github.com/riipandi/tango/internal/config.AppVersion={{.Tag}}'
+      - -X 'github.com/riipandi/tango/internal/config.BuildHash={{.ShortCommit}}'
+      - -X 'github.com/riipandi/tango/internal/config.BuildDate={{.Date}}'
 
 archives:
   - formats: [tar.gz]

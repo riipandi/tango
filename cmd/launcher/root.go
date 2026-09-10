@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/riipandi/tango/internal/config"
+	"github.com/spf13/cobra"
 )
 
 var argVersionShort bool
@@ -31,7 +31,7 @@ var versionCmd = &cobra.Command{
 			fmt.Printf("%s\n", config.AppVersion)
 			return
 		} else {
-			fmt.Printf("%s %s (%s) %s\n", config.AppName, config.AppVersion, config.BuildHash, config.Platform)
+			fmt.Printf("%s %s %s (%s %s)\n", config.AppName, config.AppVersion, config.Platform, config.BuildHash, config.BuildDate)
 		}
 	},
 }
