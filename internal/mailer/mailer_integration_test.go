@@ -40,8 +40,7 @@ func TestMailerMailpitDelivery(t *testing.T) {
 		Logger:    logger.NewMock(),
 	})
 
-	// Unique recipient per run: the search below can only match
-	// this run's message.
+	// Unique recipient per run: the search below can only match this run's message.
 	recipient := fmt.Sprintf("it-%d@tango.test", time.Now().UnixNano())
 	require.NoError(t, ml.Send(ctx, Message{
 		To:       recipient,

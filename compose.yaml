@@ -45,7 +45,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: securedb
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
-      PG_DATABASES: libredesk,unleash,testdb
+      POSTGRES_DATABASES: testdb,experimental
     configs: [{ source: pgsql_multidb, target: /docker-entrypoint-initdb.d/multidb.sh }]
     security_opt: ["no-new-privileges:true"]
     shm_size: 256m # set shared memory limit
@@ -133,9 +133,9 @@ services:
       - command: sh -c "/usr/bin/mc anonymous set download local/devbucket"
       - command: sh -c "/usr/bin/mc anonymous set download local/testbucket"
     healthcheck:
-      test: ["CMD", "/usr/bin/silo", "healthcheck", "ready"]
+      test: ["CMD", "/usr/bin/silo", "healthcheck", "ready", "--address", "127.0.0.1:9100"]
       interval: 3s
-      timeout: 5s
+      timeout: 10s
       retries: 3
 
   nginx:
@@ -183,24 +183,19 @@ configs:
   pgsql_multidb:
     content: |
       #!/bin/bash
-      set -e
-      set -u
-      if [ -n "${PG_DATABASES:-}" ]; then
-        echo "Multiple database creation requested: $PG_DATABASES"
-        IFS=',' read -ra databases <<<"$PG_DATABASES"
-        for db in "${databases[@]}"; do
-          echo "  Creating database '$db' with owner '$POSTGRES_USER'"
-          psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-            CREATE DATABASE "$db" WITH OWNER = "$POSTGRES_USER"
-            ENCODING = 'UTF8' LC_COLLATE = 'en_US.UTF-8'
-            LC_CTYPE = 'en_US.UTF-8'
-            TEMPLATE = template0;
-      EOSQL
-        done
-        echo "Multiple databases and schemas created successfully."
-      else
+      set -euo pipefail
+      if [ -z "$${POSTGRES_DATABASES:-}" ]; then
         echo "No databases requested for creation."
+        exit 0
       fi
+      echo "Multiple database creation requested: $$POSTGRES_DATABASES"
+      IFS=',' read -ra databases <<<"$$POSTGRES_DATABASES"
+      for db in "$${databases[@]}"; do
+        echo "  Creating database '$$db' with owner '$$POSTGRES_USER'"
+        psql -v ON_ERROR_STOP=1 --username "$$POSTGRES_USER" --dbname "$$POSTGRES_DB" \
+          -c "CREATE DATABASE \"$$db\" WITH OWNER = \"$$POSTGRES_USER\" ENCODING = 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8' TEMPLATE = template0;"
+      done
+      echo "Multiple databases and schemas created successfully."
 
 volumes:
   pgsql_data:
