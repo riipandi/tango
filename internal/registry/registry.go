@@ -8,6 +8,7 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/wellknown"
 )
 
@@ -36,9 +37,19 @@ func New(deps Deps) *kernel.Registry {
 	audit := auditlog.New()
 	reg.Register(audit)
 	reg.Register(wellknown.New())
-	reg.Register(identity.New(identity.NewMemoryStore(), func(e identity.AuditEvent) {
-		audit.Record(auditlog.Event{Action: e.Action, Actor: e.Actor, Target: e.Target})
-	}))
+	reg.Register(identity.New(
+		// Mandatory user core.
+		user.NewService(user.NewMemoryStore(), func(e identity.AuditEvent) {
+			audit.Record(auditlog.Event{Action: e.Action, Actor: e.Actor, Target: e.Target})
+		}),
+		// Identity authn/authz feature selection — add or remove a line to change the feature set.
+		withSession(deps),
+		withWebAuthn(deps),
+		withPassword(deps),
+		withAPIKeys(deps),
+		withAPIAccess(deps),
+		withOIDC(deps),
+	))
 
 	return reg
 }

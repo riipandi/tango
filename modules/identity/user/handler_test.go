@@ -1,4 +1,4 @@
-package identity
+package user
 
 import (
 	"encoding/json"
@@ -10,19 +10,15 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/kernel"
 )
 
-// newTestRouter mounts the identity module the same way the
-// application does: inside the shared /api group.
+// newTestRouter mounts the user core the way the identity module does:
+// inside the shared /api group.
 func newTestRouter() chi.Router {
-	reg := kernel.NewRegistry()
-	reg.Register(New(NewMemoryStore(), nil))
+	svc := NewService(NewMemoryStore(), nil)
 
 	r := chi.NewRouter()
-	r.Route("/api", reg.ApplyAPI)
+	r.Route("/api", svc.APIRoutes)
 	return r
 }
 
@@ -42,16 +38,6 @@ func decodeBody(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	return body
-}
-
-func TestAPIRoot(t *testing.T) {
-	r := newTestRouter()
-	w := do(r, http.MethodGet, "/api/", "")
-
-	require.Equal(t, http.StatusOK, w.Code)
-	body := decodeBody(t, w)
-	assert.Equal(t, config.AppName, body["name"])
-	assert.Equal(t, config.AppVersion, body["version"])
 }
 
 func TestCreateUser(t *testing.T) {
@@ -114,14 +100,7 @@ func TestGetUserNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-func TestAPIUnknownPath(t *testing.T) {
-	r := newTestRouter()
-	w := do(r, http.MethodGet, "/api/nope", "")
-
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestAPIMethodNotAllowed(t *testing.T) {
+func TestUserMethodNotAllowed(t *testing.T) {
 	r := newTestRouter()
 	w := do(r, http.MethodDelete, "/api/users/1", "")
 

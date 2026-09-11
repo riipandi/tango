@@ -1,4 +1,4 @@
-package identity
+package user
 
 import (
 	"context"
@@ -8,12 +8,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"uuid"
+
+	"github.com/riipandi/tango/modules/identity"
 )
 
 func TestServiceCreateAndGet(t *testing.T) {
 	store := NewMemoryStore()
-	var recorded []AuditEvent
-	svc := NewService(store, func(e AuditEvent) { recorded = append(recorded, e) })
+	var recorded []identity.AuditEvent
+	svc := NewService(store, func(e identity.AuditEvent) { recorded = append(recorded, e) })
 
 	user, err := svc.Create(context.Background(), "John")
 	require.NoError(t, err)

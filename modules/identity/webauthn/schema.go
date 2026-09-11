@@ -10,3 +10,22 @@
 //	service.go  — ceremony orchestration over go-webauthn
 //	store.go    — credential/session persistence (file-per-backend)
 package webauthn
+
+import (
+	"github.com/riipandi/tango/modules/identity"
+)
+
+// Feature is the wireable unit of the webauthn subdomain.
+type Feature struct{}
+
+// New returns the placeholder feature. The real constructor will take
+// its dependencies (users, sessions, store) when the subdomain is
+// implemented.
+func New() Feature { return Feature{} }
+
+// Name implements identity.Feature.
+func (Feature) Name() string { return "webauthn" }
+
+// Compile-time contract check: the feature satisfies the identity
+// feature contract.
+var _ identity.Feature = Feature{}
