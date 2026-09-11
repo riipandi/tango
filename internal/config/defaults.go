@@ -33,7 +33,6 @@ var defaultConfig = Config{
 
 	Public: PublicConfig{
 		BaseURL:                "http://localhost:3000",
-		HealthcheckURL:         "https://api.ipify.org",
 		S3AssetsURL:            "http://localhost:9180",
 		JwtAccessTokenExpiry:   900,
 		JwtRefreshTokenExpiry:  7200,

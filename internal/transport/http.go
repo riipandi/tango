@@ -28,7 +28,7 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 	r.Use(middleware.CORS())
 
 	// Core endpoints.
-	r.Get("/healthz", HealthCheckHandler(cfg))
+	r.Get("/healthz", HealthzHandler)
 	r.Get("/static/*", StaticAssetsHandler)
 
 	// Modules mount root-level routes (wellknown, ...).

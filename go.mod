@@ -11,7 +11,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/knadh/koanf/parsers/dotenv v1.1.2
 	github.com/knadh/koanf/providers/confmap v1.0.1
-	github.com/knadh/koanf/providers/env/v2 v2.0.1
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/providers/structs v1.0.1
 	github.com/knadh/koanf/v2 v2.3.6
@@ -21,7 +20,6 @@ require (
 	go.loglayer.dev/transports/testing/v3 v3.0.0
 	go.loglayer.dev/v3 v3.0.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	resty.dev/v3 v3.0.0-beta.6
 )
 
 require (
@@ -36,6 +34,5 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )

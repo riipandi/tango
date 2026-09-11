@@ -22,7 +22,6 @@ func (c *Config) Validate() error {
 		validateURL("database.url", c.Database.URL, "postgres", "postgresql"),
 		validateURL("public.base_url", c.Public.BaseURL, "http", "https"),
 		validateURL("public.s3_assets_url", c.Public.S3AssetsURL, "http", "https"),
-		validateURL("public.healthcheck_url", c.Public.HealthcheckURL, "http", "https"),
 	}
 
 	if c.App.Mode == "production" {

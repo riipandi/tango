@@ -21,64 +21,20 @@ func testConfig() *config.Config {
 		Host: "localhost",
 		Port: 3080,
 		Public: config.PublicConfig{
-			BaseURL:        "http://localhost:3000",
-			HealthcheckURL: "https://api.ipify.org",
+			BaseURL: "http://localhost:3000",
 		},
 	}
 }
 
-func TestHealthzHealthy(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("1.2.3.4"))
-	}))
-	defer upstream.Close()
-
-	cfg := testConfig()
-	cfg.Public.HealthcheckURL = upstream.URL
-
+func TestHealthzLiveness(t *testing.T) {
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	HealthCheckHandler(cfg)(w, req)
+	HealthzHandler(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var body map[string]string
 	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &body))
 	assert.Equal(t, "healthy", body["status"])
-	assert.Equal(t, "1.2.3.4", body["ip_address"])
-}
-
-func TestHealthzUpstreamNonSuccess(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer upstream.Close()
-
-	cfg := testConfig()
-	cfg.Public.HealthcheckURL = upstream.URL
-
-	w := httptest.NewRecorder()
-	HealthCheckHandler(cfg)(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
-
-	require.Equal(t, http.StatusServiceUnavailable, w.Code)
-
-	var body map[string]string
-	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &body))
-	assert.Equal(t, "unhealthy", body["status"])
-}
-
-func TestHealthzUpstreamUnreachable(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	upstreamURL := upstream.URL
-	upstream.Close() // guarantee connection failure
-
-	cfg := testConfig()
-	cfg.Public.HealthcheckURL = upstreamURL
-
-	w := httptest.NewRecorder()
-	HealthCheckHandler(cfg)(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
-
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
 
 func TestAPIRootHandler(t *testing.T) {
