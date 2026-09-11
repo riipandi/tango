@@ -1,23 +1,26 @@
 // Package config loads the runtime configuration by explicit
 // layering, where later layers win:
 //
-//	defaults → --env-file (dotenv) → system environment → overrides
+//	defaults → system environment → --env-file (dotenv) → overrides
 //
 // The whole pipeline is visible in Load — there is no implicit
-// loading. The system environment always wins over the env file,
+// loading. The --env-file layer wins over the system environment,
 // and empty values are treated as unset so they never shadow the
-// defaults.
+// defaults. Unknown keys are a hard error in the env file (it is
+// curated and ships with the binary) but ignored in the system
+// environment (a shared namespace that also carries foreign
+// variables).
 package config
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/knadh/koanf/parsers/dotenv"
 	"github.com/knadh/koanf/providers/confmap"
-	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
@@ -44,7 +47,16 @@ func Load(opts LoadOptions) (*Config, error) {
 		return nil, fmt.Errorf("load defaults: %w", err)
 	}
 
-	// 2. Optional --env-file, mapped through the same env rules.
+	// 2. System environment — below the env file.
+	if layer, err := envLayer(); err != nil {
+		return nil, err
+	} else if len(layer) > 0 {
+		if err := k.Load(confmap.Provider(layer, "."), nil); err != nil {
+			return nil, fmt.Errorf("load environment: %w", err)
+		}
+	}
+
+	// 3. Optional --env-file — wins over the system environment.
 	if opts.EnvFile != "" {
 		layer, err := envFileLayer(opts.EnvFile)
 		if err != nil {
@@ -55,11 +67,6 @@ func Load(opts LoadOptions) (*Config, error) {
 				return nil, fmt.Errorf("load env file: %w", err)
 			}
 		}
-	}
-
-	// 3. System environment — always wins over the env file.
-	if err := k.Load(env.Provider(".", env.Opt{TransformFunc: envTransform}), nil); err != nil {
-		return nil, fmt.Errorf("load environment: %w", err)
 	}
 
 	// 4. Explicit overrides (resolved CLI flags).
@@ -73,7 +80,27 @@ func Load(opts LoadOptions) (*Config, error) {
 	if err := k.UnmarshalWithConf("", &cfg, unmarshalConf()); err != nil {
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
 	return &cfg, nil
+}
+
+// envLayer maps bound system environment variables through
+// envTransform. Unknown keys are ignored: the system environment is
+// a shared namespace that also carries foreign variables.
+func envLayer() (map[string]any, error) {
+	layer := make(map[string]any)
+	for _, entry := range os.Environ() {
+		name, value, _ := strings.Cut(entry, "=")
+		key, mapped := envTransform(name, value)
+		if key == "" {
+			continue
+		}
+		layer[key] = mapped
+	}
+	return layer, nil
 }
 
 // envSections maps environment variable prefixes to config key
@@ -116,7 +143,9 @@ func envTransform(key, value string) (string, any) {
 }
 
 // envFileLayer reads a dotenv file and maps it through the same
-// environment rules as envTransform. Unknown keys are ignored.
+// environment rules as envTransform. Unknown keys are a hard error:
+// the file is curated and ships with the binary, so a mismatch is
+// a defect, not a foreign variable.
 func envFileLayer(path string) (map[string]any, error) {
 	raw, err := file.Provider(path).ReadBytes()
 	if err != nil {
@@ -130,9 +159,14 @@ func envFileLayer(path string) (map[string]any, error) {
 
 	layer := make(map[string]any, len(parsed))
 	for name, value := range parsed {
-		if key, mapped := envTransform(name, fmt.Sprintf("%v", value)); key != "" {
-			layer[key] = mapped
+		key, mapped := envTransform(name, fmt.Sprintf("%v", value))
+		if key == "" {
+			continue
 		}
+		if !validKeys[key] {
+			return nil, fmt.Errorf("load env file %s: unknown config key from %q", path, name)
+		}
+		layer[key] = mapped
 	}
 	return layer, nil
 }
