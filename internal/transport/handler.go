@@ -12,9 +12,9 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// HealthzHandler reports service health, probing an upstream endpoint.
+// HealthCheckHandler reports service health, probing an upstream endpoint.
 // The config is injected via closure instead of the package global.
-func HealthzHandler(cfg *config.Config) http.HandlerFunc {
+func HealthCheckHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		uaString := fmt.Sprintf("Mozilla/5.0 (compatible; %s/%s; +%s)", config.AppName, config.AppVersion, cfg.Public.BaseURL)
 		httpClient := resty.New().SetHeader("User-Agent", uaString)

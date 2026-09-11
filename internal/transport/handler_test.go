@@ -39,7 +39,7 @@ func TestHealthzHealthy(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	HealthzHandler(cfg)(w, req)
+	HealthCheckHandler(cfg)(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 
@@ -59,7 +59,7 @@ func TestHealthzUpstreamNonSuccess(t *testing.T) {
 	cfg.Public.HealthcheckURL = upstream.URL
 
 	w := httptest.NewRecorder()
-	HealthzHandler(cfg)(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	HealthCheckHandler(cfg)(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	require.Equal(t, http.StatusServiceUnavailable, w.Code)
 
@@ -77,7 +77,7 @@ func TestHealthzUpstreamUnreachable(t *testing.T) {
 	cfg.Public.HealthcheckURL = upstreamURL
 
 	w := httptest.NewRecorder()
-	HealthzHandler(cfg)(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	HealthCheckHandler(cfg)(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
