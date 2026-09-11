@@ -14,8 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/spf13/cobra"
 )
 
 // ANSI colors, matching the shell scripts output style.
@@ -27,66 +25,81 @@ const (
 	colorReset = "\033[0m"
 )
 
-var (
-	secretsApply   bool
-	secretsRSA     bool
-	secretsMLDSA   bool
-	secretsEnvFile string
-)
+// SecretsCmd generates application secrets.
+type SecretsCmd struct {
+	// Out is the env file --apply writes to. It deliberately has a
+	// different name from the global --env-file: one is an input
+	// (config layering), the other an output (secret sink).
+	Apply   bool   `help:"Update the env file with new secrets"`
+	RSA     bool   `help:"Generate JWT keys using RSA algorithm (2048-bit)"`
+	MLDSA   bool   `help:"Generate post-quantum ML-DSA-87 JWT keys (FIPS 204)"`
+	OutFile string `name:"out" default:".env.local" help:"Env file to update when using --apply"`
+}
 
-var secretsCmd = &cobra.Command{
-	Use:          "secrets",
-	Short:        "Generate application secrets",
-	SilenceUsage: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if secretsApply {
-			if _, err := os.Stat(secretsEnvFile); err != nil {
-				fmt.Printf("%sERROR: %s not found, the --apply flag requires %s to exist%s\n",
-					colorRed, secretsEnvFile, secretsEnvFile, colorReset)
-				fmt.Printf("Create the file first, or run without --apply to generate secrets only\n\n")
-				return nil
-			}
-		}
+// Help augments the command help with usage examples.
+func (s *SecretsCmd) Help() string {
+	return "\nExamples:\n" +
+		"  tango secrets\n" +
+		"  tango secrets --apply\n" +
+		"  tango secrets --out .env.staging --apply\n" +
+		"  tango secrets --rsa\n" +
+		"  tango secrets --mldsa\n"
+}
 
-		appSecretKey, err := randomBase64Key()
-		if err != nil {
-			return fmt.Errorf("generate app secret: %w", err)
-		}
-
-		jwtSecretKey, err := randomBase64Key()
-		if err != nil {
-			return fmt.Errorf("generate jwt secret: %w", err)
-		}
-
-		privateKey, publicKey, err := generateJWTKeyPair(secretsRSA, secretsMLDSA)
-		if err != nil {
-			return fmt.Errorf("generate jwt key pair: %w", err)
-		}
-
-		if secretsApply {
-			fmt.Printf("%sUpdating %s file...%s\n\n", colorBold, secretsEnvFile, colorReset)
-			for _, kv := range [][2]string{
-				{"APP_SECRET_KEY", appSecretKey},
-				{"JWT_PRIVATE_KEY", privateKey},
-				{"JWT_PUBLIC_KEY", publicKey},
-				{"JWT_SECRET_KEY", jwtSecretKey},
-			} {
-				if err := upsertEnvFile(secretsEnvFile, kv[0], kv[1]); err != nil {
-					return fmt.Errorf("update %s: %w", secretsEnvFile, err)
-				}
-				fmt.Printf("%s=%s\n", kv[0], kv[1])
-			}
-			fmt.Printf("\n%sEnvironment secrets updated successfully%s\n", colorGreen, colorReset)
+// Run generates keys and displays or applies the secrets.
+func (s *SecretsCmd) Run() error {
+	if s.Apply {
+		if _, err := os.Stat(s.OutFile); err != nil {
+			fmt.Printf("%sERROR: %s not found, the --apply flag requires %s to exist%s\n",
+				colorRed, s.OutFile, s.OutFile, colorReset)
+			fmt.Printf("Create the file first, or run without --apply to generate secrets only\n\n")
 			return nil
 		}
+	}
 
-		fmt.Printf("%sApplication Secrets:%s\n", colorBold, colorReset)
-		fmt.Printf("APP_SECRET_KEY=%s\n", appSecretKey)
-		fmt.Printf("JWT_PRIVATE_KEY=%s\n", privateKey)
-		fmt.Printf("JWT_PUBLIC_KEY=%s\n", publicKey)
-		fmt.Printf("JWT_SECRET_KEY=%s\n", jwtSecretKey)
+	appSecretKey, err := randomBase64Key()
+	if err != nil {
+		return fmt.Errorf("generate app secret: %w", err)
+	}
+
+	jwtSecretKey, err := randomBase64Key()
+	if err != nil {
+		return fmt.Errorf("generate jwt secret: %w", err)
+	}
+
+	privateKey, publicKey, err := generateJWTKeyPair(s.RSA, s.MLDSA)
+	if err != nil {
+		return fmt.Errorf("generate jwt key pair: %w", err)
+	}
+
+	if s.Apply {
+		fmt.Printf("%sUpdating %s file...%s\n\n", colorBold, s.OutFile, colorReset)
+		for _, kv := range [][2]string{
+			{"APP_SECRET_KEY", appSecretKey},
+			{"JWT_PRIVATE_KEY", privateKey},
+			{"JWT_PUBLIC_KEY", publicKey},
+			{"JWT_SECRET_KEY", jwtSecretKey},
+		} {
+			if err := upsertEnvFile(s.OutFile, kv[0], kv[1]); err != nil {
+				return fmt.Errorf("update %s: %w", s.OutFile, err)
+			}
+			fmt.Printf("%s=%s\n", kv[0], kv[1])
+		}
+		fmt.Printf("\n%sEnvironment secrets updated successfully%s\n", colorGreen, colorReset)
 		return nil
-	},
+	}
+
+	fmt.Printf("%sApplication Secrets:%s\n", colorBold, colorReset)
+	fmt.Printf("APP_SECRET_KEY=%s\n", appSecretKey)
+	fmt.Printf("JWT_PRIVATE_KEY=%s\n", privateKey)
+	fmt.Printf("JWT_PUBLIC_KEY=%s\n", publicKey)
+	fmt.Printf("JWT_SECRET_KEY=%s\n", jwtSecretKey)
+	return nil
+}
+
+// secretsPlugins wires the command into the CLI (debug builds only).
+func secretsPlugins() []any {
+	return []any{&SecretsCmd{}}
 }
 
 // randomBase64Key returns a cryptographically secure 48-byte
@@ -192,28 +205,4 @@ func upsertEnvFile(envFile, key, value string) error {
 	}
 
 	return os.WriteFile(envFile, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
-}
-
-func init() {
-	secretsCmd.Flags().BoolVar(&secretsApply, "apply", false, "Update the env file with new secrets")
-	secretsCmd.Flags().BoolVar(&secretsRSA, "rsa", false, "Generate JWT keys using RSA algorithm (2048-bit)")
-	secretsCmd.Flags().BoolVar(&secretsMLDSA, "mldsa", false, "Generate post-quantum ML-DSA-87 JWT keys (FIPS 204)")
-	secretsCmd.Flags().StringVar(&secretsEnvFile, "env-file", ".env.local", "Env file to update when using --apply")
-
-	secretsCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		fmt.Printf("%sApplication Secrets Generator%s\n\n", colorBold, colorCyan)
-		fmt.Printf("Usage:\n")
-		fmt.Printf("  tango secrets                - Generate keys and display secrets\n")
-		fmt.Printf("  tango secrets --apply        - Generate keys and apply to .env.local\n")
-		fmt.Printf("  tango secrets --env-file .env.staging --apply\n")
-		fmt.Printf("  tango secrets --rsa          - Generate RSA keys and display secrets\n")
-		fmt.Printf("  tango secrets --rsa --apply  - Generate RSA keys and apply to .env.local\n")
-		fmt.Printf("  tango secrets --mldsa        - Generate post-quantum ML-DSA-87 keys (FIPS 204)\n")
-		fmt.Printf("\nOptions:\n")
-		fmt.Printf("  --apply              Update the env file with new secrets\n")
-		fmt.Printf("  --rsa                Generate JWT keys using RSA algorithm (2048-bit)\n")
-		fmt.Printf("  --mldsa              Generate post-quantum ML-DSA-87 JWT keys (FIPS 204)\n")
-		fmt.Printf("  --env-file <file>    Env file for --apply (default: .env.local)\n")
-	})
-	rootCmd.AddCommand(secretsCmd)
 }

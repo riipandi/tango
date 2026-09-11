@@ -15,97 +15,93 @@ import (
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport"
-	"github.com/spf13/cobra"
 )
 
-var serveHost string
-var servePort string
+// ServeCmd starts the application server.
+type ServeCmd struct {
+	Host string `help:"Host to bind to"`
+	Port string `help:"Port to bind to"`
+}
 
-var serveCmd = &cobra.Command{
-	Use:   "serve",
-	Short: "Start the application server",
-	Run: func(cmd *cobra.Command, args []string) {
-		cfg, err := config.Load(config.LoadOptions{
-			EnvFile:   argEnvFile,
-			Overrides: flagOverrides(),
-		})
-		if err != nil {
-			log.Fatalf("failed to load config: %v", err)
+// Run loads the layered config, builds the shared logger, and serves
+// until SIGINT/SIGTERM.
+func (s *ServeCmd) Run(cli *CLI) error {
+	cfg, err := config.Load(config.LoadOptions{
+		EnvFile:   cli.EnvFile,
+		Overrides: flagOverrides(s.Host, s.Port),
+	})
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	// Composition root of the runtime: the application logger is
+	// built once from config and injected everywhere (registry,
+	// transport). Closing it drains the async queue on shutdown.
+	lg, logCloser, err := logger.New(logger.Options{
+		Level:  cfg.App.LogLevel,
+		Output: cfg.App.LogTransport,
+		Format: cfg.App.LogFormat,
+		File:   cfg.App.LogFile,
+	})
+	if err != nil {
+		return fmt.Errorf("build logger: %w", err)
+	}
+	defer logCloser.Close()
+
+	reg := registry.New(registry.Deps{Config: cfg, Logger: lg})
+	if err := reg.Start(context.Background()); err != nil {
+		lg.WithError(err).Fatal("failed to start modules")
+	}
+
+	srv := transport.NewHTTPServer(reg, cfg, lg)
+	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+
+	go func() {
+		lg.Info("listening on http://" + addr)
+		if err := srv.ListenAndServe(addr); err != nil && err != http.ErrServerClosed {
+			lg.WithError(err).Fatal("server error")
 		}
+	}()
 
-		// Composition root of the runtime: the application logger is
-		// built once from config and injected everywhere (registry,
-		// transport). Closing it drains the async queue on shutdown.
-		lg, logCloser, err := logger.New(logger.Options{
-			Level:  cfg.App.LogLevel,
-			Output: cfg.App.LogTransport,
-			Format: cfg.App.LogFormat,
-			File:   cfg.App.LogFile,
-		})
-		if err != nil {
-			log.Fatalf("failed to build logger: %v", err)
-		}
-		defer logCloser.Close()
+	// signal.NotifyContext (Go 1.26+): the returned context is
+	// canceled with the received signal as its cause, so the
+	// shutdown path can report exactly which signal arrived.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+	lg.WithError(context.Cause(ctx)).Info("received shutdown signal")
 
-		reg := registry.New(registry.Deps{Config: cfg, Logger: lg})
-		if err := reg.Start(cmd.Context()); err != nil {
-			lg.WithError(err).Fatal("failed to start modules")
-		}
+	lg.Info("shutting down server...")
 
-		srv := transport.NewHTTPServer(reg, cfg, lg)
-		addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-		go func() {
-			lg.Info("listening on http://" + addr)
-			if err := srv.ListenAndServe(addr); err != nil && err != http.ErrServerClosed {
-				lg.WithError(err).Fatal("server error")
-			}
-		}()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		lg.WithError(err).Fatal("shutdown error")
+	}
 
-		// signal.NotifyContext (Go 1.26+): the returned context is
-		// canceled with the received signal as its cause, so the
-		// shutdown path can report exactly which signal arrived.
-		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
-		defer stop()
-		<-ctx.Done()
-		lg.WithError(context.Cause(ctx)).Info("received shutdown signal")
+	if err := reg.Stop(shutdownCtx); err != nil {
+		lg.WithError(err).Warn("module shutdown errors")
+	}
 
-		lg.Info("shutting down server...")
-
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			lg.WithError(err).Fatal("shutdown error")
-		}
-
-		if err := reg.Stop(shutdownCtx); err != nil {
-			lg.WithError(err).Warn("module shutdown errors")
-		}
-
-		lg.Info("server stopped")
-	},
+	lg.Info("server stopped")
+	return nil
 }
 
 // flagOverrides resolves the serve CLI flags into config overrides.
 // Empty flags contribute nothing; an invalid --port fails fast.
-func flagOverrides() map[string]any {
+func flagOverrides(host, port string) map[string]any {
 	overrides := map[string]any{}
-	if serveHost != "" {
-		overrides["host"] = serveHost
+	if host != "" {
+		overrides["host"] = host
 	}
-	if servePort != "" {
-		cleaned := strings.TrimLeft(servePort, ":")
-		port, err := strconv.Atoi(cleaned)
+	if port != "" {
+		cleaned := strings.TrimLeft(port, ":")
+		parsed, err := strconv.Atoi(cleaned)
 		if err != nil {
-			log.Fatalf("invalid --port value: %q", servePort)
+			log.Fatalf("invalid --port value: %q", port)
 		}
-		overrides["port"] = port
+		overrides["port"] = parsed
 	}
 	return overrides
-}
-
-func init() {
-	serveCmd.Flags().StringVar(&serveHost, "host", "", "Host to bind to")
-	serveCmd.Flags().StringVar(&servePort, "port", "", "Port to bind to")
 }

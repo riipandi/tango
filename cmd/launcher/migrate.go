@@ -1,42 +1,37 @@
 package launcher
 
-import (
-	"fmt"
+import "fmt"
 
-	"github.com/spf13/cobra"
-)
-
-var migrateCmd = &cobra.Command{
-	Use:   "migrate",
-	Short: "Database migration commands",
+// MigrateCmd groups the database migration subcommands.
+type MigrateCmd struct {
+	Up     MigrateUpCmd     `cmd:"" help:"Run database migrations"`
+	Down   MigrateDownCmd   `cmd:"" help:"Rollback database migrations"`
+	Status MigrateStatusCmd `cmd:"" help:"Check database migration status"`
 }
 
-var migrateUpCmd = &cobra.Command{
-	Use:   "up",
-	Short: "Run database migrations",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("migrate up: not yet implemented")
-	},
+// MigrateUpCmd runs database migrations.
+type MigrateUpCmd struct{}
+
+// Run executes the migration.
+func (c *MigrateUpCmd) Run() error {
+	fmt.Println("migrate up: not yet implemented")
+	return nil
 }
 
-var migrateDownCmd = &cobra.Command{
-	Use:   "down",
-	Short: "Rollback database migrations",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("migrate down: not yet implemented")
-	},
+// MigrateDownCmd rolls back database migrations.
+type MigrateDownCmd struct{}
+
+// Run executes the rollback.
+func (c *MigrateDownCmd) Run() error {
+	fmt.Println("migrate down: not yet implemented")
+	return nil
 }
 
-var migrateStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Check database migration status",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("migrate status: not yet implemented")
-	},
-}
+// MigrateStatusCmd checks database migration status.
+type MigrateStatusCmd struct{}
 
-func init() {
-	migrateCmd.AddCommand(migrateUpCmd)
-	migrateCmd.AddCommand(migrateDownCmd)
-	migrateCmd.AddCommand(migrateStatusCmd)
+// Run prints the migration status.
+func (c *MigrateStatusCmd) Run() error {
+	fmt.Println("migrate status: not yet implemented")
+	return nil
 }

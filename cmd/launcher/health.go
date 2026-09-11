@@ -8,51 +8,49 @@ import (
 	"time"
 
 	"github.com/riipandi/tango/internal/config"
-	"github.com/spf13/cobra"
 )
 
-var (
-	healthAddr string
-	healthLive bool
-)
+// HealthCmd checks application health.
+type HealthCmd struct {
+	Addr string `help:"Server health endpoint URL (default: from config)"`
+	Live bool   `help:"Check live server via HTTP"`
+}
 
-var healthCmd = &cobra.Command{
-	Use:     "health",
-	Aliases: []string{"hc"},
-	Short:   "Check application health",
-	Run: func(cmd *cobra.Command, args []string) {
-		addr := healthAddr
+// Run prints static binary info, or probes a live server.
+func (h *HealthCmd) Run(cli *CLI) error {
+	addr := h.Addr
+	if h.Live {
 		if addr == "" {
-			cfg, err := config.Load(config.LoadOptions{EnvFile: argEnvFile})
+			cfg, err := config.Load(config.LoadOptions{EnvFile: cli.EnvFile})
 			if err != nil {
-				fmt.Printf("unhealthy: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("load config: %w", err)
 			}
 			addr = fmt.Sprintf("http://%s:%d/api/healthz", cfg.Host, cfg.Port)
 		}
-		if healthLive {
-			checkLive(addr)
-			return
-		}
-		checkStatic(cmd)
-	},
+		return checkLive(addr)
+	}
+	checkStatic()
+	return nil
 }
 
-func checkStatic(cmd *cobra.Command) {
+// checkStatic prints build and runtime information.
+func checkStatic() {
 	exe, _ := os.Executable()
 	info, err := os.Stat(exe)
 	var size string
 	if err == nil {
 		size = formatSize(info.Size())
 	}
-	cmd.Printf("runtime:   %s\n", runtime.Version())
-	cmd.Printf("platform:  %s/%s\n", runtime.GOOS, runtime.GOARCH)
-	cmd.Printf("binary:    %s\n", exe)
-	cmd.Printf("size:      %s\n", size)
-	cmd.Println("status:    healthy")
+	fmt.Printf("runtime:   %s\n", runtime.Version())
+	fmt.Printf("platform:  %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("binary:    %s\n", exe)
+	fmt.Printf("size:      %s\n", size)
+	fmt.Println("status:    healthy")
 }
 
-func checkLive(addr string) {
+// checkLive probes the configured endpoint; an unhealthy result
+// terminates the process with exit code 1.
+func checkLive(addr string) error {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(addr)
 	if err != nil {
@@ -67,6 +65,7 @@ func checkLive(addr string) {
 	}
 
 	fmt.Println("ok")
+	return nil
 }
 
 func formatSize(bytes int64) string {
@@ -76,9 +75,4 @@ func formatSize(bytes int64) string {
 	}
 	const kb = 1024
 	return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
-}
-
-func init() {
-	healthCmd.Flags().StringVar(&healthAddr, "addr", "", "Server health endpoint URL (default: from config)")
-	healthCmd.Flags().BoolVar(&healthLive, "live", false, "Check live server via HTTP")
 }

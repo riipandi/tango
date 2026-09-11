@@ -35,7 +35,7 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 func TestHealthStaticPrintsBinaryInfo(t *testing.T) {
-	out := runRootCommand(t, "hc")
+	out := runCommand(t, "hc")
 
 	assert.Contains(t, out, "status:    healthy")
 	exe, err := os.Executable()
@@ -49,8 +49,13 @@ func TestHealthLiveOK(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	out := captureStdout(t, func() {
-		runRootCommand(t, "hc", "--live", "--addr", upstream.URL)
-	})
+	// runCommand already captures command output.
+	out := runCommand(t, "hc", "--live", "--addr", upstream.URL)
 	assert.Contains(t, out, "ok")
+}
+
+func TestMigrateSubcommands(t *testing.T) {
+	assert.Contains(t, runCommand(t, "migrate", "up"), "migrate up: not yet implemented")
+	assert.Contains(t, runCommand(t, "migrate", "down"), "migrate down: not yet implemented")
+	assert.Contains(t, runCommand(t, "migrate", "status"), "migrate status: not yet implemented")
 }
