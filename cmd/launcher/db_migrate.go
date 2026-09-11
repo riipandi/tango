@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/config"
@@ -39,7 +40,8 @@ func (c *MigrateUpCmd) Run(cli *CLI) error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx, cancel := dbContext()
+	defer cancel()
 	dsn := cfg.Database.URL
 
 	var applied []database.MigrationOutcome
@@ -75,7 +77,8 @@ func (c *MigrateDownCmd) Run(cli *CLI) error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx, cancel := dbContext()
+	defer cancel()
 	dsn := cfg.Database.URL
 
 	if c.DryRun {
@@ -166,7 +169,9 @@ func (c *MigrateVersionCmd) Run(cli *CLI) error {
 	if err != nil {
 		return err
 	}
-	current, target, err := database.MigrateVersion(context.Background(), cfg.Database.URL)
+	ctx, cancel := dbContext()
+	defer cancel()
+	current, target, err := database.MigrateVersion(ctx, cfg.Database.URL)
 	if err != nil {
 		return fmt.Errorf("db migrate:version: %w", err)
 	}
@@ -183,7 +188,9 @@ func (c *MigrateStatusCmd) Run(cli *CLI) error {
 	if err != nil {
 		return err
 	}
-	statuses, err := database.MigrateStatus(context.Background(), cfg.Database.URL)
+	ctx, cancel := dbContext()
+	defer cancel()
+	statuses, err := database.MigrateStatus(ctx, cfg.Database.URL)
 	if err != nil {
 		return fmt.Errorf("db migrate:status: %w", err)
 	}
@@ -204,13 +211,15 @@ type DBDumpCmd struct {
 	Mode string `arg:"" help:"Dump scope: all (schema & data) or data"`
 }
 
-// Run creates a custom-format dump in storage/backup.
+// Run creates a custom-format dump in the configured backup dir.
 func (c *DBDumpCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
 		return err
 	}
-	path, err := database.Dump(context.Background(), cfg.Database.URL, c.Mode)
+	ctx, cancel := dbContext()
+	defer cancel()
+	path, err := database.Dump(ctx, cfg.Database.URL, c.Mode, cfg.BackupDir())
 	if err != nil {
 		return fmt.Errorf("db dump: %w", err)
 	}
@@ -243,7 +252,9 @@ func (c *DBRestoreCmd) Run(cli *CLI) error {
 	if confirmErr := confirmDestructive(c.Force); confirmErr != nil {
 		return confirmErr
 	}
-	if err := database.Restore(context.Background(), cfg.Database.URL, c.Mode, c.File); err != nil {
+	ctx, cancel := dbContext()
+	defer cancel()
+	if err := database.Restore(ctx, cfg.Database.URL, c.Mode, c.File); err != nil {
 		return fmt.Errorf("db restore: %w", err)
 	}
 	fmt.Printf("%srestore completed%s\n", colorGreen, colorReset)
@@ -255,13 +266,15 @@ type DBExportCmd struct {
 	Mode string `arg:"" help:"Export scope: all (schema & data) or data"`
 }
 
-// Run exports the database as SQL in storage/backup.
+// Run exports the database as SQL into the configured backup dir.
 func (c *DBExportCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
 		return err
 	}
-	path, err := database.Export(context.Background(), cfg.Database.URL, c.Mode)
+	ctx, cancel := dbContext()
+	defer cancel()
+	path, err := database.Export(ctx, cfg.Database.URL, c.Mode, cfg.BackupDir())
 	if err != nil {
 		return fmt.Errorf("db export: %w", err)
 	}
@@ -293,11 +306,26 @@ func (c *DBImportCmd) Run(cli *CLI) error {
 	if confirmErr := confirmDestructive(c.Force); confirmErr != nil {
 		return confirmErr
 	}
-	if err := database.Import(context.Background(), cfg.Database.URL, c.File); err != nil {
+	ctx, cancel := dbContext()
+	defer cancel()
+	if err := database.Import(ctx, cfg.Database.URL, c.File); err != nil {
 		return fmt.Errorf("db import: %w", err)
 	}
 	fmt.Printf("%simport completed%s\n", colorGreen, colorReset)
 	return nil
+}
+
+// dbTimeout bounds every database command: migrations, dumps,
+// restores, and client-binary invocations. Long restores on big
+// databases can exceed it — the context only cancels the wait,
+// and pg_dump/pg_restore finish their current statement.
+const dbTimeout = 5 * time.Minute
+
+// dbContext returns a timeout-bounded context for database
+// commands, so a hung server or binary cannot block the CLI
+// forever.
+func dbContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), dbTimeout)
 }
 
 // stdinReader is the input source for confirmation prompts; tests
@@ -335,11 +363,8 @@ func confirmDestructive(force bool) error {
 }
 
 // migrateConfig loads the layered configuration for migration
-// commands: only the DSN matters.
+// commands: the DSN plus the derived data-root paths. Global CLI
+// flags (--data-dir) win over env and env-file layers.
 func migrateConfig(cli *CLI) (*config.Config, error) {
-	cfg, err := config.Load(config.LoadOptions{EnvFile: cli.EnvFile})
-	if err != nil {
-		return nil, fmt.Errorf("load config: %w", err)
-	}
-	return cfg, nil
+	return loadConfig(cli, nil)
 }

@@ -140,12 +140,17 @@ DROP FUNCTION IF EXISTS get_database_sizes();
 DROP FUNCTION IF EXISTS fn_updated_at_value();
 
 -- Revoke privileges from users before dropping schemas to ensure clean removal and avoid dependency issues.
+REVOKE USAGE, CREATE ON SCHEMA auth FROM pg_database_owner;
 REVOKE USAGE, CREATE ON SCHEMA reference FROM pg_database_owner;
 REVOKE USAGE, CREATE ON SCHEMA scheduler FROM pg_database_owner;
 
--- Use CASCADE only if you are sure all objects should be removed.
--- Use RESTRICT to avoid accidental data loss; schema will only be dropped if empty.
-DROP SCHEMA IF EXISTS reference RESTRICT;
+-- Mirror the Up block: drop every schema this migration creates.
+-- CASCADE reverts the initial state fully; later migrations own
+-- their own Down paths, so a non-empty schema here means the
+-- rollback order was violated and must fail loudly rather than
+-- silently leave objects behind.
+DROP SCHEMA IF EXISTS auth CASCADE;
+DROP SCHEMA IF EXISTS reference CASCADE;
 DROP SCHEMA IF EXISTS scheduler CASCADE;
 
 -- +goose StatementEnd

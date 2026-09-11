@@ -33,17 +33,21 @@ func TestDBLifecycle(t *testing.T) {
 
 	pg := testutils.StartPostgres(t.Context(), t)
 	t.Setenv("DATABASE_URL", pg.DSN)
+	// Isolate on-disk state: backups land in a temp data root.
+	dataDir := t.TempDir()
+	t.Setenv("APP_DATA_DIR", dataDir)
 
 	// Migrate first: the backup, restore, and export round-trips
 	// below need the schema (and the metadata table) to exist.
 	_, err := runMigrate(t, false, nil, "db", "migrate:up")
 	require.NoError(t, err)
 
-	// Dump: a real file lands in storage/backup.
+	// Dump: a real file lands in <data-dir>/backup.
 	out, err := runMigrate(t, false, nil, "db", "dump", "all")
 	require.NoError(t, err)
 	assert.Contains(t, out, "dumped")
 	dumpFile := backupPathFromOutput(t, out)
+	assert.Contains(t, dumpFile, dataDir, "dump must land under the configured data root")
 	info, statErr := os.Stat(dumpFile)
 	require.NoError(t, statErr)
 	assert.Greater(t, info.Size(), int64(100), "dump must not be empty")
@@ -83,12 +87,19 @@ func TestDBLifecycle(t *testing.T) {
 	t.Cleanup(func() { _ = os.Remove(sqlFile) })
 }
 
-// backupPathFromOutput extracts the storage/backup path from a
-// dump/export command's stdout.
+// backupPathFromOutput extracts the backup path from a
+// dump/export command's stdout: everything from the data-root
+// marker to end of line.
 func backupPathFromOutput(t *testing.T, out string) string {
 	t.Helper()
 
-	idx := strings.Index(out, "storage/")
-	require.NotEqual(t, -1, idx, "output must contain the backup path: %q", out)
-	return strings.TrimSpace(out[idx:])
+	line := out
+	if idx := strings.LastIndex(out, "dumped"); idx >= 0 {
+		line = out[idx:]
+	} else if idx := strings.LastIndex(out, "exported"); idx >= 0 {
+		line = out[idx:]
+	}
+	fields := strings.Fields(line)
+	require.NotEmpty(t, fields, "output must contain the backup path: %q", out)
+	return strings.TrimSpace(fields[len(fields)-1])
 }

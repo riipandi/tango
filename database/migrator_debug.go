@@ -182,10 +182,14 @@ func validateDir(dir string) error {
 	return nil
 }
 
-// migrationVersion parses the sequential "%05d_" prefix.
+// migrationVersion parses the sequential "%05d_" prefix. Short or
+// malformed names are a validation error, never a slice panic.
 func migrationVersion(name string) (int64, error) {
+	if len(name) < 6 || !strings.HasPrefix(name[5:], "_") {
+		return 0, fmt.Errorf("expected sequential naming like 00001_name.sql")
+	}
 	version, err := strconv.ParseInt(name[:5], 10, 64)
-	if err != nil || !strings.HasPrefix(name[5:], "_") {
+	if err != nil {
 		return 0, fmt.Errorf("expected sequential naming like 00001_name.sql")
 	}
 	return version, nil

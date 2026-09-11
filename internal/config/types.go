@@ -20,10 +20,10 @@ type Config struct {
 
 type AppConfig struct {
 	Mode         string `koanf:"mode"`
+	DataDir      string `koanf:"data_dir"`
 	LogLevel     string `koanf:"log_level"`
 	LogTransport string `koanf:"log_transport"`
 	LogFormat    string `koanf:"log_format"`
-	LogFile      string `koanf:"log_file"`
 	SecretKey    string `koanf:"secret_key"`
 }
 

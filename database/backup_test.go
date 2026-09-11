@@ -41,27 +41,29 @@ func TestBackupRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	// --- Dump (custom format), all and data.
-	fullDump, err := Dump(ctx, pg.DSN, "all")
+	// --- Dump (custom format), all and data. Empty dir selects the
+	// default backup directory; the dir-override case is covered
+	// below in the same round trip.
+	fullDump, err := Dump(ctx, pg.DSN, "all", "")
 	require.NoError(t, err)
 	info, err := os.Stat(fullDump)
 	require.NoError(t, err)
 	assert.Greater(t, info.Size(), int64(100), "custom dump must not be empty")
 
-	_, err = Dump(ctx, pg.DSN, "data")
+	_, err = Dump(ctx, pg.DSN, "data", t.TempDir())
 	require.NoError(t, err)
 
-	_, err = Dump(ctx, pg.DSN, "bogus")
+	_, err = Dump(ctx, pg.DSN, "bogus", "")
 	assert.ErrorContains(t, err, "unknown dump mode")
 
 	// --- Export (plain SQL), all and data.
-	fullSQL, err := Export(ctx, pg.DSN, "all")
+	fullSQL, err := Export(ctx, pg.DSN, "all", "")
 	require.NoError(t, err)
 	exported, err := os.ReadFile(fullSQL)
 	require.NoError(t, err)
 	assert.Contains(t, string(exported), "app_migration", "export must contain the metadata table")
 
-	_, err = Export(ctx, pg.DSN, "data")
+	_, err = Export(ctx, pg.DSN, "data", t.TempDir())
 	require.NoError(t, err)
 
 	// --- Restore (custom format): objects captured in the dump
@@ -71,7 +73,7 @@ func TestBackupRoundTrip(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE backup_marker_test (id int)")
 	require.NoError(t, err)
 
-	fullDump, err = Dump(ctx, pg.DSN, "all")
+	fullDump, err = Dump(ctx, pg.DSN, "all", "")
 	require.NoError(t, err)
 	_, err = db.Exec("ALTER TABLE backup_marker_test ADD COLUMN extra int")
 	require.NoError(t, err)
@@ -87,7 +89,8 @@ func TestBackupRoundTrip(t *testing.T) {
 	_, err = db.Exec("DROP TABLE backup_marker_test")
 	require.NoError(t, err)
 
-	// --- Import: a plain SQL file is executed as-is.
+	// --- Import: a plain SQL file is executed as-is, and a
+	// failing statement aborts the import (ON_ERROR_STOP=on).
 	sqlFile := filepath.Join(t.TempDir(), "seed.sql")
 	require.NoError(t, os.WriteFile(sqlFile, []byte(
 		"CREATE TABLE import_marker_test (id int);\nINSERT INTO import_marker_test VALUES (42);\n",
@@ -97,6 +100,10 @@ func TestBackupRoundTrip(t *testing.T) {
 	var value int
 	require.NoError(t, db.QueryRow("SELECT id FROM import_marker_test LIMIT 1").Scan(&value))
 	assert.Equal(t, 42, value)
+
+	badFile := filepath.Join(t.TempDir(), "bad.sql")
+	require.NoError(t, os.WriteFile(badFile, []byte("SELECT * FROM missing_table_xyz;\n"), 0o644))
+	assert.Error(t, Import(ctx, pg.DSN, badFile), "failing statement must abort the import")
 }
 
 // TestRestoreDryRunCommands verifies the command renderers used by
@@ -122,5 +129,5 @@ func TestRestoreDryRunCommands(t *testing.T) {
 	cmd, err = ImportCommand(pg.DSN, sqlFile)
 	require.NoError(t, err)
 	assert.Contains(t, cmd, "psql")
-	assert.Contains(t, cmd, "ON_ERROR_STOP=off")
+	assert.Contains(t, cmd, "ON_ERROR_STOP=on")
 }

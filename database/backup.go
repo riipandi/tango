@@ -25,9 +25,10 @@ import (
 )
 
 const (
-	// backupDir receives every dump and export, relative to the
-	// working directory of the invoker.
-	backupDir = "storage/backup"
+	// defaultBackupSubdir is the dump/export subdirectory below
+	// the configured data root (<data-dir>/backup). Tests pass an
+	// explicit dir; the launcher passes cfg.BackupDir().
+	defaultBackupSubdir = "backup"
 
 	// timestampLayout names backup files without spaces or colons.
 	timestampLayout = "20060102_150405"
@@ -107,19 +108,38 @@ func runTool(ctx context.Context, parts connParts, name string, args ...string) 
 	return nil
 }
 
+// backupDirFor resolves the backup directory: an explicit dir
+// wins (the launcher passes cfg.BackupDir(), derived from the
+// data root), otherwise a temp-dir-safe default for tests.
+// Relative paths resolve against the invoker's working directory;
+// the directory is created on use.
+func backupDirFor(override string) string {
+	if strings.TrimSpace(override) != "" {
+		return override
+	}
+	return filepath.Join(os.TempDir(), "tango-"+defaultBackupSubdir)
+}
+
 // backupPath returns the backup file path for a database and
 // suffix, creating the backup directory.
 func backupPath(database, suffix, ext string) (string, error) {
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+	return backupPathIn(backupDirFor(""), database, suffix, ext)
+}
+
+// backupPathIn is backupPath with an explicit directory, so the
+// launcher can thread the configured backup dir through.
+func backupPathIn(dir, database, suffix, ext string) (string, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create backup dir: %w", err)
 	}
 	stamp := time.Now().Format(timestampLayout)
-	return filepath.Join(backupDir, fmt.Sprintf("%s_%s_%s.%s", database, suffix, stamp, ext)), nil
+	return filepath.Join(dir, fmt.Sprintf("%s_%s_%s.%s", database, suffix, stamp, ext)), nil
 }
 
 // Dump creates a custom-format (binary) backup: all = schema and
-// data, data = data only. Returns the created file path.
-func Dump(ctx context.Context, dsn, mode string) (string, error) {
+// data, data = data only. The launcher passes cfg.BackupDir(),
+// derived from the app data root. Returns the created file path.
+func Dump(ctx context.Context, dsn, mode, dir string) (string, error) {
 	if mode != "all" && mode != "data" {
 		return "", fmt.Errorf("unknown dump mode %q (want all or data)", mode)
 	}
@@ -132,7 +152,7 @@ func Dump(ctx context.Context, dsn, mode string) (string, error) {
 	if mode == "data" {
 		suffix = "data"
 	}
-	target, err := backupPath(parts.Database, suffix, "dump")
+	target, err := backupPathIn(backupDirFor(dir), parts.Database, suffix, "dump")
 	if err != nil {
 		return "", err
 	}
@@ -152,8 +172,10 @@ func Dump(ctx context.Context, dsn, mode string) (string, error) {
 }
 
 // Export creates a plain-SQL backup: all = schema and data with
-// clean statements, data = inserts only. Returns the created path.
-func Export(ctx context.Context, dsn, mode string) (string, error) {
+// clean statements, data = inserts only. The launcher passes
+// cfg.BackupDir(), derived from the app data root. Returns the
+// created path.
+func Export(ctx context.Context, dsn, mode, dir string) (string, error) {
 	if mode != "all" && mode != "data" {
 		return "", fmt.Errorf("unknown export mode %q (want all or data)", mode)
 	}
@@ -166,7 +188,7 @@ func Export(ctx context.Context, dsn, mode string) (string, error) {
 	if mode == "data" {
 		suffix = "data"
 	}
-	target, err := backupPath(parts.Database, suffix, "sql")
+	target, err := backupPathIn(backupDirFor(dir), parts.Database, suffix, "sql")
 	if err != nil {
 		return "", err
 	}
@@ -242,9 +264,10 @@ func restoreArgs(dsn, mode, dumpFile string) (string, connParts, []string, error
 	return bin, parts, args, nil
 }
 
-// Import runs a plain SQL file through psql. Like the script it
-// ports, it continues past per-statement errors (ON_ERROR_STOP=off)
-// so partial imports are visible. Destructive — the caller gates it.
+// Import runs a plain SQL file through psql with ON_ERROR_STOP=on,
+// so the first failing statement aborts the import and psql exits
+// non-zero — a partial import never reports success. Destructive —
+// the caller gates it.
 func Import(ctx context.Context, dsn, sqlFile string) error {
 	bin, parts, args, err := importArgs(dsn, sqlFile)
 	if err != nil {
@@ -277,7 +300,7 @@ func importArgs(dsn, sqlFile string) (string, connParts, []string, error) {
 	args := parts.baseArgs()
 	args = append(args,
 		"-f", sqlFile,
-		"--variable=ON_ERROR_STOP=off",
+		"--variable=ON_ERROR_STOP=on",
 		"--quiet",
 	)
 

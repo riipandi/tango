@@ -9,10 +9,10 @@ var defaultConfig = Config{
 
 	App: AppConfig{
 		Mode:         "development",
+		DataDir:      "storage",
 		LogLevel:     "info",
 		LogTransport: "file",
 		LogFormat:    "structured",
-		LogFile:      "storage/logs/app.log",
 	},
 
 	Auth: AuthConfig{

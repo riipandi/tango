@@ -34,7 +34,12 @@ func versionVars() kong.Vars {
 // the parsed CLI via kong's type-based binding (ctx.Run(cli)).
 type CLI struct {
 	// EnvFile loads a dotenv file into the config layering, below the system environment.
-	EnvFile string `help:"Load environment variables from a dotenv file (system env takes precedence)"`
+	EnvFile string `help:"Load environment variables from a dotenv file"`
+
+	// DataDir overrides the app data directory (app.data_dir):
+	// the single root for logs, backups, and generated keys.
+	// Wins over APP_DATA_DIR and the env file.
+	DataDir string `name:"data-dir" help:"Application data directory for on-disk runtime state"`
 
 	// Version prints the "version" variable and exits.
 	Version kong.VersionFlag `short:"V" help:"Show the application version"`
@@ -42,6 +47,35 @@ type CLI struct {
 	Serve  ServeCmd  `cmd:"" help:"Start the application server"`
 	DB     DBCmd     `cmd:"" help:"Database backup, restore, and migration commands"`
 	Health HealthCmd `cmd:"" help:"Check application health" aliases:"hc"`
+}
+
+// globalOverrides resolves the global CLI flags into config
+// overrides: --data-dir wins over every other layer (it is the
+// most explicit statement of intent).
+func globalOverrides(cli *CLI) map[string]any {
+	overrides := map[string]any{}
+	if cli.DataDir != "" {
+		overrides["app.data_dir"] = cli.DataDir
+	}
+	return overrides
+}
+
+// loadConfig loads the layered configuration for any command:
+// global CLI flags (--data-dir, --env-file) plus optional
+// command-specific overrides. Global flags win on key conflict.
+func loadConfig(cli *CLI, extra map[string]any) (*config.Config, error) {
+	overrides := map[string]any{}
+	for key, value := range extra {
+		overrides[key] = value
+	}
+	for key, value := range globalOverrides(cli) {
+		overrides[key] = value
+	}
+	cfg, err := config.Load(config.LoadOptions{EnvFile: cli.EnvFile, Overrides: overrides})
+	if err != nil {
+		return nil, fmt.Errorf("load config: %w", err)
+	}
+	return cfg, nil
 }
 
 // RunCLI parses args and runs the selected command. Kept separate

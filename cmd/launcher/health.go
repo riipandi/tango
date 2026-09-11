@@ -6,8 +6,6 @@ import (
 	"os"
 	"runtime"
 	"time"
-
-	"github.com/riipandi/tango/internal/config"
 )
 
 // HealthCmd checks application health.
@@ -21,9 +19,9 @@ func (h *HealthCmd) Run(cli *CLI) error {
 	addr := h.Addr
 	if h.Live {
 		if addr == "" {
-			cfg, err := config.Load(config.LoadOptions{EnvFile: cli.EnvFile})
+			cfg, err := loadConfig(cli, nil)
 			if err != nil {
-				return fmt.Errorf("load config: %w", err)
+				return err
 			}
 			addr = fmt.Sprintf("http://%s:%d/api/healthz", cfg.Host, cfg.Port)
 		}

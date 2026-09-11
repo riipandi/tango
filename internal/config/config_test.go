@@ -26,6 +26,10 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, "localhost", cfg.Host)
 	assert.Equal(t, 3080, cfg.Port)
 	assert.Equal(t, "development", cfg.App.Mode)
+	assert.Equal(t, "storage", cfg.App.DataDir)
+	assert.Equal(t, "storage/logs/app.log", cfg.LogFile())
+	assert.Equal(t, "storage/backup", cfg.BackupDir())
+	assert.Equal(t, "storage/keys", cfg.KeysDir())
 	assert.Equal(t, "structured", cfg.App.LogFormat)
 	assert.Equal(t, "http://localhost:3000", cfg.Public.BaseURL)
 	assert.NotEmpty(t, cfg.Database.URL)
@@ -34,12 +38,27 @@ func TestLoadDefaults(t *testing.T) {
 func TestLoadEnvOverrides(t *testing.T) {
 	t.Setenv("PORT", "9999")
 	t.Setenv("APP_LOG_LEVEL", "debug")
+	t.Setenv("APP_DATA_DIR", "/srv/data")
 
 	cfg, err := Load(LoadOptions{})
 	require.NoError(t, err)
 
 	assert.Equal(t, 9999, cfg.Port)
 	assert.Equal(t, "debug", cfg.App.LogLevel)
+	assert.Equal(t, "/srv/data", cfg.App.DataDir)
+	assert.Equal(t, "/srv/data/logs/app.log", cfg.LogFile())
+	assert.Equal(t, "/srv/data/backup", cfg.BackupDir())
+	assert.Equal(t, "/srv/data/keys", cfg.KeysDir())
+}
+
+func TestLoadDataDirOverride(t *testing.T) {
+	cfg, err := Load(LoadOptions{Overrides: map[string]any{
+		"app.data_dir": "/tmp/custom",
+	}})
+	require.NoError(t, err)
+
+	assert.Equal(t, "/tmp/custom/logs/app.log", cfg.LogFile())
+	assert.Equal(t, "/tmp/custom/backup", cfg.BackupDir())
 }
 
 func TestLoadEnvFileLayer(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"os/signal"
 	"strconv"
@@ -12,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/logger"
@@ -29,14 +27,16 @@ type ServeCmd struct {
 }
 
 // Run loads the layered config, builds the shared logger, and serves
-// until SIGINT/SIGTERM.
+// until SIGINT/SIGTERM. Every failure path returns an error so the
+// deferred closes (pool, fetcher, logger) always run.
 func (s *ServeCmd) Run(cli *CLI) error {
-	cfg, err := config.Load(config.LoadOptions{
-		EnvFile:   cli.EnvFile,
-		Overrides: flagOverrides(s.Host, s.Port),
-	})
+	overrides, err := flagOverrides(s.Host, s.Port)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return err
+	}
+	cfg, err := loadConfig(cli, overrides)
+	if err != nil {
+		return err
 	}
 
 	// Composition root of the runtime: the application logger is
@@ -46,7 +46,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		Level:  cfg.App.LogLevel,
 		Output: cfg.App.LogTransport,
 		Format: cfg.App.LogFormat,
-		File:   cfg.App.LogFile,
+		File:   cfg.LogFile(),
 	})
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
@@ -79,16 +79,23 @@ func (s *ServeCmd) Run(cli *CLI) error {
 
 	reg := registry.New(registry.Deps{Config: cfg, Logger: lg, Fetcher: fch, Mailer: ml, DB: db})
 	if err := reg.Start(context.Background()); err != nil {
-		lg.WithError(err).Fatal("failed to start modules")
+		return fmt.Errorf("start modules: %w", err)
 	}
 
 	srv := transport.NewHTTPServer(reg, cfg, lg)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
+	// Serve errors in the background goroutine cannot return
+	// through Run, so they are captured on a buffered channel and
+	// reported after shutdown. http.ErrServerClosed is the normal
+	// shutdown path, not an error.
+	serveErr := make(chan error, 1)
 	go func() {
 		lg.Info("listening on http://" + addr)
 		if err := srv.ListenAndServe(addr); err != nil && err != http.ErrServerClosed {
-			lg.WithError(err).Fatal("server error")
+			serveErr <- err
+		} else {
+			serveErr <- nil
 		}
 	}()
 
@@ -106,7 +113,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		lg.WithError(err).Fatal("shutdown error")
+		return fmt.Errorf("shutdown server: %w", err)
 	}
 
 	if err := reg.Stop(shutdownCtx); err != nil {
@@ -114,12 +121,14 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	}
 
 	lg.Info("server stopped")
-	return nil
+	return <-serveErr
 }
 
 // flagOverrides resolves the serve CLI flags into config overrides.
-// Empty flags contribute nothing; an invalid --port fails fast.
-func flagOverrides(host, port string) map[string]any {
+// Empty flags contribute nothing. An invalid --port is a plain
+// error (never log.Fatal inside a Run method: fatal exits the
+// process and skips deferred cleanup).
+func flagOverrides(host, port string) (map[string]any, error) {
 	overrides := map[string]any{}
 	if host != "" {
 		overrides["host"] = host
@@ -128,9 +137,9 @@ func flagOverrides(host, port string) map[string]any {
 		cleaned := strings.TrimLeft(port, ":")
 		parsed, err := strconv.Atoi(cleaned)
 		if err != nil {
-			log.Fatalf("invalid --port value: %q", port)
+			return nil, fmt.Errorf("invalid --port value %q: %w", port, err)
 		}
 		overrides["port"] = parsed
 	}
-	return overrides
+	return overrides, nil
 }

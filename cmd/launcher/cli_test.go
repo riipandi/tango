@@ -79,10 +79,24 @@ func TestHelpListsCommands(t *testing.T) {
 }
 
 func TestFlagOverrides(t *testing.T) {
-	assert.Empty(t, flagOverrides("", ""))
-	assert.Equal(t, map[string]any{"host": "127.0.0.1"}, flagOverrides("127.0.0.1", ""))
-	assert.Equal(t, map[string]any{"port": 9999}, flagOverrides("", ":9999"))
-	assert.Equal(t, map[string]any{"host": "h", "port": 1}, flagOverrides("h", "1"))
+	empty, err := flagOverrides("", "")
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+
+	hostOnly, err := flagOverrides("127.0.0.1", "")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"host": "127.0.0.1"}, hostOnly)
+
+	portOnly, err := flagOverrides("", ":9999")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"port": 9999}, portOnly)
+
+	both, err := flagOverrides("h", "1")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"host": "h", "port": 1}, both)
+
+	_, err = flagOverrides("", "bogus")
+	assert.ErrorContains(t, err, "invalid --port")
 }
 
 func TestRunCLIParseError(t *testing.T) {

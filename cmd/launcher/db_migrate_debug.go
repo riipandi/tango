@@ -3,7 +3,6 @@
 package launcher
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/riipandi/tango/database"
@@ -67,7 +66,8 @@ func (c *MigrateResetCmd) Run(cli *CLI) error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx, cancel := dbContext()
+	defer cancel()
 	dsn := cfg.Database.URL
 
 	if c.DryRun {

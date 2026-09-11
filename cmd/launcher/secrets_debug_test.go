@@ -39,9 +39,21 @@ func TestSecretsGeneratesKeys(t *testing.T) {
 	assert.Contains(t, out, "APP_SECRET_KEY=")
 	assert.Contains(t, out, "JWT_PRIVATE_KEY=")
 
-	// PEM key pairs land in storage/keys.
+	// PEM key pairs land in <data-dir>/keys (default storage/keys).
 	for _, name := range []string{"private_key.pem", "public_key.pem"} {
 		data, err := os.ReadFile("storage/keys/" + name)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "KEY-----")
+	}
+
+	// --data-dir relocates the keys: the default tree stays empty.
+	custom := t.TempDir()
+	out = captureStdout(t, func() {
+		require.NoError(t, RunCLI([]string{"--data-dir", custom, "secrets"}, kong.Writers(io.Discard, io.Discard)))
+	})
+	assert.Contains(t, out, "APP_SECRET_KEY=")
+	for _, name := range []string{"private_key.pem", "public_key.pem"} {
+		data, err := os.ReadFile(custom + "/keys/" + name)
 		require.NoError(t, err)
 		assert.Contains(t, string(data), "KEY-----")
 	}

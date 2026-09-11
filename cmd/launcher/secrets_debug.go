@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/alecthomas/kong"
+	"github.com/riipandi/tango/internal/config"
 )
 
 // SecretsCmd generates application secrets.
@@ -42,8 +43,9 @@ func (s *SecretsCmd) Help() string {
 		"  tango secrets --mldsa\n"
 }
 
-// Run generates keys and displays or applies the secrets.
-func (s *SecretsCmd) Run() error {
+// Run generates keys and displays or applies the secrets. Keys
+// land under the configured data root (<data-dir>/keys).
+func (s *SecretsCmd) Run(cli *CLI) error {
 	if s.Apply {
 		if _, err := os.Stat(s.OutFile); err != nil {
 			fmt.Printf("%sERROR: %s not found, the --apply flag requires %s to exist%s\n",
@@ -51,6 +53,11 @@ func (s *SecretsCmd) Run() error {
 			fmt.Printf("Create the file first, or run without --apply to generate secrets only\n\n")
 			return nil
 		}
+	}
+
+	cfg, err := loadSecretsConfig(cli)
+	if err != nil {
+		return err
 	}
 
 	appSecretKey, err := randomBase64Key()
@@ -63,7 +70,7 @@ func (s *SecretsCmd) Run() error {
 		return fmt.Errorf("generate jwt secret: %w", err)
 	}
 
-	privateKey, publicKey, err := generateJWTKeyPair(s.RSA, s.MLDSA)
+	privateKey, publicKey, err := generateJWTKeyPair(cfg.KeysDir(), s.RSA, s.MLDSA)
 	if err != nil {
 		return fmt.Errorf("generate jwt key pair: %w", err)
 	}
@@ -112,11 +119,19 @@ func randomBase64Key() (string, error) {
 	return base64.StdEncoding.EncodeToString(buf), nil
 }
 
-// generateJWTKeyPair writes the PEM files to storage/ and returns the
+// loadSecretsConfig loads the layered configuration for the
+// secrets command: only the data root matters (keys land under
+// <data-dir>/keys). Global CLI flags (--data-dir) win over env
+// and env-file layers.
+func loadSecretsConfig(cli *CLI) (*config.Config, error) {
+	return loadConfig(cli, nil)
+}
+
+// generateJWTKeyPair writes the PEM files to outDir and returns the
 // base64-encoded (DER, no PEM headers) private and public keys.
 // Algorithm precedence: --mldsa (post-quantum ML-DSA-87, FIPS 204)
 // > --rsa (RSA 2048) > Ed25519 (default).
-func generateJWTKeyPair(useRSA, useMLDSA bool) (string, string, error) {
+func generateJWTKeyPair(outDir string, useRSA, useMLDSA bool) (string, string, error) {
 	var derPrivate, derPublic []byte
 	var err error
 
@@ -161,7 +176,6 @@ func generateJWTKeyPair(useRSA, useMLDSA bool) (string, string, error) {
 			return "", "", err
 		}
 	}
-	outDir := filepath.Join("storage", "keys")
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return "", "", err
 	}
