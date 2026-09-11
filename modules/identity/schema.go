@@ -7,6 +7,7 @@
 //	account   — profile, credentials, account state
 //	session   — sign-in sessions (issue, refresh, revoke)
 //	webauthn  — passkey credentials + ceremonies (primary authn)
+//	password  — password credentials + login/reset flows
 //	apikey    — machine credentials (X-API-KEY)
 //	apiaccess — machine authorization (API scopes + client grants)
 //	usergroup — bulk OIDC client access via groups
