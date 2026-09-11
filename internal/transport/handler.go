@@ -23,7 +23,7 @@ func HealthzHandler(cfg *config.Config) http.HandlerFunc {
 		resp, err := httpClient.R().
 			SetContext(r.Context()).
 			SetTimeout(5 * time.Second).
-			Get("https://api.ipify.org")
+			Get(cfg.Public.HealthcheckURL)
 
 		if err != nil {
 			responder.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{

@@ -52,6 +52,7 @@ type PublicConfig struct {
 	JwtRefreshTokenExpiry  int      `mapstructure:"jwt_refresh_token_expiry"`
 	RateLimitDefaultMax    int      `mapstructure:"rate_limit_default_max"`
 	RateLimitDefaultWindow int      `mapstructure:"rate_limit_default_window"`
+	HealthcheckURL         string   `mapstructure:"healthcheck_url"`
 }
 
 type StorageConfig struct {

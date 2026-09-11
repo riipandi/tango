@@ -15,6 +15,7 @@ func setDefaults() {
 	v.SetDefault("mailer.smtp_port", 1025)
 	v.SetDefault("mailer.smtp_secure", false)
 	v.SetDefault("public.base_url", "http://localhost:3000")
+	v.SetDefault("public.healthcheck_url", "https://api.ipify.org")
 	v.SetDefault("public.s3_assets_url", "http://localhost:9180")
 	v.SetDefault("public.jwt_access_token_expiry", 900)
 	v.SetDefault("public.jwt_refresh_token_expiry", 7200)
@@ -54,6 +55,7 @@ func bindEnvVars() {
 		"mailer.smtp_password":             "MAILER_SMTP_PASSWORD",
 		"mailer.smtp_secure":               "MAILER_SMTP_SECURE",
 		"public.base_url":                  "PUBLIC_BASE_URL",
+		"public.healthcheck_url":           "PUBLIC_HEALTHCHECK_URL",
 		"public.s3_assets_url":             "PUBLIC_S3_ASSETS_URL",
 		"public.trusted_origins":           "PUBLIC_TRUSTED_ORIGINS",
 		"public.jwt_access_token_expiry":   "PUBLIC_JWT_ACCESS_TOKEN_EXPIRY",

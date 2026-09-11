@@ -3,6 +3,9 @@ package identity
 import (
 	"context"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestServiceCreateAndGet(t *testing.T) {
@@ -10,39 +13,39 @@ func TestServiceCreateAndGet(t *testing.T) {
 	var recorded []AuditEvent
 	svc := NewService(store, func(e AuditEvent) { recorded = append(recorded, e) })
 
-	user, err := svc.Create(context.Background(), "Aris")
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	if user.ID != "1" || user.Name != "Aris" {
-		t.Fatalf("unexpected user: %+v", user)
-	}
+	user, err := svc.Create(context.Background(), "John")
+	require.NoError(t, err)
+	assert.Equal(t, "1", user.ID)
+	assert.Equal(t, "John", user.Name)
 
-	if len(recorded) != 1 || recorded[0].Action != "user.created" {
-		t.Fatalf("expected user.created event, got %+v", recorded)
-	}
+	require.Len(t, recorded, 1)
+	assert.Equal(t, "user.created", recorded[0].Action)
 
 	got, err := svc.GetByID(context.Background(), user.ID)
-	if err != nil || got.Name != "Aris" {
-		t.Fatalf("get by id: %+v err=%v", got, err)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "John", got.Name)
 
-	if _, err := svc.Create(context.Background(), ""); err != ErrInvalidName {
-		t.Fatalf("expected ErrInvalidName, got %v", err)
-	}
+	_, err = svc.GetByID(context.Background(), "99")
+	assert.Error(t, err)
+}
+
+func TestServiceCreateValidation(t *testing.T) {
+	svc := NewService(NewMemoryStore(), nil)
+
+	_, err := svc.Create(context.Background(), "")
+	require.ErrorIs(t, err, ErrInvalidName)
 }
 
 func TestMemoryStoreList(t *testing.T) {
 	store := NewMemoryStore()
-	if _, err := store.Create(context.Background(), "A"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.Create(context.Background(), "B"); err != nil {
-		t.Fatal(err)
-	}
+
+	_, err := store.Create(context.Background(), "A")
+	require.NoError(t, err)
+	_, err = store.Create(context.Background(), "B")
+	require.NoError(t, err)
 
 	users := store.List(context.Background())
-	if len(users) != 2 || users[0].Name != "A" || users[1].Name != "B" {
-		t.Fatalf("unexpected list: %+v", users)
-	}
+	require.Len(t, users, 2)
+	assert.Equal(t, "A", users[0].Name)
+	assert.Equal(t, "B", users[1].Name)
 }

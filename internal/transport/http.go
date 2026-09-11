@@ -60,5 +60,8 @@ func (s *HTTPServer) ListenAndServe(addr string) error {
 }
 
 func (s *HTTPServer) Shutdown(ctx context.Context) error {
+	if s.Server == nil {
+		return nil
+	}
 	return s.Server.Shutdown(ctx)
 }

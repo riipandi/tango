@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type stubModule struct {
@@ -30,39 +32,67 @@ func TestRegistryRegisterAndApply(t *testing.T) {
 		r.Get("/b", func(w http.ResponseWriter, r *http.Request) {})
 	}})
 
-	if got := len(reg.Modules()); got != 2 {
-		t.Fatalf("expected 2 modules, got %d", got)
+	assert.Len(t, reg.Modules(), 2)
+	require.NotNil(t, reg.Get("a"))
+	assert.Nil(t, reg.Get("missing"))
+
+	r := chi.NewRouter()
+	reg.Apply(r)
+
+	for _, path := range []string{"/api/a", "/b"} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		assert.Equal(t, 200, w.Code, path)
 	}
-	if reg.Get("a") == nil || reg.Get("missing") != nil {
-		t.Fatal("Get lookup failed")
+}
+
+func TestRegistryDuplicateNamePanics(t *testing.T) {
+	require.Panics(t, func() {
+		reg := NewRegistry()
+		reg.Register(&stubModule{name: "dup"})
+		reg.Register(&stubModule{name: "dup"})
+	})
+}
+
+// bareModule implements only kernel.Module — no route capability.
+type bareModule struct{}
+
+func (m bareModule) Name() string { return "bare" }
+
+func TestRegisterRejectsModuleWithoutRoutes(t *testing.T) {
+	require.Panics(t, func() {
+		reg := NewRegistry()
+		reg.Register(bareModule{})
+	})
+}
+
+type mwModule struct {
+	stubModule
+}
+
+func (m *mwModule) Middleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Module", m.name)
+			next.ServeHTTP(w, r)
+		})
 	}
+}
+
+func TestApplyWiresModuleMiddleware(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(&mwModule{stubModule{name: "mw"}})
+	reg.Register(&stubModule{name: "a", mount: func(r chi.Router) {
+		r.Get("/a", func(w http.ResponseWriter, r *http.Request) {})
+	}})
 
 	r := chi.NewRouter()
 	reg.Apply(r)
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/a", nil))
-	if w.Code != 200 {
-		t.Fatalf("/api/a status = %d", w.Code)
-	}
-
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest("GET", "/b", nil))
-	if w.Code != 200 {
-		t.Fatalf("/b status = %d", w.Code)
-	}
-}
-
-func TestRegistryDuplicateNamePanics(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic on duplicate module name")
-		}
-	}()
-
-	reg := NewRegistry()
-	reg.Register(&stubModule{name: "dup"})
-	reg.Register(&stubModule{name: "dup"})
+	r.ServeHTTP(w, httptest.NewRequest("GET", "/a", nil))
+	require.Equal(t, 200, w.Code)
+	assert.Equal(t, "mw", w.Header().Get("X-Module"))
 }
 
 type startableModule struct {
@@ -87,20 +117,8 @@ func TestRegistryLifecycleOrder(t *testing.T) {
 	reg.Register(&startableModule{stubModule{name: "b"}, &events})
 	reg.Register(&stubModule{name: "plain"}) // no lifecycle
 
-	if err := reg.Start(context.Background()); err != nil {
-		t.Fatalf("start: %v", err)
-	}
-	if err := reg.Stop(context.Background()); err != nil {
-		t.Fatalf("stop: %v", err)
-	}
+	require.NoError(t, reg.Start(context.Background()))
+	require.NoError(t, reg.Stop(context.Background()))
 
-	want := []string{"start:a", "start:b", "stop:b", "stop:a"}
-	if len(events) != len(want) {
-		t.Fatalf("expected %v, got %v", want, events)
-	}
-	for i := range want {
-		if events[i] != want[i] {
-			t.Fatalf("expected %v, got %v", want, events)
-		}
-	}
+	assert.Equal(t, []string{"start:a", "start:b", "stop:b", "stop:a"}, events)
 }
