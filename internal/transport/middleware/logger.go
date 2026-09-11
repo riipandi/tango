@@ -1,25 +1,41 @@
 package middleware
 
 import (
-	"fmt"
-	"log/slog"
 	"net/http"
+	"time"
 
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/riipandi/tango/internal/logger"
+	"go.loglayer.dev/v3"
 )
 
-func Logger() func(http.Handler) http.Handler {
-	return chimw.RequestLogger(&chimw.DefaultLogFormatter{
-		Logger: slogPrinter{},
-	})
-}
+// RequestLogger emits one structured entry per request through the
+// application logger — method, path, status, bytes, duration — with
+// the level escalating on the response status (5xx error, 4xx
+// warning).
+func RequestLogger(log logger.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			ww := chimw.NewWrapResponseWriter(w, r.ProtoMajor)
 
-type slogPrinter struct{}
+			next.ServeHTTP(ww, r)
 
-func (s slogPrinter) Printf(format string, args ...any) {
-	slog.Default().Info(fmt.Sprintf(format, args...))
-}
-
-func (s slogPrinter) Print(args ...any) {
-	slog.Default().Info(fmt.Sprint(args...))
+			entry := log.WithMetadata(loglayer.M{
+				"method":      r.Method,
+				"path":        r.URL.Path,
+				"status":      ww.Status(),
+				"bytes":       ww.BytesWritten(),
+				"duration_ms": time.Since(start).Milliseconds(),
+			})
+			switch {
+			case ww.Status() >= http.StatusInternalServerError:
+				entry.Error("request failed")
+			case ww.Status() >= http.StatusBadRequest:
+				entry.Warn("request rejected")
+			default:
+				entry.Info("request served")
+			}
+		})
+	}
 }

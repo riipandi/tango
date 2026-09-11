@@ -6,6 +6,7 @@ package registry
 import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -18,6 +19,10 @@ import (
 type Deps struct {
 	// Config is the loaded runtime configuration.
 	Config *config.Config
+
+	// Logger is the shared application logger. Modules receive it
+	// to emit structured entries; they never build their own.
+	Logger logger.Logger
 
 	// DB is the shared database pool. Populated once Postgres
 	// support lands; modules receive store implementations built

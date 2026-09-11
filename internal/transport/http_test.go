@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.loglayer.dev/v3"
 )
 
 func contextWithTimeout() context.Context {
@@ -21,9 +23,14 @@ func contextWithTimeout() context.Context {
 	return ctx
 }
 
+func testLogger() logger.Logger {
+	// Silent mock: same API, emits nothing, Fatal does not exit.
+	return loglayer.NewMock()
+}
+
 func TestNewHTTPServerRoutes(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(registry.New(registry.Deps{Config: cfg}), cfg)
+	srv := NewHTTPServer(registry.New(registry.Deps{Config: cfg}), cfg, testLogger())
 
 	cases := []struct {
 		path       string
@@ -52,7 +59,7 @@ func TestNewHTTPServerRoutes(t *testing.T) {
 
 func TestNewHTTPServerMountsModules(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(registry.New(registry.Deps{Config: cfg}), cfg)
+	srv := NewHTTPServer(registry.New(registry.Deps{Config: cfg}), cfg, testLogger())
 
 	w := httptest.NewRecorder()
 	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/users", strings.NewReader(`{"name":"John"}`)))
@@ -66,7 +73,7 @@ func TestNewHTTPServerMountsModules(t *testing.T) {
 
 func TestHTTPServerShutdown(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(kernel.NewRegistry(), cfg)
+	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger())
 
 	// Server never listened: Shutdown must be a safe no-op.
 	assert.NoError(t, srv.Shutdown(contextWithTimeout()))

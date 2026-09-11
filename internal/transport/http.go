@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/web"
 )
@@ -19,10 +20,10 @@ type HTTPServer struct {
 
 // NewHTTPServer assembles the application: shared middleware, core
 // routes, then every module from the registry mounts itself.
-func NewHTTPServer(registry *kernel.Registry, cfg *config.Config) *HTTPServer {
+func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Logger) *HTTPServer {
 	r := chi.NewRouter()
 
-	r.Use(middleware.Logger())
+	r.Use(middleware.RequestLogger(log))
 	r.Use(middleware.JSONRecoverer)
 	r.Use(middleware.CORS())
 

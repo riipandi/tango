@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/spf13/cobra"
@@ -29,18 +30,32 @@ var serveCmd = &cobra.Command{
 			log.Fatalf("failed to load config: %v", err)
 		}
 
-		reg := registry.New(registry.Deps{Config: cfg})
+		// Composition root of the runtime: the application logger is
+		// built once from config and injected everywhere (registry,
+		// transport). Closing it drains the async queue on shutdown.
+		lg, logCloser, err := logger.New(logger.Options{
+			Level:  cfg.App.LogLevel,
+			Output: cfg.App.LogTransport,
+			Format: cfg.App.LogFormat,
+			File:   cfg.App.LogFile,
+		})
+		if err != nil {
+			log.Fatalf("failed to build logger: %v", err)
+		}
+		defer logCloser.Close()
+
+		reg := registry.New(registry.Deps{Config: cfg, Logger: lg})
 		if err := reg.Start(cmd.Context()); err != nil {
-			log.Fatalf("failed to start modules: %v", err)
+			lg.WithError(err).Fatal("failed to start modules")
 		}
 
-		srv := transport.NewHTTPServer(reg, cfg)
+		srv := transport.NewHTTPServer(reg, cfg, lg)
 		addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
 		go func() {
-			log.Printf("listening on http://%s\n", addr)
+			lg.Info("listening on http://" + addr)
 			if err := srv.ListenAndServe(addr); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("server error: %v", err)
+				lg.WithError(err).Fatal("server error")
 			}
 		}()
 
@@ -50,22 +65,22 @@ var serveCmd = &cobra.Command{
 		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
 		<-ctx.Done()
-		log.Printf("received shutdown signal: %v", context.Cause(ctx))
+		lg.WithError(context.Cause(ctx)).Info("received shutdown signal")
 
-		log.Println("shutting down server...")
+		lg.Info("shutting down server...")
 
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			log.Fatalf("shutdown error: %v", err)
+			lg.WithError(err).Fatal("shutdown error")
 		}
 
 		if err := reg.Stop(shutdownCtx); err != nil {
-			log.Printf("module shutdown errors: %v", err)
+			lg.WithError(err).Warn("module shutdown errors")
 		}
 
-		log.Println("server stopped")
+		lg.Info("server stopped")
 	},
 }
 
