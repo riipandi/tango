@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,9 +25,10 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the application server",
 	Run: func(cmd *cobra.Command, args []string) {
-		config.ApplyFlags(serveHost, servePort)
-
-		cfg, err := config.Load()
+		cfg, err := config.Load(config.LoadOptions{
+			EnvFile:   argEnvFile,
+			Overrides: flagOverrides(),
+		})
 		if err != nil {
 			log.Fatalf("failed to load config: %v", err)
 		}
@@ -82,6 +85,24 @@ var serveCmd = &cobra.Command{
 
 		lg.Info("server stopped")
 	},
+}
+
+// flagOverrides resolves the serve CLI flags into config overrides.
+// Empty flags contribute nothing; an invalid --port fails fast.
+func flagOverrides() map[string]any {
+	overrides := map[string]any{}
+	if serveHost != "" {
+		overrides["host"] = serveHost
+	}
+	if servePort != "" {
+		cleaned := strings.TrimLeft(servePort, ":")
+		port, err := strconv.Atoi(cleaned)
+		if err != nil {
+			log.Fatalf("invalid --port value: %q", servePort)
+		}
+		overrides["port"] = port
+	}
+	return overrides
 }
 
 func init() {

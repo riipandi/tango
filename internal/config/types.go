@@ -1,74 +1,74 @@
 package config
 
 type Config struct {
-	Host     string         `mapstructure:"host"`
-	Port     int            `mapstructure:"port"`
-	App      AppConfig      `mapstructure:"app"`
-	Auth     AuthConfig     `mapstructure:"auth"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Mailer   MailerConfig   `mapstructure:"mailer"`
-	Public   PublicConfig   `mapstructure:"public"`
-	Storage  StorageConfig  `mapstructure:"storage"`
+	Host     string         `koanf:"host"`
+	Port     int            `koanf:"port"`
+	App      AppConfig      `koanf:"app"`
+	Auth     AuthConfig     `koanf:"auth"`
+	Database DatabaseConfig `koanf:"database"`
+	Mailer   MailerConfig   `koanf:"mailer"`
+	Public   PublicConfig   `koanf:"public"`
+	Storage  StorageConfig  `koanf:"storage"`
 }
 
 type AppConfig struct {
-	Mode         string `mapstructure:"mode"`
-	LogLevel     string `mapstructure:"log_level"`
-	LogTransport string `mapstructure:"log_transport"`
-	LogFormat    string `mapstructure:"log_format"`
-	LogFile      string `mapstructure:"log_file"`
-	SecretKey    string `mapstructure:"secret_key"`
+	Mode         string `koanf:"mode"`
+	LogLevel     string `koanf:"log_level"`
+	LogTransport string `koanf:"log_transport"`
+	LogFormat    string `koanf:"log_format"`
+	LogFile      string `koanf:"log_file"`
+	SecretKey    string `koanf:"secret_key"`
 }
 
 type AuthConfig struct {
-	PrivateKey         string `mapstructure:"private_key"`
-	PublicKey          string `mapstructure:"public_key"`
-	SecretKey          string `mapstructure:"secret_key"`
-	AccessTokenExpiry  int    `mapstructure:"access_token_expiry"`
-	RefreshTokenExpiry int    `mapstructure:"refresh_token_expiry"`
-	GithubClientID     string `mapstructure:"github_client_id"`
-	GithubClientSecret string `mapstructure:"github_client_secret"`
-	GoogleClientID     string `mapstructure:"google_client_id"`
-	GoogleClientSecret string `mapstructure:"google_client_secret"`
+	PrivateKey         string `koanf:"private_key"`
+	PublicKey          string `koanf:"public_key"`
+	SecretKey          string `koanf:"secret_key"`
+	AccessTokenExpiry  int    `koanf:"access_token_expiry"`
+	RefreshTokenExpiry int    `koanf:"refresh_token_expiry"`
+	GithubClientID     string `koanf:"github_client_id"`
+	GithubClientSecret string `koanf:"github_client_secret"`
+	GoogleClientID     string `koanf:"google_client_id"`
+	GoogleClientSecret string `koanf:"google_client_secret"`
 }
 
 type DatabaseConfig struct {
-	URL string `mapstructure:"url"`
+	URL string `koanf:"url"`
 }
 
 type MailerConfig struct {
-	FromEmail    string `mapstructure:"from_email"`
-	FromName     string `mapstructure:"from_name"`
-	SMTPHost     string `mapstructure:"smtp_host"`
-	SMTPPort     int    `mapstructure:"smtp_port"`
-	SMTPUsername string `mapstructure:"smtp_username"`
-	SMTPPassword string `mapstructure:"smtp_password"`
-	SMTPSecure   bool   `mapstructure:"smtp_secure"`
+	FromEmail    string `koanf:"from_email"`
+	FromName     string `koanf:"from_name"`
+	SMTPHost     string `koanf:"smtp_host"`
+	SMTPPort     int    `koanf:"smtp_port"`
+	SMTPUsername string `koanf:"smtp_username"`
+	SMTPPassword string `koanf:"smtp_password"`
+	SMTPSecure   bool   `koanf:"smtp_secure"`
 }
 
 type PublicConfig struct {
-	BaseURL                string   `mapstructure:"base_url"`
-	S3AssetsURL            string   `mapstructure:"s3_assets_url"`
-	TrustedOrigins         []string `mapstructure:"trusted_origins"`
-	JwtAccessTokenExpiry   int      `mapstructure:"jwt_access_token_expiry"`
-	JwtRefreshTokenExpiry  int      `mapstructure:"jwt_refresh_token_expiry"`
-	RateLimitDefaultMax    int      `mapstructure:"rate_limit_default_max"`
-	RateLimitDefaultWindow int      `mapstructure:"rate_limit_default_window"`
-	HealthcheckURL         string   `mapstructure:"healthcheck_url"`
+	BaseURL                string   `koanf:"base_url"`
+	S3AssetsURL            string   `koanf:"s3_assets_url"`
+	TrustedOrigins         []string `koanf:"trusted_origins"`
+	JwtAccessTokenExpiry   int      `koanf:"jwt_access_token_expiry"`
+	JwtRefreshTokenExpiry  int      `koanf:"jwt_refresh_token_expiry"`
+	RateLimitDefaultMax    int      `koanf:"rate_limit_default_max"`
+	RateLimitDefaultWindow int      `koanf:"rate_limit_default_window"`
+	HealthcheckURL         string   `koanf:"healthcheck_url"`
 }
 
 type StorageConfig struct {
-	MaxUploadSize int64    `mapstructure:"max_upload_size"`
-	S3            S3Config `mapstructure:"s3"`
+	MaxUploadSize int64    `koanf:"max_upload_size"`
+	S3            S3Config `koanf:"s3"`
 }
 
 type S3Config struct {
-	AccessKeyID      string  `mapstructure:"access_key_id"`
-	BucketDefault    string  `mapstructure:"bucket_default"`
-	EndpointURL      string  `mapstructure:"endpoint_url"`
-	ForcePathStyle   bool    `mapstructure:"force_path_style"`
-	PathPrefix       *string `mapstructure:"path_prefix"`
-	Region           string  `mapstructure:"region"`
-	SecretAccessKey  string  `mapstructure:"secret_access_key"`
-	SignedURLExpires int     `mapstructure:"signed_url_expires"`
+	AccessKeyID      string  `koanf:"access_key_id"`
+	BucketDefault    string  `koanf:"bucket_default"`
+	EndpointURL      string  `koanf:"endpoint_url"`
+	ForcePathStyle   bool    `koanf:"force_path_style"`
+	PathPrefix       *string `koanf:"path_prefix"`
+	Region           string  `koanf:"region"`
+	SecretAccessKey  string  `koanf:"secret_access_key"`
+	SignedURLExpires int     `koanf:"signed_url_expires"`
 }

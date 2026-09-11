@@ -21,8 +21,17 @@ var healthCmd = &cobra.Command{
 	Aliases: []string{"hc"},
 	Short:   "Check application health",
 	Run: func(cmd *cobra.Command, args []string) {
+		addr := healthAddr
+		if addr == "" {
+			cfg, err := config.Load(config.LoadOptions{EnvFile: argEnvFile})
+			if err != nil {
+				fmt.Printf("unhealthy: %v\n", err)
+				os.Exit(1)
+			}
+			addr = fmt.Sprintf("http://%s:%d/api/healthz", cfg.Host, cfg.Port)
+		}
 		if healthLive {
-			checkLive()
+			checkLive(addr)
 			return
 		}
 		checkStatic(cmd)
@@ -43,9 +52,9 @@ func checkStatic(cmd *cobra.Command) {
 	cmd.Println("status:    healthy")
 }
 
-func checkLive() {
+func checkLive(addr string) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(healthAddr)
+	resp, err := client.Get(addr)
 	if err != nil {
 		fmt.Printf("unhealthy: %v\n", err)
 		os.Exit(1)
@@ -70,7 +79,6 @@ func formatSize(bytes int64) string {
 }
 
 func init() {
-	defaultAddr := fmt.Sprintf("http://%s:%d/api/healthz", config.V().GetString("host"), config.V().GetInt("port"))
-	healthCmd.Flags().StringVar(&healthAddr, "addr", defaultAddr, "Server health endpoint")
+	healthCmd.Flags().StringVar(&healthAddr, "addr", "", "Server health endpoint URL (default: from config)")
 	healthCmd.Flags().BoolVar(&healthLive, "live", false, "Check live server via HTTP")
 }

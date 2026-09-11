@@ -10,6 +10,7 @@ import (
 
 var argVersionShort bool
 var argVersionSemantic bool
+var argEnvFile string
 
 var rootCmd = &cobra.Command{
 	Use:   "tango",
@@ -44,11 +45,11 @@ func Execute() {
 }
 
 func init() {
-	config.Init()
-
 	// Set `true` to disable the default help subcommand
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: false})
 
+	// Global flags (inherited by every subcommand).
+	rootCmd.PersistentFlags().StringVar(&argEnvFile, "env-file", "", "Load environment variables from a dotenv file (system env takes precedence)")
 	// Add version subcommand
 	rootCmd.AddCommand(versionCmd)
 	versionCmd.Flags().BoolVarP(&argVersionShort, "short", "s", false, "Show short version")
