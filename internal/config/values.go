@@ -6,6 +6,8 @@ func setDefaults() {
 	v.SetDefault("app.mode", "development")
 	v.SetDefault("app.log_level", "info")
 	v.SetDefault("app.log_transport", "console")
+	v.SetDefault("app.log_format", "structured")
+	v.SetDefault("app.log_file", "storage/logs/app.log")
 	v.SetDefault("auth.access_token_expiry", 900)
 	v.SetDefault("auth.refresh_token_expiry", 7200)
 	v.SetDefault("database.url", "postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable")
@@ -36,6 +38,8 @@ func bindEnvVars() {
 		"app.mode":                         "APP_MODE",
 		"app.log_level":                    "APP_LOG_LEVEL",
 		"app.log_transport":                "APP_LOG_TRANSPORT",
+		"app.log_format":                   "APP_LOG_FORMAT",
+		"app.log_file":                     "APP_LOG_FILE",
 		"app.secret_key":                   "APP_SECRET_KEY",
 		"auth.private_key":                 "AUTH_PRIVATE_KEY",
 		"auth.public_key":                  "AUTH_PUBLIC_KEY",

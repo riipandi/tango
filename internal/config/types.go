@@ -15,6 +15,8 @@ type AppConfig struct {
 	Mode         string `mapstructure:"mode"`
 	LogLevel     string `mapstructure:"log_level"`
 	LogTransport string `mapstructure:"log_transport"`
+	LogFormat    string `mapstructure:"log_format"`
+	LogFile      string `mapstructure:"log_file"`
 	SecretKey    string `mapstructure:"secret_key"`
 }
 
