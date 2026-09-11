@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,17 +35,23 @@ func TestServeRunLifecycle(t *testing.T) {
 	}()
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/api/users", port)
-	var resp *http.Response
+
+	// Wait for the server to accept connections; every probe body
+	// is closed inside the closure.
 	require.Eventually(t, func() bool {
-		r, err := http.Get(url) //nolint:bodyclose
+		resp, err := http.Get(url)
 		if err != nil {
 			return false
 		}
-		resp = r
-		return true
+		resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
 	}, 5*time.Second, 50*time.Millisecond, "server must come up")
-	resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// One full request-response, closed deterministically.
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// The signal path: ServeCmd.Run registered SIGTERM handling.
 	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGTERM))

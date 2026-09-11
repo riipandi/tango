@@ -129,7 +129,7 @@ func (m *smtpMailer) deliver(ctx context.Context, from *mail.Address, to string,
 	if err != nil {
 		return err
 	}
-	defer client.Close() //nolint:errcheck
+	defer func() { _ = client.Close() }()
 
 	// Bounds for command responses and the final-dot handoff; ctx
 	// deadlines apply at the next reload of this API.
@@ -154,7 +154,7 @@ func (m *smtpMailer) deliver(ctx context.Context, from *mail.Address, to string,
 		return fmt.Errorf("mailer: data: %w", err)
 	}
 	if _, werr := data.Write(payload); werr != nil {
-		data.Close() //nolint:errcheck
+		_ = data.Close()
 		return fmt.Errorf("mailer: write payload: %w", werr)
 	}
 	if err = data.Close(); err != nil {
@@ -189,7 +189,7 @@ func (m *smtpMailer) dial(addr string) (*gosmtp.Client, error) {
 		return client, nil
 	}
 
-	client.Close() //nolint:errcheck
+	_ = client.Close()
 	upgraded, err := gosmtp.DialStartTLS(addr, tlsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("mailer: starttls: %w", err)

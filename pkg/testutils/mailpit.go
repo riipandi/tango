@@ -5,7 +5,9 @@ package testutils
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	tcre "github.com/testcontainers/testcontainers-go"
@@ -31,30 +33,54 @@ type Mailpit struct {
 // MAILPIT_VERSION default; pin both when pinning one.
 const mailpitImage = "axllent/mailpit:latest"
 
-// StartMailpit starts a throwaway Mailpit container that terminates
-// itself with the test's cleanup.
+var (
+	mailpitOnce   sync.Once
+	sharedMailpit *Mailpit
+	sharedErr     error
+)
+
+// StartMailpit returns the process-wide shared Mailpit container:
+// the first call starts it, later calls in the same test binary
+// reuse it, and the testcontainers reaper terminates it when the
+// binary exits. Tests isolate their data with unique recipients.
 func StartMailpit(ctx context.Context, t testing.TB) *Mailpit {
 	t.Helper()
 
-	container, err := tcre.Run(ctx, mailpitImage,
-		tcre.WithEnv(map[string]string{
-			"MP_SMTP_AUTH":                "maileruser1:mailerpass1",
-			"MP_SMTP_AUTH_ALLOW_INSECURE": "true",
-		}),
-		tcre.WithAdditionalWaitStrategy(wait.ForListeningPort("1025/tcp")),
-	)
-	require.NoError(t, err, "start mailpit container (docker daemon required)")
-	t.Cleanup(func() { _ = container.Terminate(context.WithoutCancel(ctx)) })
+	mailpitOnce.Do(func() {
+		container, startErr := tcre.Run(ctx, mailpitImage,
+			tcre.WithEnv(map[string]string{
+				"MP_SMTP_AUTH":                "maileruser1:mailerpass1",
+				"MP_SMTP_AUTH_ALLOW_INSECURE": "true",
+			}),
+			tcre.WithAdditionalWaitStrategy(
+				wait.ForListeningPort("1025/tcp").
+					WithStartupTimeout(30*time.Second),
+			),
+		)
+		if startErr != nil {
+			sharedErr = startErr
+			return
+		}
 
-	smtpAddr, err := container.PortEndpoint(ctx, "1025/tcp", "")
-	require.NoError(t, err)
-	apiURL, err := container.PortEndpoint(ctx, "8025/tcp", "http")
-	require.NoError(t, err)
+		smtpAddr, endpointErr := container.PortEndpoint(ctx, "1025/tcp", "")
+		if endpointErr != nil {
+			sharedErr = endpointErr
+			return
+		}
+		apiURL, endpointErr := container.PortEndpoint(ctx, "8025/tcp", "http")
+		if endpointErr != nil {
+			sharedErr = endpointErr
+			return
+		}
 
-	return &Mailpit{
-		SMTPAddr: smtpAddr,
-		APIURL:   apiURL,
-		Username: "maileruser1",
-		Password: "mailerpass1",
-	}
+		sharedMailpit = &Mailpit{
+			SMTPAddr: smtpAddr,
+			APIURL:   apiURL,
+			Username: "maileruser1",
+			Password: "mailerpass1",
+		}
+	})
+
+	require.NoError(t, sharedErr, "start mailpit container (docker daemon required)")
+	return sharedMailpit
 }

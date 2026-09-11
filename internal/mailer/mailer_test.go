@@ -1,6 +1,7 @@
 package mailer
 
 import (
+	"errors"
 	"io"
 	"io/fs"
 	"net"
@@ -128,8 +129,19 @@ func newTestMailer(t *testing.T) (Mailer, *captureBackend) {
 	server.AllowInsecureAuth = true
 
 	listener := newSMTPListener(t)
-	go server.Serve(listener) //nolint:errcheck
-	t.Cleanup(func() { server.Close() })
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- server.Serve(listener) }()
+
+	// Shutdown order matters: close the listener first so Serve's
+	// Accept unblocks, then stop the server, then drain the
+	// goroutine — any other order deadlocks the cleanup.
+	t.Cleanup(func() {
+		listener.Close()
+		server.Close()
+		if srvErr := <-serveErr; srvErr != nil && !errors.Is(srvErr, net.ErrClosed) && !errors.Is(srvErr, gosmtp.ErrServerClosed) {
+			t.Errorf("smtp relay: %v", srvErr)
+		}
+	})
 
 	cfg := config.MailerConfig{
 		FromEmail:    "noreply@tango.test",
@@ -207,8 +219,6 @@ func TestSendUnknownTemplateFails(t *testing.T) {
 	assert.Empty(t, backend.messages)
 }
 
-// --- helpers ---------------------------------------------------------
-
 // TestRealEmbeddedTemplatesRender parses and executes every template
 // embedded by the build — catching drift between the React Email
 // compilation and this package's rendering.
@@ -252,12 +262,12 @@ func TestRealEmbeddedTemplatesRender(t *testing.T) {
 
 // --- helpers ---------------------------------------------------------
 
-// newSMTPListener reserves a loopback port for the fake relay.
+// newSMTPListener reserves a loopback port; closing it belongs to
+// the caller's cleanup.
 func newSMTPListener(t *testing.T) net.Listener {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	t.Cleanup(func() { listener.Close() })
 	return listener
 }
 

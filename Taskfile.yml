@@ -80,12 +80,6 @@ tasks:
     desc: Run frontend unit tests
     cmd: pnpm exec vitest run {{.CLI_ARGS}}
 
-  test:integration:
-    desc: Run integration tests against compose services (auto-skip if down)
-    cmds:
-      - docker compose up -d --wait mailpit
-      - gotestsum --format testname -- ./...
-
   coverage:
     desc: Run Go tests with coverage report
     cmds:

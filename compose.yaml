@@ -39,15 +39,14 @@ services:
     image: docker.io/postgres:${PGSQL_VERSION:-18-alpine}
     hostname: postgres
     ports: ["5432:5432"]
-    volumes:
-      - ".storage/pgsql_data:/var/lib/postgresql/18/docker:rw"
-      - ./docker/extradb.sh:/docker-entrypoint-initdb.d/extradb.sh
+    volumes: [".storage/pgsql_data:/var/lib/postgresql/18/docker:rw"]
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: securedb
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
       PG_DATABASES: libredesk,unleash,testdb
+    configs: [{ source: pgsql_multidb, target: /docker-entrypoint-initdb.d/multidb.sh }]
     security_opt: ["no-new-privileges:true"]
     shm_size: 256m # set shared memory limit
     mem_limit: 512m # set memory limit
@@ -180,6 +179,28 @@ configs:
           send_timeout 300;
         }
       }
+
+  pgsql_multidb:
+    content: |
+      #!/bin/bash
+      set -e
+      set -u
+      if [ -n "${PG_DATABASES:-}" ]; then
+        echo "Multiple database creation requested: $PG_DATABASES"
+        IFS=',' read -ra databases <<<"$PG_DATABASES"
+        for db in "${databases[@]}"; do
+          echo "  Creating database '$db' with owner '$POSTGRES_USER'"
+          psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+            CREATE DATABASE "$db" WITH OWNER = "$POSTGRES_USER"
+            ENCODING = 'UTF8' LC_COLLATE = 'en_US.UTF-8'
+            LC_CTYPE = 'en_US.UTF-8'
+            TEMPLATE = template0;
+      EOSQL
+        done
+        echo "Multiple databases and schemas created successfully."
+      else
+        echo "No databases requested for creation."
+      fi
 
 volumes:
   pgsql_data:

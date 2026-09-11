@@ -57,7 +57,7 @@ func checkLive(addr string) error {
 		fmt.Printf("unhealthy: %v\n", err)
 		os.Exit(1)
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		fmt.Printf("unhealthy: status %d\n", resp.StatusCode)
