@@ -48,3 +48,18 @@ func MigrateDownTarget(ctx context.Context, dsn string) (*MigrationStatus, error
 func MigrateStatus(ctx context.Context, dsn string) ([]MigrationStatus, error) {
 	return runStatus(ctx, dsn, migrationsSource())
 }
+
+// MigrateUpTo applies pending migrations up to the given version.
+func MigrateUpTo(ctx context.Context, dsn string, version int64) ([]MigrationOutcome, error) {
+	return runUpTo(ctx, dsn, migrationsSource(), version)
+}
+
+// MigrateDownTo rolls back every migration above the given version.
+func MigrateDownTo(ctx context.Context, dsn string, version int64) ([]MigrationOutcome, error) {
+	return runDownTo(ctx, dsn, migrationsSource(), version)
+}
+
+// MigrateVersion reports the current applied and target versions.
+func MigrateVersion(ctx context.Context, dsn string) (current, target int64, err error) {
+	return runVersion(ctx, dsn, migrationsSource())
+}

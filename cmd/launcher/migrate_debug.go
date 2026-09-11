@@ -10,14 +10,42 @@ import (
 )
 
 // MigrateCmd is the debug command surface: development-only
-// operations (scaffolding new migrations, rolling the schema back
-// to the initial state) join the release set.
+// operations (scaffolding new migrations, reordering, validating,
+// rolling the schema back to the initial state) join the release
+// set.
 type MigrateCmd struct {
-	Up     MigrateUpCmd     `cmd:"" help:"Run database migrations"`
-	Down   MigrateDownCmd   `cmd:"" help:"Rollback the most recent migration"`
-	Status MigrateStatusCmd `cmd:"" help:"Check database migration status"`
-	Create MigrateCreateCmd `cmd:"" help:"Create a new sequential migration file"`
-	Reset  MigrateResetCmd  `cmd:"" help:"Rollback all migrations"`
+	Up       MigrateUpCmd       `cmd:"" help:"Run database migrations"`
+	Down     MigrateDownCmd     `cmd:"" help:"Rollback the most recent migration"`
+	Status   MigrateStatusCmd   `cmd:"" help:"Check database migration status"`
+	Version  MigrateVersionCmd  `cmd:"" help:"Print the current migration version"`
+	Create   MigrateCreateCmd   `cmd:"" help:"Create a new sequential migration file"`
+	Fix      MigrateFixCmd      `cmd:"" help:"Reorder migration files"`
+	Validate MigrateValidateCmd `cmd:"" help:"Check the migration files"`
+	Reset    MigrateResetCmd    `cmd:"" help:"Rollback all migrations"`
+}
+
+// MigrateFixCmd reorders migration files.
+type MigrateFixCmd struct{}
+
+// Run reorders migration files into a consistent sequential order.
+func (c *MigrateFixCmd) Run(cli *CLI) error {
+	if err := database.Fix(); err != nil {
+		return fmt.Errorf("migrate fix: %w", err)
+	}
+	fmt.Printf("%sfixed%s migration file ordering\n", colorGreen, colorReset)
+	return nil
+}
+
+// MigrateValidateCmd checks migration files.
+type MigrateValidateCmd struct{}
+
+// Run validates migration file naming and annotations.
+func (c *MigrateValidateCmd) Run(cli *CLI) error {
+	if err := database.Validate(); err != nil {
+		return fmt.Errorf("migrate validate: %w", err)
+	}
+	fmt.Printf("%sall migration files are valid%s\n", colorGreen, colorReset)
+	return nil
 }
 
 // MigrateCreateCmd scaffolds a new migration file.

@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pressly/goose/v3"
@@ -43,6 +45,21 @@ func MigrateDownTarget(ctx context.Context, dsn string) (*MigrationStatus, error
 // MigrateStatus reports the state of every migration file.
 func MigrateStatus(ctx context.Context, dsn string) ([]MigrationStatus, error) {
 	return runStatus(ctx, dsn, os.DirFS(devMigrationsDir))
+}
+
+// MigrateUpTo applies pending migrations up to the given version.
+func MigrateUpTo(ctx context.Context, dsn string, version int64) ([]MigrationOutcome, error) {
+	return runUpTo(ctx, dsn, os.DirFS(devMigrationsDir), version)
+}
+
+// MigrateDownTo rolls back every migration above the given version.
+func MigrateDownTo(ctx context.Context, dsn string, version int64) ([]MigrationOutcome, error) {
+	return runDownTo(ctx, dsn, os.DirFS(devMigrationsDir), version)
+}
+
+// MigrateVersion reports the current applied and target versions.
+func MigrateVersion(ctx context.Context, dsn string) (current, target int64, err error) {
+	return runVersion(ctx, dsn, os.DirFS(devMigrationsDir))
 }
 
 // MigrateReset rolls every migration back, returning the database
@@ -112,6 +129,66 @@ func createMigration(dsn, name, dir string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("scaffolded migration not found in %s", dir)
+}
+
+// Fix reorders migration files into a consistent, conflict-free
+// sequential order (goose fix).
+func Fix() error {
+	return goose.Fix(devMigrationsDir)
+}
+
+// Validate checks every migration file: sequential naming, no
+// duplicate versions, and the goose Up/Down annotations present.
+func Validate() error {
+	return validateDir(devMigrationsDir)
+}
+
+// validateDir validates an explicit migrations directory.
+func validateDir(dir string) error {
+	migrations := dirEntries(dir)
+	if len(migrations) == 0 {
+		return fmt.Errorf("no migration files found in %s", dir)
+	}
+
+	seen := make(map[int64]bool, len(migrations))
+	var problems []string
+	for _, name := range migrations {
+		version, err := migrationVersion(name)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", name, err))
+			continue
+		}
+		if seen[version] {
+			problems = append(problems, fmt.Sprintf("%s: duplicate version %d", name, version))
+		}
+		seen[version] = true
+
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", name, err))
+			continue
+		}
+		body := string(data)
+		for _, annotation := range []string{"+goose Up", "+goose Down"} {
+			if !strings.Contains(body, annotation) {
+				problems = append(problems, fmt.Sprintf("%s: missing %q annotation", name, annotation))
+			}
+		}
+	}
+
+	if len(problems) > 0 {
+		return fmt.Errorf("%d problem(s): %s", len(problems), strings.Join(problems, "; "))
+	}
+	return nil
+}
+
+// migrationVersion parses the sequential "%05d_" prefix.
+func migrationVersion(name string) (int64, error) {
+	version, err := strconv.ParseInt(name[:5], 10, 64)
+	if err != nil || !strings.HasPrefix(name[5:], "_") {
+		return 0, fmt.Errorf("expected sequential naming like 00001_name.sql")
+	}
+	return version, nil
 }
 
 // dirEntries lists the .sql files in dir by name.

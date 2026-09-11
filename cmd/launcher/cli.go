@@ -54,8 +54,10 @@ func RunCLI(args []string, opts ...kong.Option) error {
 		kong.UsageOnError(),
 		versionVars(),
 	}
-	// Build-specific commands: secrets exists in debug builds only.
+	// Build-specific commands: secrets and the db backup group
+	// exist in debug builds only.
 	base = append(base, secretsOptions()...)
+	base = append(base, dbOptions()...)
 	parser, err := kong.New(cli, append(base, opts...)...)
 	if err != nil {
 		return err

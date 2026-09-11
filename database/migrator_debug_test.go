@@ -3,6 +3,7 @@
 package database
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,6 +71,38 @@ func TestCreateMigrationRequiresName(t *testing.T) {
 	assert.ErrorContains(t, err, "name is required")
 }
 
+// TestMigrateValidateAndFix covers the file-quality checks and the
+// reorder command against the real migrations directory.
+func TestMigrateValidateAndFix(t *testing.T) {
+	chdirRepoRoot(t)
+
+	require.NoError(t, Validate(), "repository migrations must validate")
+	require.NoError(t, Fix(), "sequential migrations need no reordering")
+}
+
+// TestValidateDirRejectsProblems covers the validate rules with a
+// synthetic directory.
+func TestValidateDirRejectsProblems(t *testing.T) {
+	dir := t.TempDir()
+
+	good := "-- +goose Up\n-- +goose Down\nSELECT 1;\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "00001_good.sql"), []byte(good), 0o644))
+	require.NoError(t, validateDir(dir))
+
+	// Duplicate version.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "00001_dupe.sql"), []byte(good), 0o644))
+	assert.ErrorContains(t, validateDir(dir), "duplicate version")
+	require.NoError(t, os.Remove(filepath.Join(dir, "00001_dupe.sql")))
+
+	// Missing Down annotation.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "00002_nodown.sql"), []byte("-- +goose Up\nSELECT 1;\n"), 0o644))
+	assert.ErrorContains(t, validateDir(dir), "+goose Down")
+
+	// Non-sequential naming.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "20260101120000_ts.sql"), []byte(good), 0o644))
+	assert.ErrorContains(t, validateDir(dir), "sequential naming")
+}
+
 // TestMigrateReset rolls the schema back to the initial state and
 // re-applies from scratch (disk source, resolved from repo root).
 func TestMigrateReset(t *testing.T) {
@@ -78,9 +111,7 @@ func TestMigrateReset(t *testing.T) {
 	pg := testutils.StartPostgres(t.Context(), t)
 	ctx := t.Context()
 
-	applied, err := MigrateUp(ctx, pg.DSN)
-	require.NoError(t, err)
-	require.NotEmpty(t, applied)
+	applied := freshMigratedDB(ctx, t, pg.DSN)
 
 	rolled, err := MigrateReset(ctx, pg.DSN)
 	require.NoError(t, err)
@@ -89,4 +120,57 @@ func TestMigrateReset(t *testing.T) {
 	reapplied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)
 	assert.Len(t, reapplied, len(applied))
+}
+
+// freshMigratedDB brings the shared database to a deterministic
+// fully-migrated state: rollback everything, apply everything.
+func freshMigratedDB(ctx context.Context, t *testing.T, dsn string) []MigrationOutcome {
+	t.Helper()
+
+	if _, err := MigrateReset(ctx, dsn); err != nil {
+		t.Fatalf("reset before test: %v", err)
+	}
+	applied, err := MigrateUp(ctx, dsn)
+	if err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+	if len(applied) == 0 {
+		t.Fatal("expected at least one migration to apply")
+	}
+	return applied
+}
+
+// TestMigrateDownTo verifies the up-to/down-to pair: applying only
+// up to a version and rolling back above one.
+func TestMigrateDownTo(t *testing.T) {
+	chdirRepoRoot(t)
+
+	pg := testutils.StartPostgres(t.Context(), t)
+	ctx := t.Context()
+
+	applied := freshMigratedDB(ctx, t, pg.DSN)
+	highest := applied[len(applied)-1].Version
+
+	rolled, err := MigrateDownTo(ctx, pg.DSN, highest-1)
+	require.NoError(t, err)
+	assert.Len(t, rolled, 1)
+
+	reapplied, err := MigrateUpTo(ctx, pg.DSN, highest)
+	require.NoError(t, err)
+	assert.Len(t, reapplied, 1)
+}
+
+// TestMigrateVersion reports the current and target versions.
+func TestMigrateVersion(t *testing.T) {
+	chdirRepoRoot(t)
+
+	pg := testutils.StartPostgres(t.Context(), t)
+	ctx := t.Context()
+
+	freshMigratedDB(ctx, t, pg.DSN)
+
+	current, target, err := MigrateVersion(ctx, pg.DSN)
+	require.NoError(t, err)
+	assert.Greater(t, current, int64(0))
+	assert.GreaterOrEqual(t, target, current)
 }

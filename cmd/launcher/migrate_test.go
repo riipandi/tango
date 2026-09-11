@@ -1,9 +1,9 @@
-//go:build !debug
-
 package launcher
 
 import (
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,6 +14,7 @@ import (
 )
 
 // parseOnly resolves the selected command path without running it.
+// Debug-only plugins are appended by the per-variant test files.
 func parseOnly(t *testing.T, args ...string) string {
 	t.Helper()
 
@@ -55,32 +56,54 @@ func runMigrate(t *testing.T, interactive bool, stdin io.Reader, args ...string)
 	return out, err
 }
 
-// TestMigrateCommandGrammar locks in the release command set:
-// up, down, and status exist; the development-only commands do not.
-func TestMigrateCommandGrammar(t *testing.T) {
-	require.Equal(t, "migrate up", parseOnly(t, "migrate", "up"))
-	require.Equal(t, "migrate down", parseOnly(t, "migrate", "down"))
-	require.Equal(t, "migrate status", parseOnly(t, "migrate", "status"))
+// chdirRepoRoot moves the test working directory to the repository
+// root — debug builds resolve the disk migration source relative
+// to it — and restores it when the test ends.
+func chdirRepoRoot(t *testing.T) {
+	t.Helper()
 
-	parser, err := kong.New(&CLI{}, kong.Name("tango"))
+	orig, err := os.Getwd()
 	require.NoError(t, err)
 
-	_, err = parser.Parse([]string{"migrate", "create", "x"})
-	require.Error(t, err, "create must not exist in release builds")
-	_, err = parser.Parse([]string{"migrate", "reset"})
-	require.Error(t, err, "reset must not exist in release builds")
+	dir := orig
+	for {
+		if _, statErr := os.Stat(filepath.Join(dir, "Taskfile.yml")); statErr == nil {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("repository root not found")
+		}
+		dir = parent
+	}
+
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() { _ = os.Chdir(orig) })
 }
 
 // TestMigrateLifecycle runs up, a guarded down, and status against
 // the shared testcontainer database, configured through the
-// environment the same way operators do it.
+// environment the same way operators do it. It runs in both build
+// variants — the command set only differs in development-only
+// subcommands, not in these.
 func TestMigrateLifecycle(t *testing.T) {
+	chdirRepoRoot(t)
+
 	pg := testutils.StartPostgres(t.Context(), t)
 	t.Setenv("DATABASE_URL", pg.DSN)
 
 	out, err := runMigrate(t, true, strings.NewReader("\n"), "migrate", "up")
 	require.NoError(t, err)
 	assert.Contains(t, out, "00001")
+
+	// Partial apply: up to an already-applied version is a no-op.
+	out, err = runMigrate(t, true, strings.NewReader("\n"), "migrate", "up", "--to", "1")
+	require.NoError(t, err)
+	assert.Contains(t, out, "nothing to migrate")
+
+	out, err = runMigrate(t, false, nil, "migrate", "version")
+	require.NoError(t, err)
+	assert.Contains(t, out, "current: 1")
 
 	// Dry-run: reports the target without rolling it back.
 	out, err = runMigrate(t, true, strings.NewReader("\n"), "migrate", "down", "--dry-run")

@@ -130,6 +130,61 @@ func runDownTarget(ctx context.Context, dsn string, src fs.FS) (*MigrationStatus
 	return target, nil
 }
 
+// runUpTo applies pending migrations up to the given version
+// (inclusive).
+func runUpTo(ctx context.Context, dsn string, src fs.FS, version int64) ([]MigrationOutcome, error) {
+	db, p, err := openProvider(dsn, src)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	results, err := p.UpTo(ctx, version)
+	if err != nil {
+		return nil, fmt.Errorf("apply migrations to %d: %w", version, err)
+	}
+	outcomes := make([]MigrationOutcome, 0, len(results))
+	for _, result := range results {
+		outcomes = append(outcomes, outcomeFrom(result))
+	}
+	return outcomes, nil
+}
+
+// runDownTo rolls back every migration above the given version.
+func runDownTo(ctx context.Context, dsn string, src fs.FS, version int64) ([]MigrationOutcome, error) {
+	db, p, err := openProvider(dsn, src)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	results, err := p.DownTo(ctx, version)
+	if err != nil {
+		return nil, fmt.Errorf("roll back to %d: %w", version, err)
+	}
+	outcomes := make([]MigrationOutcome, 0, len(results))
+	for _, result := range results {
+		outcomes = append(outcomes, outcomeFrom(result))
+	}
+	return outcomes, nil
+}
+
+// runVersion reports the current applied and the target (file
+// system) migration versions.
+func runVersion(ctx context.Context, dsn string, src fs.FS) (current, target int64, err error) {
+	db, p, openErr := openProvider(dsn, src)
+	if openErr != nil {
+		return 0, 0, openErr
+	}
+	defer db.Close()
+
+	current, target, err = p.GetVersions(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("migration version: %w", err)
+	}
+	return current, target, nil
+}
+
 // outcomeFrom converts a goose result into the package type.
 func outcomeFrom(result *goose.MigrationResult) MigrationOutcome {
 	outcome := MigrationOutcome{Duration: result.Duration}

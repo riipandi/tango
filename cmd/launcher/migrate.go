@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/riipandi/tango/database"
@@ -23,7 +24,11 @@ import (
 // without executing anything.
 
 // MigrateUpCmd applies all pending migrations.
-type MigrateUpCmd struct{}
+type MigrateUpCmd struct {
+	// To applies migrations only up to this version (inclusive);
+	// 0 means all pending.
+	To int64 `help:"Apply migrations only up to this version (default: all)"`
+}
 
 // Run applies all pending migrations to the configured database.
 func (c *MigrateUpCmd) Run(cli *CLI) error {
@@ -31,7 +36,15 @@ func (c *MigrateUpCmd) Run(cli *CLI) error {
 	if err != nil {
 		return err
 	}
-	applied, err := database.MigrateUp(context.Background(), cfg.Database.URL)
+	ctx := context.Background()
+	dsn := cfg.Database.URL
+
+	var applied []database.MigrationOutcome
+	if c.To > 0 {
+		applied, err = database.MigrateUpTo(ctx, dsn, c.To)
+	} else {
+		applied, err = database.MigrateUp(ctx, dsn)
+	}
 	if err != nil {
 		return fmt.Errorf("migrate up: %w", err)
 	}
@@ -47,6 +60,8 @@ func (c *MigrateUpCmd) Run(cli *CLI) error {
 
 // MigrateDownCmd rolls back the most recent migration.
 type MigrateDownCmd struct {
+	// Count rolls back this many migrations (default 1).
+	Count  int  `help:"Number of migrations to roll back (default: 1)"`
 	Force  bool `help:"Skip the confirmation prompt"`
 	DryRun bool `help:"Print what would be rolled back without changing anything"`
 }
@@ -61,26 +76,98 @@ func (c *MigrateDownCmd) Run(cli *CLI) error {
 	dsn := cfg.Database.URL
 
 	if c.DryRun {
-		target, targetErr := database.MigrateDownTarget(ctx, dsn)
-		if targetErr != nil {
-			return fmt.Errorf("migrate down: %w", targetErr)
-		}
-		if target == nil {
-			fmt.Printf("%snothing to roll back%s\n", colorCyan, colorReset)
-			return nil
-		}
-		fmt.Printf("%sdry-run%s would roll back %s\n", colorCyan, colorReset, target.Path)
-		return nil
+		return migrateDownDryRun(ctx, dsn, c.Count)
 	}
-
 	if confirmErr := confirmDestructive(c.Force); confirmErr != nil {
 		return confirmErr
 	}
-	outcome, downErr := database.MigrateDown(ctx, dsn)
+
+	outcomes, downErr := migrateDownN(ctx, dsn, c.Count)
 	if downErr != nil {
 		return fmt.Errorf("migrate down: %w", downErr)
 	}
-	fmt.Printf("%srolled back%s %s (%s)\n", colorGreen, colorReset, outcome.Path, outcome.Duration)
+	for _, outcome := range outcomes {
+		fmt.Printf("%srolled back%s %s (%s)\n", colorGreen, colorReset, outcome.Path, outcome.Duration)
+	}
+	return nil
+}
+
+// migrateDownDryRun reports what down would roll back, without
+// touching the database: the last Count applied migrations.
+func migrateDownDryRun(ctx context.Context, dsn string, count int) error {
+	if count < 1 {
+		count = 1
+	}
+	statuses, err := database.MigrateStatus(ctx, dsn)
+	if err != nil {
+		return fmt.Errorf("migrate down: %w", err)
+	}
+	targets := appliedDescending(statuses)
+	if len(targets) == 0 {
+		fmt.Printf("%snothing to roll back%s\n", colorCyan, colorReset)
+		return nil
+	}
+	if count > len(targets) {
+		count = len(targets)
+	}
+	fmt.Printf("%sdry-run%s would roll back %d migration(s):", colorCyan, colorReset, count)
+	for _, entry := range targets[:count] {
+		fmt.Printf("\n  %s", entry.Path)
+	}
+	fmt.Println()
+	return nil
+}
+
+// migrateDownN rolls back Count migrations (at least one): the
+// equivalent of repeating goose down Count times, in one operation.
+func migrateDownN(ctx context.Context, dsn string, count int) ([]database.MigrationOutcome, error) {
+	if count < 1 {
+		count = 1
+	}
+	statuses, err := database.MigrateStatus(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+	targets := appliedDescending(statuses)
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no applied migrations to roll back")
+	}
+	if count > len(targets) {
+		count = len(targets)
+	}
+	// Roll back everything above the Count-th applied version.
+	return database.MigrateDownTo(ctx, dsn, targets[count-1].Version-1)
+}
+
+// appliedDescending sorts applied migrations by version, newest
+// first.
+func appliedDescending(statuses []database.MigrationStatus) []database.MigrationStatus {
+	var applied []database.MigrationStatus
+	for _, entry := range statuses {
+		if entry.State == "applied" {
+			applied = append(applied, entry)
+		}
+	}
+	sort.Slice(applied, func(i, j int) bool {
+		return applied[i].Version > applied[j].Version
+	})
+	return applied
+}
+
+// MigrateVersionCmd prints the current migration version.
+type MigrateVersionCmd struct{}
+
+// Run prints the current applied and target migration versions.
+func (c *MigrateVersionCmd) Run(cli *CLI) error {
+	cfg, err := migrateConfig(cli)
+	if err != nil {
+		return err
+	}
+	current, target, err := database.MigrateVersion(context.Background(), cfg.Database.URL)
+	if err != nil {
+		return fmt.Errorf("migrate version: %w", err)
+	}
+	fmt.Printf("current: %d\ntarget:  %d\n", current, target)
 	return nil
 }
 

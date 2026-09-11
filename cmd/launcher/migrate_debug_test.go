@@ -9,15 +9,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// parseOnly resolves the selected command path without running it.
-func parseOnly(t *testing.T, args ...string) string {
+// parseOnlyDebug resolves the selected command path without
+// running it, with the debug-only plugins (secrets, db) registered.
+func parseOnlyDebug(t *testing.T, args ...string) string {
 	t.Helper()
 
-	parser, err := kong.New(&CLI{},
+	base := []kong.Option{
 		kong.Name("tango"),
 		kong.UsageOnError(),
 		versionVars(),
-	)
+	}
+	base = append(base, secretsOptions()...)
+	base = append(base, dbOptions()...)
+
+	parser, err := kong.New(&CLI{}, base...)
 	require.NoError(t, err)
 
 	kctx, err := parser.Parse(args)
@@ -26,11 +31,14 @@ func parseOnly(t *testing.T, args ...string) string {
 }
 
 // TestMigrateCommandGrammarDebug locks in the debug command set:
-// all five subcommands parse, including the development-only ones.
+// all subcommands parse, including the development-only ones.
 func TestMigrateCommandGrammarDebug(t *testing.T) {
-	require.Equal(t, "migrate up", parseOnly(t, "migrate", "up"))
-	require.Equal(t, "migrate down", parseOnly(t, "migrate", "down"))
-	require.Equal(t, "migrate status", parseOnly(t, "migrate", "status"))
-	require.Equal(t, "migrate create <name>", parseOnly(t, "migrate", "create", "add_users_table"))
-	require.Equal(t, "migrate reset", parseOnly(t, "migrate", "reset", "--force"))
+	require.Equal(t, "migrate up", parseOnlyDebug(t, "migrate", "up"))
+	require.Equal(t, "migrate down", parseOnlyDebug(t, "migrate", "down"))
+	require.Equal(t, "migrate status", parseOnlyDebug(t, "migrate", "status"))
+	require.Equal(t, "migrate version", parseOnlyDebug(t, "migrate", "version"))
+	require.Equal(t, "migrate create <name>", parseOnlyDebug(t, "migrate", "create", "add_users_table"))
+	require.Equal(t, "migrate fix", parseOnlyDebug(t, "migrate", "fix"))
+	require.Equal(t, "migrate validate", parseOnlyDebug(t, "migrate", "validate"))
+	require.Equal(t, "migrate reset", parseOnlyDebug(t, "migrate", "reset", "--force"))
 }

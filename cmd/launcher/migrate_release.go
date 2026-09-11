@@ -6,7 +6,8 @@ package launcher
 // inspect the compiled-in migrations. Creating migration files and
 // resetting the schema are development operations.
 type MigrateCmd struct {
-	Up     MigrateUpCmd     `cmd:"" help:"Run database migrations"`
-	Down   MigrateDownCmd   `cmd:"" help:"Rollback the most recent migration"`
-	Status MigrateStatusCmd `cmd:"" help:"Check database migration status"`
+	Up      MigrateUpCmd      `cmd:"" help:"Run database migrations"`
+	Down    MigrateDownCmd    `cmd:"" help:"Rollback the most recent migration"`
+	Status  MigrateStatusCmd  `cmd:"" help:"Check database migration status"`
+	Version MigrateVersionCmd `cmd:"" help:"Print the current migration version"`
 }
