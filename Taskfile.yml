@@ -25,7 +25,7 @@ tasks:
 
   run:
     desc: Run the Go backend directly (debug build)
-    cmd: go run -tags debug ./cmd {{.CLI_ARGS}}
+    cmd: go run -tags debug ./cmd --env-file=.env.local {{.CLI_ARGS}}
 
   email:dev:
     desc: Run React Email dev UI (:3030)
