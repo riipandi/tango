@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/riipandi/tango/internal/transport/responder"
+	"github.com/riipandi/tango/pkg/responder"
 )
 
 //go:embed all:output

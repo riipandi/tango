@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport"
 )
 
@@ -30,7 +31,7 @@ var serveCmd = &cobra.Command{
 			log.Fatalf("failed to load config: %v", err)
 		}
 
-		srv := transport.NewHTTPServer()
+		srv := transport.NewHTTPServer(registry.New())
 		addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
 		go func() {

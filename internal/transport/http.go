@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/handler"
 	"github.com/riipandi/tango/internal/transport/middleware"
-	"github.com/riipandi/tango/internal/transport/routes"
 	"github.com/riipandi/tango/web"
 )
 
@@ -18,21 +18,27 @@ type HTTPServer struct {
 	Server *http.Server
 }
 
-func NewHTTPServer() *HTTPServer {
+// NewHTTPServer assembles the application: shared middleware, core
+// routes, then every module from the registry mounts itself.
+func NewHTTPServer(registry *kernel.Registry) *HTTPServer {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger())
 	r.Use(middleware.JSONRecoverer)
 	r.Use(middleware.CORS())
 
-	// Well Known: Discovery endpoints for OpenID Connect, etc.
-	r.Get("/.well-known/jwks.json", handler.NotImplementedHandler) // Get JSON Web Key Set (JWKS)
-	r.Get("/.well-known/version", handler.NotImplementedHandler)   // Get current application version
-
-	r.Route("/api", routes.RegisterAPI)
+	// Core endpoints.
+	r.Get("/healthz", handler.HealthzHandler)
 	r.Get("/static/*", handler.StaticAssetsHandler)
 
-	// Render frontend SPA (must be last)
+	// Modules mount root-level routes (wellknown, ...).
+	registry.Apply(r)
+
+	// Shared /api group; APIRoutable modules register inside it.
+	r.Route("/api", registry.ApplyAPI)
+
+	// Render frontend SPA (must be last); web.SetupStatic also owns
+	// the root 404/SPA fallback.
 	web.SetupStatic(r)
 
 	return &HTTPServer{Router: r}

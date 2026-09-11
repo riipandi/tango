@@ -9,15 +9,10 @@ import (
 	"resty.dev/v3"
 
 	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/transport/responder"
+	"github.com/riipandi/tango/pkg/responder"
 )
 
-func NotImplementedHandler(w http.ResponseWriter, r *http.Request) {
-	responder.WriteJSON(w, http.StatusOK, map[string]string{
-		"message": "Not yet implemented",
-	})
-}
-
+// HealthzHandler reports service health, probing an upstream endpoint.
 func HealthzHandler(w http.ResponseWriter, r *http.Request) {
 	uaString := fmt.Sprintf("Mozilla/5.0 (compatible; %s/%s; +%s)", config.AppName, config.AppVersion, config.C.Public.BaseURL)
 	httpClient := resty.New().SetHeader("User-Agent", uaString)
@@ -50,16 +45,6 @@ func HealthzHandler(w http.ResponseWriter, r *http.Request) {
 	responder.WriteJSON(w, http.StatusOK, map[string]string{
 		"status":     "healthy",
 		"ip_address": ipAddress,
-	})
-}
-
-func APIRootHandler(w http.ResponseWriter, r *http.Request) {
-	responder.WriteJSON(w, http.StatusOK, map[string]string{
-		"name":     config.AppName,
-		"version":  config.AppVersion,
-		"platform": config.Platform,
-		"build":    config.BuildDate,
-		"hash":     config.BuildHash,
 	})
 }
 
