@@ -6,6 +6,8 @@ toolchain go1.27.1
 
 require (
 	github.com/alecthomas/kong v1.16.1
+	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
+	github.com/emersion/go-smtp v0.25.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-chi/cors v1.2.2
 	github.com/go-viper/mapstructure/v2 v2.5.0

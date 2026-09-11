@@ -3,6 +3,7 @@ package launcher
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os/signal"
@@ -14,8 +15,10 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport"
+	"github.com/riipandi/tango/web"
 )
 
 // ServeCmd starts the application server.
@@ -54,7 +57,17 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	fch := fetcher.New(fetcher.Options{Logger: lg})
 	defer fch.Close()
 
-	reg := registry.New(registry.Deps{Config: cfg, Logger: lg, Fetcher: fch})
+	// Transactional email over the configured relay, rendered from the embedded React Email templates.
+	templates, err := fs.Sub(web.EmailTemplates, "email")
+	if err != nil {
+		return fmt.Errorf("mount email templates: %w", err)
+	}
+	ml := mailer.New(cfg.Mailer, mailer.Options{
+		Templates: templates,
+		Logger:    lg,
+	})
+
+	reg := registry.New(registry.Deps{Config: cfg, Logger: lg, Fetcher: fch, Mailer: ml})
 	if err := reg.Start(context.Background()); err != nil {
 		lg.WithError(err).Fatal("failed to start modules")
 	}

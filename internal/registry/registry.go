@@ -8,6 +8,7 @@ import (
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -28,6 +29,10 @@ type Deps struct {
 	// Fetcher is the shared outbound HTTP client for service
 	// integrations. Built once and reused for its connection pool.
 	Fetcher *fetcher.Fetcher
+
+	// Mailer renders and delivers transactional email from the
+	// embedded React Email templates.
+	Mailer mailer.Mailer
 
 	// DB is the shared database pool. Populated once Postgres
 	// support lands; modules receive store implementations built

@@ -23,6 +23,12 @@ import (
 // implementation swappable in this package.
 type Logger = *loglayer.LogLayer
 
+// NewMock returns a silent logger with the same API — Fatal does
+// not exit. Useful for tests and optional components.
+func NewMock() Logger {
+	return loglayer.NewMock()
+}
+
 // Errors returned by New.
 var (
 	// ErrInvalidLevel is returned for an unknown level string.
