@@ -8,7 +8,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/riipandi/tango/internal/kernel"
-	"github.com/riipandi/tango/internal/transport/handler"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/web"
 )
@@ -28,8 +27,8 @@ func NewHTTPServer(registry *kernel.Registry) *HTTPServer {
 	r.Use(middleware.CORS())
 
 	// Core endpoints.
-	r.Get("/healthz", handler.HealthzHandler)
-	r.Get("/static/*", handler.StaticAssetsHandler)
+	r.Get("/healthz", HealthzHandler)
+	r.Get("/static/*", StaticAssetsHandler)
 
 	// Modules mount root-level routes (wellknown, ...).
 	registry.Apply(r)

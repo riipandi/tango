@@ -15,23 +15,9 @@ import (
 // ModuleName identifies the audit log module in the registry.
 const ModuleName = "auditlog"
 
-// Event is a single audit entry. Other modules record events through
-// the module's public API instead of touching storage directly.
-type Event struct {
-	Action    string    `json:"action"`
-	Actor     string    `json:"actor"`
-	Target    string    `json:"target"`
-	Timestamp time.Time `json:"timestamp"`
-}
-
-// Recorder captures audit events.
-type Recorder interface {
-	Record(event Event)
-}
-
 // Module is the audit log feature: an in-memory sink plus a read-only
-// listing endpoint. Replace the sink with a DB-backed implementation
-// behind the Recorder interface when persistence lands.
+// listing endpoint. Swap the sink for a DB-backed implementation
+// when persistence lands.
 type Module struct {
 	mu     sync.Mutex
 	events []Event
@@ -48,7 +34,6 @@ func (m *Module) Record(event Event) {
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now().UTC()
 	}
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.events = append(m.events, event)
