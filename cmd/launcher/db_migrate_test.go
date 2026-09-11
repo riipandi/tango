@@ -2,8 +2,6 @@ package launcher
 
 import (
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,74 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// parseOnly resolves the selected command path without running it.
-// Debug-only plugins are appended by the per-variant test files.
-func parseOnly(t *testing.T, args ...string) string {
-	t.Helper()
-
-	parser, err := kong.New(&CLI{},
-		kong.Name("tango"),
-		kong.UsageOnError(),
-		versionVars(),
-	)
-	require.NoError(t, err)
-
-	kctx, err := parser.Parse(args)
-	require.NoError(t, err, "args: %v", args)
-	return kctx.Command()
-}
-
-// runMigrate runs a migrate command and returns its captured
-// stdout plus any execution error, with the destructive-action
-// gates switched to the given stdin source.
-func runMigrate(t *testing.T, interactive bool, stdin io.Reader, args ...string) (string, error) {
-	t.Helper()
-
-	prevReader, prevInteractive := stdinReader, stdinIsInteractive
-	stdinReader = stdin
-	stdinIsInteractive = func() bool { return interactive }
-	t.Cleanup(func() { stdinReader, stdinIsInteractive = prevReader, prevInteractive })
-
-	parser, err := kong.New(&CLI{},
-		kong.Name("tango"),
-		kong.Writers(io.Discard, io.Discard),
-		versionVars(),
-	)
-	require.NoError(t, err)
-	kctx, err := parser.Parse(args)
-	require.NoError(t, err, "args: %v", args)
-
-	out := captureStdout(t, func() {
-		err = kctx.Run(&CLI{})
-	})
-	return out, err
-}
-
-// chdirRepoRoot moves the test working directory to the repository
-// root — debug builds resolve the disk migration source relative
-// to it — and restores it when the test ends.
-func chdirRepoRoot(t *testing.T) {
-	t.Helper()
-
-	orig, err := os.Getwd()
-	require.NoError(t, err)
-
-	dir := orig
-	for {
-		if _, statErr := os.Stat(filepath.Join(dir, "Taskfile.yml")); statErr == nil {
-			break
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("repository root not found")
-		}
-		dir = parent
-	}
-
-	require.NoError(t, os.Chdir(dir))
-	t.Cleanup(func() { _ = os.Chdir(orig) })
-}
 
 // TestMigrateLifecycle runs up, a guarded down, and status against
 // the shared testcontainer database, configured through the
@@ -141,4 +71,47 @@ func TestMigrateLifecycle(t *testing.T) {
 	out, err = runMigrate(t, false, nil, "db", "migrate:status")
 	require.NoError(t, err)
 	assert.Contains(t, out, "pending")
+}
+
+// parseOnly resolves the selected command path without running it.
+// Debug-only plugins are appended by the per-variant test files.
+func parseOnly(t *testing.T, args ...string) string {
+	t.Helper()
+
+	parser, err := kong.New(&CLI{},
+		kong.Name("tango"),
+		kong.UsageOnError(),
+		versionVars(),
+	)
+	require.NoError(t, err)
+
+	kctx, err := parser.Parse(args)
+	require.NoError(t, err, "args: %v", args)
+	return kctx.Command()
+}
+
+// runMigrate runs a migrate command and returns its captured
+// stdout plus any execution error, with the destructive-action
+// gates switched to the given stdin source.
+func runMigrate(t *testing.T, interactive bool, stdin io.Reader, args ...string) (string, error) {
+	t.Helper()
+
+	prevReader, prevInteractive := stdinReader, stdinIsInteractive
+	stdinReader = stdin
+	stdinIsInteractive = func() bool { return interactive }
+	t.Cleanup(func() { stdinReader, stdinIsInteractive = prevReader, prevInteractive })
+
+	parser, err := kong.New(&CLI{},
+		kong.Name("tango"),
+		kong.Writers(io.Discard, io.Discard),
+		versionVars(),
+	)
+	require.NoError(t, err)
+	kctx, err := parser.Parse(args)
+	require.NoError(t, err, "args: %v", args)
+
+	out := captureStdout(t, func() {
+		err = kctx.Run(&CLI{})
+	})
+	return out, err
 }

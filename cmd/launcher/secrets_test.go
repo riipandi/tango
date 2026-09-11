@@ -1,5 +1,3 @@
-//go:build debug
-
 package launcher
 
 import (
@@ -13,20 +11,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSecretsRegisteredInDebug(t *testing.T) {
+func TestSecretsRegistered(t *testing.T) {
 	help := &strings.Builder{}
-	opts := []kong.Option{
+	parser, err := kong.New(&CLI{},
 		kong.Name("tango"),
 		kong.Writers(help, io.Discard),
-		kong.Exit(func(int) {}),
-	}
-	opts = append(opts, secretsOptions()...)
-	parser, err := kong.New(&CLI{}, opts...)
+		kong.Exit(func(int) {}), // --help must not os.Exit in tests
+		versionVars(),
+	)
 	require.NoError(t, err)
 
 	_, _ = parser.Parse([]string{"--help"})
 	assert.Contains(t, help.String(), "secrets")
-	assert.NotContains(t, help.String(), "--apply", "secrets flags belong to the secrets command, not the root")
 }
 
 func TestSecretsGeneratesKeys(t *testing.T) {
@@ -57,4 +53,32 @@ func TestSecretsGeneratesKeys(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, string(data), "KEY-----")
 	}
+}
+
+func TestSecretsApplyWritesEnvFile(t *testing.T) {
+	dir := t.TempDir()
+	envFile := dir + "/.env.local"
+	require.NoError(t, os.WriteFile(envFile, []byte("PORT=3080\n"), 0o600))
+
+	captureStdout(t, func() {
+		require.NoError(t, RunCLI([]string{"--data-dir", dir, "secrets", "--apply", "--out", envFile}, kong.Writers(io.Discard, io.Discard)))
+	})
+
+	data, err := os.ReadFile(envFile)
+	require.NoError(t, err)
+	for _, key := range []string{"APP_SECRET_KEY=", "JWT_PRIVATE_KEY=", "JWT_PUBLIC_KEY=", "JWT_SECRET_KEY="} {
+		assert.Contains(t, string(data), key)
+	}
+}
+
+func TestUpsertEnvFile(t *testing.T) {
+	envFile := t.TempDir() + "/.env"
+	require.NoError(t, os.WriteFile(envFile, []byte("A=1\nB=2\n"), 0o600))
+
+	require.NoError(t, upsertEnvFile(envFile, "B", "20"))
+	require.NoError(t, upsertEnvFile(envFile, "C", "30"))
+
+	data, err := os.ReadFile(envFile)
+	require.NoError(t, err)
+	assert.Equal(t, "A=1\nB=20\nC=30\n", string(data))
 }

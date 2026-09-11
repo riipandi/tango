@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestDBCommandGrammar locks in the release command set: backup
+// TestDBCommandGrammar locks in the release command set: manage
 // plus up, down, status, and version exist; the development-only
 // migration commands do not.
 func TestDBCommandGrammar(t *testing.T) {

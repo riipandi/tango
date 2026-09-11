@@ -10,18 +10,15 @@ import (
 )
 
 // parseOnlyDebug resolves the selected command path without
-// running it, with the debug-only secrets plugin registered.
+// running it.
 func parseOnlyDebug(t *testing.T, args ...string) string {
 	t.Helper()
 
-	base := []kong.Option{
+	parser, err := kong.New(&CLI{},
 		kong.Name("tango"),
 		kong.UsageOnError(),
 		versionVars(),
-	}
-	base = append(base, secretsOptions()...)
-
-	parser, err := kong.New(&CLI{}, base...)
+	)
 	require.NoError(t, err)
 
 	kctx, err := parser.Parse(args)
@@ -30,7 +27,7 @@ func parseOnlyDebug(t *testing.T, args ...string) string {
 }
 
 // TestDBCommandGrammarDebug locks in the debug command set:
-// backup, migration, and development-only operations all parse.
+// manage, migration, and development-only operations all parse.
 func TestDBCommandGrammarDebug(t *testing.T) {
 	require.Equal(t, "db dump <mode>", parseOnlyDebug(t, "db", "dump", "all"))
 	require.Equal(t, "db dump <mode>", parseOnlyDebug(t, "db", "dump", "data"))

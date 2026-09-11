@@ -11,19 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// requirePGTools skips the test when the PostgreSQL client
-// binaries are not installed locally.
-func requirePGTools(t *testing.T) {
-	t.Helper()
-
-	for _, tool := range []string{"pg_dump", "pg_restore", "psql"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf("%s not in PATH; install the PostgreSQL client tools", tool)
-		}
-	}
-}
-
-// TestDBLifecycle exercises the backup commands end to end
+// TestDBLifecycle exercises the manage commands end to end
 // against the shared testcontainer database: dump, a failing mode,
 // and the gated restore/import paths. It runs in both build
 // variants.
@@ -88,8 +76,8 @@ func TestDBLifecycle(t *testing.T) {
 }
 
 // backupPathFromOutput extracts the backup path from a
-// dump/export command's stdout: everything from the data-root
-// marker to end of line.
+// dump/export command's stdout: the last whitespace-separated
+// field after the dumped/exported marker.
 func backupPathFromOutput(t *testing.T, out string) string {
 	t.Helper()
 
@@ -102,4 +90,16 @@ func backupPathFromOutput(t *testing.T, out string) string {
 	fields := strings.Fields(line)
 	require.NotEmpty(t, fields, "output must contain the backup path: %q", out)
 	return strings.TrimSpace(fields[len(fields)-1])
+}
+
+// requirePGTools skips the test when the PostgreSQL client
+// binaries are not installed locally.
+func requirePGTools(t *testing.T) {
+	t.Helper()
+
+	for _, tool := range []string{"pg_dump", "pg_restore", "psql"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s not in PATH; install the PostgreSQL client tools", tool)
+		}
+	}
 }

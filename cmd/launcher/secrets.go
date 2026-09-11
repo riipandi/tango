@@ -1,5 +1,3 @@
-//go:build debug
-
 package launcher
 
 import (
@@ -15,14 +13,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/alecthomas/kong"
 	"github.com/riipandi/tango/internal/config"
 )
 
-// SecretsCmd generates application secrets.
-//
-// It is registered via kong.DynamicCommand (see secretsOptions) —
-// a build-tag conditional command, not a CLI struct field.
+// SecretsCmd generates application secrets. Keys land under the
+// configured data root (<data-dir>/keys). Available in every build
+// variant: operators need it wherever they provision.
 type SecretsCmd struct {
 	// Out is the env file --apply writes to. It deliberately has a
 	// different name from the global --env-file: one is an input
@@ -43,8 +39,7 @@ func (s *SecretsCmd) Help() string {
 		"  tango secrets --mldsa\n"
 }
 
-// Run generates keys and displays or applies the secrets. Keys
-// land under the configured data root (<data-dir>/keys).
+// Run generates keys and displays or applies the secrets.
 func (s *SecretsCmd) Run(cli *CLI) error {
 	if s.Apply {
 		if _, err := os.Stat(s.OutFile); err != nil {
@@ -60,53 +55,83 @@ func (s *SecretsCmd) Run(cli *CLI) error {
 		return err
 	}
 
-	appSecretKey, err := randomBase64Key()
+	keys, err := generateSecrets(cfg.KeysDir(), s.RSA, s.MLDSA)
 	if err != nil {
-		return fmt.Errorf("generate app secret: %w", err)
-	}
-
-	jwtSecretKey, err := randomBase64Key()
-	if err != nil {
-		return fmt.Errorf("generate jwt secret: %w", err)
-	}
-
-	privateKey, publicKey, err := generateJWTKeyPair(cfg.KeysDir(), s.RSA, s.MLDSA)
-	if err != nil {
-		return fmt.Errorf("generate jwt key pair: %w", err)
+		return err
 	}
 
 	if s.Apply {
-		fmt.Printf("%sUpdating %s file...%s\n\n", colorBold, s.OutFile, colorReset)
-		for _, kv := range [][2]string{
-			{"APP_SECRET_KEY", appSecretKey},
-			{"JWT_PRIVATE_KEY", privateKey},
-			{"JWT_PUBLIC_KEY", publicKey},
-			{"JWT_SECRET_KEY", jwtSecretKey},
-		} {
-			if err := upsertEnvFile(s.OutFile, kv[0], kv[1]); err != nil {
-				return fmt.Errorf("update %s: %w", s.OutFile, err)
-			}
-			fmt.Printf("%s=%s\n", kv[0], kv[1])
-		}
-		fmt.Printf("\n%sEnvironment secrets updated successfully%s\n", colorGreen, colorReset)
-		return nil
+		return applySecrets(s.OutFile, keys)
 	}
-
-	fmt.Printf("%sApplication Secrets:%s\n", colorBold, colorReset)
-	fmt.Printf("APP_SECRET_KEY=%s\n", appSecretKey)
-	fmt.Printf("JWT_PRIVATE_KEY=%s\n", privateKey)
-	fmt.Printf("JWT_PUBLIC_KEY=%s\n", publicKey)
-	fmt.Printf("JWT_SECRET_KEY=%s\n", jwtSecretKey)
+	printSecrets(keys)
 	return nil
 }
 
-// secretsOptions registers the secrets command into the CLI grammar
-// (debug builds only). DynamicCommand is kong's mechanism for
-// build-tag conditional commands.
-func secretsOptions() []kong.Option {
-	return []kong.Option{
-		kong.DynamicCommand("secrets", "Generate application secrets", "", &SecretsCmd{}),
+// secretsBundle is one generated set: display values plus the
+// env-file rows --apply writes.
+type secretsBundle struct {
+	display [][2]string
+	env     [][2]string
+}
+
+// generateSecrets builds random app/JWT secrets plus the JWT key
+// pair (PEM files on disk, base64 DER for the env rows).
+func generateSecrets(keysDir string, useRSA, useMLDSA bool) (secretsBundle, error) {
+	appSecret, err := randomBase64Key()
+	if err != nil {
+		return secretsBundle{}, fmt.Errorf("generate app secret: %w", err)
 	}
+	jwtSecret, err := randomBase64Key()
+	if err != nil {
+		return secretsBundle{}, fmt.Errorf("generate jwt secret: %w", err)
+	}
+	privateKey, publicKey, err := generateJWTKeyPair(keysDir, useRSA, useMLDSA)
+	if err != nil {
+		return secretsBundle{}, fmt.Errorf("generate jwt key pair: %w", err)
+	}
+	return secretsBundle{
+		display: [][2]string{
+			{"APP_SECRET_KEY", appSecret},
+			{"JWT_PRIVATE_KEY", privateKey},
+			{"JWT_PUBLIC_KEY", publicKey},
+			{"JWT_SECRET_KEY", jwtSecret},
+		},
+		env: [][2]string{
+			{"APP_SECRET_KEY", appSecret},
+			{"JWT_PRIVATE_KEY", privateKey},
+			{"JWT_PUBLIC_KEY", publicKey},
+			{"JWT_SECRET_KEY", jwtSecret},
+		},
+	}, nil
+}
+
+// printSecrets renders the bundle to stdout.
+func printSecrets(keys secretsBundle) {
+	fmt.Printf("%sApplication Secrets:%s\n", colorBold, colorReset)
+	for _, kv := range keys.display {
+		fmt.Printf("%s=%s\n", kv[0], kv[1])
+	}
+}
+
+// applySecrets writes the bundle into the env file, one key per line.
+func applySecrets(outFile string, keys secretsBundle) error {
+	fmt.Printf("%sUpdating %s file...%s\n\n", colorBold, outFile, colorReset)
+	for _, kv := range keys.env {
+		if err := upsertEnvFile(outFile, kv[0], kv[1]); err != nil {
+			return fmt.Errorf("update %s: %w", outFile, err)
+		}
+		fmt.Printf("%s=%s\n", kv[0], kv[1])
+	}
+	fmt.Printf("\n%sEnvironment secrets updated successfully%s\n", colorGreen, colorReset)
+	return nil
+}
+
+// loadSecretsConfig loads the layered configuration for the
+// secrets command: only the data root matters (keys land under
+// <data-dir>/keys). Global CLI flags (--data-dir) win over env
+// and env-file layers.
+func loadSecretsConfig(cli *CLI) (*config.Config, error) {
+	return loadConfig(cli, nil)
 }
 
 // randomBase64Key returns a cryptographically secure 48-byte
@@ -117,14 +142,6 @@ func randomBase64Key() (string, error) {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(buf), nil
-}
-
-// loadSecretsConfig loads the layered configuration for the
-// secrets command: only the data root matters (keys land under
-// <data-dir>/keys). Global CLI flags (--data-dir) win over env
-// and env-file layers.
-func loadSecretsConfig(cli *CLI) (*config.Config, error) {
-	return loadConfig(cli, nil)
 }
 
 // generateJWTKeyPair writes the PEM files to outDir and returns the
@@ -150,9 +167,9 @@ func generateJWTKeyPair(outDir string, useRSA, useMLDSA bool) (string, string, e
 			return "", "", err
 		}
 	case useRSA:
-		key, err := rsa.GenerateKey(nil, 2048)
-		if err != nil {
-			return "", "", err
+		key, genErr := rsa.GenerateKey(nil, 2048)
+		if genErr != nil {
+			return "", "", genErr
 		}
 		derPrivate, err = x509.MarshalPKCS8PrivateKey(key)
 		if err != nil {
@@ -177,7 +194,7 @@ func generateJWTKeyPair(outDir string, useRSA, useMLDSA bool) (string, string, e
 		}
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("create keys dir: %w", err)
 	}
 
 	privatePath := filepath.Join(outDir, "private_key.pem")

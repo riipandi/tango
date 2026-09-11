@@ -1,13 +1,9 @@
 package launcher
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
-	"os"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/riipandi/tango/database"
@@ -23,9 +19,26 @@ import (
 // Destructive commands (down, reset) confirm on stdin before they
 // run; --force skips the prompt and --dry-run prints the target
 // without executing anything.
-//
-// Database backup/restore commands (dump, restore, export, import)
-// are also included in this file and run in both build variants.
+
+// dbTimeout bounds every database command: migrations, dumps,
+// restores, and client-binary invocations. Long restores on big
+// databases can exceed it — the context only cancels the wait,
+// and pg_dump/pg_restore finish their current statement.
+const dbTimeout = 5 * time.Minute
+
+// dbContext returns a timeout-bounded context for database
+// commands, so a hung server or binary cannot block the CLI
+// forever.
+func dbContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), dbTimeout)
+}
+
+// migrateConfig loads the layered configuration for database
+// commands: the DSN plus the derived data-root paths. Global CLI
+// flags (--data-dir) win over env and env-file layers.
+func migrateConfig(cli *CLI) (*config.Config, error) {
+	return loadConfig(cli, nil)
+}
 
 // MigrateUpCmd applies all pending migrations.
 type MigrateUpCmd struct {
@@ -204,167 +217,4 @@ func (c *MigrateStatusCmd) Run(cli *CLI) error {
 		fmt.Printf("%-8d  %-9s  %-40s  %s\n", entry.Version, entry.State, entry.Path, appliedAt)
 	}
 	return nil
-}
-
-// DBDumpCmd creates a binary-format backup.
-type DBDumpCmd struct {
-	Mode string `arg:"" help:"Dump scope: all (schema & data) or data"`
-}
-
-// Run creates a custom-format dump in the configured backup dir.
-func (c *DBDumpCmd) Run(cli *CLI) error {
-	cfg, err := migrateConfig(cli)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := dbContext()
-	defer cancel()
-	path, err := database.Dump(ctx, cfg.Database.URL, c.Mode, cfg.BackupDir())
-	if err != nil {
-		return fmt.Errorf("db dump: %w", err)
-	}
-	fmt.Printf("%sdumped%s %s\n", colorGreen, colorReset, path)
-	return nil
-}
-
-// DBRestoreCmd restores from a binary-format dump.
-type DBRestoreCmd struct {
-	Mode   string `arg:"" help:"Restore scope: all, data, or schema"`
-	File   string `arg:"" help:"Path to the .dump file"`
-	Force  bool   `help:"Skip the confirmation prompt"`
-	DryRun bool   `help:"Print the pg_restore command without running it"`
-}
-
-// Run restores the database from a dump after confirmation.
-func (c *DBRestoreCmd) Run(cli *CLI) error {
-	cfg, err := migrateConfig(cli)
-	if err != nil {
-		return err
-	}
-	if c.DryRun {
-		cmd, err := database.RestoreCommand(cfg.Database.URL, c.Mode, c.File)
-		if err != nil {
-			return fmt.Errorf("db restore: %w", err)
-		}
-		fmt.Printf("%sdry-run%s %s\n", colorCyan, colorReset, cmd)
-		return nil
-	}
-	if confirmErr := confirmDestructive(c.Force); confirmErr != nil {
-		return confirmErr
-	}
-	ctx, cancel := dbContext()
-	defer cancel()
-	if err := database.Restore(ctx, cfg.Database.URL, c.Mode, c.File); err != nil {
-		return fmt.Errorf("db restore: %w", err)
-	}
-	fmt.Printf("%srestore completed%s\n", colorGreen, colorReset)
-	return nil
-}
-
-// DBExportCmd creates a plain-SQL backup.
-type DBExportCmd struct {
-	Mode string `arg:"" help:"Export scope: all (schema & data) or data"`
-}
-
-// Run exports the database as SQL into the configured backup dir.
-func (c *DBExportCmd) Run(cli *CLI) error {
-	cfg, err := migrateConfig(cli)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := dbContext()
-	defer cancel()
-	path, err := database.Export(ctx, cfg.Database.URL, c.Mode, cfg.BackupDir())
-	if err != nil {
-		return fmt.Errorf("db export: %w", err)
-	}
-	fmt.Printf("%sexported%s %s\n", colorGreen, colorReset, path)
-	return nil
-}
-
-// DBImportCmd imports a plain SQL file.
-type DBImportCmd struct {
-	File   string `arg:"" help:"Path to the .sql file"`
-	Force  bool   `help:"Skip the confirmation prompt"`
-	DryRun bool   `help:"Print the psql command without running it"`
-}
-
-// Run imports a SQL file after confirmation.
-func (c *DBImportCmd) Run(cli *CLI) error {
-	cfg, err := migrateConfig(cli)
-	if err != nil {
-		return err
-	}
-	if c.DryRun {
-		cmd, err := database.ImportCommand(cfg.Database.URL, c.File)
-		if err != nil {
-			return fmt.Errorf("db import: %w", err)
-		}
-		fmt.Printf("%sdry-run%s %s\n", colorCyan, colorReset, cmd)
-		return nil
-	}
-	if confirmErr := confirmDestructive(c.Force); confirmErr != nil {
-		return confirmErr
-	}
-	ctx, cancel := dbContext()
-	defer cancel()
-	if err := database.Import(ctx, cfg.Database.URL, c.File); err != nil {
-		return fmt.Errorf("db import: %w", err)
-	}
-	fmt.Printf("%simport completed%s\n", colorGreen, colorReset)
-	return nil
-}
-
-// dbTimeout bounds every database command: migrations, dumps,
-// restores, and client-binary invocations. Long restores on big
-// databases can exceed it — the context only cancels the wait,
-// and pg_dump/pg_restore finish their current statement.
-const dbTimeout = 5 * time.Minute
-
-// dbContext returns a timeout-bounded context for database
-// commands, so a hung server or binary cannot block the CLI
-// forever.
-func dbContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), dbTimeout)
-}
-
-// stdinReader is the input source for confirmation prompts; tests
-// override it the same way captureStdout swaps os.Stdout.
-var stdinReader io.Reader = os.Stdin
-
-// stdinIsInteractive reports whether stdin is a terminal. Pipes and
-// /dev/null cannot confirm a prompt.
-var stdinIsInteractive = func() bool {
-	fi, err := os.Stdin.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
-}
-
-// confirmDestructive gates destructive migrations: unless --force,
-// it prompts on stdin and refuses in non-interactive sessions (CI,
-// scripts), where nobody can answer the prompt.
-func confirmDestructive(force bool) error {
-	if force {
-		return nil
-	}
-	if !stdinIsInteractive() {
-		return fmt.Errorf("refusing destructive migration in a non-interactive session (pass --force to proceed)")
-	}
-
-	fmt.Print("This operation is destructive. Proceed? [y/N] ")
-	answer, err := bufio.NewReader(stdinReader).ReadString('\n')
-	if err != nil && answer == "" {
-		return fmt.Errorf("aborted")
-	}
-	answer = strings.ToLower(strings.TrimSpace(answer))
-	if answer == "y" || answer == "yes" {
-		return nil
-	}
-	return fmt.Errorf("aborted")
-}
-
-// migrateConfig loads the layered configuration for migration
-// commands: the DSN plus the derived data-root paths. Global CLI
-// flags (--data-dir) win over env and env-file layers.
-func migrateConfig(cli *CLI) (*config.Config, error) {
-	return loadConfig(cli, nil)
 }
