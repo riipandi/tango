@@ -73,8 +73,8 @@ tasks:
       - task: test:ui
 
   test:go:
-    desc: Run Go unit tests
-    cmd: gotestsum --format testname ./...
+    desc: Run Go unit tests (pass packages or flags after `--`)
+    cmd: gotestsum --format testname {{.CLI_ARGS | default "./..."}}
 
   test:ui:
     desc: Run frontend unit tests
