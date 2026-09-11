@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -46,20 +45,24 @@ var serveCmd = &cobra.Command{
 			}
 		}()
 
-		quit := make(chan os.Signal, 1)
-		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-		<-quit
+		// signal.NotifyContext (Go 1.26+): the returned context is
+		// canceled with the received signal as its cause, so the
+		// shutdown path can report exactly which signal arrived.
+		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		<-ctx.Done()
+		log.Printf("received shutdown signal: %v", context.Cause(ctx))
 
 		log.Println("shutting down server...")
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if err := srv.Shutdown(ctx); err != nil {
+		if err := srv.Shutdown(shutdownCtx); err != nil {
 			log.Fatalf("shutdown error: %v", err)
 		}
 
-		if err := reg.Stop(ctx); err != nil {
+		if err := reg.Stop(shutdownCtx); err != nil {
 			log.Printf("module shutdown errors: %v", err)
 		}
 

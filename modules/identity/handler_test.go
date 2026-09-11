@@ -60,7 +60,7 @@ func TestCreateUser(t *testing.T) {
 
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	body := decodeBody(t, w)
-	assert.Equal(t, "1", body["id"])
+	assert.NotEmpty(t, body["id"])
 	assert.Equal(t, "John", body["name"])
 }
 
@@ -95,12 +95,15 @@ func TestListUsers(t *testing.T) {
 
 func TestGetUser(t *testing.T) {
 	r := newTestRouter()
-	do(r, http.MethodPost, "/api/users", `{"name":"John"}`)
+	w := do(r, http.MethodPost, "/api/users", `{"name":"John"}`)
+	body := decodeBody(t, w)
+	id, _ := body["id"].(string)
+	require.NotEmpty(t, id)
 
-	w := do(r, http.MethodGet, "/api/users/1", "")
+	w = do(r, http.MethodGet, "/api/users/"+id, "")
 	require.Equal(t, http.StatusOK, w.Code)
 
-	body := decodeBody(t, w)
+	body = decodeBody(t, w)
 	assert.Equal(t, "John", body["name"])
 }
 

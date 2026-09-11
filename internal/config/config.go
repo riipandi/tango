@@ -63,9 +63,9 @@ func nullStringToNullableStringHook() mapstructure.DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
-		data interface{},
-	) (interface{}, error) {
-		if t != reflect.TypeOf((*string)(nil)) {
+		data any,
+	) (any, error) {
+		if t != reflect.TypeFor[*string]() {
 			return data, nil
 		}
 

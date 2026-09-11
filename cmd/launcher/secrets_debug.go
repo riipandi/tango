@@ -4,6 +4,7 @@ package launcher
 
 import (
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -29,6 +30,7 @@ const (
 var (
 	secretsApply   bool
 	secretsRSA     bool
+	secretsMLDSA   bool
 	secretsEnvFile string
 )
 
@@ -56,7 +58,7 @@ var secretsCmd = &cobra.Command{
 			return fmt.Errorf("generate jwt secret: %w", err)
 		}
 
-		privateKey, publicKey, err := generateJWTKeyPair(secretsRSA)
+		privateKey, publicKey, err := generateJWTKeyPair(secretsRSA, secretsMLDSA)
 		if err != nil {
 			return fmt.Errorf("generate jwt key pair: %w", err)
 		}
@@ -99,12 +101,28 @@ func randomBase64Key() (string, error) {
 
 // generateJWTKeyPair writes the PEM files to storage/ and returns the
 // base64-encoded (DER, no PEM headers) private and public keys.
-func generateJWTKeyPair(useRSA bool) (string, string, error) {
+// Algorithm precedence: --mldsa (post-quantum ML-DSA-87, FIPS 204)
+// > --rsa (RSA 2048) > Ed25519 (default).
+func generateJWTKeyPair(useRSA, useMLDSA bool) (string, string, error) {
 	var derPrivate, derPublic []byte
 	var err error
 
-	if useRSA {
-		key, err := rsa.GenerateKey(rand.Reader, 2048)
+	switch {
+	case useMLDSA:
+		key, genErr := mldsa.GenerateKey(mldsa.MLDSA87())
+		if genErr != nil {
+			return "", "", genErr
+		}
+		derPrivate, err = x509.MarshalPKCS8PrivateKey(key)
+		if err != nil {
+			return "", "", err
+		}
+		derPublic, err = x509.MarshalPKIXPublicKey(key.PublicKey())
+		if err != nil {
+			return "", "", err
+		}
+	case useRSA:
+		key, err := rsa.GenerateKey(nil, 2048)
 		if err != nil {
 			return "", "", err
 		}
@@ -116,8 +134,8 @@ func generateJWTKeyPair(useRSA bool) (string, string, error) {
 		if err != nil {
 			return "", "", err
 		}
-	} else {
-		_, priv, genErr := ed25519.GenerateKey(rand.Reader)
+	default:
+		_, priv, genErr := ed25519.GenerateKey(nil)
 		if genErr != nil {
 			return "", "", genErr
 		}
@@ -130,7 +148,6 @@ func generateJWTKeyPair(useRSA bool) (string, string, error) {
 			return "", "", err
 		}
 	}
-
 	outDir := filepath.Join("storage", "keys")
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return "", "", err
@@ -180,6 +197,7 @@ func upsertEnvFile(envFile, key, value string) error {
 func init() {
 	secretsCmd.Flags().BoolVar(&secretsApply, "apply", false, "Update the env file with new secrets")
 	secretsCmd.Flags().BoolVar(&secretsRSA, "rsa", false, "Generate JWT keys using RSA algorithm (2048-bit)")
+	secretsCmd.Flags().BoolVar(&secretsMLDSA, "mldsa", false, "Generate post-quantum ML-DSA-87 JWT keys (FIPS 204)")
 	secretsCmd.Flags().StringVar(&secretsEnvFile, "env-file", ".env.local", "Env file to update when using --apply")
 
 	secretsCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
@@ -190,9 +208,11 @@ func init() {
 		fmt.Printf("  tango secrets --env-file .env.staging --apply\n")
 		fmt.Printf("  tango secrets --rsa          - Generate RSA keys and display secrets\n")
 		fmt.Printf("  tango secrets --rsa --apply  - Generate RSA keys and apply to .env.local\n")
+		fmt.Printf("  tango secrets --mldsa        - Generate post-quantum ML-DSA-87 keys (FIPS 204)\n")
 		fmt.Printf("\nOptions:\n")
 		fmt.Printf("  --apply              Update the env file with new secrets\n")
 		fmt.Printf("  --rsa                Generate JWT keys using RSA algorithm (2048-bit)\n")
+		fmt.Printf("  --mldsa              Generate post-quantum ML-DSA-87 JWT keys (FIPS 204)\n")
 		fmt.Printf("  --env-file <file>    Env file for --apply (default: .env.local)\n")
 	})
 	rootCmd.AddCommand(secretsCmd)

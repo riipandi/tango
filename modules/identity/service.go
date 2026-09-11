@@ -3,19 +3,19 @@ package identity
 import (
 	"context"
 	"errors"
-	"strconv"
 	"sync"
+
+	"uuid"
 )
 
 // MemoryStore is an in-memory Store, guarded by a mutex.
 type MemoryStore struct {
-	mu     sync.Mutex
-	users  []User
-	nextID int
+	mu    sync.Mutex
+	users []User
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{nextID: 1}
+	return &MemoryStore{}
 }
 
 func (s *MemoryStore) List(_ context.Context) []User {
@@ -29,8 +29,7 @@ func (s *MemoryStore) List(_ context.Context) []User {
 func (s *MemoryStore) Create(_ context.Context, name string) (User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	user := User{ID: strconv.Itoa(s.nextID), Name: name}
-	s.nextID++
+	user := User{ID: uuid.NewV7().String(), Name: name}
 	s.users = append(s.users, user)
 	return user, nil
 }

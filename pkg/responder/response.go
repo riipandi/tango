@@ -1,14 +1,17 @@
 package responder
 
 import (
-	"encoding/json"
 	"net/http"
+
+	jsonv2 "encoding/json/v2"
 )
 
+// WriteJSON serializes v with encoding/json/v2 (faster unmarshal
+// path, stricter defaults) directly into the response writer.
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
+	if err := jsonv2.MarshalWrite(w, v); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }

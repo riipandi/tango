@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"uuid"
 )
 
 func TestServiceCreateAndGet(t *testing.T) {
@@ -15,7 +17,9 @@ func TestServiceCreateAndGet(t *testing.T) {
 
 	user, err := svc.Create(context.Background(), "John")
 	require.NoError(t, err)
-	assert.Equal(t, "1", user.ID)
+	_, parseErr := uuid.Parse(user.ID)
+	require.NoError(t, parseErr)
+	assert.Equal(t, byte(7), user.ID[14]-'0')
 	assert.Equal(t, "John", user.Name)
 
 	require.Len(t, recorded, 1)

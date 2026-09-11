@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/pkg/responder"
@@ -134,13 +135,13 @@ func (reg *Registry) Start(ctx context.Context) error {
 // joins all errors so one failing module does not block the rest.
 func (reg *Registry) Stop(ctx context.Context) error {
 	var errs []error
-	for i := len(reg.modules) - 1; i >= 0; i-- {
-		s, ok := reg.modules[i].(Startable)
+	for _, v := range slices.Backward(reg.modules) {
+		s, ok := v.(Startable)
 		if !ok {
 			continue
 		}
 		if err := s.Stop(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("stop module %q: %w", reg.modules[i].Name(), err))
+			errs = append(errs, fmt.Errorf("stop module %q: %w", v.Name(), err))
 		}
 	}
 	return errors.Join(errs...)

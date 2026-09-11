@@ -7,8 +7,6 @@ import (
 )
 
 func TestMigrateSubcommands(t *testing.T) {
-	// Placeholder implementations: must run without error and
-	// must remain registered on the root command.
 	out := runRootCommand(t, "migrate", "up")
 	assert.Contains(t, out, "")
 
