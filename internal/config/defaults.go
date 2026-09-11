@@ -10,7 +10,7 @@ var defaultConfig = Config{
 	App: AppConfig{
 		Mode:         "development",
 		LogLevel:     "info",
-		LogTransport: "console",
+		LogTransport: "file",
 		LogFormat:    "structured",
 		LogFile:      "storage/logs/app.log",
 	},

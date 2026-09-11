@@ -3,40 +3,32 @@ package mailer
 import (
 	"fmt"
 	"io/fs"
-	"net"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/riipandi/tango/web"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// mailpitAPI is the Mailpit HTTP API from compose.yaml (:8025).
-const mailpitAPI = "http://localhost:8025"
-
-// TestMailerMailpitDelivery is an integration test against the
-// Mailpit relay from compose.yaml (SMTP :1025, API :8025). It skips
-// itself when Mailpit is not reachable — start it with:
-//
-//	task compose:up   (or: docker compose up -d mailpit)
-//
-// then run: task test:integration
+// TestMailerMailpitDelivery delivers a message through the real
+// SMTP pipeline and verifies it via Mailpit's HTTP API. The relay
+// is a throwaway testcontainers container (docker daemon required).
 func TestMailerMailpitDelivery(t *testing.T) {
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:1025", 500*time.Millisecond)
-	if err != nil {
-		t.Skip("mailpit not reachable — start it with: docker compose up -d mailpit")
-	}
-	conn.Close()
+	ctx := t.Context()
+	mp := testutils.StartMailpit(ctx, t)
 
-	// The compose relay enforces auth (MP_SMTP_AUTH); supply the
-	// first credential pair through the real config pipeline.
-	t.Setenv("MAILER_SMTP_USERNAME", "maileruser1")
-	t.Setenv("MAILER_SMTP_PASSWORD", "mailerpass1")
+	smtpHost, smtpPort, _ := strings.Cut(mp.SMTPAddr, ":")
+	t.Setenv("MAILER_SMTP_HOST", smtpHost)
+	t.Setenv("MAILER_SMTP_PORT", smtpPort)
+	t.Setenv("MAILER_SMTP_USERNAME", mp.Username)
+	t.Setenv("MAILER_SMTP_PASSWORD", mp.Password)
 	cfg, err := config.Load(config.LoadOptions{})
 	require.NoError(t, err)
 
@@ -51,17 +43,17 @@ func TestMailerMailpitDelivery(t *testing.T) {
 	// Unique recipient per run: the search below can only match
 	// this run's message.
 	recipient := fmt.Sprintf("it-%d@tango.test", time.Now().UnixNano())
-	require.NoError(t, ml.Send(t.Context(), Message{
+	require.NoError(t, ml.Send(ctx, Message{
 		To:       recipient,
 		Subject:  "Tango mailer integration test",
 		Template: "test-email",
 	}))
 
 	// Verify delivery through the Mailpit HTTP API.
-	api := fetcher.New(fetcher.Options{BaseURL: mailpitAPI})
+	api := fetcher.New(fetcher.Options{BaseURL: mp.APIURL})
 	defer api.Close()
 
-	searchURL := mailpitAPI + "/api/v1/search?query=to:" + url.QueryEscape(recipient)
+	searchURL := mp.APIURL + "/api/v1/search?query=to:" + url.QueryEscape(recipient)
 
 	var search struct {
 		Total    int `json:"total"`
@@ -71,7 +63,7 @@ func TestMailerMailpitDelivery(t *testing.T) {
 		} `json:"messages"`
 	}
 	require.Eventually(t, func() bool {
-		if _, apiErr := api.GetJSON(t.Context(), searchURL, &search); apiErr != nil {
+		if _, apiErr := api.GetJSON(ctx, searchURL, &search); apiErr != nil {
 			return false
 		}
 		return search.Total >= 1
@@ -85,7 +77,7 @@ func TestMailerMailpitDelivery(t *testing.T) {
 		HTML    string `json:"HTML"`
 		Text    string `json:"Text"`
 	}
-	_, err = api.GetJSON(t.Context(), mailpitAPI+"/api/v1/message/"+search.Messages[0].ID, &detail)
+	_, err = api.GetJSON(ctx, mp.APIURL+"/api/v1/message/"+search.Messages[0].ID, &detail)
 	require.NoError(t, err)
 
 	assert.Contains(t, detail.HTML, config.AppName)
