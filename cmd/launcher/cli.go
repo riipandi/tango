@@ -52,6 +52,7 @@ func RunCLI(args []string, opts ...kong.Option) error {
 		kong.Name("tango"),
 		kong.Description("A fullstack web application built with Go, Chi, and React."),
 		kong.UsageOnError(),
+		kong.ConfigureHelp(kong.HelpOptions{Compact: true}),
 		versionVars(),
 	}
 	// Build-specific commands: secrets exist in debug builds
