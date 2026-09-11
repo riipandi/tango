@@ -33,7 +33,7 @@ func TestSecretsGeneratesKeys(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	out := captureStdout(t, func() {
-		require.NoError(t, runCLI([]string{"secrets"}, kong.Writers(io.Discard, io.Discard)))
+		require.NoError(t, RunCLI([]string{"secrets"}, kong.Writers(io.Discard, io.Discard)))
 	})
 
 	assert.Contains(t, out, "APP_SECRET_KEY=")

@@ -30,17 +30,13 @@ type Deps struct {
 	// integrations. Built once and reused for its connection pool.
 	Fetcher *fetcher.Fetcher
 
-	// Mailer renders and delivers transactional email from the
-	// embedded React Email templates.
+	// Mailer is the shared email client for modules that send mail.
 	Mailer mailer.Mailer
 
 	// DB is the shared database pool. Populated once Postgres
 	// support lands; modules receive store implementations built
 	// on top of it, never the pool itself.
 	// DB *pgxpool.Pool
-
-	// Mailer is the shared email client for modules that send mail.
-	// Mailer mailer.Mailer
 }
 
 // New builds the module registry with every active module, in
