@@ -6,6 +6,8 @@
 package kernel
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -38,6 +40,14 @@ type APIRoutable interface {
 // before any routing happens.
 type Middleware interface {
 	Middleware() func(http.Handler) http.Handler
+}
+
+// Startable is an optional lifecycle capability for modules holding
+// resources (database pools, background workers, consumers). Start
+// runs in registration order, Stop in reverse order.
+type Startable interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
 }
 
 // Registry keeps module instances in registration order.
@@ -102,4 +112,36 @@ func (reg *Registry) ApplyAPI(api chi.Router) {
 			a.APIRoutes(api)
 		}
 	}
+}
+
+// Start starts every Startable module in registration order. It stops
+// at the first error; already-started modules are left running (the
+// caller should Stop them).
+func (reg *Registry) Start(ctx context.Context) error {
+	for _, m := range reg.modules {
+		s, ok := m.(Startable)
+		if !ok {
+			continue
+		}
+		if err := s.Start(ctx); err != nil {
+			return fmt.Errorf("start module %q: %w", m.Name(), err)
+		}
+	}
+	return nil
+}
+
+// Stop stops every Startable module in reverse registration order and
+// joins all errors so one failing module does not block the rest.
+func (reg *Registry) Stop(ctx context.Context) error {
+	var errs []error
+	for i := len(reg.modules) - 1; i >= 0; i-- {
+		s, ok := reg.modules[i].(Startable)
+		if !ok {
+			continue
+		}
+		if err := s.Stop(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("stop module %q: %w", reg.modules[i].Name(), err))
+		}
+	}
+	return errors.Join(errs...)
 }

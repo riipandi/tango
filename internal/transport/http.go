@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/web"
@@ -19,7 +20,7 @@ type HTTPServer struct {
 
 // NewHTTPServer assembles the application: shared middleware, core
 // routes, then every module from the registry mounts itself.
-func NewHTTPServer(registry *kernel.Registry) *HTTPServer {
+func NewHTTPServer(registry *kernel.Registry, cfg *config.Config) *HTTPServer {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger())
@@ -27,7 +28,7 @@ func NewHTTPServer(registry *kernel.Registry) *HTTPServer {
 	r.Use(middleware.CORS())
 
 	// Core endpoints.
-	r.Get("/healthz", HealthzHandler)
+	r.Get("/healthz", HealthzHandler(cfg))
 	r.Get("/static/*", StaticAssetsHandler)
 
 	// Modules mount root-level routes (wellknown, ...).

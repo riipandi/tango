@@ -31,7 +31,12 @@ var serveCmd = &cobra.Command{
 			log.Fatalf("failed to load config: %v", err)
 		}
 
-		srv := transport.NewHTTPServer(registry.New())
+		reg := registry.New(registry.Deps{Config: cfg})
+		if err := reg.Start(cmd.Context()); err != nil {
+			log.Fatalf("failed to start modules: %v", err)
+		}
+
+		srv := transport.NewHTTPServer(reg, cfg)
 		addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
 		go func() {
@@ -52,6 +57,10 @@ var serveCmd = &cobra.Command{
 
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Fatalf("shutdown error: %v", err)
+		}
+
+		if err := reg.Stop(ctx); err != nil {
+			log.Printf("module shutdown errors: %v", err)
 		}
 
 		log.Println("server stopped")

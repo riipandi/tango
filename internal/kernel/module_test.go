@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -62,4 +63,44 @@ func TestRegistryDuplicateNamePanics(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(&stubModule{name: "dup"})
 	reg.Register(&stubModule{name: "dup"})
+}
+
+type startableModule struct {
+	stubModule
+	events *[]string
+}
+
+func (m *startableModule) Start(ctx context.Context) error {
+	*m.events = append(*m.events, "start:"+m.name)
+	return nil
+}
+
+func (m *startableModule) Stop(ctx context.Context) error {
+	*m.events = append(*m.events, "stop:"+m.name)
+	return nil
+}
+
+func TestRegistryLifecycleOrder(t *testing.T) {
+	var events []string
+	reg := NewRegistry()
+	reg.Register(&startableModule{stubModule{name: "a"}, &events})
+	reg.Register(&startableModule{stubModule{name: "b"}, &events})
+	reg.Register(&stubModule{name: "plain"}) // no lifecycle
+
+	if err := reg.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if err := reg.Stop(context.Background()); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+
+	want := []string{"start:a", "start:b", "stop:b", "stop:a"}
+	if len(events) != len(want) {
+		t.Fatalf("expected %v, got %v", want, events)
+	}
+	for i := range want {
+		if events[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, events)
+		}
+	}
 }
