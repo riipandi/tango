@@ -7,14 +7,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"slices"
 
 	"github.com/go-chi/chi/v5"
-
-	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/kernel"
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // ModuleName identifies the identity module in the registry.
@@ -60,11 +56,11 @@ func New(core APIFeature, features ...Feature) kernel.Module {
 
 func (m *Module) Name() string { return ModuleName }
 
-// APIRoutes mounts the identity API root, the user core, and every
-// selected feature's endpoints inside the shared /api group.
+// APIRoutes mounts the user core and every selected feature's
+// endpoints inside the shared /api group. The group's index endpoint
+// is owned by the transport layer, not by this module.
 // Implements kernel.APIRoutable.
 func (m *Module) APIRoutes(r chi.Router) {
-	r.Get("/", m.apiRoot)
 	m.core.APIRoutes(r)
 
 	for _, f := range m.features {
@@ -104,9 +100,8 @@ func (m *Module) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops startable features in reverse selection order (core
-// last) and joins all errors so one failing feature does not block
-// the rest.
+// Stop stops startable features in reverse selection order (core last)
+// and joins all errors so one failing feature does not block the rest.
 func (m *Module) Stop(ctx context.Context) error {
 	var errs []error
 	for _, f := range slices.Backward(m.features) {
@@ -123,14 +118,4 @@ func (m *Module) Stop(ctx context.Context) error {
 		}
 	}
 	return errors.Join(errs...)
-}
-
-func (m *Module) apiRoot(w http.ResponseWriter, r *http.Request) {
-	responder.WriteJSON(w, http.StatusOK, map[string]string{
-		"name":     config.AppName,
-		"version":  config.AppVersion,
-		"platform": config.Platform,
-		"build":    config.BuildDate,
-		"hash":     config.BuildHash,
-	})
 }

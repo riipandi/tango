@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
@@ -34,8 +33,12 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config) *HTTPServer {
 	// Modules mount root-level routes (wellknown, ...).
 	registry.Apply(r)
 
-	// Shared /api group; APIRoutable modules register inside it.
-	r.Route("/api", registry.ApplyAPI)
+	// Shared /api group; the index is core API metadata, then
+	// APIRoutable modules register inside it.
+	r.Route("/api", func(r chi.Router) {
+		r.Get("/", APIRootHandler)
+		registry.ApplyAPI(r)
+	})
 
 	// Render frontend SPA (must be last); web.SetupStatic also owns
 	// the root 404/SPA fallback.

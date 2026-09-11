@@ -8,10 +8,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/riipandi/tango/internal/kernel"
 )
 
 var fixedTime = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

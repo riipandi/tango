@@ -9,11 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/registry"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func contextWithTimeout() context.Context {

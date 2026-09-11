@@ -6,11 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func jsonUnmarshal(data []byte, v any) error {
@@ -80,6 +79,19 @@ func TestHealthzUpstreamUnreachable(t *testing.T) {
 	HealthCheckHandler(cfg)(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestAPIRootHandler(t *testing.T) {
+	w := httptest.NewRecorder()
+	APIRootHandler(w, httptest.NewRequest(http.MethodGet, "/api/", nil))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
+
+	var body map[string]string
+	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, config.AppName, body["name"])
+	assert.Equal(t, config.AppVersion, body["version"])
 }
 
 func TestStaticAssetsHandler(t *testing.T) {

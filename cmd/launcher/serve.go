@@ -9,11 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spf13/cobra"
-
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport"
+	"github.com/spf13/cobra"
 )
 
 var serveHost string

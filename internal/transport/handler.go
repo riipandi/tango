@@ -6,10 +6,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"resty.dev/v3"
-
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/pkg/responder"
+	"resty.dev/v3"
 )
 
 // HealthCheckHandler reports service health, probing an upstream endpoint.
@@ -47,6 +46,19 @@ func HealthCheckHandler(cfg *config.Config) http.HandlerFunc {
 			"ip_address": resp.String(),
 		})
 	}
+}
+
+// APIRootHandler is the shared /api group's index: application build
+// metadata. Build-meta values are ldflags-injected package globals,
+// so no runtime config is needed.
+func APIRootHandler(w http.ResponseWriter, r *http.Request) {
+	responder.WriteJSON(w, http.StatusOK, map[string]string{
+		"name":     config.AppName,
+		"version":  config.AppVersion,
+		"platform": config.Platform,
+		"build":    config.BuildDate,
+		"hash":     config.BuildHash,
+	})
 }
 
 func StaticAssetsHandler(w http.ResponseWriter, r *http.Request) {

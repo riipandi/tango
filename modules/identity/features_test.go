@@ -2,18 +2,15 @@ package identity
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/kernel"
 )
 
 type stubFeature struct {
@@ -69,22 +66,6 @@ func TestFeatureRoutesMounted(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestModuleAPIRoot(t *testing.T) {
-	mod := New(stubCore{})
-
-	r := chi.NewRouter()
-	r.Route("/api", mod.(kernel.APIRoutable).APIRoutes)
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/", nil))
-	require.Equal(t, http.StatusOK, w.Code)
-
-	var body map[string]string
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	assert.Equal(t, config.AppName, body["name"])
-	assert.Equal(t, config.AppVersion, body["version"])
-}
-
 func TestModuleUnknownPath(t *testing.T) {
 	mod := New(stubCore{})
 
@@ -120,7 +101,7 @@ func TestFeatureWithoutRoutesMountsHarmlessly(t *testing.T) {
 	r.Route("/api", mod.(kernel.APIRoutable).APIRoutes)
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/", nil))
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/users", nil))
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 

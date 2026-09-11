@@ -24,7 +24,6 @@ package identity
 
 import (
 	"github.com/go-chi/chi/v5"
-
 	"github.com/riipandi/tango/internal/kernel"
 )
 
