@@ -1,6 +1,20 @@
 // Schema contracts and domain types of the identity module:
 // interfaces live here so alternate implementations (memory, Postgres)
 // stay swappable without touching handlers or business rules.
+//
+// The identity module owns all authn/authz concerns. Subdomains:
+//
+//	account   — profile, credentials, account state
+//	session   — sign-in sessions (issue, refresh, revoke)
+//	webauthn  — passkey credentials + ceremonies (primary authn)
+//	apikey    — machine credentials (X-API-KEY)
+//	apiaccess — machine authorization (API scopes + client grants)
+//	usergroup — bulk OIDC client access via groups
+//	customclaim — per-user claims injected into OIDC tokens
+//	signup    — self-service sign-up flows
+//	emailverification — verify email addresses
+//	onetimeaccess — email sign-in links (single-use tokens)
+//	devicelogin — verify a sign-in code on a limited-input device
 package identity
 
 import (
