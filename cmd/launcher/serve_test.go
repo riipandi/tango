@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,6 +27,10 @@ func freePort(t *testing.T) int {
 // path a production SIGTERM takes.
 func TestServeRunLifecycle(t *testing.T) {
 	t.Setenv("APP_LOG_LEVEL", "error") // keep test output quiet
+	// The server pings the database on boot (fail fast), so the
+	// lifecycle test points it at the shared testcontainer.
+	pg := testutils.StartPostgres(t.Context(), t)
+	t.Setenv("DATABASE_URL", pg.DSN)
 	port := freePort(t)
 
 	runErr := make(chan error, 1)

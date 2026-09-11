@@ -5,6 +5,7 @@ package registry
 
 import (
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
@@ -33,10 +34,10 @@ type Deps struct {
 	// Mailer is the shared email client for modules that send mail.
 	Mailer mailer.Mailer
 
-	// DB is the shared database pool. Populated once Postgres
-	// support lands; modules receive store implementations built
-	// on top of it, never the pool itself.
-	// DB *pgxpool.Pool
+	// DB is the shared Postgres store: a connection pool with
+	// transaction support. Modules receive store implementations
+	// built on top of it, never the pool itself.
+	DB datastore.Store
 }
 
 // New builds the module registry with every active module, in

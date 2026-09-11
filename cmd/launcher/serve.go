@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
@@ -57,6 +58,15 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	fch := fetcher.New(fetcher.Options{Logger: lg})
 	defer fch.Close()
 
+	// Shared Postgres pool (fail fast: ping on construction).
+	// Closed before the fetcher and logger so shutdown-path
+	// queries still log.
+	db, err := datastore.New(context.Background(), datastore.Options{DSN: cfg.Database.URL})
+	if err != nil {
+		return fmt.Errorf("connect database: %w", err)
+	}
+	defer db.Close()
+
 	// Transactional email over the configured relay, rendered from the embedded React Email templates.
 	templates, err := fs.Sub(web.EmailTemplates, "email")
 	if err != nil {
@@ -67,7 +77,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		Logger:    lg,
 	})
 
-	reg := registry.New(registry.Deps{Config: cfg, Logger: lg, Fetcher: fch, Mailer: ml})
+	reg := registry.New(registry.Deps{Config: cfg, Logger: lg, Fetcher: fch, Mailer: ml, DB: db})
 	if err := reg.Start(context.Background()); err != nil {
 		lg.WithError(err).Fatal("failed to start modules")
 	}
