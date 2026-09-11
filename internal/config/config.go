@@ -3,22 +3,23 @@
 //
 //	defaults → --env-file (dotenv) → system environment → overrides
 //
-// There is no implicit loading and no config-file format to
-// negotiate — the whole pipeline is visible in Load. The system
-// environment always wins over the env file, and empty environment
-// variables are treated as unset.
+// The whole pipeline is visible in Load — there is no implicit
+// loading. The system environment always wins over the env file,
+// and empty values are treated as unset so they never shadow the
+// defaults.
 package config
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/knadh/koanf/parsers/dotenv"
 	"github.com/knadh/koanf/providers/confmap"
+	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
 )
 
@@ -38,10 +39,12 @@ type LoadOptions struct {
 func Load(opts LoadOptions) (*Config, error) {
 	k := koanf.New(".")
 
-	if err := k.Load(confmap.Provider(defaultsMap(), "."), nil); err != nil {
+	// 1. Defaults: the Config type itself (see defaultConfig).
+	if err := k.Load(structs.Provider(defaultConfig, "koanf"), nil); err != nil {
 		return nil, fmt.Errorf("load defaults: %w", err)
 	}
 
+	// 2. Optional --env-file, mapped through the same env rules.
 	if opts.EnvFile != "" {
 		layer, err := envFileLayer(opts.EnvFile)
 		if err != nil {
@@ -54,12 +57,12 @@ func Load(opts LoadOptions) (*Config, error) {
 		}
 	}
 
-	if layer := envLayer(); len(layer) > 0 {
-		if err := k.Load(confmap.Provider(layer, "."), nil); err != nil {
-			return nil, fmt.Errorf("load environment: %w", err)
-		}
+	// 3. System environment — always wins over the env file.
+	if err := k.Load(env.Provider(".", env.Opt{TransformFunc: envTransform}), nil); err != nil {
+		return nil, fmt.Errorf("load environment: %w", err)
 	}
 
+	// 4. Explicit overrides (resolved CLI flags).
 	for key, value := range opts.Overrides {
 		if err := k.Set(key, value); err != nil {
 			return nil, fmt.Errorf("override %s: %w", key, err)
@@ -73,10 +76,47 @@ func Load(opts LoadOptions) (*Config, error) {
 	return &cfg, nil
 }
 
-// envFileLayer reads a dotenv file and remaps its keys through the
-// binding table. Only bound variables are accepted — unknown keys in
-// the file are ignored — and the same value normalization applies
-// as the environment layer.
+// envSections maps environment variable prefixes to config key
+// sections. HOST and PORT are unprefixed.
+var envSections = []struct{ prefix, section string }{
+	{"APP_", "app"},
+	{"AUTH_", "auth"},
+	{"DATABASE_", "database"},
+	{"MAILER_", "mailer"},
+	{"PUBLIC_", "public"},
+	{"STORAGE_", "storage"},
+}
+
+// envTransform maps a system environment variable to its config key:
+// the first underscore-separated segment selects the section and the
+// rest keeps its snake_case form (APP_LOG_LEVEL -> app.log_level,
+// STORAGE_S3_REGION -> storage.s3_region). Unbound variables are
+// skipped by returning an empty key; empty values are treated as
+// unset so they never shadow the defaults.
+func envTransform(key, value string) (string, any) {
+	switch key {
+	case "HOST":
+		return "host", value
+	case "PORT":
+		return "port", value
+	case "":
+		return "", nil
+	}
+	for _, section := range envSections {
+		if !strings.HasPrefix(key, section.prefix) {
+			continue
+		}
+		if value == "" {
+			return "", nil
+		}
+		rest := strings.ToLower(strings.TrimPrefix(key, section.prefix))
+		return section.section + "." + rest, value
+	}
+	return "", nil
+}
+
+// envFileLayer reads a dotenv file and maps it through the same
+// environment rules as envTransform. Unknown keys are ignored.
 func envFileLayer(path string) (map[string]any, error) {
 	raw, err := file.Provider(path).ReadBytes()
 	if err != nil {
@@ -89,51 +129,13 @@ func envFileLayer(path string) (map[string]any, error) {
 	}
 
 	layer := make(map[string]any, len(parsed))
-	for envName, value := range parsed {
-		key, ok := envKeys[envName]
-		if !ok {
-			continue
+	for name, value := range parsed {
+		if key, mapped := envTransform(name, fmt.Sprintf("%v", value)); key != "" {
+			layer[key] = mapped
 		}
-		layer[key] = expandValue(key, value)
 	}
 	return layer, nil
 }
-
-// envLayer maps bound system environment variables to their config
-// keys. Unbound variables are ignored; empty values are treated as
-// unset so they never shadow the defaults.
-func envLayer() map[string]any {
-	layer := make(map[string]any, len(envBindings))
-	for key, envName := range envBindings {
-		value, ok := os.LookupEnv(envName)
-		if !ok || value == "" {
-			continue
-		}
-		layer[key] = expandValue(key, value)
-	}
-	return layer
-}
-
-// expandValue applies key-specific value normalization: the only
-// slice-typed key splits on commas.
-func expandValue(key string, value any) any {
-	if key == "public.trusted_origins" {
-		if s, ok := value.(string); ok {
-			return strings.Split(s, ",")
-		}
-	}
-	return value
-}
-
-// envKeys is the reverse of envBindings: environment variable name
-// → config key.
-var envKeys = func() map[string]string {
-	reversed := make(map[string]string, len(envBindings))
-	for key, envName := range envBindings {
-		reversed[envName] = key
-	}
-	return reversed
-}()
 
 // unmarshalConf decodes into Config: weakly typed (env strings to
 // ints/bools), comma-separated slices, and a hook turning the

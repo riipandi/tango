@@ -1,5 +1,12 @@
 package config
 
+// Config is the runtime configuration. It is the schema AND the
+// source of its own defaults (see defaultConfig): koanf tags name
+// the keys, the defaultConfig literal fills the bottom layer.
+//
+// Environment variables map mechanically: the first underscore-
+// separated segment selects the section (AUTH_PRIVATE_KEY ->
+// auth.private_key) and the rest keeps its snake_case form.
 type Config struct {
 	Host     string         `koanf:"host"`
 	Port     int            `koanf:"port"`
@@ -58,17 +65,13 @@ type PublicConfig struct {
 }
 
 type StorageConfig struct {
-	MaxUploadSize int64    `koanf:"max_upload_size"`
-	S3            S3Config `koanf:"s3"`
-}
-
-type S3Config struct {
-	AccessKeyID      string  `koanf:"access_key_id"`
-	BucketDefault    string  `koanf:"bucket_default"`
-	EndpointURL      string  `koanf:"endpoint_url"`
-	ForcePathStyle   bool    `koanf:"force_path_style"`
-	PathPrefix       *string `koanf:"path_prefix"`
-	Region           string  `koanf:"region"`
-	SecretAccessKey  string  `koanf:"secret_access_key"`
-	SignedURLExpires int     `koanf:"signed_url_expires"`
+	MaxUploadSize      int64   `koanf:"max_upload_size"`
+	S3AccessKeyID      string  `koanf:"s3_access_key_id"`
+	S3BucketDefault    string  `koanf:"s3_bucket_default"`
+	S3EndpointURL      string  `koanf:"s3_endpoint_url"`
+	S3ForcePathStyle   bool    `koanf:"s3_force_path_style"`
+	S3PathPrefix       *string `koanf:"s3_path_prefix"`
+	S3Region           string  `koanf:"s3_region"`
+	S3SecretAccessKey  string  `koanf:"s3_secret_access_key"`
+	S3SignedURLExpires int     `koanf:"s3_signed_url_expires"`
 }

@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -16,12 +17,15 @@ import (
 func runCommand(t *testing.T, args ...string) string {
 	t.Helper()
 
-	cli := newCLI()
-	parser, err := kong.New(cli,
+	cli := &CLI{}
+	base := []kong.Option{
 		kong.Name("tango"),
 		kong.Description("A fullstack web application built with Go, Chi, and React."),
 		kong.Writers(io.Discard, io.Discard),
-	)
+		versionVars(),
+	}
+	base = append(base, secretsOptions()...)
+	parser, err := kong.New(cli, base...)
 	require.NoError(t, err)
 
 	ctx, err := parser.Parse(args)
@@ -33,34 +37,35 @@ func runCommand(t *testing.T, args ...string) string {
 	return out
 }
 
-func TestVersionDefault(t *testing.T) {
-	out := runCommand(t, "version")
+func TestVersionFlag(t *testing.T) {
+	want := fmt.Sprintf("%s %s %s (%s %s)",
+		config.AppName, config.AppVersion, config.Platform, config.BuildHash, config.BuildDate)
 
-	want := config.AppName + " " + config.AppVersion + " " + config.Platform
-	assert.Contains(t, out, want)
-	assert.Contains(t, out, "("+config.BuildHash)
-}
+	for _, args := range [][]string{{"--version"}, {"-V"}} {
+		out := &strings.Builder{}
+		parser, err := kong.New(&CLI{},
+			kong.Name("tango"),
+			kong.Writers(out, io.Discard),
+			kong.Exit(func(int) {}), // --version exits; stub it for tests
+			versionVars(),
+		)
+		require.NoError(t, err)
 
-func TestVersionShort(t *testing.T) {
-	out := runCommand(t, "version", "--short")
-
-	assert.Equal(t, config.AppVersion+" ("+config.BuildHash+")\n", out)
-}
-
-func TestVersionSemantic(t *testing.T) {
-	out := runCommand(t, "version", "--semantic")
-
-	assert.Equal(t, config.AppVersion+"\n", out)
+		_, _ = parser.Parse(args)
+		assert.Contains(t, out.String(), want, "args: %v", args)
+	}
 }
 
 func TestHelpListsCommands(t *testing.T) {
-	cli := newCLI()
 	help := &strings.Builder{}
-	parser, err := kong.New(cli,
+	opts := []kong.Option{
 		kong.Name("tango"),
 		kong.Writers(help, io.Discard),
 		kong.Exit(func(int) {}), // --help must not os.Exit in tests
-	)
+		versionVars(),
+	}
+	opts = append(opts, secretsOptions()...)
+	parser, err := kong.New(&CLI{}, opts...)
 	require.NoError(t, err)
 
 	// --help prints the help, then (with the stubbed exit) parse
@@ -81,13 +86,6 @@ func TestFlagOverrides(t *testing.T) {
 }
 
 func TestRunCLIParseError(t *testing.T) {
-	err := runCLI([]string{"--nope"}, kong.Writers(io.Discard, io.Discard))
+	err := RunCLI([]string{"--nope"}, kong.Writers(io.Discard, io.Discard))
 	require.Error(t, err)
-}
-
-func TestRunCLIVersion(t *testing.T) {
-	out := captureStdout(t, func() {
-		require.NoError(t, runCLI([]string{"version"}, kong.Writers(io.Discard, io.Discard)))
-	})
-	assert.Contains(t, out, config.AppVersion)
 }

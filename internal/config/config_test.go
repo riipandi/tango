@@ -103,15 +103,25 @@ func TestLoadTrustedOrigins(t *testing.T) {
 
 func TestLoadNullPathPrefix(t *testing.T) {
 	cfg, err := Load(LoadOptions{Overrides: map[string]any{
-		"storage.s3.path_prefix": "null",
+		"storage.s3_path_prefix": "null",
 	}})
 	require.NoError(t, err)
-	assert.Nil(t, cfg.Storage.S3.PathPrefix, "literal null must decode to nil")
+	assert.Nil(t, cfg.Storage.S3PathPrefix, "literal null must decode to nil")
 
 	cfg, err = Load(LoadOptions{Overrides: map[string]any{
-		"storage.s3.path_prefix": "tenant-a",
+		"storage.s3_path_prefix": "tenant-a",
 	}})
 	require.NoError(t, err)
-	require.NotNil(t, cfg.Storage.S3.PathPrefix)
-	assert.Equal(t, "tenant-a", *cfg.Storage.S3.PathPrefix)
+	require.NotNil(t, cfg.Storage.S3PathPrefix)
+	assert.Equal(t, "tenant-a", *cfg.Storage.S3PathPrefix)
+}
+
+func TestLoadEnvFileIgnoresUnboundKeys(t *testing.T) {
+	path := writeEnvFile(t, "HOME=/leaking\nPORT=4400\n")
+
+	cfg, err := Load(LoadOptions{EnvFile: path})
+	require.NoError(t, err)
+
+	assert.Equal(t, 4400, cfg.Port)
+	assert.Equal(t, "localhost", cfg.Host, "unbound keys must not leak into config")
 }

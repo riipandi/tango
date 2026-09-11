@@ -21,6 +21,10 @@ pnpm dlx tiged riipandi/tango myapp-name
 
 In this repo I'm using [go-chi][go-chi] but you can change it with whatever library you want.
 
+> [!NOTE]
+> This project just a template that I use for my personal use, so you may encounter bugs.
+> Please review the release notes thoroughly before updating, as breaking changes can occur!
+
 ## 🏁 Quick Start
 
 You will need [`Go >=1.26`][golang], [`Node.js >= 24.14`][nodejs], [`PNPM >= 10.33`][pnpm],

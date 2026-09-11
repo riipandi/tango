@@ -11,7 +11,9 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/knadh/koanf/parsers/dotenv v1.1.2
 	github.com/knadh/koanf/providers/confmap v1.0.1
+	github.com/knadh/koanf/providers/env/v2 v2.0.1
 	github.com/knadh/koanf/providers/file v1.2.1
+	github.com/knadh/koanf/providers/structs v1.0.1
 	github.com/knadh/koanf/v2 v2.3.6
 	github.com/stretchr/testify v1.12.1
 	go.loglayer.dev/transports/pretty/v3 v3.0.0
@@ -24,6 +26,7 @@ require (
 
 require (
 	github.com/fatih/color v1.19.0 // indirect
+	github.com/fatih/structs v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect

@@ -14,6 +14,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/alecthomas/kong"
 )
 
 // ANSI colors, matching the shell scripts output style.
@@ -26,6 +28,9 @@ const (
 )
 
 // SecretsCmd generates application secrets.
+//
+// It is registered via kong.DynamicCommand (see secretsOptions) —
+// a build-tag conditional command, not a CLI struct field.
 type SecretsCmd struct {
 	// Out is the env file --apply writes to. It deliberately has a
 	// different name from the global --env-file: one is an input
@@ -97,9 +102,13 @@ func (s *SecretsCmd) Run() error {
 	return nil
 }
 
-// secretsPlugins wires the command into the CLI (debug builds only).
-func secretsPlugins() []any {
-	return []any{&SecretsCmd{}}
+// secretsOptions registers the secrets command into the CLI grammar
+// (debug builds only). DynamicCommand is kong's mechanism for
+// build-tag conditional commands.
+func secretsOptions() []kong.Option {
+	return []kong.Option{
+		kong.DynamicCommand("secrets", "Generate application secrets", "", &SecretsCmd{}),
+	}
 }
 
 // randomBase64Key returns a cryptographically secure 48-byte
