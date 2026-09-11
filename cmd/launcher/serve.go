@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport"
@@ -48,7 +49,12 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	}
 	defer logCloser.Close()
 
-	reg := registry.New(registry.Deps{Config: cfg, Logger: lg})
+	// Shared outbound client for service integrations; closed
+	// last so shutdown-path calls still have a live pool.
+	fch := fetcher.New(fetcher.Options{BaseURL: cfg.Public.BaseURL})
+	defer fch.Close()
+
+	reg := registry.New(registry.Deps{Config: cfg, Logger: lg, Fetcher: fch})
 	if err := reg.Start(context.Background()); err != nil {
 		lg.WithError(err).Fatal("failed to start modules")
 	}

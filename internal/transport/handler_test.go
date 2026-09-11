@@ -28,7 +28,7 @@ func testConfig() *config.Config {
 
 func TestHealthzLiveness(t *testing.T) {
 	w := httptest.NewRecorder()
-	HealthzHandler(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	HealthCheckHandler(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	require.Equal(t, http.StatusOK, w.Code)
 

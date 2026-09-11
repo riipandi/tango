@@ -5,6 +5,7 @@ package registry
 
 import (
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/modules/auditlog"
@@ -23,6 +24,10 @@ type Deps struct {
 	// Logger is the shared application logger. Modules receive it
 	// to emit structured entries; they never build their own.
 	Logger logger.Logger
+
+	// Fetcher is the shared outbound HTTP client for service
+	// integrations. Built once and reused for its connection pool.
+	Fetcher *fetcher.Fetcher
 
 	// DB is the shared database pool. Populated once Postgres
 	// support lands; modules receive store implementations built

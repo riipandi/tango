@@ -20,6 +20,7 @@ require (
 	go.loglayer.dev/transports/testing/v3 v3.0.0
 	go.loglayer.dev/v3 v3.0.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
+	resty.dev/v3 v3.0.0-rc.4
 )
 
 require (
@@ -34,5 +35,6 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )

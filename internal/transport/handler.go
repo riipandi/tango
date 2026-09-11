@@ -9,10 +9,10 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// HealthzHandler reports liveness: the process is up and serving.
-// Readiness probes for real dependencies (database, cache) belong
-// in dedicated checks as those dependencies land.
-func HealthzHandler(w http.ResponseWriter, r *http.Request) {
+// HealthCheckHandler reports liveness: the process is up and
+// serving. Readiness probes for real dependencies (database, cache)
+// belong in dedicated checks as those dependencies land.
+func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	responder.WriteJSON(w, http.StatusOK, map[string]string{
 		"status": "healthy",
 	})
