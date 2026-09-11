@@ -57,7 +57,7 @@ tasks:
   # ----------------------------------------------------------------------------
   db:migrate:
     desc: Run database migrations
-    cmd: go run -tags debug ./cmd --env-file=.env.local migrate up {{.CLI_ARGS}}
+    cmd: go run -tags debug ./cmd --env-file=.env.local db migrate:up {{.CLI_ARGS}}
 
   secrets:generate:
     desc: Generate application secrets (dev only)

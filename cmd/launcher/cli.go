@@ -39,9 +39,9 @@ type CLI struct {
 	// Version prints the "version" variable and exits.
 	Version kong.VersionFlag `short:"V" help:"Show the application version"`
 
-	Serve   ServeCmd   `cmd:"" help:"Start the application server"`
-	Migrate MigrateCmd `cmd:"" help:"Database migration commands"`
-	Health  HealthCmd  `cmd:"" help:"Check application health" aliases:"hc"`
+	Serve  ServeCmd  `cmd:"" help:"Start the application server"`
+	DB     DBCmd     `cmd:"" help:"Database backup, restore, and migration commands"`
+	Health HealthCmd `cmd:"" help:"Check application health" aliases:"hc"`
 }
 
 // RunCLI parses args and runs the selected command. Kept separate
@@ -55,7 +55,7 @@ func RunCLI(args []string, opts ...kong.Option) error {
 		versionVars(),
 	}
 	// Build-specific commands: secrets exist in debug builds
-	// only; the migrate command surface is wired per-variant.
+	// only; the db command surface is wired per-variant.
 	base = append(base, secretsOptions()...)
 	parser, err := kong.New(cli, append(base, opts...)...)
 	if err != nil {

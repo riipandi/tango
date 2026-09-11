@@ -13,9 +13,9 @@ import (
 	"github.com/riipandi/tango/internal/config"
 )
 
-// The migrate command surface. Which subcommands exist is
-// build-dependent — debug builds add create and reset (see
-// migrate_debug.go and migrate_release.go). Command implementations
+// The db migrate command surface: up, down, status, and version
+// run in both build variants; create, fix, validate, and reset
+// are debug-only (see migrate_debug.go). Command implementations
 // call the database package, whose own build variants select the
 // migration source (disk vs embedded).
 //
@@ -46,7 +46,7 @@ func (c *MigrateUpCmd) Run(cli *CLI) error {
 		applied, err = database.MigrateUp(ctx, dsn)
 	}
 	if err != nil {
-		return fmt.Errorf("migrate up: %w", err)
+		return fmt.Errorf("db migrate:up: %w", err)
 	}
 	if len(applied) == 0 {
 		fmt.Printf("%snothing to migrate%s\n", colorCyan, colorReset)
@@ -84,7 +84,7 @@ func (c *MigrateDownCmd) Run(cli *CLI) error {
 
 	outcomes, downErr := migrateDownN(ctx, dsn, c.Count)
 	if downErr != nil {
-		return fmt.Errorf("migrate down: %w", downErr)
+		return fmt.Errorf("db migrate:down: %w", downErr)
 	}
 	for _, outcome := range outcomes {
 		fmt.Printf("%srolled back%s %s (%s)\n", colorGreen, colorReset, outcome.Path, outcome.Duration)
@@ -100,7 +100,7 @@ func migrateDownDryRun(ctx context.Context, dsn string, count int) error {
 	}
 	statuses, err := database.MigrateStatus(ctx, dsn)
 	if err != nil {
-		return fmt.Errorf("migrate down: %w", err)
+		return fmt.Errorf("db migrate:down: %w", err)
 	}
 	targets := appliedDescending(statuses)
 	if len(targets) == 0 {
@@ -165,7 +165,7 @@ func (c *MigrateVersionCmd) Run(cli *CLI) error {
 	}
 	current, target, err := database.MigrateVersion(context.Background(), cfg.Database.URL)
 	if err != nil {
-		return fmt.Errorf("migrate version: %w", err)
+		return fmt.Errorf("db migrate:version: %w", err)
 	}
 	fmt.Printf("current: %d\ntarget:  %d\n", current, target)
 	return nil
@@ -182,7 +182,7 @@ func (c *MigrateStatusCmd) Run(cli *CLI) error {
 	}
 	statuses, err := database.MigrateStatus(context.Background(), cfg.Database.URL)
 	if err != nil {
-		return fmt.Errorf("migrate status: %w", err)
+		return fmt.Errorf("db migrate:status: %w", err)
 	}
 
 	fmt.Printf("%-8s  %-9s  %-40s  %s\n", "VERSION", "STATE", "MIGRATION", "APPLIED AT")

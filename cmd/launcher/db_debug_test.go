@@ -1,0 +1,50 @@
+//go:build debug
+
+package launcher
+
+import (
+	"testing"
+
+	"github.com/alecthomas/kong"
+	"github.com/stretchr/testify/require"
+)
+
+// parseOnlyDebug resolves the selected command path without
+// running it, with the debug-only secrets plugin registered.
+func parseOnlyDebug(t *testing.T, args ...string) string {
+	t.Helper()
+
+	base := []kong.Option{
+		kong.Name("tango"),
+		kong.UsageOnError(),
+		versionVars(),
+	}
+	base = append(base, secretsOptions()...)
+
+	parser, err := kong.New(&CLI{}, base...)
+	require.NoError(t, err)
+
+	kctx, err := parser.Parse(args)
+	require.NoError(t, err, "args: %v", args)
+	return kctx.Command()
+}
+
+// TestDBCommandGrammarDebug locks in the debug command set:
+// backup, migration, and development-only operations all parse.
+func TestDBCommandGrammarDebug(t *testing.T) {
+	require.Equal(t, "db dump <mode>", parseOnlyDebug(t, "db", "dump", "all"))
+	require.Equal(t, "db dump <mode>", parseOnlyDebug(t, "db", "dump", "data"))
+	require.Equal(t, "db restore <mode> <file>", parseOnlyDebug(t, "db", "restore", "all", "storage/backup/x.dump"))
+	require.Equal(t, "db restore <mode> <file>", parseOnlyDebug(t, "db", "restore", "data", "--force", "x.dump"))
+	require.Equal(t, "db restore <mode> <file>", parseOnlyDebug(t, "db", "restore", "schema", "--dry-run", "x.dump"))
+	require.Equal(t, "db export <mode>", parseOnlyDebug(t, "db", "export", "all"))
+	require.Equal(t, "db import <file>", parseOnlyDebug(t, "db", "import", "storage/backup/x.sql"))
+	require.Equal(t, "db migrate:up", parseOnlyDebug(t, "db", "migrate:up"))
+	require.Equal(t, "db migrate:down", parseOnlyDebug(t, "db", "migrate:down"))
+	require.Equal(t, "db migrate:status", parseOnlyDebug(t, "db", "migrate:status"))
+	require.Equal(t, "db migrate:version", parseOnlyDebug(t, "db", "migrate:version"))
+	require.Equal(t, "db migrate:create <name>", parseOnlyDebug(t, "db", "migrate:create", "add_users_table"))
+	require.Equal(t, "db migrate:fix", parseOnlyDebug(t, "db", "migrate:fix"))
+	require.Equal(t, "db migrate:validate", parseOnlyDebug(t, "db", "migrate:validate"))
+	require.Equal(t, "db migrate:reset", parseOnlyDebug(t, "db", "migrate:reset", "--force"))
+}

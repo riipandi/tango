@@ -9,29 +9,13 @@ import (
 	"github.com/riipandi/tango/database"
 )
 
-// MigrateCmd is the debug command surface: development-only
-// operations (scaffolding new migrations, reordering, validating,
-// rolling the schema back to the initial state) join the release
-// set.
-type MigrateCmd struct {
-	Up       MigrateUpCmd       `cmd:"" help:"Run database migrations"`
-	Down     MigrateDownCmd     `cmd:"" help:"Rollback the most recent migration"`
-	Status   MigrateStatusCmd   `cmd:"" help:"Check database migration status"`
-	Version  MigrateVersionCmd  `cmd:"" help:"Print the current migration version"`
-	DB       DBCmd              `cmd:"" name:"db" help:"Database backup and restore"`
-	Create   MigrateCreateCmd   `cmd:"" help:"Create a new sequential migration file"`
-	Fix      MigrateFixCmd      `cmd:"" help:"Reorder migration files"`
-	Validate MigrateValidateCmd `cmd:"" help:"Check the migration files"`
-	Reset    MigrateResetCmd    `cmd:"" help:"Rollback all migrations"`
-}
-
 // MigrateFixCmd reorders migration files.
 type MigrateFixCmd struct{}
 
 // Run reorders migration files into a consistent sequential order.
 func (c *MigrateFixCmd) Run(cli *CLI) error {
 	if err := database.Fix(); err != nil {
-		return fmt.Errorf("migrate fix: %w", err)
+		return fmt.Errorf("db migrate:fix: %w", err)
 	}
 	fmt.Printf("%sfixed%s migration file ordering\n", colorGreen, colorReset)
 	return nil
@@ -43,7 +27,7 @@ type MigrateValidateCmd struct{}
 // Run validates migration file naming and annotations.
 func (c *MigrateValidateCmd) Run(cli *CLI) error {
 	if err := database.Validate(); err != nil {
-		return fmt.Errorf("migrate validate: %w", err)
+		return fmt.Errorf("db migrate:validate: %w", err)
 	}
 	fmt.Printf("%sall migration files are valid%s\n", colorGreen, colorReset)
 	return nil
@@ -65,7 +49,7 @@ func (c *MigrateCreateCmd) Run(cli *CLI) error {
 	}
 	path, createErr := database.CreateMigration(cfg.Database.URL, c.Name)
 	if createErr != nil {
-		return fmt.Errorf("migrate create: %w", createErr)
+		return fmt.Errorf("db migrate:create: %w", createErr)
 	}
 	fmt.Printf("%screated%s %s\n", colorGreen, colorReset, path)
 	return nil
@@ -89,7 +73,7 @@ func (c *MigrateResetCmd) Run(cli *CLI) error {
 	if c.DryRun {
 		statuses, statusErr := database.MigrateStatus(ctx, dsn)
 		if statusErr != nil {
-			return fmt.Errorf("migrate reset: %w", statusErr)
+			return fmt.Errorf("db migrate:reset: %w", statusErr)
 		}
 		var applied []database.MigrationStatus
 		for _, entry := range statuses {
@@ -113,7 +97,7 @@ func (c *MigrateResetCmd) Run(cli *CLI) error {
 	}
 	rolled, resetErr := database.MigrateReset(ctx, dsn)
 	if resetErr != nil {
-		return fmt.Errorf("migrate reset: %w", resetErr)
+		return fmt.Errorf("db migrate:reset: %w", resetErr)
 	}
 	for _, outcome := range rolled {
 		fmt.Printf("%srolled back%s %s (%s)\n", colorGreen, colorReset, outcome.Path, outcome.Duration)

@@ -74,7 +74,7 @@ func TestHelpListsCommands(t *testing.T) {
 	_, _ = parser.Parse([]string{"--help"})
 
 	assert.Contains(t, help.String(), "serve")
-	assert.Contains(t, help.String(), "migrate")
+	assert.Contains(t, help.String(), "db")
 	assert.Contains(t, help.String(), "health")
 }
 

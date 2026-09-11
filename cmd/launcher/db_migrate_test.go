@@ -98,47 +98,47 @@ func TestMigrateLifecycle(t *testing.T) {
 	_, err := database.MigrateDownTo(t.Context(), pg.DSN, 0)
 	require.NoError(t, err)
 
-	out, err := runMigrate(t, true, strings.NewReader("\n"), "migrate", "up")
+	out, err := runMigrate(t, true, strings.NewReader("\n"), "db", "migrate:up")
 	require.NoError(t, err)
 	assert.Contains(t, out, "00001")
 
 	// Partial apply: up to an already-applied version is a no-op.
-	out, err = runMigrate(t, true, strings.NewReader("\n"), "migrate", "up", "--to", "1")
+	out, err = runMigrate(t, true, strings.NewReader("\n"), "db", "migrate:up", "--to", "1")
 	require.NoError(t, err)
 	assert.Contains(t, out, "nothing to migrate")
 
-	out, err = runMigrate(t, false, nil, "migrate", "version")
+	out, err = runMigrate(t, false, nil, "db", "migrate:version")
 	require.NoError(t, err)
 	assert.Contains(t, out, "current: 1")
 
 	// Dry-run: reports the target without rolling it back.
-	out, err = runMigrate(t, true, strings.NewReader("\n"), "migrate", "down", "--dry-run")
+	out, err = runMigrate(t, true, strings.NewReader("\n"), "db", "migrate:down", "--dry-run")
 	require.NoError(t, err)
 	assert.Contains(t, out, "would roll back")
 	assert.Contains(t, out, "00001")
 
 	// Non-interactive stdin refuses even an explicit Enter.
-	_, err = runMigrate(t, false, strings.NewReader("\n"), "migrate", "down")
+	_, err = runMigrate(t, false, strings.NewReader("\n"), "db", "migrate:down")
 	assert.ErrorContains(t, err, "--force")
 
 	// Interactive decline aborts.
-	_, err = runMigrate(t, true, strings.NewReader("\n"), "migrate", "down")
+	_, err = runMigrate(t, true, strings.NewReader("\n"), "db", "migrate:down")
 	assert.ErrorContains(t, err, "aborted")
 
 	// Interactive yes proceeds, as does --force on any stdin.
-	out, err = runMigrate(t, true, strings.NewReader("y\n"), "migrate", "down")
+	out, err = runMigrate(t, true, strings.NewReader("y\n"), "db", "migrate:down")
 	require.NoError(t, err)
 	assert.Contains(t, out, "rolled back")
 
 	// Re-apply, then roll back again via --force: no prompt, no
 	// stdin needed.
-	_, err = runMigrate(t, false, nil, "migrate", "up")
+	_, err = runMigrate(t, false, nil, "db", "migrate:up")
 	require.NoError(t, err)
-	out, err = runMigrate(t, false, nil, "migrate", "down", "--force")
+	out, err = runMigrate(t, false, nil, "db", "migrate:down", "--force")
 	require.NoError(t, err)
 	assert.Contains(t, out, "rolled back")
 
-	out, err = runMigrate(t, false, nil, "migrate", "status")
+	out, err = runMigrate(t, false, nil, "db", "migrate:status")
 	require.NoError(t, err)
 	assert.Contains(t, out, "pending")
 }
