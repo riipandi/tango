@@ -1,4 +1,4 @@
-// Package launcher implements the tango command line.
+// package launcher implements the tango command line.
 //
 // The command surface is declared once as a struct (kong); runtime
 // configuration is layered separately by internal/config (koanf).
