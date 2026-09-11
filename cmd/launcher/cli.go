@@ -12,6 +12,16 @@ import (
 	"github.com/riipandi/tango/internal/config"
 )
 
+// ANSI colors, matching the shell scripts output style. Shared by
+// every command that prints status output (secrets, migrate).
+const (
+	colorRed   = "\033[0;31m"
+	colorGreen = "\033[0;32m"
+	colorCyan  = "\033[0;36m"
+	colorBold  = "\033[1m"
+	colorReset = "\033[0m"
+)
+
 // versionVars builds the kong interpolation vars: the --version
 // flag (kong.VersionFlag) prints the "version" variable verbatim.
 func versionVars() kong.Vars {

@@ -18,15 +18,6 @@ import (
 	"github.com/alecthomas/kong"
 )
 
-// ANSI colors, matching the shell scripts output style.
-const (
-	colorRed   = "\033[0;31m"
-	colorGreen = "\033[0;32m"
-	colorCyan  = "\033[0;36m"
-	colorBold  = "\033[1m"
-	colorReset = "\033[0m"
-)
-
 // SecretsCmd generates application secrets.
 //
 // It is registered via kong.DynamicCommand (see secretsOptions) —

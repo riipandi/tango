@@ -53,9 +53,3 @@ func TestHealthLiveOK(t *testing.T) {
 	out := runCommand(t, "hc", "--live", "--addr", upstream.URL)
 	assert.Contains(t, out, "ok")
 }
-
-func TestMigrateSubcommands(t *testing.T) {
-	assert.Contains(t, runCommand(t, "migrate", "up"), "migrate up: not yet implemented")
-	assert.Contains(t, runCommand(t, "migrate", "down"), "migrate down: not yet implemented")
-	assert.Contains(t, runCommand(t, "migrate", "status"), "migrate status: not yet implemented")
-}
