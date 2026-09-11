@@ -51,7 +51,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 
 	// Shared outbound client for service integrations; closed
 	// last so shutdown-path calls still have a live pool.
-	fch := fetcher.New(fetcher.Options{BaseURL: cfg.Public.BaseURL})
+	fch := fetcher.New(fetcher.Options{Logger: lg})
 	defer fch.Close()
 
 	reg := registry.New(registry.Deps{Config: cfg, Logger: lg, Fetcher: fch})
