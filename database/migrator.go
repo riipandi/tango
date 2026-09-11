@@ -9,6 +9,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"fmt"
 	"io/fs"
 	"time"
@@ -16,6 +17,9 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" driver
 	"github.com/pressly/goose/v3"
 )
+
+//go:embed migrations/*.sql
+var DatabaseMigrations embed.FS
 
 // appMigrationTableName is the goose metadata table. It matches the
 // exclusion in the get_table_sizes() helper defined by the initial

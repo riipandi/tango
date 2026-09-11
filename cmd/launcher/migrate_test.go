@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/kong"
+	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -91,6 +92,11 @@ func TestMigrateLifecycle(t *testing.T) {
 
 	pg := testutils.StartPostgres(t.Context(), t)
 	t.Setenv("DATABASE_URL", pg.DSN)
+
+	// Deterministic starting state: other lifecycle tests share
+	// this container, so roll back anything they applied first.
+	_, err := database.MigrateDownTo(t.Context(), pg.DSN, 0)
+	require.NoError(t, err)
 
 	out, err := runMigrate(t, true, strings.NewReader("\n"), "migrate", "up")
 	require.NoError(t, err)

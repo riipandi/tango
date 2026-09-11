@@ -19,6 +19,12 @@ func TestMigrationsLifecycle(t *testing.T) {
 	pg := testutils.StartPostgres(t.Context(), t)
 	ctx := t.Context()
 
+	// Deterministic starting state: the backup tests share this
+	// container, so roll back anything they applied first.
+	if _, err := MigrateDownTo(ctx, pg.DSN, 0); err != nil {
+		t.Fatalf("reset before test: %v", err)
+	}
+
 	applied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.Len(t, applied, 1)

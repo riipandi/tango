@@ -1,5 +1,3 @@
-//go:build debug
-
 // Backup and restore tooling ported from scripts/migrator.sh: a
 // thin, typed wrapper around the PostgreSQL client binaries.
 //
@@ -27,9 +25,9 @@ import (
 )
 
 const (
-	// devBackupDir receives every dump and export, relative to the
-	// repository root.
-	devBackupDir = "storage/backup"
+	// backupDir receives every dump and export, relative to the
+	// working directory of the invoker.
+	backupDir = "storage/backup"
 
 	// timestampLayout names backup files without spaces or colons.
 	timestampLayout = "20060102_150405"
@@ -112,11 +110,11 @@ func runTool(ctx context.Context, parts connParts, name string, args ...string) 
 // backupPath returns the backup file path for a database and
 // suffix, creating the backup directory.
 func backupPath(database, suffix, ext string) (string, error) {
-	if err := os.MkdirAll(devBackupDir, 0o755); err != nil {
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
 		return "", fmt.Errorf("create backup dir: %w", err)
 	}
 	stamp := time.Now().Format(timestampLayout)
-	return filepath.Join(devBackupDir, fmt.Sprintf("%s_%s_%s.%s", database, suffix, stamp, ext)), nil
+	return filepath.Join(backupDir, fmt.Sprintf("%s_%s_%s.%s", database, suffix, stamp, ext)), nil
 }
 
 // Dump creates a custom-format (binary) backup: all = schema and
@@ -305,9 +303,5 @@ func runToolWith(ctx context.Context, bin string, parts connParts, args ...strin
 // commandString renders a command line for --dry-run output,
 // hiding the password position (it travels via the environment).
 func commandString(bin string, parts connParts, args []string) string {
-	joined := make([]string, 0, len(args))
-	for _, arg := range args {
-		joined = append(joined, arg)
-	}
-	return fmt.Sprintf("%s %s", filepath.Base(bin), strings.Join(joined, " "))
+	return fmt.Sprintf("%s %s", filepath.Base(bin), strings.Join(args, " "))
 }

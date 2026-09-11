@@ -3,7 +3,6 @@
 package database
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,31 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// chdirRepoRoot moves the test working directory to the repository
-// root, where the disk-based migration source resolves, and
-// restores it when the test ends.
-func chdirRepoRoot(t *testing.T) {
-	t.Helper()
-
-	orig, err := os.Getwd()
-	require.NoError(t, err)
-
-	dir := orig
-	for {
-		if _, statErr := os.Stat(filepath.Join(dir, "Taskfile.yml")); statErr == nil {
-			break
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("repository root not found")
-		}
-		dir = parent
-	}
-
-	require.NoError(t, os.Chdir(dir))
-	t.Cleanup(func() { _ = os.Chdir(orig) })
-}
 
 // TestCreateMigrationSequential verifies the incremental naming:
 // the first scaffold is 00001, the next one continues from the
@@ -120,24 +94,6 @@ func TestMigrateReset(t *testing.T) {
 	reapplied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)
 	assert.Len(t, reapplied, len(applied))
-}
-
-// freshMigratedDB brings the shared database to a deterministic
-// fully-migrated state: rollback everything, apply everything.
-func freshMigratedDB(ctx context.Context, t *testing.T, dsn string) []MigrationOutcome {
-	t.Helper()
-
-	if _, err := MigrateReset(ctx, dsn); err != nil {
-		t.Fatalf("reset before test: %v", err)
-	}
-	applied, err := MigrateUp(ctx, dsn)
-	if err != nil {
-		t.Fatalf("apply migrations: %v", err)
-	}
-	if len(applied) == 0 {
-		t.Fatal("expected at least one migration to apply")
-	}
-	return applied
 }
 
 // TestMigrateDownTo verifies the up-to/down-to pair: applying only

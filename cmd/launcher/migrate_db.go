@@ -1,19 +1,15 @@
-//go:build debug
-
 package launcher
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/alecthomas/kong"
 	"github.com/riipandi/tango/database"
 )
 
-// DBCmd groups the database backup and restore operations ported
-// from scripts/migrator.sh. A development tool: it shells out to
-// the local pg_dump/pg_restore/psql binaries and writes to the
-// repository backup directory.
+// DBCmd groups the database backup and restore operations under
+// "migrate db". It shells out to the pg_dump/pg_restore/psql
+// binaries and writes to the storage/backup directory.
 type DBCmd struct {
 	Dump    DBDumpCmd    `cmd:"" help:"Dump schema & data or data only (custom format)"`
 	Restore DBRestoreCmd `cmd:"" help:"Restore from a dump file (custom format)"`
@@ -34,7 +30,7 @@ func (c *DBDumpCmd) Run(cli *CLI) error {
 	}
 	path, err := database.Dump(context.Background(), cfg.Database.URL, c.Mode)
 	if err != nil {
-		return fmt.Errorf("db dump: %w", err)
+		return fmt.Errorf("migrate db dump: %w", err)
 	}
 	fmt.Printf("%sdumped%s %s\n", colorGreen, colorReset, path)
 	return nil
@@ -57,7 +53,7 @@ func (c *DBRestoreCmd) Run(cli *CLI) error {
 	if c.DryRun {
 		cmd, err := database.RestoreCommand(cfg.Database.URL, c.Mode, c.File)
 		if err != nil {
-			return fmt.Errorf("db restore: %w", err)
+			return fmt.Errorf("migrate db restore: %w", err)
 		}
 		fmt.Printf("%sdry-run%s %s\n", colorCyan, colorReset, cmd)
 		return nil
@@ -66,7 +62,7 @@ func (c *DBRestoreCmd) Run(cli *CLI) error {
 		return confirmErr
 	}
 	if err := database.Restore(context.Background(), cfg.Database.URL, c.Mode, c.File); err != nil {
-		return fmt.Errorf("db restore: %w", err)
+		return fmt.Errorf("migrate db restore: %w", err)
 	}
 	fmt.Printf("%srestore completed%s\n", colorGreen, colorReset)
 	return nil
@@ -85,7 +81,7 @@ func (c *DBExportCmd) Run(cli *CLI) error {
 	}
 	path, err := database.Export(context.Background(), cfg.Database.URL, c.Mode)
 	if err != nil {
-		return fmt.Errorf("db export: %w", err)
+		return fmt.Errorf("migrate db export: %w", err)
 	}
 	fmt.Printf("%sexported%s %s\n", colorGreen, colorReset, path)
 	return nil
@@ -107,7 +103,7 @@ func (c *DBImportCmd) Run(cli *CLI) error {
 	if c.DryRun {
 		cmd, err := database.ImportCommand(cfg.Database.URL, c.File)
 		if err != nil {
-			return fmt.Errorf("db import: %w", err)
+			return fmt.Errorf("migrate db import: %w", err)
 		}
 		fmt.Printf("%sdry-run%s %s\n", colorCyan, colorReset, cmd)
 		return nil
@@ -116,16 +112,8 @@ func (c *DBImportCmd) Run(cli *CLI) error {
 		return confirmErr
 	}
 	if err := database.Import(context.Background(), cfg.Database.URL, c.File); err != nil {
-		return fmt.Errorf("db import: %w", err)
+		return fmt.Errorf("migrate db import: %w", err)
 	}
 	fmt.Printf("%simport completed%s\n", colorGreen, colorReset)
 	return nil
-}
-
-// dbOptions registers the db command group into the CLI grammar
-// (debug builds only).
-func dbOptions() []kong.Option {
-	return []kong.Option{
-		kong.DynamicCommand("db", "Database backup and restore", "", &DBCmd{}),
-	}
 }

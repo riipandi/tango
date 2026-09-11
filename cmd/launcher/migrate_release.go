@@ -10,4 +10,5 @@ type MigrateCmd struct {
 	Down    MigrateDownCmd    `cmd:"" help:"Rollback the most recent migration"`
 	Status  MigrateStatusCmd  `cmd:"" help:"Check database migration status"`
 	Version MigrateVersionCmd `cmd:"" help:"Print the current migration version"`
+	DB      DBCmd             `cmd:"" name:"db" help:"Database backup and restore"`
 }

@@ -57,7 +57,7 @@ tasks:
   # ----------------------------------------------------------------------------
   db:migrate:
     desc: Run database migrations
-    cmd: pnpm exec dotenv -e .env.local -- sh ./scripts/migrator.sh
+    cmd: go run -tags debug ./cmd --env-file=.env.local migrate up {{.CLI_ARGS}}
 
   secrets:generate:
     desc: Generate application secrets (dev only)
@@ -75,6 +75,10 @@ tasks:
   test:go:
     desc: Run Go unit tests (pass packages or flags after `--`)
     cmd: gotestsum --format testname {{.CLI_ARGS | default "./..."}}
+
+  test:go:debug:
+    desc: Run Go unit tests for the debug build (migrate create/fix/validate included)
+    cmd: gotestsum --format testname -- -tags debug {{.CLI_ARGS | default "./cmd/... ./database/..."}}
 
   test:ui:
     desc: Run frontend unit tests

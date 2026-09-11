@@ -10,7 +10,7 @@ import (
 )
 
 // parseOnlyDebug resolves the selected command path without
-// running it, with the debug-only plugins (secrets, db) registered.
+// running it, with the debug-only secrets plugin registered.
 func parseOnlyDebug(t *testing.T, args ...string) string {
 	t.Helper()
 
@@ -20,7 +20,6 @@ func parseOnlyDebug(t *testing.T, args ...string) string {
 		versionVars(),
 	}
 	base = append(base, secretsOptions()...)
-	base = append(base, dbOptions()...)
 
 	parser, err := kong.New(&CLI{}, base...)
 	require.NoError(t, err)
@@ -41,4 +40,5 @@ func TestMigrateCommandGrammarDebug(t *testing.T) {
 	require.Equal(t, "migrate fix", parseOnlyDebug(t, "migrate", "fix"))
 	require.Equal(t, "migrate validate", parseOnlyDebug(t, "migrate", "validate"))
 	require.Equal(t, "migrate reset", parseOnlyDebug(t, "migrate", "reset", "--force"))
+	require.Equal(t, "migrate db dump <mode>", parseOnlyDebug(t, "migrate", "db", "dump", "all"))
 }
