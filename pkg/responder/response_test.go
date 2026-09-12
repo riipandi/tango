@@ -78,8 +78,8 @@ func TestSuccessGeneratesRequestID(t *testing.T) {
 
 	// Generated request IDs are TypeIDs: request_<26-char UUIDv7 suffix>.
 	id := w.Header().Get("X-Request-Id")
-	assert.True(t, strings.HasPrefix(id, "request_"), id)
-	assert.Len(t, id, len("request_")+26)
+	assert.True(t, strings.HasPrefix(id, "req_"), id)
+	assert.Len(t, id, len("req_")+26)
 	meta := decodeEnvelope(t, w)["metadata"].(map[string]any)
 	assert.Equal(t, id, meta["request_id"])
 }

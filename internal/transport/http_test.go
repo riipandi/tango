@@ -118,7 +118,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	id := w.Header().Get("X-Request-Id")
 	assert.NotEmpty(t, id)
-	assert.True(t, strings.HasPrefix(id, "request_"), id)
+	assert.True(t, strings.HasPrefix(id, "req_"), id)
 
 	// Incoming header: echoed verbatim.
 	w = httptest.NewRecorder()

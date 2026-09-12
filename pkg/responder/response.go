@@ -27,7 +27,7 @@ const (
 
 type requestPrefix struct{}
 
-func (requestPrefix) Prefix() string { return "request" }
+func (requestPrefix) Prefix() string { return "req" }
 
 // RequestID identifies a single API request for tracing and support.
 type RequestID = typeid.TypeID[requestPrefix]
