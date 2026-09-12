@@ -21,8 +21,7 @@ const embeddedMigrationsDir = "migrations"
 func migrationsSource() fs.FS {
 	sub, err := fs.Sub(DatabaseMigrations, embeddedMigrationsDir)
 	if err != nil {
-		// The embed pattern is compile-time fixed; a mismatch is a
-		// programming error and panics at first use.
+		// The embed pattern is compile-time fixed; a mismatch is a programming error and panics at first use.
 		panic("database: embedded migrations directory missing: " + err.Error())
 	}
 	return sub

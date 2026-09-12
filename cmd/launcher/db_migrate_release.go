@@ -2,10 +2,8 @@
 
 package launcher
 
-// DBCmd is the release command surface: manage operations join the
-// migration commands that apply, roll back, and inspect the
-// compiled-in migrations. Creating migration files and resetting
-// the schema are development operations.
+// Release DBCmd: manage plus up/down/status/version over embedded
+// migrations. create/fix/validate/reset are debug-only.
 type DBCmd struct {
 	Dump           DBDumpCmd         `cmd:"" help:"Dump schema & data or data only (custom format)"`
 	Export         DBExportCmd        `cmd:"" help:"Export schema & data or data only (SQL format)"`

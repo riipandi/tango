@@ -1,8 +1,7 @@
 // package launcher implements the tango command line.
 //
-// The command surface is declared once as a struct (kong); runtime
-// configuration is layered separately by internal/config (koanf).
-// Kong flags stay zero-valued — config defaults never live here.
+// Grammar is declared once as a struct (kong); config is layered
+// separately by internal/config. Kong flags stay zero-valued.
 package launcher
 
 import (
@@ -19,8 +18,7 @@ import (
 	"github.com/riipandi/tango/internal/config"
 )
 
-// ANSI colors, matching the shell scripts output style. Shared by
-// every command that prints status output (secrets, migrate).
+// ANSI colors, shared by every command printing status output.
 const (
 	colorRed   = "\033[0;31m"
 	colorGreen = "\033[0;32m"
@@ -29,33 +27,13 @@ const (
 	colorReset = "\033[0m"
 )
 
-// stdinReader is the input source for confirmation prompts; tests
-// override it the same way captureStdout swaps os.Stdout.
-var stdinReader io.Reader = os.Stdin
-
-// stdinIsInteractive reports whether stdin is a terminal. Pipes and
-// /dev/null cannot confirm a prompt.
-var stdinIsInteractive = func() bool {
-	fi, err := os.Stdin.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
-}
-
-// versionVars builds the kong interpolation vars: the --version
-// flag (kong.VersionFlag) prints the "version" variable verbatim.
-func versionVars() kong.Vars {
-	return kong.Vars{
-		"version": fmt.Sprintf("%s %s %s (%s %s)", config.AppName, config.AppVersion, config.Platform, config.BuildHash, config.BuildDate),
-	}
-}
-
-// CLI is the command-line grammar. Subcommand Run methods receive
-// the parsed CLI via kong's type-based binding (ctx.Run(cli)).
+// CLI is the command-line grammar. Subcommands receive it via
+// kong's type-based binding (ctx.Run(cli)).
 type CLI struct {
-	// EnvFile loads a dotenv file into the config layering, below the system environment.
+	// EnvFile loads a dotenv file, below the system environment.
 	EnvFile string `help:"Load environment variables from a dotenv file"`
 
-	// DataDir overrides the app data directory (app.data_dir):
-	// the single root for logs, backups, and generated keys.
+	// DataDir is the single root for logs, backups, keys.
 	// Wins over APP_DATA_DIR and the env file.
 	DataDir string `name:"data-dir" help:"Application data directory for on-disk runtime state"`
 
@@ -68,9 +46,15 @@ type CLI struct {
 	Health  HealthCmd  `cmd:"" help:"Check application health" aliases:"hc"`
 }
 
-// globalOverrides resolves the global CLI flags into config
-// overrides: --data-dir wins over every other layer (it is the
-// most explicit statement of intent).
+// versionVars builds the kong vars for --version.
+func versionVars() kong.Vars {
+	return kong.Vars{
+		"version": fmt.Sprintf("%s %s %s (%s %s)", config.AppName, config.AppVersion, config.Platform, config.BuildHash, config.BuildDate),
+	}
+}
+
+// globalOverrides maps global flags to config keys.
+// --data-dir wins over every other layer.
 func globalOverrides(cli *CLI) map[string]any {
 	overrides := map[string]any{}
 	if cli.DataDir != "" {
@@ -79,9 +63,34 @@ func globalOverrides(cli *CLI) map[string]any {
 	return overrides
 }
 
-// confirmDestructive gates destructive operations: unless --force,
-// it prompts on stdin and refuses in non-interactive sessions (CI,
-// scripts), where nobody can answer the prompt.
+// loadConfig loads layered config: global flags (--data-dir,
+// --env-file) plus command overrides. Global flags win.
+func loadConfig(cli *CLI, extra map[string]any) (*config.Config, error) {
+	overrides := map[string]any{}
+	for key, value := range extra {
+		overrides[key] = value
+	}
+	for key, value := range globalOverrides(cli) {
+		overrides[key] = value
+	}
+	cfg, err := config.Load(config.LoadOptions{EnvFile: cli.EnvFile, Overrides: overrides})
+	if err != nil {
+		return nil, fmt.Errorf("load config: %w", err)
+	}
+	return cfg, nil
+}
+
+// stdinReader feeds confirmation prompts; tests override it.
+var stdinReader io.Reader = os.Stdin
+
+// stdinIsInteractive is false for pipes and /dev/null.
+var stdinIsInteractive = func() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
+// confirmDestructive prompts unless --force; refuses in
+// non-interactive sessions where nobody can answer.
 func confirmDestructive(force bool) error {
 	if force {
 		return nil
@@ -102,54 +111,13 @@ func confirmDestructive(force bool) error {
 	return fmt.Errorf("aborted")
 }
 
-// loadConfig loads the layered configuration for any command:
-// global CLI flags (--data-dir, --env-file) plus optional
-// command-specific overrides. Global flags win on key conflict.
-func loadConfig(cli *CLI, extra map[string]any) (*config.Config, error) {
-	overrides := map[string]any{}
-	for key, value := range extra {
-		overrides[key] = value
-	}
-	for key, value := range globalOverrides(cli) {
-		overrides[key] = value
-	}
-	cfg, err := config.Load(config.LoadOptions{EnvFile: cli.EnvFile, Overrides: overrides})
-	if err != nil {
-		return nil, fmt.Errorf("load config: %w", err)
-	}
-	return cfg, nil
-}
-
-// RunCLI parses args and runs the selected command. The db
-// command surface is wired per-variant (see db_debug.go and
-// db_release.go); everything else is static grammar on CLI.
-func RunCLI(args []string, opts ...kong.Option) error {
-	cli := &CLI{}
-	base := []kong.Option{
-		kong.Name("tango"),
-		kong.Description("A fullstack web application built with Go, Chi, and React."),
-		kong.UsageOnError(),
-		kong.ConfigureHelp(kong.HelpOptions{Compact: true}),
-		versionVars(),
-	}
-	parser, err := kong.New(cli, append(base, opts...)...)
-	if err != nil {
-		return err
-	}
-	kctx, err := parser.Parse(args)
-	if err != nil {
-		return err
-	}
-	return kctx.Run(cli)
-}
-
 // HealthCmd checks application health.
 type HealthCmd struct {
 	Addr string `help:"Server health endpoint URL (default: from config)"`
 	Live bool   `help:"Check live server via HTTP"`
 }
 
-// Run prints static binary info, or probes a live server.
+// Run prints binary info, or probes a live server.
 func (h *HealthCmd) Run(cli *CLI) error {
 	addr := h.Addr
 	if h.Live {
@@ -181,8 +149,7 @@ func checkStatic() {
 	fmt.Println("status:    healthy")
 }
 
-// checkLive probes the configured endpoint; an unhealthy result
-// terminates the process with exit code 1.
+// checkLive probes the endpoint; unhealthy exits with code 1.
 func checkLive(addr string) error {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(addr)
@@ -208,4 +175,26 @@ func formatSize(bytes int64) string {
 	}
 	const kb = 1024
 	return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
+}
+
+// RunCLI parses args and runs the selected command. The db surface
+// is wired per-variant (db_migrate_debug/release.go).
+func RunCLI(args []string, opts ...kong.Option) error {
+	cli := &CLI{}
+	base := []kong.Option{
+		kong.Name("tango"),
+		kong.Description("A fullstack web application built with Go, Chi, and React."),
+		kong.UsageOnError(),
+		kong.ConfigureHelp(kong.HelpOptions{Compact: true}),
+		versionVars(),
+	}
+	parser, err := kong.New(cli, append(base, opts...)...)
+	if err != nil {
+		return err
+	}
+	kctx, err := parser.Parse(args)
+	if err != nil {
+		return err
+	}
+	return kctx.Run(cli)
 }

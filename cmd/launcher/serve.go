@@ -26,9 +26,26 @@ type ServeCmd struct {
 	Port string `help:"Port to bind to"`
 }
 
-// Run loads the layered config, builds the shared logger, and serves
-// until SIGINT/SIGTERM. Every failure path returns an error so the
-// deferred closes (pool, fetcher, logger) always run.
+// flagOverrides maps serve flags to config keys.
+// Bad --port is a plain error, never log.Fatal (skips defers).
+func flagOverrides(host, port string) (map[string]any, error) {
+	overrides := map[string]any{}
+	if host != "" {
+		overrides["host"] = host
+	}
+	if port != "" {
+		cleaned := strings.TrimLeft(port, ":")
+		parsed, err := strconv.Atoi(cleaned)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --port value %q: %w", port, err)
+		}
+		overrides["port"] = parsed
+	}
+	return overrides, nil
+}
+
+// Run loads config, starts modules, serves until signal.
+// Every failure returns so deferred closes always run.
 func (s *ServeCmd) Run(cli *CLI) error {
 	overrides, err := flagOverrides(s.Host, s.Port)
 	if err != nil {
@@ -39,9 +56,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		return err
 	}
 
-	// Composition root of the runtime: the application logger is
-	// built once from config and injected everywhere (registry,
-	// transport). Closing it drains the async queue on shutdown.
+	// Logger built once, injected everywhere. Close drains queue.
 	lg, logCloser, err := logger.New(logger.Options{
 		Level:  cfg.App.LogLevel,
 		Output: cfg.App.LogTransport,
@@ -53,21 +68,18 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	}
 	defer logCloser.Close()
 
-	// Shared outbound client for service integrations; closed
-	// last so shutdown-path calls still have a live pool.
+	// Shared outbound client; closed last.
 	fch := fetcher.New(fetcher.Options{Logger: lg})
 	defer fch.Close()
 
-	// Shared Postgres pool (fail fast: ping on construction).
-	// Closed before the fetcher and logger so shutdown-path
-	// queries still log.
+	// Postgres pool, fail-fast ping. Closed before fetcher/logger.
 	db, err := datastore.New(context.Background(), datastore.Options{DSN: cfg.Database.URL})
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
 	}
 	defer db.Close()
 
-	// Transactional email over the configured relay, rendered from the embedded React Email templates.
+	// Transactional email from embedded React Email templates.
 	templates, err := fs.Sub(web.EmailTemplates, "email")
 	if err != nil {
 		return fmt.Errorf("mount email templates: %w", err)
@@ -85,10 +97,8 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	srv := transport.NewHTTPServer(reg, cfg, lg)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
-	// Serve errors in the background goroutine cannot return
-	// through Run, so they are captured on a buffered channel and
-	// reported after shutdown. http.ErrServerClosed is the normal
-	// shutdown path, not an error.
+	// Serve errors can't return through Run; buffer for after shutdown.
+	// http.ErrServerClosed is the normal path, not an error.
 	serveErr := make(chan error, 1)
 	go func() {
 		lg.Info("listening on http://" + addr)
@@ -99,9 +109,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		}
 	}()
 
-	// signal.NotifyContext (Go 1.26+): the returned context is
-	// canceled with the received signal as its cause, so the
-	// shutdown path can report exactly which signal arrived.
+	// Context carries the received signal as its cause.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	<-ctx.Done()
@@ -122,24 +130,4 @@ func (s *ServeCmd) Run(cli *CLI) error {
 
 	lg.Info("server stopped")
 	return <-serveErr
-}
-
-// flagOverrides resolves the serve CLI flags into config overrides.
-// Empty flags contribute nothing. An invalid --port is a plain
-// error (never log.Fatal inside a Run method: fatal exits the
-// process and skips deferred cleanup).
-func flagOverrides(host, port string) (map[string]any, error) {
-	overrides := map[string]any{}
-	if host != "" {
-		overrides["host"] = host
-	}
-	if port != "" {
-		cleaned := strings.TrimLeft(port, ":")
-		parsed, err := strconv.Atoi(cleaned)
-		if err != nil {
-			return nil, fmt.Errorf("invalid --port value %q: %w", port, err)
-		}
-		overrides["port"] = parsed
-	}
-	return overrides, nil
 }

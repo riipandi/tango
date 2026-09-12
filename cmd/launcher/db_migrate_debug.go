@@ -3,15 +3,13 @@
 package launcher
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/riipandi/tango/database"
 )
 
-// DBCmd is the debug command surface: manage operations join the
-// migration commands, including the development-only ones
-// (scaffolding new migrations, reordering, validating, rolling the
-// schema back to the initial state).
+// Debug DBCmd: manage plus dev-only create/fix/validate/reset.
 type DBCmd struct {
 	Dump           DBDumpCmd          `cmd:"" help:"Dump schema & data or data only (custom format)"`
 	Export         DBExportCmd        `cmd:"" help:"Export schema & data or data only (SQL format)"`
@@ -30,7 +28,7 @@ type DBCmd struct {
 // MigrateFixCmd reorders migration files.
 type MigrateFixCmd struct{}
 
-// Run reorders migration files into a consistent sequential order.
+// Run reorders migration files sequentially.
 func (c *MigrateFixCmd) Run(cli *CLI) error {
 	if err := database.Fix(); err != nil {
 		return fmt.Errorf("db migrate:fix: %w", err)
@@ -42,7 +40,7 @@ func (c *MigrateFixCmd) Run(cli *CLI) error {
 // MigrateValidateCmd checks migration files.
 type MigrateValidateCmd struct{}
 
-// Run validates migration file naming and annotations.
+// Run validates naming and annotations.
 func (c *MigrateValidateCmd) Run(cli *CLI) error {
 	if err := database.Validate(); err != nil {
 		return fmt.Errorf("db migrate:validate: %w", err)
@@ -53,13 +51,11 @@ func (c *MigrateValidateCmd) Run(cli *CLI) error {
 
 // MigrateCreateCmd scaffolds a new migration file.
 type MigrateCreateCmd struct {
-	// Name is the migration name; goose snake-cases it and
-	// prefixes the next sequential version number.
+	// Name is snake-cased by goose with the next version prefix.
 	Name string `arg:"" help:"Migration name, e.g. add_users_table"`
 }
 
-// Run scaffolds the next sequential migration file in the on-disk
-// migrations directory.
+// Run scaffolds into the on-disk migrations directory.
 func (c *MigrateCreateCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -90,25 +86,7 @@ func (c *MigrateResetCmd) Run(cli *CLI) error {
 	dsn := cfg.Database.URL
 
 	if c.DryRun {
-		statuses, statusErr := database.MigrateStatus(ctx, dsn)
-		if statusErr != nil {
-			return fmt.Errorf("db migrate:reset: %w", statusErr)
-		}
-		var applied []database.MigrationStatus
-		for _, entry := range statuses {
-			if entry.State == "applied" {
-				applied = append(applied, entry)
-			}
-		}
-		if len(applied) == 0 {
-			fmt.Printf("%snothing to roll back%s\n", colorCyan, colorReset)
-			return nil
-		}
-		fmt.Printf("%sdry-run%s would roll back %d migration(s):\n", colorCyan, colorReset, len(applied))
-		for _, entry := range applied {
-			fmt.Printf("  %s\n", entry.Path)
-		}
-		return nil
+		return migrateResetDryRun(ctx, dsn)
 	}
 
 	if confirmErr := confirmDestructive(c.Force); confirmErr != nil {
@@ -120,6 +98,29 @@ func (c *MigrateResetCmd) Run(cli *CLI) error {
 	}
 	for _, outcome := range rolled {
 		fmt.Printf("%srolled back%s %s (%s)\n", colorGreen, colorReset, outcome.Path, outcome.Duration)
+	}
+	return nil
+}
+
+// migrateResetDryRun lists what reset would roll back, read-only.
+func migrateResetDryRun(ctx context.Context, dsn string) error {
+	statuses, err := database.MigrateStatus(ctx, dsn)
+	if err != nil {
+		return fmt.Errorf("db migrate:reset: %w", err)
+	}
+	var applied []database.MigrationStatus
+	for _, entry := range statuses {
+		if entry.State == "applied" {
+			applied = append(applied, entry)
+		}
+	}
+	if len(applied) == 0 {
+		fmt.Printf("%snothing to roll back%s\n", colorCyan, colorReset)
+		return nil
+	}
+	fmt.Printf("%sdry-run%s would roll back %d migration(s):\n", colorCyan, colorReset, len(applied))
+	for _, entry := range applied {
+		fmt.Printf("  %s\n", entry.Path)
 	}
 	return nil
 }
