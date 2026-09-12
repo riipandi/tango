@@ -112,6 +112,13 @@ func (p *Postgres) QueryRow(ctx context.Context, sql string, args ...any) pgx.Ro
 	return p.pool.QueryRow(ctx, sql, args...)
 }
 
+// Pool exposes the underlying pgx pool for infrastructure that owns its
+// own transactions and long-lived connections (the task queue). Domain
+// modules use the typed Store instead.
+func (p *Postgres) Pool() *pgxpool.Pool {
+	return p.pool
+}
+
 // WithTx runs fn in a tx: commit on nil, rollback on error/panic.
 // Rollback uses an uncanceled ctx copy so shutdown errors still
 // release the connection.

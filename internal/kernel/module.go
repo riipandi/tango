@@ -14,8 +14,8 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// Module is a self-contained feature unit. Needs at least one
-// routing capability: RootRoutable or APIRoutable.
+// Module is a self-contained feature unit: routes (RootRoutable or APIRoutable)
+// or a lifecycle (Startable), at least one.
 type Module interface {
 	Name() string
 }
@@ -54,11 +54,14 @@ func NewRegistry() *Registry {
 }
 
 // Register adds a module; order sets route and middleware priority.
-// Panics without route capability or on duplicate name.
+// Panics on duplicate name. Lifecycle-only modules (Startable, no
+// routes) are valid: e.g. the task queue.
 func (reg *Registry) Register(m Module) {
 	if _, ok := m.(RootRoutable); !ok {
 		if _, ok := m.(APIRoutable); !ok {
-			panic(fmt.Sprintf("kernel: module %q has no route capability", m.Name()))
+			if _, ok := m.(Startable); !ok {
+				panic(fmt.Sprintf("kernel: module %q has no route capability", m.Name()))
+			}
 		}
 	}
 

@@ -27,7 +27,6 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 	r.Use(middleware.JSONRecoverer)
 	r.Use(middleware.CORS())
 
-	r.Get("/healthz", HealthCheckHandler)
 	r.Get("/static/*", StaticAssetsHandler)
 	r.Get("/.well-known/version", VersionHandler)
 
@@ -36,6 +35,7 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 	// Shared /api group; modules register inside it.
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/", APIRootHandler)
+		r.Get("/healthz", HealthCheckHandler)
 		registry.ApplyAPI(r)
 	})
 

@@ -132,6 +132,7 @@ var envSections = []struct{ prefix, section string }{
 	{"DATABASE_", "database"},
 	{"MAILER_", "mailer"},
 	{"PUBLIC_", "public"},
+	{"QUEUE_", "queue"},
 	{"STORAGE_", "storage"},
 }
 

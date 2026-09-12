@@ -9,6 +9,8 @@ package registry
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"go.jetify.com/typeid"
 
@@ -18,10 +20,12 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
+	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/pkg/antree"
 )
 
 // Deps are shared dependencies for modules. No globals;
@@ -42,6 +46,11 @@ type Deps struct {
 	// DB is the shared Postgres store. Modules get stores built
 	// on it, never the pool itself.
 	DB datastore.Store
+
+	// Queue is the shared task queue client, built by New from
+	// DB.Pool(). Features register their queues on it at build time;
+	// the queue module runs the dispatcher. Not set by callers.
+	Queue *antree.Client
 }
 
 // New builds the registry in registration order. Every store is
@@ -53,6 +62,21 @@ func New(deps Deps) *kernel.Registry {
 	}
 
 	reg := kernel.NewRegistry()
+
+	// Task queue: first registered so its Stop drains last. Features
+	// register named queues via deps.Queue before the server starts.
+	queueClient, err := antree.NewClient(antree.ClientConfig{
+		DB:              deps.DB.Pool(),
+		Logger:          logger.QueueLogger(deps.Logger),
+		NumWorkers:      deps.Config.Queue.Workers,
+		ReleaseAfter:    time.Duration(deps.Config.Queue.ReleaseAfter) * time.Second,
+		CleanupInterval: time.Duration(deps.Config.Queue.CleanupInterval) * time.Second,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("registry: task queue: %v", err))
+	}
+	deps.Queue = queueClient
+	reg.Register(queue.New(queueClient))
 
 	audit := auditlog.New(auditlog.NewPostgresStore(deps.DB))
 	reg.Register(audit)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Executor is the query surface: a pool (autocommit) or an open
@@ -27,6 +28,9 @@ type Store interface {
 	Executor
 
 	WithTx(ctx context.Context, fn func(Executor) error) error
+
+	// Pool exposes the raw pgx pool. Domain modules never use it.
+	Pool() *pgxpool.Pool
 }
 
 // Backend is health plus shutdown. Wired in internal/registry,

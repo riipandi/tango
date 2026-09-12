@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/testutils"
@@ -30,16 +31,22 @@ func testDeps(t *testing.T) Deps {
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 
-	return Deps{DB: store}
+	return Deps{
+		DB: store,
+		Config: &config.Config{
+			Queue: config.QueueConfig{Workers: 2, ReleaseAfter: 30, CleanupInterval: 3600},
+		},
+	}
 }
 
 func TestNewRegistersAllModules(t *testing.T) {
 	reg := New(testDeps(t))
 
 	modules := reg.Modules()
-	assert.Len(t, modules, 3)
+	assert.Len(t, modules, 4)
 
-	wantOrder := []string{"auditlog", "identity", "federation"}
+	// Queue first: its Stop drains last on shutdown.
+	wantOrder := []string{"queue", "auditlog", "identity", "federation"}
 	for i, want := range wantOrder {
 		assert.Equal(t, want, modules[i].Name())
 	}

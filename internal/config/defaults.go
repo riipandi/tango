@@ -39,6 +39,12 @@ var defaultConfig = Config{
 		RateLimitDefaultWindow: 900,
 	},
 
+	Queue: QueueConfig{
+		Workers:         4,
+		ReleaseAfter:    300,
+		CleanupInterval: 21600,
+	},
+
 	Storage: StorageConfig{
 		MaxUploadSize:      5242880,
 		S3BucketDefault:    "devbucket",

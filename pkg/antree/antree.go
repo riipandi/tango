@@ -1,10 +1,9 @@
-// Package antree provides type-safe, persistent, embedded task queues backed
-// by Postgres (the queue_tasks tables) that run within the application process
-// instead of an external message broker.
+// Package antree provides type-safe, persistent task queues backed by
+// Postgres that run within the application process instead of an external
+// message broker.
 //
-// This package is a port of github.com/mikestefanello/backlite (MIT license),
-// adapted to Postgres and restructured as a single self-contained package with
-// no dependencies outside pkg/.
+// A port of github.com/mikestefanello/backlite (MIT license), adapted to
+// Postgres as a single self-contained package.
 package antree
 
 import (
@@ -27,48 +26,37 @@ var now = func() time.Time {
 }
 
 type (
-	// Client is used to register queues and add tasks to them for execution.
+	// Client registers queues and adds tasks to them for execution.
 	Client struct {
-		// db stores the database used for storing tasks.
-		db *pgxpool.Pool
-
-		// log is the logger.
-		log Logger
-
-		// queues stores the registered queues which tasks can be added to.
+		db     *pgxpool.Pool
+		log    Logger
 		queues queues
 
-		// buffers is a pool of byte buffers for more efficient encoding.
+		// buffers reuses encoding buffers across saves.
 		buffers sync.Pool
 
-		// dispatcher fetches queued tasks and hands them to the workers.
 		dispatcher Dispatcher
 	}
 
 	// ClientConfig contains configuration for the Client.
 	ClientConfig struct {
-		// DB is the Postgres connection pool used for storing tasks.
 		DB *pgxpool.Pool
 
 		// Logger logs task execution. Omit to disable logging.
 		Logger Logger
 
-		// NumWorkers is the number of goroutines opened to execute queued tasks
-		// concurrently.
+		// NumWorkers is the number of goroutines executing queued tasks.
 		NumWorkers int
 
-		// ReleaseAfter is the duration after which a claimed task is released back
-		// to its queue if it never finished executing. This should be much higher
-		// than the timeout setting of each queue and exists as a fail-safe for
-		// stuck tasks.
+		// ReleaseAfter reclaims a claimed task that never finished executing.
+		// A fail-safe for stuck tasks; much higher than any queue Timeout.
 		ReleaseAfter time.Duration
 
-		// CleanupInterval is how often the database is cleaned of expired completed
-		// tasks. If omitted, retention durations are never enforced.
+		// CleanupInterval removes expired completed tasks. If omitted,
+		// retention durations are never enforced.
 		CleanupInterval time.Duration
 	}
 
-	// ctxKeyClient is used to store a Client in a context.
 	ctxKeyClient struct{}
 
 	// TaskStatus describes the state of a task.
@@ -76,19 +64,10 @@ type (
 )
 
 const (
-	// TaskStatusPending indicates the task is awaiting execution.
 	TaskStatusPending TaskStatus = iota
-
-	// TaskStatusRunning indicates the task is being executed.
 	TaskStatusRunning
-
-	// TaskStatusSuccess indicates the task completed successfully.
 	TaskStatusSuccess
-
-	// TaskStatusFailure indicates the task execution failed.
 	TaskStatusFailure
-
-	// TaskStatusNotFound indicates the task was not found in the database.
 	TaskStatusNotFound
 )
 
@@ -136,8 +115,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	return c, nil
 }
 
-// Register registers a queue so tasks can be added to it.
-// Panics if a queue with the same name is already registered.
+// Register registers a queue. Panics on a duplicate or missing name.
 func (c *Client) Register(queue Queue) {
 	c.queues.add(queue)
 }
@@ -147,16 +125,14 @@ func (c *Client) Add(tasks ...Task) *TaskAddOp {
 	return &TaskAddOp{client: c, tasks: tasks}
 }
 
-// Start starts the dispatcher so queued tasks execute automatically in the
-// background. Call Stop for a graceful shutdown, or cancel the provided
-// context for a hard stop.
+// Start executes queued tasks in the background. Cancel the context for a
+// hard stop; call Stop for a graceful one.
 func (c *Client) Start(ctx context.Context) {
 	c.dispatcher.Start(ctx)
 }
 
-// Stop gracefully shuts down the dispatcher, waiting until the given context is
-// cancelled or all workers finish their tasks. True is returned when all
-// workers completed their tasks prior to shutting down.
+// Stop shuts down gracefully, waiting until the context is cancelled or all
+// workers finish their tasks. True when all workers completed in time.
 func (c *Client) Stop(ctx context.Context) bool {
 	return c.dispatcher.Stop(ctx)
 }
@@ -210,7 +186,7 @@ func (c *Client) save(op *TaskAddOp) ([]string, error) {
 		// The caller owns the transaction and commits it, then notifies us.
 		err = insert(op.tx)
 	} else {
-		// We own the transaction: roll it back on failure, commit, notify.
+		// We own the transaction: roll back on failure, commit, notify.
 		var tx pgx.Tx
 		if tx, err = op.client.db.Begin(op.ctx); err != nil {
 			return nil, err
@@ -246,7 +222,7 @@ func (c *Client) Status(ctx context.Context, taskID string) (TaskStatus, error) 
 	// Queued tasks: pending or running.
 	running := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	running.Select("claimed_at IS NOT NULL")
-	running.From("queue_tasks")
+	running.From(tasksTable)
 	running.Where(running.Equal("id", taskID))
 
 	var claimed bool
@@ -267,7 +243,7 @@ func (c *Client) Status(ctx context.Context, taskID string) (TaskStatus, error) 
 	// Completed tasks: success or failure.
 	succeeded := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	succeeded.Select("error IS NULL")
-	succeeded.From("queue_tasks_completed")
+	succeeded.From(completedTasksTable)
 	succeeded.Where(succeeded.Equal("id", taskID))
 
 	var success bool

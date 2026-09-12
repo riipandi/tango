@@ -11,6 +11,7 @@ type Config struct {
 	Database DatabaseConfig `koanf:"database"`
 	Mailer   MailerConfig   `koanf:"mailer"`
 	Public   PublicConfig   `koanf:"public"`
+	Queue    QueueConfig    `koanf:"queue"`
 	Storage  StorageConfig  `koanf:"storage"`
 }
 
@@ -57,6 +58,12 @@ type PublicConfig struct {
 	JwtRefreshTokenExpiry  int      `koanf:"jwt_refresh_token_expiry"`
 	RateLimitDefaultMax    int      `koanf:"rate_limit_default_max"`
 	RateLimitDefaultWindow int      `koanf:"rate_limit_default_window"`
+}
+
+type QueueConfig struct {
+	Workers         int `koanf:"workers"`
+	ReleaseAfter    int `koanf:"release_after"`
+	CleanupInterval int `koanf:"cleanup_interval"`
 }
 
 type StorageConfig struct {

@@ -64,9 +64,9 @@ func TestNewHTTPServerRoutes(t *testing.T) {
 		wantStatus int
 		checkJSON  bool
 	}{
-		{"/healthz", http.StatusOK, true},   // probes default upstream (network)
-		{"/api", http.StatusOK, true},       // identity apiRoot
-		{"/api/users", http.StatusOK, true}, // identity list
+		{"/api/healthz", http.StatusOK, true}, // moved under the /api group
+		{"/api", http.StatusOK, true},         // identity apiRoot
+		{"/api/users", http.StatusOK, true},   // identity list
 		{"/api/nope", http.StatusNotFound, true},
 		{"/.well-known/version", http.StatusOK, true},
 		{"/static/app.js", http.StatusOK, true},
