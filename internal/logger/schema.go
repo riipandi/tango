@@ -1,14 +1,9 @@
-// Package logger wires the LogLayer fluent API to the configured
-// sinks: a colorized pretty console (LogLayer pretty renderer) or
-// always-structured JSON — slog JSON handlers, plain on stderr or
-// rotating over lumberjack. Dispatch is async and non-blocking —
-// emission never waits on I/O; overflowing entries are dropped and
-// counted.
+// Package logger wires the LogLayer API to sinks: pretty console
+// or structured JSON (stderr, or rotating file via lumberjack).
+// Dispatch is async and non-blocking; overflow drops and counts.
 //
-// Config keys (see internal/config): app.log_level, app.log_transport
-// (console|file), app.log_pretty, app.log_file. Future log backends
-// (HTTP shippers, cloud services) slot in as additional transports
-// inside New without touching callers.
+// Config keys: app.log_level, app.log_transport (console|file),
+// app.log_format, app.log_file. New backends slot into New.
 package logger
 
 import (
@@ -17,61 +12,56 @@ import (
 	"go.loglayer.dev/v3"
 )
 
-// Logger is the application logging contract. It is a type alias
-// over the LogLayer fluent API so modules get the full surface
-// (levels, fields, metadata, errors) while keeping the concrete
-// implementation swappable in this package.
+// Logger is the app logging contract: alias over LogLayer, full
+// surface, implementation swappable here.
 type Logger = *loglayer.LogLayer
 
-// NewMock returns a silent logger with the same API — Fatal does
-// not exit. Useful for tests and optional components.
+// NewMock is a silent logger with the same API; Fatal doesn't exit.
+// For tests and optional components.
 func NewMock() Logger {
 	return loglayer.NewMock()
 }
 
 // Errors returned by New.
 var (
-	// ErrInvalidLevel is returned for an unknown level string.
+	// ErrInvalidLevel for unknown level strings.
 	ErrInvalidLevel = errors.New("logger: invalid level (want trace|debug|info|warn|error|fatal|panic)")
 
-	// ErrInvalidOutput is returned for an unknown output selection.
+	// ErrInvalidOutput for unknown output selections.
 	ErrInvalidOutput = errors.New("logger: invalid output (want console|file)")
 
-	// ErrInvalidFormat is returned for an unknown format string.
+	// ErrInvalidFormat for unknown format strings.
 	ErrInvalidFormat = errors.New("logger: invalid format (want pretty|structured)")
 
-	// ErrPrettyRequiresConsole is returned when the pretty format
-	// is combined with file output; files are always structured.
+	// ErrPrettyRequiresConsole: pretty is console-only, files stay structured.
 	ErrPrettyRequiresConsole = errors.New("logger: pretty format requires console output")
 
-	// ErrFileRequired is returned when output is file without a path.
+	// ErrFileRequired when file output lacks a path.
 	ErrFileRequired = errors.New("logger: file output requires a file path")
 )
 
-// Options selects the sinks and rendering for New. It mirrors the
-// app.log_* config keys; passing a zero value yields the defaults
-// (info level, structured JSON on console).
+// Options selects sinks and rendering for New. Mirrors app.log_*
+// keys; zero value is info, structured JSON on console.
 type Options struct {
-	// Level is the minimum level: trace, debug, info, warn, error,
-	// fatal, or panic. Empty means info.
+	// Level: trace, debug, info, warn, error, fatal, panic.
+	// Empty means info.
 	Level string
 
-	// Output is "console" (default) or "file".
+	// Output: "console" (default) or "file".
 	Output string
 
-	// Format is "structured" (default, JSON everywhere) or
-	// "pretty" (colorized renderer, console only).
+	// Format: "structured" (default, JSON) or "pretty"
+	// (colorized, console only).
 	Format string
 
-	// NoColor forces ANSI colors off for pretty output. When left
-	// false, colors are auto-disabled when stdout is not a terminal.
+	// NoColor forces pretty colors off. False auto-disables
+	// when stdout isn't a terminal.
 	NoColor bool
 
-	// File is the log file path for file output. Rotation defaults
-	// apply (100 MB, 7 backups, 30 days, gzip).
+	// File path for file output. Rotation: 100MB, 7 backups,
+	// 30 days, gzip.
 	File string
 
-	// Buffer is the async queue capacity. Zero uses
-	// DefaultBufferSize.
+	// Buffer is async queue capacity. Zero uses DefaultBufferSize.
 	Buffer int
 }

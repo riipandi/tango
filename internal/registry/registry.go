@@ -1,6 +1,5 @@
-// Package registry wires the application's feature modules. This is
-// the composition point of the monolith: adding a module = import +
-// one Register line, removing one = delete the line.
+// Package registry wires feature modules: add = import + one
+// Register line, remove = delete the line.
 package registry
 
 import (
@@ -16,33 +15,28 @@ import (
 	"github.com/riipandi/tango/modules/wellknown"
 )
 
-// Deps carries the shared dependencies every module may draw from.
-// Modules never read them from package globals; constructors receive
-// only what they need.
+// Deps are shared dependencies for modules. No globals;
+// constructors take what they need.
 type Deps struct {
 	// Config is the loaded runtime configuration.
 	Config *config.Config
 
-	// Logger is the shared application logger. Modules receive it
-	// to emit structured entries; they never build their own.
+	// Logger is shared; modules never build their own.
 	Logger logger.Logger
 
-	// Fetcher is the shared outbound HTTP client for service
-	// integrations. Built once and reused for its connection pool.
+	// Fetcher is the shared outbound client (pooled).
 	Fetcher *fetcher.Fetcher
 
-	// Mailer is the shared email client for modules that send mail.
+	// Mailer is the shared email client.
 	Mailer mailer.Mailer
 
-	// DB is the shared Postgres store: a connection pool with
-	// transaction support. Modules receive store implementations
-	// built on top of it, never the pool itself.
+	// DB is the shared Postgres store. Modules get stores built
+	// on it, never the pool itself.
 	DB datastore.Store
 }
 
-// New builds the module registry with every active module, in
-// registration order. The adapter below routes identity audit events
-// into the auditlog module, keeping the two decoupled.
+// New builds the registry in registration order. The adapter routes
+// identity audit events into auditlog, keeping them decoupled.
 func New(deps Deps) *kernel.Registry {
 	reg := kernel.NewRegistry()
 
@@ -50,17 +44,18 @@ func New(deps Deps) *kernel.Registry {
 	reg.Register(audit)
 	reg.Register(wellknown.New())
 	reg.Register(identity.New(
-		// Mandatory user core.
 		user.NewService(user.NewMemoryStore(), func(e identity.AuditEvent) {
 			audit.Record(auditlog.Event{Action: e.Action, Actor: e.Actor, Target: e.Target})
 		}),
-		// Identity authn/authz feature selection — add or remove a line to change the feature set.
+		// Feature selection: add/remove a line to change the set.
 		withSession(deps),
 		withWebAuthn(deps),
 		withPassword(deps),
 		withAPIKeys(deps),
 		withAPIAccess(deps),
 		withOIDC(deps),
+		withLDAPSync(deps),
+		withSCIMSync(deps),
 	))
 
 	return reg

@@ -16,6 +16,8 @@
 //	            file-per-area: client, token, device)
 //	usergroup — bulk OIDC client access via groups
 //	customclaim — per-user claims injected into OIDC tokens
+//	ldapsync — periodic LDAP directory sync (users + groups)
+//	scimsync — SCIM 2.0 provisioning from an external IdP
 //	signup    — self-service sign-up flows
 //	emailverification — verify email addresses
 //	onetimeaccess — email sign-in links (single-use tokens)

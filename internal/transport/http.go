@@ -18,8 +18,7 @@ type HTTPServer struct {
 	Server *http.Server
 }
 
-// NewHTTPServer assembles the application: shared middleware, core
-// routes, then every module from the registry mounts itself.
+// NewHTTPServer wires middleware, core routes, then registry modules.
 func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Logger) *HTTPServer {
 	r := chi.NewRouter()
 
@@ -27,22 +26,18 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 	r.Use(middleware.JSONRecoverer)
 	r.Use(middleware.CORS())
 
-	// Core endpoints.
 	r.Get("/healthz", HealthCheckHandler)
 	r.Get("/static/*", StaticAssetsHandler)
 
-	// Modules mount root-level routes (wellknown, ...).
 	registry.Apply(r)
 
-	// Shared /api group; the index is core API metadata, then
-	// APIRoutable modules register inside it.
+	// Shared /api group; modules register inside it.
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/", APIRootHandler)
 		registry.ApplyAPI(r)
 	})
 
-	// Render frontend SPA (must be last); web.SetupStatic also owns
-	// the root 404/SPA fallback.
+	// SPA fallback last; owns root 404.
 	web.SetupStatic(r)
 
 	return &HTTPServer{Router: r}

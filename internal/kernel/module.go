@@ -1,8 +1,6 @@
-// Package kernel defines the module contract and registry that powers
-// the modular monolith. A module owns its feature slice end-to-end
-// (handlers, services, storage) and declares its own routes, so adding
-// or removing a feature is a single registry line in the composition
-// root (cmd/launcher).
+// Package kernel defines the module contract and registry for the
+// modular monolith. A module owns its slice end-to-end and declares
+// its routes; add/remove is one registry line.
 package kernel
 
 import (
@@ -16,42 +14,36 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// Module is a self-contained feature unit. It must implement at least
-// one routing capability: RootRoutable (mounts on the router root,
-// e.g. wellknown) or APIRoutable (mounts inside the shared /api
-// group, e.g. identity).
+// Module is a self-contained feature unit. Needs at least one
+// routing capability: RootRoutable or APIRoutable.
 type Module interface {
 	Name() string
 }
 
-// RootRoutable is the capability to mount routes on the root router.
+// RootRoutable mounts routes on the router root.
 type RootRoutable interface {
 	Routes(r chi.Router)
 }
 
-// APIRoutable is the capability to mount routes inside the shared
-// /api subtree. The registry mounts them inside a single "/api"
-// group (chi forbids mounting the same path twice).
+// APIRoutable mounts inside the shared /api group (one group;
+// chi forbids mounting the same path twice).
 type APIRoutable interface {
 	APIRoutes(r chi.Router)
 }
 
-// Middleware is an optional capability a module can provide. Modules
-// implementing it have their middleware applied to the root router
-// before any routing happens.
+// Middleware applies to the root router before routing.
 type Middleware interface {
 	Middleware() func(http.Handler) http.Handler
 }
 
-// Startable is an optional lifecycle capability for modules holding
-// resources (database pools, background workers, consumers). Start
-// runs in registration order, Stop in reverse order.
+// Startable is for modules holding resources. Start runs in
+// registration order, Stop in reverse.
 type Startable interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
 }
 
-// Registry keeps module instances in registration order.
+// Registry keeps modules in registration order.
 type Registry struct {
 	modules []Module
 	byName  map[string]Module
@@ -61,8 +53,8 @@ func NewRegistry() *Registry {
 	return &Registry{byName: make(map[string]Module)}
 }
 
-// Register adds a module. Registration order determines route
-// priority and middleware order.
+// Register adds a module; order sets route and middleware priority.
+// Panics without route capability or on duplicate name.
 func (reg *Registry) Register(m Module) {
 	if _, ok := m.(RootRoutable); !ok {
 		if _, ok := m.(APIRoutable); !ok {
@@ -77,18 +69,17 @@ func (reg *Registry) Register(m Module) {
 	reg.modules = append(reg.modules, m)
 }
 
-// Modules returns registered modules in registration order.
+// Modules returns modules in registration order.
 func (reg *Registry) Modules() []Module {
 	return reg.modules
 }
 
-// Get returns a module by name, or nil when not registered.
+// Get returns a module by name, nil when absent.
 func (reg *Registry) Get(name string) Module {
 	return reg.byName[name]
 }
 
-// Apply mounts root-level module routes and wires module-provided
-// middleware.
+// Apply wires module middleware, then mounts root routes.
 func (reg *Registry) Apply(r chi.Router) {
 	for _, m := range reg.modules {
 		if mw, ok := m.(Middleware); ok {
@@ -102,8 +93,8 @@ func (reg *Registry) Apply(r chi.Router) {
 	}
 }
 
-// ApplyAPI mounts every APIRoutable module inside the shared /api
-// group, in registration order.
+// ApplyAPI mounts APIRoutable modules in the /api group,
+// registration order.
 func (reg *Registry) ApplyAPI(api chi.Router) {
 	api.NotFound(responder.NotFoundJSON)
 	api.MethodNotAllowed(responder.MethodNotAllowedJSON)
@@ -115,9 +106,8 @@ func (reg *Registry) ApplyAPI(api chi.Router) {
 	}
 }
 
-// Start starts every Startable module in registration order. It stops
-// at the first error; already-started modules are left running (the
-// caller should Stop them).
+// Start starts Startable modules in order; stops at first error
+// (caller Stops the rest).
 func (reg *Registry) Start(ctx context.Context) error {
 	for _, m := range reg.modules {
 		s, ok := m.(Startable)
@@ -131,8 +121,8 @@ func (reg *Registry) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops every Startable module in reverse registration order and
-// joins all errors so one failing module does not block the rest.
+// Stop stops Startable modules in reverse order, joining errors
+// so one failure doesn't block the rest.
 func (reg *Registry) Stop(ctx context.Context) error {
 	var errs []error
 	for _, v := range slices.Backward(reg.modules) {

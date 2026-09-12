@@ -1,13 +1,9 @@
 package storage
 
-// TODO: S3 backend (production).
+// TODO: S3 backend (prod).
 //
-// aws-sdk-go-v2 client (s3 + config packages) with bucket,
-// region, and endpoint from config (e.g. storage.s3.*; custom
-// endpoint enables MinIO/compatible stores). Put streams the
-// reader via PutObject; Open uses GetObject and maps
-// apierr NoSuchKey to ErrNotFound; Delete calls DeleteObject.
-//
-// Later, if presigned URL upload/download lands, extend the
-// contract behind a separate Presigner capability interface
-// instead of widening Store for every backend.
+// aws-sdk-go-v2 (config + s3): bucket/region/endpoint from config
+// (custom endpoint = MinIO-compatible). Put streams PutObject;
+// Open maps NoSuchKey to ErrNotFound; Delete is DeleteObject.
+// Presigned URLs later go behind a Presigner capability, not by
+// widening Store.

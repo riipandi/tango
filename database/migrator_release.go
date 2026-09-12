@@ -7,21 +7,17 @@ import (
 	"io/fs"
 )
 
-// embeddedMigrationsDir is the migrations directory inside the
-// embedded FS (see embed.go).
+// Migrations dir inside the embedded FS.
 const embeddedMigrationsDir = "migrations"
 
-// The release migration surface: apply, roll back, and inspect the
-// compiled-in migrations (see embed.go). Scaffolding new migration
-// files and resetting the schema are development operations and
-// stay out of release builds.
+// Release applies/inspects compiled-in migrations. Scaffolding and
+// reset are debug-only.
 
-// migrationsSource returns the embedded migrations as a single
-// filesystem root for the goose Provider.
+// migrationsSource returns embedded migrations as a Provider root.
 func migrationsSource() fs.FS {
 	sub, err := fs.Sub(DatabaseMigrations, embeddedMigrationsDir)
 	if err != nil {
-		// The embed pattern is compile-time fixed; a mismatch is a programming error and panics at first use.
+		// Embed pattern is compile-time fixed; mismatch is a bug.
 		panic("database: embedded migrations directory missing: " + err.Error())
 	}
 	return sub
@@ -37,28 +33,27 @@ func MigrateDown(ctx context.Context, dsn string) (*MigrationOutcome, error) {
 	return runDown(ctx, dsn, migrationsSource())
 }
 
-// MigrateDownTarget reports what MigrateDown would roll back next,
-// without touching the database.
+// MigrateDownTarget reports what MigrateDown would roll back, read-only.
 func MigrateDownTarget(ctx context.Context, dsn string) (*MigrationStatus, error) {
 	return runDownTarget(ctx, dsn, migrationsSource())
 }
 
-// MigrateStatus reports the state of every embedded migration.
+// MigrateStatus reports every embedded migration's state.
 func MigrateStatus(ctx context.Context, dsn string) ([]MigrationStatus, error) {
 	return runStatus(ctx, dsn, migrationsSource())
 }
 
-// MigrateUpTo applies pending migrations up to the given version.
+// MigrateUpTo applies pending migrations up to version.
 func MigrateUpTo(ctx context.Context, dsn string, version int64) ([]MigrationOutcome, error) {
 	return runUpTo(ctx, dsn, migrationsSource(), version)
 }
 
-// MigrateDownTo rolls back every migration above the given version.
+// MigrateDownTo rolls back everything above version.
 func MigrateDownTo(ctx context.Context, dsn string, version int64) ([]MigrationOutcome, error) {
 	return runDownTo(ctx, dsn, migrationsSource(), version)
 }
 
-// MigrateVersion reports the current applied and target versions.
+// MigrateVersion reports applied and target versions.
 func MigrateVersion(ctx context.Context, dsn string) (current, target int64, err error) {
 	return runVersion(ctx, dsn, migrationsSource())
 }

@@ -14,16 +14,14 @@ import (
 )
 
 const (
-	// DefaultBufferSize is the async queue capacity when
-	// Options.Buffer is unset.
+	// DefaultBufferSize is async queue capacity when Buffer unset.
 	DefaultBufferSize = 4096
 
-	// DefaultFlushTimeout bounds Close and the core's
-	// close-on-fatal wait.
+	// DefaultFlushTimeout bounds Close and close-on-fatal wait.
 	DefaultFlushTimeout = 5 * time.Second
 )
 
-// File rotation defaults for the file output.
+// File rotation for file output.
 const (
 	defaultMaxSizeMB   = 100
 	defaultMaxBackups  = 7
@@ -31,15 +29,10 @@ const (
 	defaultCompression = true
 )
 
-// New builds the application logger: a LogLayer fluent API wrapped
-// in an async non-blocking transport.
-//
-// The structured format emits JSON everywhere: console via slog
-// JSON handler (stderr), file via slog JSON handler over
-// lumberjack (rotation). The pretty format renders a colorized
-// console view (LogLayer pretty renderer) and is console-only.
-// The returned closer drains the async queue; call it on shutdown
-// (and before reading the file in tests).
+// New builds the logger: LogLayer API over an async transport.
+// Structured emits JSON everywhere (stderr console, lumberjack
+// file); pretty is colorized console-only. The closer drains the
+// queue; call on shutdown (and before file reads in tests).
 func New(opts Options) (Logger, io.Closer, error) {
 	slogLevel, coreLevel, err := parseLevel(opts.Level)
 	if err != nil {
@@ -64,7 +57,7 @@ func New(opts Options) (Logger, io.Closer, error) {
 	return core, asyncT, nil
 }
 
-// newTransport selects the sink behind the async queue.
+// newTransport picks the sink behind the async queue.
 func newTransport(opts Options, slogLevel slog.Level, coreLevel loglayer.LogLevel) (loglayer.Transport, error) {
 	format := opts.Format
 	if format == "" {
@@ -116,7 +109,7 @@ func slogTransport(h slog.Handler, coreLevel loglayer.LogLevel) loglayer.Transpo
 	})
 }
 
-// isTTY reports whether the file refers to a terminal.
+// isTTY reports whether f is a terminal.
 func isTTY(f *os.File) bool {
 	info, err := f.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0

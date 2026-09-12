@@ -17,14 +17,10 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// devMigrationsDir is the on-disk migrations directory relative to
-// the repository root — the working directory of debug runs
-// (`task dev`, `go run -tags debug ./cmd`).
+// On-disk migrations dir, relative to repo root (debug cwd).
 const devMigrationsDir = "database/migrations"
 
-// The debug migration surface: every operation, reading migrations
-// from the on-disk directory so newly created files apply without
-// rebuilding the binary.
+// Debug reads on-disk so new files apply without rebuild.
 
 // MigrateUp applies all pending migrations.
 func MigrateUp(ctx context.Context, dsn string) ([]MigrationOutcome, error) {
@@ -36,39 +32,37 @@ func MigrateDown(ctx context.Context, dsn string) (*MigrationOutcome, error) {
 	return runDown(ctx, dsn, os.DirFS(devMigrationsDir))
 }
 
-// MigrateDownTarget reports what MigrateDown would roll back next,
-// without touching the database.
+// MigrateDownTarget reports what MigrateDown would roll back, read-only.
 func MigrateDownTarget(ctx context.Context, dsn string) (*MigrationStatus, error) {
 	return runDownTarget(ctx, dsn, os.DirFS(devMigrationsDir))
 }
 
-// MigrateStatus reports the state of every migration file.
+// MigrateStatus reports every migration file's state.
 func MigrateStatus(ctx context.Context, dsn string) ([]MigrationStatus, error) {
 	return runStatus(ctx, dsn, os.DirFS(devMigrationsDir))
 }
 
-// MigrateUpTo applies pending migrations up to the given version.
+// MigrateUpTo applies pending migrations up to version.
 func MigrateUpTo(ctx context.Context, dsn string, version int64) ([]MigrationOutcome, error) {
 	return runUpTo(ctx, dsn, os.DirFS(devMigrationsDir), version)
 }
 
-// MigrateDownTo rolls back every migration above the given version.
+// MigrateDownTo rolls back everything above version.
 func MigrateDownTo(ctx context.Context, dsn string, version int64) ([]MigrationOutcome, error) {
 	return runDownTo(ctx, dsn, os.DirFS(devMigrationsDir), version)
 }
 
-// MigrateVersion reports the current applied and target versions.
+// MigrateVersion reports applied and target versions.
 func MigrateVersion(ctx context.Context, dsn string) (current, target int64, err error) {
 	return runVersion(ctx, dsn, os.DirFS(devMigrationsDir))
 }
 
-// MigrateReset rolls every migration back, returning the database
-// to its initial state.
+// MigrateReset rolls every migration back. Debug-only.
 func MigrateReset(ctx context.Context, dsn string) ([]MigrationOutcome, error) {
 	return runReset(ctx, dsn, os.DirFS(devMigrationsDir))
 }
 
-// runReset rolls every migration back (debug-only operation).
+// runReset rolls back to version 0.
 func runReset(ctx context.Context, dsn string, src fs.FS) ([]MigrationOutcome, error) {
 	db, p, err := openProvider(dsn, src)
 	if err != nil {
@@ -87,9 +81,7 @@ func runReset(ctx context.Context, dsn string, src fs.FS) ([]MigrationOutcome, e
 	return outcomes, nil
 }
 
-// withMigrationsDB opens the database connection (lazy — no server
-// contact), runs fn, and closes it. Used by file scaffolding, which
-// never needs a live server.
+// withMigrationsDB opens lazily (no server contact) for scaffolding.
 func withMigrationsDB(dsn string, fn func(*sql.DB) error) error {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -99,15 +91,13 @@ func withMigrationsDB(dsn string, fn func(*sql.DB) error) error {
 	return fn(db)
 }
 
-// CreateMigration scaffolds the next sequential SQL migration file
-// in the on-disk migrations directory and returns its path.
+// CreateMigration scaffolds the next sequential file, returns its path.
 func CreateMigration(dsn, name string) (string, error) {
 	return createMigration(dsn, name, devMigrationsDir)
 }
 
-// createMigration scaffolds into an explicit directory. The created
-// path is derived by diffing the directory across goose.Create, so
-// the naming logic stays goose's own.
+// createMigration scaffolds into dir; the path comes from diffing
+// across goose.Create, so naming stays goose's own.
 func createMigration(dsn, name, dir string) (string, error) {
 	if name == "" {
 		return "", fmt.Errorf("migration name is required")
@@ -131,19 +121,17 @@ func createMigration(dsn, name, dir string) (string, error) {
 	return "", fmt.Errorf("scaffolded migration not found in %s", dir)
 }
 
-// Fix reorders migration files into a consistent, conflict-free
-// sequential order (goose fix).
+// Fix reorders files sequentially (goose fix).
 func Fix() error {
 	return goose.Fix(devMigrationsDir)
 }
 
-// Validate checks every migration file: sequential naming, no
-// duplicate versions, and the goose Up/Down annotations present.
+// Validate checks naming, duplicates, Up/Down annotations.
 func Validate() error {
 	return validateDir(devMigrationsDir)
 }
 
-// validateDir validates an explicit migrations directory.
+// validateDir validates an explicit directory.
 func validateDir(dir string) error {
 	migrations := dirEntries(dir)
 	if len(migrations) == 0 {
@@ -182,8 +170,8 @@ func validateDir(dir string) error {
 	return nil
 }
 
-// migrationVersion parses the sequential "%05d_" prefix. Short or
-// malformed names are a validation error, never a slice panic.
+// migrationVersion parses the "%05d_" prefix. Short/malformed names
+// are validation errors, never a slice panic.
 func migrationVersion(name string) (int64, error) {
 	if len(name) < 6 || !strings.HasPrefix(name[5:], "_") {
 		return 0, fmt.Errorf("expected sequential naming like 00001_name.sql")
@@ -195,7 +183,7 @@ func migrationVersion(name string) (int64, error) {
 	return version, nil
 }
 
-// dirEntries lists the .sql files in dir by name.
+// dirEntries lists .sql files in dir by name.
 func dirEntries(dir string) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

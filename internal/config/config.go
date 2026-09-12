@@ -1,15 +1,10 @@
-// Package config loads the runtime configuration by explicit
-// layering, where later layers win:
+// Package config loads runtime config by layering, later wins:
 //
-//	defaults → system environment → --env-file (dotenv) → overrides
+//	defaults → system env → --env-file → overrides
 //
-// The whole pipeline is visible in Load — there is no implicit
-// loading. The --env-file layer wins over the system environment,
-// and empty values are treated as unset so they never shadow the
-// defaults. Unknown keys are a hard error in the env file (it is
-// curated and ships with the binary) but ignored in the system
-// environment (a shared namespace that also carries foreign
-// variables).
+// --env-file wins over system env; empty values are unset and never
+// shadow defaults. Unknown keys fail in the env file (curated) but
+// are ignored in system env (shared namespace).
 package config
 
 import (
@@ -26,15 +21,12 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// validKeys is the complete set of dotted config keys, derived from
-// the Config struct's koanf tags. It is the single source of truth
-// for unknown-key detection and documentation sync; adding a field
-// to Config automatically adds its key here.
+// validKeys is every dotted key from Config's koanf tags; adding a
+// field adds its key automatically.
 var validKeys = buildKeySet(reflect.TypeFor[Config](), "")
 
-// buildKeySet walks a struct type and collects the dotted key of
-// every koanf-tagged leaf field. Nested structs recurse with their
-// tag as the path prefix.
+// buildKeySet collects dotted keys of koanf-tagged leaves,
+// recursing into nested structs with the tag as prefix.
 func buildKeySet(t reflect.Type, prefix string) map[string]bool {
 	keys := make(map[string]bool)
 	for i := range t.NumField() {
@@ -62,26 +54,23 @@ func buildKeySet(t reflect.Type, prefix string) map[string]bool {
 
 // LoadOptions parametrizes Load.
 type LoadOptions struct {
-	// EnvFile is an optional dotenv file layered between the
-	// defaults and the system environment.
+	// EnvFile is an optional dotenv file between defaults and env.
 	EnvFile string
 
-	// Overrides are explicit values applied on top of everything
-	// else (resolved CLI flags). Values are keyed by config key.
+	// Overrides win over everything (resolved CLI flags).
 	Overrides map[string]any
 }
 
-// Load assembles the layered configuration and decodes it into the
-// typed Config struct.
+// Load assembles layered config and decodes it into Config.
 func Load(opts LoadOptions) (*Config, error) {
 	k := koanf.New(".")
 
-	// 1. Defaults: the Config type itself (see defaultConfig).
+	// Defaults from the Config type itself.
 	if err := k.Load(structs.Provider(defaultConfig, "koanf"), nil); err != nil {
 		return nil, fmt.Errorf("load defaults: %w", err)
 	}
 
-	// 2. System environment — below the env file.
+	// System env, below the env file.
 	if layer, err := envLayer(); err != nil {
 		return nil, err
 	} else if len(layer) > 0 {
@@ -90,7 +79,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		}
 	}
 
-	// 3. Optional --env-file — wins over the system environment.
+	// Optional --env-file, wins over system env.
 	if opts.EnvFile != "" {
 		layer, err := envFileLayer(opts.EnvFile)
 		if err != nil {
@@ -103,7 +92,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		}
 	}
 
-	// 4. Explicit overrides (resolved CLI flags).
+	// Explicit overrides (CLI flags).
 	for key, value := range opts.Overrides {
 		if err := k.Set(key, value); err != nil {
 			return nil, fmt.Errorf("override %s: %w", key, err)
@@ -121,9 +110,8 @@ func Load(opts LoadOptions) (*Config, error) {
 	return &cfg, nil
 }
 
-// envLayer maps bound system environment variables through
-// envTransform. Unknown keys are ignored: the system environment is
-// a shared namespace that also carries foreign variables.
+// envLayer maps bound system env vars; unknown keys ignored
+// (shared namespace carries foreign vars).
 func envLayer() (map[string]any, error) {
 	layer := make(map[string]any)
 	for _, entry := range os.Environ() {
@@ -137,8 +125,8 @@ func envLayer() (map[string]any, error) {
 	return layer, nil
 }
 
-// envSections maps environment variable prefixes to config key
-// sections. HOST and PORT are unprefixed.
+// envSections maps env prefixes to key sections.
+// HOST and PORT are unprefixed.
 var envSections = []struct{ prefix, section string }{
 	{"APP_", "app"},
 	{"AUTH_", "auth"},
@@ -148,12 +136,9 @@ var envSections = []struct{ prefix, section string }{
 	{"STORAGE_", "storage"},
 }
 
-// envTransform maps a system environment variable to its config key:
-// the first underscore-separated segment selects the section and the
-// rest keeps its snake_case form (APP_LOG_LEVEL -> app.log_level,
-// STORAGE_S3_REGION -> storage.s3_region). Unbound variables are
-// skipped by returning an empty key; empty values are treated as
-// unset so they never shadow the defaults.
+// envTransform maps an env var to its key: first segment is the
+// section, rest keeps snake_case (APP_LOG_LEVEL -> app.log_level).
+// Unbound vars return ""; empty values are unset.
 func envTransform(key, value string) (string, any) {
 	switch key {
 	case "HOST":
@@ -176,10 +161,8 @@ func envTransform(key, value string) (string, any) {
 	return "", nil
 }
 
-// envFileLayer reads a dotenv file and maps it through the same
-// environment rules as envTransform. Unknown keys are a hard error:
-// the file is curated and ships with the binary, so a mismatch is
-// a defect, not a foreign variable.
+// envFileLayer reads a dotenv file through envTransform. Unknown
+// keys fail: the file is curated, mismatch is a defect.
 func envFileLayer(path string) (map[string]any, error) {
 	raw, err := file.Provider(path).ReadBytes()
 	if err != nil {
@@ -205,9 +188,8 @@ func envFileLayer(path string) (map[string]any, error) {
 	return layer, nil
 }
 
-// unmarshalConf decodes into Config: weakly typed (env strings to
-// ints/bools), comma-separated slices, and a hook turning the
-// literal "null" into a nil *string.
+// unmarshalConf decodes into Config: weak typing (env strings to
+// ints/bools), comma slices, "null" to nil *string.
 func unmarshalConf() koanf.UnmarshalConf {
 	return koanf.UnmarshalConf{
 		Tag: "koanf",

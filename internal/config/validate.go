@@ -7,11 +7,9 @@ import (
 	"strings"
 )
 
-// Validate checks the semantic rules the loader cannot express as
-// defaults: enums, ranges, URL shapes, and the secrets that are
-// mandatory in production. It runs at the end of Load, so every
-// consumer — serve, migrate, health — fails fast on a broken
-// configuration instead of deep inside a request.
+// Validate checks what defaults can't express: enums, ranges, URL
+// shapes, production secrets. Runs at end of Load so every command
+// fails fast instead of deep in a request.
 func (c *Config) Validate() error {
 	errs := []error{
 		validateRange("port", c.Port, 1, 65535),

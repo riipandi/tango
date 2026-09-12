@@ -1,9 +1,6 @@
-// Migrations runner shared by both build variants. It builds a
-// goose Provider over the migration source selected by the variant
-// files (migrator_debug.go, migrator_release.go) and exposes
-// results as package-owned types — goose types never leak past
-// this boundary. The provider API is read- and write-oriented, so
-// the CLI can implement --dry-run as pure introspection.
+// Goose runner shared by both variants. Builds a Provider over the
+// source picked by the variant files, exposes package-owned types
+// (goose never leaks). --dry-run reads via the same Provider API.
 package database
 
 import (
@@ -21,20 +18,17 @@ import (
 //go:embed migrations/*.sql
 var DatabaseMigrations embed.FS
 
-// appMigrationTableName is the goose metadata table. It matches the
-// exclusion in the get_table_sizes() helper defined by the initial
-// migration.
+// Goose metadata table; excluded from get_table_sizes().
 const appMigrationTableName = "app_migration"
 
-// MigrationOutcome describes one migration the runner just applied
-// or rolled back.
+// MigrationOutcome is one applied or rolled-back migration.
 type MigrationOutcome struct {
 	Version  int64
 	Path     string
 	Duration time.Duration
 }
 
-// MigrationStatus describes the state of one migration file.
+// MigrationStatus is one migration file's state.
 type MigrationStatus struct {
 	Version   int64
 	Path      string
@@ -42,8 +36,7 @@ type MigrationStatus struct {
 	AppliedAt time.Time
 }
 
-// openProvider opens the database and builds a goose Provider over
-// src with the project's metadata table.
+// openProvider opens the db and builds a Provider over src.
 func openProvider(dsn string, src fs.FS) (*sql.DB, *goose.Provider, error) {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -91,7 +84,7 @@ func runDown(ctx context.Context, dsn string, src fs.FS) (*MigrationOutcome, err
 	return outcomePtrFrom(result), nil
 }
 
-// runStatus reports the state of every migration file.
+// runStatus reports every migration file's state.
 func runStatus(ctx context.Context, dsn string, src fs.FS) ([]MigrationStatus, error) {
 	db, p, err := openProvider(dsn, src)
 	if err != nil {
@@ -115,9 +108,8 @@ func runStatus(ctx context.Context, dsn string, src fs.FS) ([]MigrationStatus, e
 	return out, nil
 }
 
-// runDownTarget reports the migration runDown would roll back
-// next, without touching the database: the highest applied
-// version. A nil result means nothing is applied.
+// runDownTarget reports what runDown would roll back next,
+// read-only. Nil means nothing applied.
 func runDownTarget(ctx context.Context, dsn string, src fs.FS) (*MigrationStatus, error) {
 	statuses, err := runStatus(ctx, dsn, src)
 	if err != nil {
@@ -134,8 +126,7 @@ func runDownTarget(ctx context.Context, dsn string, src fs.FS) (*MigrationStatus
 	return target, nil
 }
 
-// runUpTo applies pending migrations up to the given version
-// (inclusive).
+// runUpTo applies pending migrations up to version (inclusive).
 func runUpTo(ctx context.Context, dsn string, src fs.FS, version int64) ([]MigrationOutcome, error) {
 	db, p, err := openProvider(dsn, src)
 	if err != nil {
@@ -154,7 +145,7 @@ func runUpTo(ctx context.Context, dsn string, src fs.FS, version int64) ([]Migra
 	return outcomes, nil
 }
 
-// runDownTo rolls back every migration above the given version.
+// runDownTo rolls back everything above version.
 func runDownTo(ctx context.Context, dsn string, src fs.FS, version int64) ([]MigrationOutcome, error) {
 	db, p, err := openProvider(dsn, src)
 	if err != nil {
@@ -173,8 +164,7 @@ func runDownTo(ctx context.Context, dsn string, src fs.FS, version int64) ([]Mig
 	return outcomes, nil
 }
 
-// runVersion reports the current applied and the target (file
-// system) migration versions.
+// runVersion reports applied and file-system target versions.
 func runVersion(ctx context.Context, dsn string, src fs.FS) (current, target int64, err error) {
 	db, p, openErr := openProvider(dsn, src)
 	if openErr != nil {
@@ -189,7 +179,7 @@ func runVersion(ctx context.Context, dsn string, src fs.FS) (current, target int
 	return current, target, nil
 }
 
-// outcomeFrom converts a goose result into the package type.
+// outcomeFrom converts a goose result to the package type.
 func outcomeFrom(result *goose.MigrationResult) MigrationOutcome {
 	outcome := MigrationOutcome{Duration: result.Duration}
 	if result.Source != nil {

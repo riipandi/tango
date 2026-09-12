@@ -11,11 +11,9 @@ import (
 	"go.loglayer.dev/v3/transport"
 )
 
-// asyncTransport decouples emission from I/O: entries land in a
-// bounded queue drained by a single worker goroutine that forwards
-// to the inner transport. When the queue is full, entries are
-// dropped and counted — emission never blocks, even if the sink
-// wedges.
+// asyncTransport decouples emission from I/O: a bounded queue, one
+// worker forwarding to inner. Full queue drops and counts; emission
+// never blocks, even on a wedged sink.
 type asyncTransport struct {
 	transport.BaseTransport
 	inner loglayer.Transport
@@ -35,8 +33,8 @@ type asyncTransport struct {
 	flushTimeout time.Duration
 }
 
-// newAsync starts a worker draining the inner transport. Buffer
-// below one uses DefaultBufferSize.
+// newAsync starts the drain worker. Non-positive buffer/timeout
+// take the defaults.
 func newAsync(inner loglayer.Transport, buffer int, flushTimeout time.Duration) *asyncTransport {
 	if buffer <= 0 {
 		buffer = DefaultBufferSize
@@ -61,7 +59,7 @@ func (t *asyncTransport) work() {
 	for {
 		select {
 		case <-t.stop:
-			// Draining: forward everything already queued, then exit.
+			// Drain queued entries, then exit.
 			for {
 				select {
 				case p := <-t.entries:
@@ -78,7 +76,7 @@ func (t *asyncTransport) work() {
 	}
 }
 
-// SendToLogger enqueues the entry without blocking.
+// SendToLogger enqueues without blocking.
 func (t *asyncTransport) SendToLogger(p loglayer.TransportParams) {
 	if t.closed.Load() {
 		t.dropped.Add(1)
@@ -92,14 +90,13 @@ func (t *asyncTransport) SendToLogger(p loglayer.TransportParams) {
 	}
 }
 
-// GetLoggerInstance exposes the inner transport's underlying logger.
+// GetLoggerInstance exposes the inner logger.
 func (t *asyncTransport) GetLoggerInstance() any {
 	return t.inner.GetLoggerInstance()
 }
 
-// Flush waits, bounded by the timeout, until every accepted entry
-// has been handed to the inner transport. It does not close
-// anything.
+// Flush waits (bounded) until accepted entries reach inner.
+// Closes nothing.
 func (t *asyncTransport) Flush(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -113,8 +110,8 @@ func (t *asyncTransport) Flush(timeout time.Duration) error {
 	}
 }
 
-// Close stops the worker after draining the queue, then closes the
-// inner transport when it is an io.Closer. Idempotent.
+// Close drains, stops the worker, then closes inner if closable.
+// Idempotent.
 func (t *asyncTransport) Close() error {
 	t.closed.Store(true)
 	t.closeOnce.Do(func() { close(t.stop) })
@@ -134,8 +131,7 @@ func (t *asyncTransport) Close() error {
 	return err
 }
 
-// Dropped reports how many entries were dropped due to a full queue
-// or a post-close emission.
+// Dropped counts entries lost to full queue or post-close send.
 func (t *asyncTransport) Dropped() uint64 {
 	return t.dropped.Load()
 }

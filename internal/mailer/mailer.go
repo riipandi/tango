@@ -28,9 +28,8 @@ type smtpMailer struct {
 	sendTimeout time.Duration
 }
 
-// New builds the mailer from the app's mailer config section.
-// Connections open per send and close after delivery — the relay
-// is shared infrastructure, not a per-app resource.
+// New builds a mailer from the mailer config section. Connections
+// open per send; the relay is shared infra, not per-app state.
 func New(cfg config.MailerConfig, opts Options) Mailer {
 	if opts.Logger == nil {
 		opts.Logger = loglayer.NewMock()
@@ -46,7 +45,7 @@ func New(cfg config.MailerConfig, opts Options) Mailer {
 	}
 }
 
-// Send renders the template and delivers the message over SMTP.
+// Send renders the template and delivers over SMTP.
 func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 	if msg.To == "" {
 		return errors.New("mailer: recipient is empty")
@@ -84,8 +83,8 @@ func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 	return nil
 }
 
-// compose builds the RFC 5322 message: headers plus a
-// multipart/alternative body (plain text first, HTML second).
+// compose builds the RFC 5322 message: headers plus
+// multipart/alternative (text first, HTML second).
 func (m *smtpMailer) compose(from, to *mail.Address, subject, textBody, htmlBody string) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	writer := multipart.NewWriter(buf)
@@ -121,7 +120,7 @@ func (m *smtpMailer) compose(from, to *mail.Address, subject, textBody, htmlBody
 	return buf.Bytes(), nil
 }
 
-// deliver runs the SMTP transaction against the configured relay.
+// deliver runs the SMTP transaction on the configured relay.
 func (m *smtpMailer) deliver(ctx context.Context, from *mail.Address, to string, payload []byte) error {
 	addr := fmt.Sprintf("%s:%d", m.cfg.SMTPHost, m.cfg.SMTPPort)
 
@@ -131,8 +130,6 @@ func (m *smtpMailer) deliver(ctx context.Context, from *mail.Address, to string,
 	}
 	defer func() { _ = client.Close() }()
 
-	// Bounds for command responses and the final-dot handoff; ctx
-	// deadlines apply at the next reload of this API.
 	client.CommandTimeout = m.sendTimeout
 	client.SubmissionTimeout = m.sendTimeout
 
@@ -167,9 +164,8 @@ func (m *smtpMailer) deliver(ctx context.Context, from *mail.Address, to string,
 	return nil
 }
 
-// dial opens the connection: implicit TLS when the config marks the
-// relay secure, otherwise plaintext with opportunistic STARTTLS
-// (upgraded before authentication when the relay supports it).
+// dial connects: implicit TLS when configured, else plaintext with
+// opportunistic STARTTLS before auth when supported.
 func (m *smtpMailer) dial(addr string) (*gosmtp.Client, error) {
 	tlsConfig := &tls.Config{ServerName: m.cfg.SMTPHost}
 

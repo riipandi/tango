@@ -9,18 +9,16 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// HealthCheckHandler reports liveness: the process is up and
-// serving. Readiness probes for real dependencies (database, cache)
-// belong in dedicated checks as those dependencies land.
+// HealthCheckHandler reports liveness. Readiness for real deps
+// (db, cache) gets dedicated checks when they land.
 func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	responder.WriteJSON(w, http.StatusOK, map[string]string{
 		"status": "healthy",
 	})
 }
 
-// APIRootHandler is the shared /api group's index: application build
-// metadata. Build-meta values are ldflags-injected package globals,
-// so no runtime config is needed.
+// APIRootHandler is the /api index: build metadata from
+// ldflags globals, no runtime config needed.
 func APIRootHandler(w http.ResponseWriter, r *http.Request) {
 	responder.WriteJSON(w, http.StatusOK, map[string]string{
 		"name":     config.AppName,

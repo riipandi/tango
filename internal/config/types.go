@@ -1,12 +1,8 @@
 package config
 
-// Config is the runtime configuration. It is the schema AND the
-// source of its own defaults (see defaultConfig): koanf tags name
-// the keys, the defaultConfig literal fills the bottom layer.
-//
-// Environment variables map mechanically: the first underscore-
-// separated segment selects the section (AUTH_PRIVATE_KEY ->
-// auth.private_key) and the rest keeps its snake_case form.
+// Config is schema and defaults source: koanf tags name keys,
+// defaultConfig fills the bottom layer. Env maps mechanically:
+// first segment is the section (AUTH_PRIVATE_KEY -> auth.private_key).
 type Config struct {
 	Host     string         `koanf:"host"`
 	Port     int            `koanf:"port"`

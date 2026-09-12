@@ -1,8 +1,7 @@
 package config
 
-// defaultConfig is the bottom layer of the Load pipeline: a plain
-// Config value, so defaults can never drift from the schema — one
-// struct, one place.
+// defaultConfig is the bottom Load layer: one struct, so defaults
+// can't drift from the schema.
 var defaultConfig = Config{
 	Host: "localhost",
 	Port: 3080,

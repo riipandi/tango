@@ -13,13 +13,12 @@ import (
 
 // templatePair holds one template's parsed renderers.
 type templatePair struct {
-	html *htmltemplate.Template // context-aware auto-escaping
+	html *htmltemplate.Template // auto-escaping
 	text *texttemplate.Template
 }
 
-// templateStore renders templates from the embedded FS with an
-// in-memory cache: each template parses exactly once per process
-// (the FS is immutable, so entries never invalidate).
+// templateStore renders from the embedded FS, caching each parse.
+// FS is immutable, entries never invalidate.
 type templateStore struct {
 	fs    fs.FS
 	logo  string
@@ -31,7 +30,7 @@ func newTemplateStore(source fs.FS, logo string) *templateStore {
 	return &templateStore{fs: source, logo: logo, cache: make(map[string]*templatePair)}
 }
 
-// render produces the HTML and plain-text bodies for a template.
+// render produces HTML and text bodies for a template.
 func (s *templateStore) render(name, to string, data map[string]any) (string, string, error) {
 	pair, err := s.pair(name)
 	if err != nil {
@@ -55,8 +54,7 @@ func (s *templateStore) render(name, to string, data map[string]any) (string, st
 	return htmlOut.String(), textOut.String(), nil
 }
 
-// pair returns the cached parse result, parsing on first use with
-// a double-checked read-mostly lock.
+// pair returns the cached parse, parsing on first use.
 func (s *templateStore) pair(name string) (*templatePair, error) {
 	s.mu.RLock()
 	pair, ok := s.cache[name]

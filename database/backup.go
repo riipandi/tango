@@ -1,14 +1,12 @@
-// Backup and restore tooling ported from scripts/migrator.sh: a
-// thin, typed wrapper around the PostgreSQL client binaries.
+// Thin wrapper over pg_dump/pg_restore/psql.
 //
-//	dump     — pg_dump, binary custom format (fast, smaller)
-//	export   — pg_dump, plain SQL (portable, editable)
-//	restore  — pg_restore from a custom-format dump
-//	import   — psql from a plain SQL file
+//	dump: pg_dump custom format (fast, small)
+//	export: pg_dump plain SQL (portable)
+//	restore: pg_restore from a dump
+//	import: psql from a SQL file
 //
-// The DSN is parsed with pgx itself — no shell string splitting.
-// restore and import replace database content and are therefore
-// gated by the caller (confirm/--force/--dry-run in the launcher).
+// DSN parsed with pgx only. restore/import are destructive;
+// the caller gates them (confirm/--force/--dry-run).
 package database
 
 import (
@@ -25,20 +23,17 @@ import (
 )
 
 const (
-	// defaultBackupSubdir is the dump/export subdirectory below
-	// the configured data root (<data-dir>/backup). Tests pass an
-	// explicit dir; the launcher passes cfg.BackupDir().
+	// Dump/export subdir under <data-dir>/backup.
 	defaultBackupSubdir = "backup"
 
-	// timestampLayout names backup files without spaces or colons.
+	// File timestamps without spaces or colons.
 	timestampLayout = "20060102_150405"
 
-	// systemSchemaExcludes keeps PostgreSQL internals out of the
-	// dumps.
+	// Keeps PostgreSQL internals out of dumps.
 	systemSchemaExcludes = "-N information_schema -N pg_catalog -N pg_toast"
 )
 
-// pgTool resolves a PostgreSQL client binary from PATH.
+// pgTool resolves a client binary from PATH.
 func pgTool(name string) (string, error) {
 	path, err := exec.LookPath(name)
 	if err != nil {
@@ -47,7 +42,7 @@ func pgTool(name string) (string, error) {
 	return path, nil
 }
 
-// connParts holds the parsed DSN fields the client binaries need.
+// connParts holds parsed DSN fields for the client binaries.
 type connParts struct {
 	Host     string
 	Port     string
@@ -56,8 +51,7 @@ type connParts struct {
 	Database string
 }
 
-// parseDSN reuses the pgx parser so there is exactly one place that
-// understands connection strings.
+// parseDSN uses the pgx parser: one place understands DSNs.
 func parseDSN(dsn string) (connParts, error) {
 	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
@@ -76,13 +70,13 @@ func parseDSN(dsn string) (connParts, error) {
 	return parts, nil
 }
 
-// baseArgs builds the shared -U/-h/-p flags; the password travels
-// through the command environment (never argv).
+// baseArgs builds shared -U/-h/-p flags; password goes via env,
+// never argv.
 func (c connParts) baseArgs() []string {
 	return []string{"-U", c.User, "-h", c.Host, "-p", c.Port, "-d", c.Database}
 }
 
-// env returns the command environment with the password set.
+// env adds the password to the command environment.
 func (c connParts) env() []string {
 	if c.Password == "" {
 		return os.Environ()
@@ -90,8 +84,7 @@ func (c connParts) env() []string {
 	return append(os.Environ(), "PGPASSWORD="+c.Password)
 }
 
-// run executes a client binary against the database, mirroring the
-// caller's cancellation and streaming output to the process's own.
+// run executes a client binary, streaming to process stdio.
 func runTool(ctx context.Context, parts connParts, name string, args ...string) error {
 	bin, err := pgTool(name)
 	if err != nil {
@@ -108,11 +101,8 @@ func runTool(ctx context.Context, parts connParts, name string, args ...string) 
 	return nil
 }
 
-// backupDirFor resolves the backup directory: an explicit dir
-// wins (the launcher passes cfg.BackupDir(), derived from the
-// data root), otherwise a temp-dir-safe default for tests.
-// Relative paths resolve against the invoker's working directory;
-// the directory is created on use.
+// backupDirFor resolves the backup dir: explicit wins (launcher
+// passes cfg.BackupDir()), else a temp default for tests.
 func backupDirFor(override string) string {
 	if strings.TrimSpace(override) != "" {
 		return override
@@ -120,9 +110,7 @@ func backupDirFor(override string) string {
 	return filepath.Join(os.TempDir(), "tango-"+defaultBackupSubdir)
 }
 
-// backupPathIn builds the backup file path inside dir, creating
-// the directory. The launcher threads the configured backup dir
-// (cfg.BackupDir()) through; tests pass their own temp dir.
+// backupPathIn builds the file path inside dir, creating it.
 func backupPathIn(dir, database, suffix, ext string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create backup dir: %w", err)
@@ -131,9 +119,8 @@ func backupPathIn(dir, database, suffix, ext string) (string, error) {
 	return filepath.Join(dir, fmt.Sprintf("%s_%s_%s.%s", database, suffix, stamp, ext)), nil
 }
 
-// Dump creates a custom-format (binary) backup: all = schema and
-// data, data = data only. The launcher passes cfg.BackupDir(),
-// derived from the app data root. Returns the created file path.
+// Dump writes a custom-format backup. all = schema+data,
+// data = data only. Returns the file path.
 func Dump(ctx context.Context, dsn, mode, dir string) (string, error) {
 	if mode != "all" && mode != "data" {
 		return "", fmt.Errorf("unknown dump mode %q (want all or data)", mode)
@@ -166,10 +153,8 @@ func Dump(ctx context.Context, dsn, mode, dir string) (string, error) {
 	return target, runTool(ctx, parts, "pg_dump", args...)
 }
 
-// Export creates a plain-SQL backup: all = schema and data with
-// clean statements, data = inserts only. The launcher passes
-// cfg.BackupDir(), derived from the app data root. Returns the
-// created path.
+// Export writes a plain-SQL backup. all = schema+data with clean
+// statements, data = inserts only. Returns the file path.
 func Export(ctx context.Context, dsn, mode, dir string) (string, error) {
 	if mode != "all" && mode != "data" {
 		return "", fmt.Errorf("unknown export mode %q (want all or data)", mode)
@@ -203,9 +188,8 @@ func Export(ctx context.Context, dsn, mode, dir string) (string, error) {
 	return target, runTool(ctx, parts, "pg_dump", args...)
 }
 
-// Restore loads a custom-format dump back into the database:
-// all = schema and data (--clean first), data = data only,
-// schema = schema only. Destructive — the caller gates it.
+// Restore loads a custom-format dump. all = schema+data (--clean),
+// data = data only, schema = schema only. Destructive.
 func Restore(ctx context.Context, dsn, mode, dumpFile string) error {
 	bin, parts, args, err := restoreArgs(dsn, mode, dumpFile)
 	if err != nil {
@@ -214,8 +198,7 @@ func Restore(ctx context.Context, dsn, mode, dumpFile string) error {
 	return runToolWith(ctx, bin, parts, args...)
 }
 
-// RestoreCommand renders the exact pg_restore invocation Restore
-// would run, for --dry-run.
+// RestoreCommand renders the pg_restore call for --dry-run.
 func RestoreCommand(dsn, mode, dumpFile string) (string, error) {
 	bin, parts, args, err := restoreArgs(dsn, mode, dumpFile)
 	if err != nil {
@@ -224,8 +207,7 @@ func RestoreCommand(dsn, mode, dumpFile string) (string, error) {
 	return commandString(bin, parts, args), nil
 }
 
-// restoreArgs validates the request and builds the pg_restore
-// arguments.
+// restoreArgs validates and builds pg_restore arguments.
 func restoreArgs(dsn, mode, dumpFile string) (string, connParts, []string, error) {
 	if mode != "all" && mode != "data" && mode != "schema" {
 		return "", connParts{}, nil, fmt.Errorf("unknown restore mode %q (want all, data, or schema)", mode)
@@ -259,10 +241,8 @@ func restoreArgs(dsn, mode, dumpFile string) (string, connParts, []string, error
 	return bin, parts, args, nil
 }
 
-// Import runs a plain SQL file through psql with ON_ERROR_STOP=on,
-// so the first failing statement aborts the import and psql exits
-// non-zero — a partial import never reports success. Destructive —
-// the caller gates it.
+// Import runs a SQL file with ON_ERROR_STOP=on: the first failure
+// aborts, so partial imports never report success. Destructive.
 func Import(ctx context.Context, dsn, sqlFile string) error {
 	bin, parts, args, err := importArgs(dsn, sqlFile)
 	if err != nil {
@@ -271,8 +251,7 @@ func Import(ctx context.Context, dsn, sqlFile string) error {
 	return runToolWith(ctx, bin, parts, args...)
 }
 
-// ImportCommand renders the exact psql invocation Import would
-// run, for --dry-run.
+// ImportCommand renders the psql call for --dry-run.
 func ImportCommand(dsn, sqlFile string) (string, error) {
 	bin, parts, args, err := importArgs(dsn, sqlFile)
 	if err != nil {
@@ -281,7 +260,7 @@ func ImportCommand(dsn, sqlFile string) (string, error) {
 	return commandString(bin, parts, args), nil
 }
 
-// importArgs validates the request and builds the psql arguments.
+// importArgs validates and builds psql arguments.
 func importArgs(dsn, sqlFile string) (string, connParts, []string, error) {
 	if _, err := os.Stat(sqlFile); err != nil {
 		return "", connParts{}, nil, fmt.Errorf("sql file: %w", err)
@@ -318,8 +297,7 @@ func runToolWith(ctx context.Context, bin string, parts connParts, args ...strin
 	return nil
 }
 
-// commandString renders a command line for --dry-run output,
-// hiding the password position (it travels via the environment).
+// commandString renders a --dry-run line; password stays in env.
 func commandString(bin string, parts connParts, args []string) string {
 	return fmt.Sprintf("%s %s", filepath.Base(bin), strings.Join(args, " "))
 }

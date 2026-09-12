@@ -1,8 +1,4 @@
-// Package scheduler is a periodic background job scheduler for
-// housekeeping (expired token cleanup, one-time access pruning, sync
-// schedules) integrated with kernel.Startable.
-//
-// Planned files: scheduler.go (Scheduler contract + registration),
-// runner.go (ticker-based runner). Modules register named jobs instead
-// of owning goroutines.
+// Package scheduler runs periodic housekeeping jobs (token
+// cleanup, pruning). Modules register named jobs; no own
+// goroutines. Integrates with kernel.Startable.
 package scheduler
