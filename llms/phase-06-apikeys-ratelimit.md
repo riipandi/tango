@@ -32,6 +32,7 @@ pairs for resource APIs; abusive clients get throttled.
 - [ ] Scope enforcement in token/userinfo paths (Phase 4 hook: `AllowedScopesForAudience`).
 - [ ] `ratelimit.go` — atomic `INSERT ... ON CONFLICT` window counter; categories (auth, default,
       strict); 429 with `Retry-After` via `pkg/responder`.
+- [ ] `apikey`/`apiaccess` request bodies validated via `pkg/validate`.
 - [ ] Wire limiter into `/api` group + auth endpoints (tighter class).
 - [ ] Tests: key verification, scope denial, limiter windows on the shared container (limit-based
       assertions, per-test cleanup).
@@ -45,3 +46,4 @@ pairs for resource APIs; abusive clients get throttled.
 ## Progress Log
 
 - 2026-09-12 Phase created (planned).
+- 2026-09-12 Added `pkg/validate` request-validation task per plan update.

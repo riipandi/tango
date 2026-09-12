@@ -32,6 +32,7 @@ webhooks with signed payloads; recurring jobs have a home.
 - [ ] `webhook` store/service/handler — CRUD, secret per endpoint, event type filter.
 - [ ] Signed delivery — canonical JSON body, `X-Signature: t=...,v1=...` (HMAC), 30s timeout,
       backoff retry via queue, log per attempt.
+- [ ] Webhook endpoint DTOs validated via `pkg/validate`.
 - [ ] Tests: signing vectors, outbox-to-delivery flow on testcontainers, retry on failure.
 
 ## Validation
@@ -42,3 +43,4 @@ webhooks with signed payloads; recurring jobs have a home.
 ## Progress Log
 
 - 2026-09-12 Phase created (planned).
+- 2026-09-12 Added `pkg/validate` request-validation task per plan update.

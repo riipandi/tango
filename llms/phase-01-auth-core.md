@@ -22,11 +22,15 @@ can sign in with username/password and manage their account.
 - `modules/identity/password` — argon2id hashing via `pkg/crypto`, login throttling; table
   `user_passwords`.
 - `modules/identity/account` — self-service: profile, change password, active sessions list/revoke.
+- `pkg/validate` — ozzo-validation adapter: jsonv2 decode+`Validate()` helper for handlers,
+  `validation.Errors` → field-error mapping.
 - Wire features in `internal/registry`; protect admin routes as a smoke test.
 
 ## Tasks
 
 - [ ] Typed IDs: `session.SessionID`, `password.PasswordID` in module `schema.go`.
+- [ ] `pkg/validate` — ozzo-validation adapter: decode+`Validate()` helper, 422 `validation_failed`
+      mapping; first consumers are the account/password handlers below.
 - [ ] `session/store.go` — sqlbuilder CRUD over `sessions` (find by selector, delete by user).
 - [ ] `session/service.go` — issue/validate/refresh/revoke; expiry from app config; cookie helpers
       (HttpOnly, Secure, SameSite=Lax).
@@ -47,3 +51,4 @@ can sign in with username/password and manage their account.
 ## Progress Log
 
 - 2026-09-12 Phase created (planned).
+- 2026-09-12 Added `pkg/validate` (ozzo-validation) deliverable + task per plan update.

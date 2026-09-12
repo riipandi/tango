@@ -27,6 +27,7 @@ through the API.
 
 - [ ] `usergroup` store/service/handler — CRUD, add/remove members, list by user.
 - [ ] `customclaim` store/service/handler — attach claims to users and groups, validation.
+- [ ] Admin request bodies validated via `pkg/validate` (ozzo rules per DTO `Validate()`).
 - [ ] `auditlog` list endpoint — filters + `pkg/responder` pagination contract.
 - [ ] `user` admin endpoints — POST/PATCH/DELETE `/api/users`, group assignment, paginated list
       with search + sort.
@@ -42,3 +43,4 @@ through the API.
 ## Progress Log
 
 - 2026-09-12 Phase created (planned).
+- 2026-09-12 Added `pkg/validate` request-validation task per plan update.

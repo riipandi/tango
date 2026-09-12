@@ -37,6 +37,7 @@ signup.
 - [ ] `emailverification` — token issue/verify, hook into account email change (Phase 1).
 - [ ] `signup` — token-based signup with group assignment, invitation CRUD, policy from appconfig.
 - [ ] Emails sent through antree queue tasks (async, retried) — first real queue consumers.
+- [ ] Request bodies (device code, OTP, signup) validated via `pkg/validate`.
 - [ ] Tests per ceremony against testcontainers; WebAuthn ceremony unit tests with fixed challenge
       inputs.
 
@@ -48,3 +49,4 @@ signup.
 ## Progress Log
 
 - 2026-09-12 Phase created (planned).
+- 2026-09-12 Added `pkg/validate` request-validation task per plan update.

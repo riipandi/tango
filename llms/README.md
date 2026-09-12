@@ -5,16 +5,16 @@ tango foundation. Reference: https://pocket-id.org/docs/api
 
 ## Phase Index
 
-| Phase | File                                            | Scope                                          | Status  | Updated    |
-| ----- | ----------------------------------------------- | ---------------------------------------------- | ------- | ---------- |
-| 1     | [phase-01-auth-core.md](./phase-01-auth-core.md)  | Auth middleware, session, password, account     | planned | 2026-09-12 |
-| 2     | [phase-02-identity-admin.md](./phase-02-identity-admin.md) | User groups, custom claims, audit API, admin CRUD | planned | 2026-09-12 |
-| 3     | [phase-03-jwks-wellknown.md](./phase-03-jwks-wellknown.md) | JWKS provider, discovery endpoints   | planned | 2026-09-12 |
-| 4     | [phase-04-oidc-provider.md](./phase-04-oidc-provider.md)   | Authorize (PKCE), token, userinfo    | planned | 2026-09-12 |
-| 5     | [phase-05-passkeys-signin.md](./phase-05-passkeys-signin.md) | WebAuthn, device login, one-time access, signup | planned | 2026-09-12 |
-| 6     | [phase-06-apikeys-ratelimit.md](./phase-06-apikeys-ratelimit.md) | API keys, resource APIs, rate limiter | planned | 2026-09-12 |
-| 7     | [phase-07-jobs-webhooks.md](./phase-07-jobs-webhooks.md)   | Antree consumers, webhooks, scheduler | planned | 2026-09-12 |
-| 8     | [phase-08-sync-storage.md](./phase-08-sync-storage.md)     | LDAP, SCIM, S3 storage, app images    | planned | 2026-09-12 |
+| Phase | File                                                             | Scope                                             | Status  | Updated    |
+| ----- | ---------------------------------------------------------------- | ------------------------------------------------- | ------- | ---------- |
+| 1     | [phase-01-auth-core.md](./phase-01-auth-core.md)                 | Auth middleware, session, password, account       | planned | 2026-09-12 |
+| 2     | [phase-02-identity-admin.md](./phase-02-identity-admin.md)       | User groups, custom claims, audit API, admin CRUD | planned | 2026-09-12 |
+| 3     | [phase-03-jwks-wellknown.md](./phase-03-jwks-wellknown.md)       | JWKS provider, discovery endpoints                | planned | 2026-09-12 |
+| 4     | [phase-04-oidc-provider.md](./phase-04-oidc-provider.md)         | Authorize (PKCE), token, userinfo                 | planned | 2026-09-12 |
+| 5     | [phase-05-passkeys-signin.md](./phase-05-passkeys-signin.md)     | WebAuthn, device login, one-time access, signup   | planned | 2026-09-12 |
+| 6     | [phase-06-apikeys-ratelimit.md](./phase-06-apikeys-ratelimit.md) | API keys, resource APIs, rate limiter             | planned | 2026-09-12 |
+| 7     | [phase-07-jobs-webhooks.md](./phase-07-jobs-webhooks.md)         | Antree consumers, webhooks, scheduler             | planned | 2026-09-12 |
+| 8     | [phase-08-sync-storage.md](./phase-08-sync-storage.md)           | LDAP, SCIM, S3 storage, app images                | planned | 2026-09-12 |
 
 ## Status Protocol (mandatory)
 
@@ -32,7 +32,7 @@ A checkbox may only be ticked when its validation command passes.
 ## Language & Style Rules (all phases)
 
 - Chat: Indonesian; code, comments, commit messages, and these docs: English.
-- No abbreviated folder names; no section separators; comments explain *why*.
+- No abbreviated folder names; no section separators; comments explain _why_.
 - **Comments: always concise, avoid unnecessary ones.** Never restate what the code or identifier
   already says (`// db is the database`); no doc comment on obvious setters/getters. When in doubt,
   delete the comment. Keep only race invariants, protocols, and non-obvious constraints.
@@ -63,12 +63,26 @@ A checkbox may only be ticked when its validation command passes.
 - Validation gate for every task: `go test ./...`, `go test -tags debug ./...`,
   `go test -tags release ./...` (0 FAIL), `golangci-lint run ./...` (0 issues), `gofmt` clean.
 
+## Request Validation (mandatory, all phases)
+
+Library: `github.com/go-ozzo/ozzo-validation/v4` (>= v4.4.1, code-first rules — no validation tags).
+Chosen for: rules are compiled code (no stringly-typed tag drift), no tag collision with
+`encoding/json/v2` `omitzero`, context-aware rules, revival-maintained since Aug 2026.
+
+- Rules live next to the DTO: `func (r CreateXRequest) Validate() error` with ozzo rules.
+- `pkg/validate` (zero `internal/` deps): decode+validate helper for handlers (jsonv2 read, then
+  `Validate()`), maps `validation.Errors` to `[]FieldError{Field, Message}`.
+- Handler flow: decode+validate once → failure responds 422 `validation_failed` with field errors
+  via `pkg/responder`; no ad-hoc `if req.X == ""` guards in handlers.
+- Query/path params validated with ozzo at the handler (`validation.Required`, `validation.Match`).
+- Rule values (lengths, formats) mirror Pocket ID semantics, not gin binding tags.
+
 ## Pocket ID Source Map (porting reference)
 
-| Pocket ID (`backend/internal/...`) | Tango target                    |
-| ---------------------------------- | ------------------------------- |
-| `middleware`, `apikey`             | `internal/transport/middleware`, `modules/identity/apikey` |
-| `webauthn`, `devicelogin`, `onetimeaccess`, `usersignup`, `emailverification` | `modules/identity/*` |
-| `oidc`, `api` (apis resource)      | `modules/federation/oidc`, `modules/identity/apiaccess` |
-| `appconfig`, `auditlogs`, `storage`, `email`, `job` | `modules/appconfig`, `modules/auditlog`, `internal/storage`, `internal/mailer`, `pkg/antree` |
-| `ldapsync`, `scimsync`             | `modules/identity/ldapsync`, `modules/federation/scimsync` |
+| Pocket ID (`backend/internal/...`)                                            | Tango target                                                                                 |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `middleware`, `apikey`                                                        | `internal/transport/middleware`, `modules/identity/apikey`                                   |
+| `webauthn`, `devicelogin`, `onetimeaccess`, `usersignup`, `emailverification` | `modules/identity/*`                                                                         |
+| `oidc`, `api` (apis resource)                                                 | `modules/federation/oidc`, `modules/identity/apiaccess`                                      |
+| `appconfig`, `auditlogs`, `storage`, `email`, `job`                           | `modules/appconfig`, `modules/auditlog`, `internal/storage`, `internal/mailer`, `pkg/antree` |
+| `ldapsync`, `scimsync`                                                        | `modules/identity/ldapsync`, `modules/federation/scimsync`                                   |
