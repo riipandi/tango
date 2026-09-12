@@ -13,13 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newTestRouter mounts the user core inside the shared /api group,
-// the way the identity module does.
-func newTestRouter() chi.Router {
-	svc := NewService(NewMemoryStore(), nil)
-
+// newTestRouter mounts the user core (real Postgres store) inside
+// the shared /api group, the way the identity module does.
+func newTestRouter(t *testing.T) chi.Router {
 	r := chi.NewRouter()
-	r.Route("/api", svc.APIRoutes)
+	r.Route("/api", NewService(newTestStore(t), nil).APIRoutes)
 	return r
 }
 
@@ -50,59 +48,84 @@ func decodeData(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	return data
 }
 
+// johnPayload is unique per call: the test container is shared
+// across tests and runs, so usernames/emails must not collide.
+func johnPayload() string {
+	stamp := uniqueStamp()
+	return `{"username":"john` + stamp + `","email":"john` + stamp + `@example.com","first_name":"John"}`
+}
+
 func TestCreateUser(t *testing.T) {
-	r := newTestRouter()
-	w := do(r, http.MethodPost, "/api/users", `{"name":"John"}`)
+	r := newTestRouter(t)
+	w := do(r, http.MethodPost, "/api/users", johnPayload())
 
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	body := decodeBody(t, w)
 	assert.Equal(t, "success", body["status"])
 
 	data := decodeData(t, w)
-	assert.NotEmpty(t, data["id"])
 	assert.True(t, strings.HasPrefix(data["id"].(string), "user_"))
-	assert.Equal(t, "John", data["name"])
+	assert.True(t, strings.HasPrefix(data["username"].(string), "john"))
+	assert.True(t, strings.HasPrefix(data["email"].(string), "john"))
 }
 
 func TestCreateUserInvalidJSON(t *testing.T) {
-	r := newTestRouter()
+	r := newTestRouter(t)
 	w := do(r, http.MethodPost, "/api/users", `{invalid`)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestCreateUserEmptyName(t *testing.T) {
-	r := newTestRouter()
-	w := do(r, http.MethodPost, "/api/users", `{"name":""}`)
+func TestCreateUserValidation(t *testing.T) {
+	r := newTestRouter(t)
 
-	require.Equal(t, http.StatusBadRequest, w.Code)
+	cases := []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{"short username", `{"username":"ab","email":"a@b.co"}`, http.StatusBadRequest},
+		{"bad email", `{"username":"john","email":"nope"}`, http.StatusBadRequest},
+	}
+
+	for _, tc := range cases {
+		w := do(r, http.MethodPost, "/api/users", tc.body)
+		assert.Equal(t, tc.wantStatus, w.Code, tc.name)
+	}
+
+	// The SAME payload twice → unique violation → 409.
+	payload := johnPayload()
+	w := do(r, http.MethodPost, "/api/users", payload)
+	require.Equal(t, http.StatusCreated, w.Code)
+	w = do(r, http.MethodPost, "/api/users", payload)
+	assert.Equal(t, http.StatusConflict, w.Code)
 	body := decodeBody(t, w)
-	assert.Equal(t, "error", body["status"])
-	assert.Equal(t, ErrInvalidName.Error(), body["message"])
+	assert.Equal(t, ErrDuplicate.Error(), body["message"])
 }
 
 func TestListUsers(t *testing.T) {
-	r := newTestRouter()
-	do(r, http.MethodPost, "/api/users", `{"name":"A"}`)
+	r := newTestRouter(t)
+	w := do(r, http.MethodPost, "/api/users", johnPayload())
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
-	w := do(r, http.MethodGet, "/api/users", "")
+	w = do(r, http.MethodGet, "/api/users", "")
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var payload struct {
 		Status string `json:"status"`
 		Data   []struct {
-			Name string `json:"name"`
+			Username string `json:"username"`
 		} `json:"data"`
 	}
 	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &payload))
 	assert.Equal(t, "success", payload.Status)
-	require.Len(t, payload.Data, 1)
-	assert.Equal(t, "A", payload.Data[0].Name)
+	require.NotEmpty(t, payload.Data)
+	assert.True(t, strings.HasPrefix(payload.Data[0].Username, "john"))
 }
 
 func TestGetUser(t *testing.T) {
-	r := newTestRouter()
-	w := do(r, http.MethodPost, "/api/users", `{"name":"John"}`)
+	r := newTestRouter(t)
+	w := do(r, http.MethodPost, "/api/users", johnPayload())
 	id, _ := decodeData(t, w)["id"].(string)
 	require.NotEmpty(t, id)
 
@@ -110,18 +133,26 @@ func TestGetUser(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	data := decodeData(t, w)
-	assert.Equal(t, "John", data["name"])
+	assert.True(t, strings.HasPrefix(data["username"].(string), "john"))
 }
 
 func TestGetUserNotFound(t *testing.T) {
-	r := newTestRouter()
+	r := newTestRouter(t)
 	w := do(r, http.MethodGet, "/api/users/99", "")
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+func TestGetUserInvalidID(t *testing.T) {
+	r := newTestRouter(t)
+	// A valid UUID suffix without the user_ prefix must 404, not 500.
+	w := do(r, http.MethodGet, "/api/users/0199aaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "")
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
 func TestUserMethodNotAllowed(t *testing.T) {
-	r := newTestRouter()
+	r := newTestRouter(t)
 	w := do(r, http.MethodDelete, "/api/users/1", "")
 
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)

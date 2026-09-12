@@ -5,6 +5,9 @@
 package identity
 
 import (
+	"context"
+	"time"
+
 	"github.com/go-chi/chi/v5"
 	"go.jetify.com/typeid"
 
@@ -110,15 +113,31 @@ func (apiKeyPrefix) Prefix() string             { return "api_key" }
 func (oauthConnectionPrefix) Prefix() string    { return "oauth_connection" }
 
 // User is the core entity, shared by all features. The optional
-// federation module consumes it via adapters.
+// federation module consumes it via adapters. Nullable columns use
+// pointers; empty string is never stored for those.
 type User struct {
-	ID   UserID `json:"id"`
-	Name string `json:"name"`
+	ID        UserID  `json:"id"`
+	Username  string  `json:"username"`
+	Email     string  `json:"email"`
+	FirstName *string `json:"first_name,omitzero"`
+	LastName  *string `json:"last_name,omitzero"`
+	AvatarURL *string `json:"avatar_url,omitzero"`
+	Locale    *string `json:"locale,omitzero"`
+
+	DisplayName string `json:"display_name"`
+	IsAdmin     bool   `json:"is_admin"`
+	Disabled    bool   `json:"disabled"`
+
+	EmailVerifiedAt *time.Time `json:"email_verified_at,omitzero"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       *time.Time `json:"updated_at,omitzero"`
+	LastLoginAt     *time.Time `json:"last_login_at,omitzero"`
 }
 
 // Recorder receives audit events; the composition root adapts any
-// sink (e.g. auditlog) so features never import it directly.
-type Recorder func(event AuditEvent)
+// sink (e.g. auditlog) so features never import it directly. The
+// context flows from the originating request.
+type Recorder func(ctx context.Context, event AuditEvent)
 
 // AuditEvent is what features emit to a Recorder.
 type AuditEvent struct {

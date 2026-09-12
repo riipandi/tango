@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 
 	"github.com/riipandi/tango/modules/identity"
 )
@@ -25,30 +24,32 @@ func NewService(store Store, recorder identity.Recorder) *Service {
 // Name implements identity.Feature.
 func (s *Service) Name() string { return "user" }
 
+// List returns all users, newest first.
 func (s *Service) List(ctx context.Context) []identity.User {
 	return s.store.List(ctx)
 }
 
+// GetByID resolves one user; unknown IDs surface ErrNotFound.
 func (s *Service) GetByID(ctx context.Context, id identity.UserID) (identity.User, error) {
-	user, ok := s.store.GetByID(ctx, id)
-	if !ok {
-		return identity.User{}, errors.New("user not found")
-	}
-	return user, nil
+	return s.store.GetByID(ctx, id)
 }
 
-func (s *Service) Create(ctx context.Context, name string) (identity.User, error) {
-	if name == "" {
-		return identity.User{}, ErrInvalidName
+// Create validates the payload, persists the user, and records an
+// audit event when a recorder is wired.
+func (s *Service) Create(ctx context.Context, params CreateParams) (identity.User, error) {
+	displayName, err := params.Validate()
+	if err != nil {
+		return identity.User{}, err
 	}
+	params.DisplayName = displayName
 
-	user, err := s.store.Create(ctx, name)
+	user, err := s.store.Create(ctx, params)
 	if err != nil {
 		return identity.User{}, err
 	}
 
 	if s.recorder != nil {
-		s.recorder(identity.AuditEvent{Action: "user.created", Actor: user.ID.String(), Target: user.ID.String()})
+		s.recorder(ctx, identity.AuditEvent{Action: "user.created", Actor: user.ID.String(), Target: user.ID.String()})
 	}
 	return user, nil
 }

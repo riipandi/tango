@@ -2,17 +2,25 @@ package transport
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	jsonv2 "encoding/json/v2"
 
+	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
-	"github.com/riipandi/tango/internal/registry"
+	"github.com/riipandi/tango/modules/auditlog"
+	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.loglayer.dev/v3"
@@ -29,9 +37,27 @@ func testLogger() logger.Logger {
 	return loglayer.NewMock()
 }
 
+// testServer builds the HTTP server over real Postgres-backed
+// modules (shared test container) — the same wiring the registry
+// uses in production.
+func testServer(t *testing.T, cfg *config.Config) *HTTPServer {
+	pg := testutils.StartPostgres(t.Context(), t)
+	if _, err := database.MigrateUp(t.Context(), pg.DSN); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+	db, err := datastore.New(t.Context(), datastore.Options{DSN: pg.DSN})
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	reg := kernel.NewRegistry()
+	reg.Register(auditlog.New(auditlog.NewPostgresStore(db)))
+	reg.Register(identity.New(user.NewService(user.NewPostgresStore(db), nil)))
+	return NewHTTPServer(reg, cfg, testLogger())
+}
+
 func TestNewHTTPServerRoutes(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(registry.New(registry.Deps{Config: cfg}), cfg, testLogger())
+	srv := testServer(t, cfg)
 
 	cases := []struct {
 		path       string
@@ -44,7 +70,7 @@ func TestNewHTTPServerRoutes(t *testing.T) {
 		{"/api/nope", http.StatusNotFound, true},
 		{"/.well-known/version", http.StatusOK, true},
 		{"/static/app.js", http.StatusOK, true},
-		{"/some-page", http.StatusNotFound, false}, // dev static fallback
+		{"/some-page", spaFallbackStatus, false}, // dev: 404, release: SPA shell
 	}
 
 	for _, tc := range cases {
@@ -60,22 +86,46 @@ func TestNewHTTPServerRoutes(t *testing.T) {
 
 func TestNewHTTPServerMountsModules(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(registry.New(registry.Deps{Config: cfg}), cfg, testLogger())
+	srv := testServer(t, cfg)
+
+	// Unique username per run: the test container is shared.
+	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
+	body := fmt.Sprintf(`{"username":"transport_%s","email":"transport-%s@example.com"}`, stamp, stamp)
 
 	w := httptest.NewRecorder()
-	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/users", strings.NewReader(`{"name":"John"}`)))
+	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/users", strings.NewReader(body)))
 
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	var payload struct {
 		Status string `json:"status"`
 		Data   struct {
-			Name string `json:"name"`
+			Username string `json:"username"`
 		} `json:"data"`
 	}
 	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &payload))
 	assert.Equal(t, "success", payload.Status)
-	assert.Equal(t, "John", payload.Data.Name)
+	assert.True(t, strings.HasPrefix(payload.Data.Username, "transport_"))
+}
+
+func TestRequestIDMiddleware(t *testing.T) {
+	cfg := testConfig()
+	srv := testServer(t, cfg)
+
+	// No incoming header: the server generates one and echoes it.
+	w := httptest.NewRecorder()
+	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	id := w.Header().Get("X-Request-Id")
+	assert.NotEmpty(t, id)
+	assert.True(t, strings.HasPrefix(id, "request_"), id)
+
+	// Incoming header: echoed verbatim.
+	w = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api", nil)
+	req.Header.Set("X-Request-Id", "client-supplied-id")
+	srv.Router.ServeHTTP(w, req)
+	assert.Equal(t, "client-supplied-id", w.Header().Get("X-Request-Id"))
 }
 
 func TestHTTPServerShutdown(t *testing.T) {

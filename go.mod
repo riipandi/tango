@@ -11,6 +11,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-chi/cors v1.2.2
 	github.com/go-viper/mapstructure/v2 v2.5.0
+	github.com/huandu/go-sqlbuilder v1.43.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/knadh/koanf/parsers/dotenv v1.1.2
 	github.com/knadh/koanf/providers/confmap v1.0.1
@@ -59,6 +60,8 @@ require (
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/gofrs/uuid/v5 v5.5.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/huandu/go-clone v1.7.3 // indirect
+	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect

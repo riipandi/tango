@@ -23,8 +23,7 @@ type (
 
 	oidcClientPrefix struct{}
 
-	// OIDCClientID identifies an oidc_clients row (stored as the full
-	// TypeID string, matching the Pocket ID opaque client id).
+	// OIDCClientID identifies an oidc_clients row (stored as the full TypeID string).
 	OIDCClientID = typeid.TypeID[oidcClientPrefix]
 
 	customClaimPrefix struct{}

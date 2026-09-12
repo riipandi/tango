@@ -4,6 +4,7 @@
 package responder
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,6 +31,28 @@ func (requestPrefix) Prefix() string { return "request" }
 
 // RequestID identifies a single API request for tracing and support.
 type RequestID = typeid.TypeID[requestPrefix]
+
+// requestIDContextKey scopes the request ID inside a request context.
+type requestIDContextKey struct{}
+
+// NewRequestID generates a fresh request ID: a TypeID whose UUIDv7
+// suffix is K-sortable, so log entries order by request start time.
+func NewRequestID() string {
+	return typeid.Must(typeid.New[RequestID]()).String()
+}
+
+// WithRequestID attaches a request ID to the context; middleware
+// resolves it once and responders/loggers read it back.
+func WithRequestID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, requestIDContextKey{}, id)
+}
+
+// RequestIDFromContext returns the context request ID, empty when
+// absent.
+func RequestIDFromContext(ctx context.Context) string {
+	id, _ := ctx.Value(requestIDContextKey{}).(string)
+	return id
+}
 
 // Envelope is the standard API response wrapper. Success responses carry
 // Data, error responses carry Error; Message and Links are optional on both.
@@ -173,21 +196,21 @@ func newMetadata(w http.ResponseWriter, r *http.Request, status int) Metadata {
 	return m
 }
 
-// requestID reuses the incoming X-Request-Id (echoed back as a response
-// header) or generates one when absent.
+// requestID prefers the context value set by the request-ID
+// middleware, then the incoming X-Request-Id header (echoed back as
+// a response header), and generates one when both are absent.
 func requestID(w http.ResponseWriter, r *http.Request) string {
+	if id := RequestIDFromContext(r.Context()); id != "" {
+		w.Header().Set(requestIDHeader, id)
+		return id
+	}
+
 	id := strings.TrimSpace(r.Header.Get(requestIDHeader))
 	if id == "" {
-		id = newRequestID()
+		id = NewRequestID()
 	}
 	w.Header().Set(requestIDHeader, id)
 	return id
-}
-
-func newRequestID() string {
-	// TypeID with a UUIDv7 suffix: K-sortable, so log entries and
-	// traces order naturally by request start time.
-	return typeid.Must(typeid.New[RequestID]()).String()
 }
 
 // rateLimitFromHeaders reads standard X-RateLimit-* headers (set by the

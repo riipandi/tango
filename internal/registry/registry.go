@@ -8,6 +8,10 @@
 package registry
 
 import (
+	"context"
+
+	"go.jetify.com/typeid"
+
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
@@ -40,19 +44,22 @@ type Deps struct {
 	DB datastore.Store
 }
 
-// New builds the registry in registration order. The adapter routes
-// identity audit events into auditlog, keeping them decoupled.
+// New builds the registry in registration order. Every store is
+// Postgres-backed via deps.DB; the adapter routes identity audit
+// events into auditlog, keeping the modules decoupled.
 func New(deps Deps) *kernel.Registry {
+	if deps.DB == nil {
+		panic("registry: nil database store")
+	}
+
 	reg := kernel.NewRegistry()
 
-	audit := auditlog.New()
+	audit := auditlog.New(auditlog.NewPostgresStore(deps.DB))
 	reg.Register(audit)
 
 	// Internal authn/authz: user core + selected auth features.
 	reg.Register(identity.New(
-		user.NewService(user.NewMemoryStore(), func(e identity.AuditEvent) {
-			audit.Record(auditlog.Event{Action: e.Action, Actor: e.Actor, Target: e.Target})
-		}),
+		user.NewService(user.NewPostgresStore(deps.DB), auditAdapter(audit)),
 		// Feature selection: add/remove a line to change the set.
 		withSession(deps),
 		withWebAuthn(deps),
@@ -72,4 +79,34 @@ func New(deps Deps) *kernel.Registry {
 	))
 
 	return reg
+}
+
+// auditAdapter converts identity audit events into auditlog entries:
+// typed-ID actors/targets map to their UUID columns, anything else
+// lands in the payload.
+func auditAdapter(audit *auditlog.Module) identity.Recorder {
+	return func(ctx context.Context, e identity.AuditEvent) {
+		entry := auditlog.Entry{
+			Event:   e.Action,
+			Trigger: auditlog.TriggerUser,
+			Status:  auditlog.StatusSuccess,
+			Payload: map[string]any{},
+		}
+
+		if actor, err := typeid.Parse[identity.UserID](e.Actor); err == nil {
+			uuidText := actor.UUID()
+			entry.UserID = &uuidText
+		} else {
+			entry.Payload["actor"] = e.Actor
+		}
+		if target, err := typeid.Parse[identity.UserID](e.Target); err == nil {
+			uuidText := target.UUID()
+			entry.ResourceType = "user"
+			entry.ResourceID = &uuidText
+		} else {
+			entry.Payload["target"] = e.Target
+		}
+
+		_ = audit.Record(ctx, &entry)
+	}
 }

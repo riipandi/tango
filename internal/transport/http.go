@@ -22,6 +22,7 @@ type HTTPServer struct {
 func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Logger) *HTTPServer {
 	r := chi.NewRouter()
 
+	r.Use(middleware.RequestID)
 	r.Use(middleware.RequestLogger(log))
 	r.Use(middleware.JSONRecoverer)
 	r.Use(middleware.CORS())
@@ -54,6 +55,11 @@ func (s *HTTPServer) ListenAndServe(addr string) error {
 		Handler:           s.Router,
 		Protocols:         protocols,
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+		// No ReadTimeout/WriteTimeout: they would kill streamed
+		// bodies and SSE responses; per-request deadlines come from
+		// route-specific middleware instead.
 	}
 
 	return s.Server.ListenAndServe()

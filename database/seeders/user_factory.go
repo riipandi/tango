@@ -53,12 +53,31 @@ func (f *UserFactory) Create(ctx context.Context, base string) (identity.User, e
 	f.next = (f.next + 1) % suffixMod
 	f.mu.Unlock()
 
-	name := fmt.Sprintf("%s-%04d", base, n)
-	created, err := f.service.Create(ctx, name)
+	name := fmt.Sprintf("%s_%04d", sanitizeBase(base), n)
+	created, err := f.service.Create(ctx, user.CreateParams{
+		Username: name,
+		Email:    name + "@users.local",
+	})
 	if err != nil {
 		return identity.User{}, fmt.Errorf("seed user %q: %w", name, err)
 	}
 	return created, nil
+}
+
+// sanitizeBase keeps only username-safe characters; the factory
+// must never fail on fixture names.
+func sanitizeBase(base string) string {
+	out := make([]rune, 0, len(base))
+	for _, r := range base {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_':
+			out = append(out, r)
+		}
+	}
+	if len(out) == 0 {
+		return "user"
+	}
+	return string(out)
 }
 
 // CreateMany builds count users sharing the same base name,

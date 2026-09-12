@@ -1,6 +1,7 @@
 package user
 
 import (
+	"errors"
 	"net/http"
 
 	jsonv2 "encoding/json/v2"
@@ -11,8 +12,15 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
+// createUserRequest is the POST /users payload; optional fields
+// default like the store does (empty → NULL / display-name fallback).
 type createUserRequest struct {
-	Name string `json:"name"`
+	Username    string `json:"username"`
+	Email       string `json:"email"`
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	DisplayName string `json:"display_name"`
+	IsAdmin     bool   `json:"is_admin"`
 }
 
 // APIRoutes mounts the user endpoints inside the shared /api group.
@@ -29,9 +37,9 @@ func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.Create(r.Context(), req.Name)
+	user, err := s.Create(r.Context(), CreateParams(req))
 	if err != nil {
-		responder.BadRequestJSON(w, r, err.Error())
+		writeError(w, r, err)
 		return
 	}
 
@@ -51,9 +59,24 @@ func (s *Service) getUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.GetByID(r.Context(), id)
 	if err != nil {
-		responder.NotFoundJSON(w, r)
+		writeError(w, r, err)
 		return
 	}
 
 	responder.Success(w, r, http.StatusOK, user)
+}
+
+// writeError maps store/service errors to the response envelope:
+// validation 400, duplicates 409, missing 404, everything else 500.
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, ErrInvalidUsername), errors.Is(err, ErrInvalidEmail):
+		responder.BadRequestJSON(w, r, err.Error())
+	case errors.Is(err, ErrDuplicate):
+		responder.Fail(w, r, http.StatusConflict, err.Error())
+	case errors.Is(err, ErrNotFound):
+		responder.NotFoundJSON(w, r)
+	default:
+		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+	}
 }

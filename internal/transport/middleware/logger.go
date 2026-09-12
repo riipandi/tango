@@ -6,10 +6,12 @@ import (
 
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/pkg/responder"
 	"go.loglayer.dev/v3"
 )
 
-// RequestLogger logs one entry per request (5xx error, 4xx warning).
+// RequestLogger logs one entry per request (5xx error, 4xx warning)
+// correlated by the request ID from the RequestID middleware.
 func RequestLogger(log logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -24,6 +26,7 @@ func RequestLogger(log logger.Logger) func(http.Handler) http.Handler {
 				"status":      ww.Status(),
 				"bytes":       ww.BytesWritten(),
 				"duration_ms": time.Since(start).Milliseconds(),
+				"request_id":  responder.RequestIDFromContext(r.Context()),
 			})
 			switch {
 			case ww.Status() >= http.StatusInternalServerError:

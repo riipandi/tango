@@ -20,46 +20,64 @@ import (
 // On-disk migrations dir, relative to repo root (debug cwd).
 const devMigrationsDir = "database/migrations"
 
+// Migrations dir inside the embedded FS.
+const embeddedMigrationsDir = "migrations"
+
+// migrationsSource prefers the on-disk dir (repo-root cwd) and
+// falls back to the embedded copy when absent — so tests running
+// from package directories still see the real migrations.
+func migrationsSource() fs.FS {
+	if dirEntries(devMigrationsDir) != nil {
+		return os.DirFS(devMigrationsDir)
+	}
+	sub, err := fs.Sub(DatabaseMigrations, embeddedMigrationsDir)
+	if err != nil {
+		// Embed pattern is compile-time fixed; mismatch is a bug.
+		panic(fmt.Sprintf("embed migrations: %v", err))
+	}
+	return sub
+}
+
 // Debug reads on-disk so new files apply without rebuild.
 
 // MigrateUp applies all pending migrations.
 func MigrateUp(ctx context.Context, dsn string) ([]MigrationOutcome, error) {
-	return runUp(ctx, dsn, os.DirFS(devMigrationsDir))
+	return runUp(ctx, dsn, migrationsSource())
 }
 
 // MigrateDown rolls back the most recent migration.
 func MigrateDown(ctx context.Context, dsn string) (*MigrationOutcome, error) {
-	return runDown(ctx, dsn, os.DirFS(devMigrationsDir))
+	return runDown(ctx, dsn, migrationsSource())
 }
 
 // MigrateDownTarget reports what MigrateDown would roll back, read-only.
 func MigrateDownTarget(ctx context.Context, dsn string) (*MigrationStatus, error) {
-	return runDownTarget(ctx, dsn, os.DirFS(devMigrationsDir))
+	return runDownTarget(ctx, dsn, migrationsSource())
 }
 
 // MigrateStatus reports every migration file's state.
 func MigrateStatus(ctx context.Context, dsn string) ([]MigrationStatus, error) {
-	return runStatus(ctx, dsn, os.DirFS(devMigrationsDir))
+	return runStatus(ctx, dsn, migrationsSource())
 }
 
 // MigrateUpTo applies pending migrations up to version.
 func MigrateUpTo(ctx context.Context, dsn string, version int64) ([]MigrationOutcome, error) {
-	return runUpTo(ctx, dsn, os.DirFS(devMigrationsDir), version)
+	return runUpTo(ctx, dsn, migrationsSource(), version)
 }
 
 // MigrateDownTo rolls back everything above version.
 func MigrateDownTo(ctx context.Context, dsn string, version int64) ([]MigrationOutcome, error) {
-	return runDownTo(ctx, dsn, os.DirFS(devMigrationsDir), version)
+	return runDownTo(ctx, dsn, migrationsSource(), version)
 }
 
 // MigrateVersion reports applied and target versions.
 func MigrateVersion(ctx context.Context, dsn string) (current, target int64, err error) {
-	return runVersion(ctx, dsn, os.DirFS(devMigrationsDir))
+	return runVersion(ctx, dsn, migrationsSource())
 }
 
 // MigrateReset rolls every migration back. Debug-only.
 func MigrateReset(ctx context.Context, dsn string) ([]MigrationOutcome, error) {
-	return runReset(ctx, dsn, os.DirFS(devMigrationsDir))
+	return runReset(ctx, dsn, migrationsSource())
 }
 
 // runReset rolls back to version 0.
