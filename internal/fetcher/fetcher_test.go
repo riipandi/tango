@@ -210,9 +210,9 @@ func TestNilLoggerStaysSilent(t *testing.T) {
 }
 
 func TestRetriesIdempotentRequests(t *testing.T) {
-	var attempts int32
+	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atomic.AddInt32(&attempts, 1) < 3 { // fail twice, succeed third
+		if attempts.Add(1) < 3 { // fail twice, succeed third
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -231,7 +231,7 @@ func TestRetriesIdempotentRequests(t *testing.T) {
 	var out map[string]any
 	resp, err := f.GetJSON(t.Context(), server.URL, &out)
 	require.NoError(t, err, "third attempt must succeed")
-	assert.Equal(t, int32(3), atomic.LoadInt32(&attempts))
+	assert.Equal(t, int32(3), attempts.Load())
 	assert.Equal(t, 3, resp.Request.Attempt)
 
 	// Retry hooks logged the two failed attempts (the final
@@ -254,9 +254,9 @@ func TestRetriesIdempotentRequests(t *testing.T) {
 }
 
 func TestDoesNotRetryNonIdempotentByDefault(t *testing.T) {
-	var attempts int32
+	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&attempts, 1)
+		attempts.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -270,13 +270,13 @@ func TestDoesNotRetryNonIdempotentByDefault(t *testing.T) {
 
 	_, err := f.PostJSON(t.Context(), server.URL, map[string]string{"k": "v"}, nil)
 	require.Error(t, err)
-	assert.Equal(t, int32(1), atomic.LoadInt32(&attempts), "POST must not be retried by default")
+	assert.Equal(t, int32(1), attempts.Load(), "POST must not be retried by default")
 }
 
 func TestCircuitBreakerOpensFast(t *testing.T) {
-	var attempts int32
+	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&attempts, 1)
+		attempts.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -287,12 +287,12 @@ func TestCircuitBreakerOpensFast(t *testing.T) {
 	for range DefaultBreakerThreshold {
 		_, _ = f.GetJSON(t.Context(), server.URL, nil)
 	}
-	require.Equal(t, int32(DefaultBreakerThreshold), atomic.LoadInt32(&attempts))
+	require.Equal(t, int32(DefaultBreakerThreshold), attempts.Load())
 
 	// The open breaker rejects before any network call.
 	_, err := f.GetJSON(t.Context(), server.URL, nil)
 	require.ErrorIs(t, err, resty.ErrCircuitBreakerOpen)
-	assert.Equal(t, int32(DefaultBreakerThreshold), atomic.LoadInt32(&attempts))
+	assert.Equal(t, int32(DefaultBreakerThreshold), attempts.Load())
 
 	// State transitions and triggers are observable in the log.
 	var foundTrigger, foundStateChange bool

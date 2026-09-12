@@ -65,7 +65,7 @@ func (f *UserFactory) Create(ctx context.Context, base string) (identity.User, e
 // returning them in creation order.
 func (f *UserFactory) CreateMany(ctx context.Context, base string, count int) ([]identity.User, error) {
 	users := make([]identity.User, 0, count)
-	for i := 0; i < count; i++ {
+	for range count {
 		created, err := f.Create(ctx, base)
 		if err != nil {
 			return nil, err

@@ -9,6 +9,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"strings"
@@ -29,8 +30,7 @@ var validKeys = buildKeySet(reflect.TypeFor[Config](), "")
 // recursing into nested structs with the tag as prefix.
 func buildKeySet(t reflect.Type, prefix string) map[string]bool {
 	keys := make(map[string]bool)
-	for i := range t.NumField() {
-		field := t.Field(i)
+	for field := range t.Fields() {
 
 		name := field.Tag.Get("koanf")
 		if name == "" || name == "-" {
@@ -42,9 +42,7 @@ func buildKeySet(t reflect.Type, prefix string) map[string]bool {
 		}
 
 		if field.Type.Kind() == reflect.Struct {
-			for key, ok := range buildKeySet(field.Type, path) {
-				keys[key] = ok
-			}
+			maps.Copy(keys, buildKeySet(field.Type, path))
 			continue
 		}
 		keys[path] = true

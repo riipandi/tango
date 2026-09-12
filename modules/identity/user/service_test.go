@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"uuid"
 )
 
 func TestServiceCreateAndGet(t *testing.T) {
@@ -20,9 +21,9 @@ func TestServiceCreateAndGet(t *testing.T) {
 	assert.Equal(t, "user", user.ID.Prefix())
 
 	// The suffix decodes to a UUIDv7 (RFC 9562): version nibble is 7.
-	gotUUID, parseErr := uuid.Parse(user.ID.UUID())
+	parsed, parseErr := uuid.Parse(user.ID.UUID())
 	require.NoError(t, parseErr)
-	assert.Equal(t, uuid.Version(7), gotUUID.Version())
+	assert.Equal(t, byte(7), parsed[6]>>4)
 	assert.Equal(t, "John", user.Name)
 
 	require.Len(t, recorded, 1)

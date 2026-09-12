@@ -64,7 +64,7 @@ func TestAsyncDeliversAll(t *testing.T) {
 	inner := &recordingTransport{}
 	tr := newAsync(inner, 100, time.Second)
 
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		tr.SendToLogger(loglayer.TransportParams{})
 	}
 	require.NoError(t, tr.Close())
@@ -119,7 +119,7 @@ func TestAsyncFlush(t *testing.T) {
 	inner := &recordingTransport{}
 	tr := newAsync(inner, 100, time.Second)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		tr.SendToLogger(loglayer.TransportParams{})
 	}
 	require.NoError(t, tr.Flush(2*time.Second))

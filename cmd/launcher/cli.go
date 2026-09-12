@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"runtime"
@@ -78,12 +79,8 @@ func loadConfig(cli *CLI, extra map[string]any) (*config.Config, error) {
 	}
 
 	overrides := map[string]any{}
-	for key, value := range extra {
-		overrides[key] = value
-	}
-	for key, value := range globalOverrides(cli) {
-		overrides[key] = value
-	}
+	maps.Copy(overrides, extra)
+	maps.Copy(overrides, globalOverrides(cli))
 	cfg, err := config.Load(config.LoadOptions{EnvFile: envFile, Overrides: overrides})
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)

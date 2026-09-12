@@ -287,7 +287,7 @@ func TestEnvExampleInSync(t *testing.T) {
 	require.NoError(t, err)
 
 	documented := map[string]bool{}
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue

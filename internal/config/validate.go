@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -39,10 +40,8 @@ func (c *Config) Validate() error {
 }
 
 func validateEnum(name, value string, allowed ...string) error {
-	for _, candidate := range allowed {
-		if value == candidate {
-			return nil
-		}
+	if slices.Contains(allowed, value) {
+		return nil
 	}
 	return fmt.Errorf("%s: invalid value %q (want one of %s)", name, value, strings.Join(allowed, ", "))
 }
@@ -59,10 +58,8 @@ func validateURL(name, raw string, schemes ...string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", name, err)
 	}
-	for _, scheme := range schemes {
-		if parsed.Scheme == scheme {
-			return nil
-		}
+	if slices.Contains(schemes, parsed.Scheme) {
+		return nil
 	}
 	return fmt.Errorf("%s: unsupported scheme %q (want %s)", name, parsed.Scheme, strings.Join(schemes, ", "))
 }

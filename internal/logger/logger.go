@@ -9,7 +9,6 @@ import (
 	pretty "go.loglayer.dev/transports/pretty/v3"
 	llslog "go.loglayer.dev/transports/slog/v3"
 	"go.loglayer.dev/v3"
-	"go.loglayer.dev/v3/transport"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -71,9 +70,9 @@ func newTransport(opts Options, slogLevel slog.Level, coreLevel loglayer.LogLeve
 	case "", "console":
 		if format == "pretty" {
 			return pretty.New(pretty.Config{
-				Writer:     os.Stdout,
-				NoColor:    opts.NoColor || !isTTY(os.Stdout),
-				BaseConfig: transport.BaseConfig{ID: "pretty", Level: coreLevel},
+				Writer:  os.Stdout,
+				NoColor: opts.NoColor || !isTTY(os.Stdout),
+				ID:      "pretty", Level: coreLevel,
 			}), nil
 		}
 		return slogTransport(
@@ -104,8 +103,8 @@ func newTransport(opts Options, slogLevel slog.Level, coreLevel loglayer.LogLeve
 
 func slogTransport(h slog.Handler, coreLevel loglayer.LogLevel) loglayer.Transport {
 	return llslog.New(llslog.Config{
-		Logger:     slog.New(h),
-		BaseConfig: transport.BaseConfig{ID: "slog", Level: coreLevel},
+		Logger: slog.New(h),
+		ID:     "slog", Level: coreLevel,
 	})
 }
 

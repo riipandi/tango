@@ -3,9 +3,10 @@ package identity
 import (
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"uuid"
 )
 
 func TestNewIDGeneratesPrefixedUUIDv7(t *testing.T) {
@@ -16,7 +17,7 @@ func TestNewIDGeneratesPrefixedUUIDv7(t *testing.T) {
 	// The suffix decodes to a UUIDv7 (RFC 9562): version nibble is 7.
 	parsed, err := uuid.Parse(id.UUID())
 	require.NoError(t, err)
-	assert.Equal(t, uuid.Version(7), parsed.Version())
+	assert.Equal(t, byte(7), parsed[6]>>4)
 }
 
 func TestParseIDRejectsWrongPrefix(t *testing.T) {
