@@ -46,7 +46,7 @@ func TestUpsertAndHashByUserID(t *testing.T) {
 	store, users := newTestStack(t)
 	u := createUser(t, users, "pwdup")
 
-	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmArgon2id)
+	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 	first, err := hasher.Hash("correct horse battery")
 	require.NoError(t, err)
 	require.NoError(t, store.Upsert(t.Context(), u.ID, first))

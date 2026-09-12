@@ -47,6 +47,9 @@ can sign in with username/password and manage their account.
       admin `/api/users` routes guarded.
 - [x] Tests: store tests (testcontainers), service tests, middleware tests with `httptest`;
       sign-in → cookie → session → sign-out round trip.
+- [x] Yaak: folder "Tango Extensions (auth)" (sign-in/out/session) + "Users" (guarded `/api/users`)
+      + "Version" (`/api/healthz`, `/api/version/*` in phase 3 work) — live-tested on :3080,
+      observed 200/401 per matrix in the progress log.
 
 ## Validation
 
@@ -63,3 +66,8 @@ can sign in with username/password and manage their account.
 - 2026-09-12 Auth middleware + session/password/account features landed; user core admin routes
   guarded (anonymous `/api/users` now 401 — lifecycle probe moved to `/api/healthz`).
   Validated: 3 suites + `-race` 0 FAIL, golangci-lint 0 issues, gofmt clean.
+- 2026-09-12 Yaak live verification on :3080 (compose Postgres + seeded admin password):
+  sign-in 200 + `tango_session` cookie (HttpOnly, Lax, Secure off in dev); `/api/users` 200 with
+  cookie, 401 anonymous; `/api/auth/session` 200 live, 401 after sign-out; sign-out 200 clears
+  cookie (`Max-Age=0`). Workspace reorganized to upstream tags: "Tango Extensions (auth)",
+  "Users" (+ more folders per phase, see README Yaak table).

@@ -1,7 +1,7 @@
 # Pocket ID Porting Plan
 
-Phased plan for porting Pocket ID (https://github.com/pocket-id/pocket-id) features onto the
-tango foundation. Reference: https://pocket-id.org/docs/api
+Phased plan for porting Pocket ID (<https://github.com/pocket-id/pocket-id>) features onto the
+tango foundation. Reference: <https://pocket-id.org/docs/api>
 
 ## Phase Index
 
@@ -24,8 +24,10 @@ Every phase file carries YAML front matter and a progress log. When work on a ph
    blocker named in the progress log).
 2. Update `updated:` (format `YYYY-MM-DD`) on the same edit.
 3. Tick checkboxes (`- [ ]` → `- [x]`) as tasks complete — one commit per completed task group.
-4. Append one line to **Progress Log**: `- 2026-09-12 <what happened>`.
-5. Update the matching row in the phase index above (Status + Updated columns).
+4. For every HTTP feature: create the requests in Yaak (MCP) and send them against the running
+   server **before** ticking the checkbox — see Yaak Live Verification below.
+5. Append one line to **Progress Log**: `- 2026-09-12 <what happened>`.
+6. Update the matching row in the phase index above (Status + Updated columns).
 
 A checkbox may only be ticked when its validation command passes.
 
@@ -76,6 +78,38 @@ Chosen for: rules are compiled code (no stringly-typed tag drift), no tag collis
   via `pkg/responder`; no ad-hoc `if req.X == ""` guards in handlers.
 - Query/path params validated with ozzo at the handler (`validation.Required`, `validation.Match`).
 - Rule values (lengths, formats) mirror Pocket ID semantics, not gin binding tags.
+
+## Yaak Live Verification (mandatory for HTTP features)
+
+Every finished HTTP feature gets a live check: create the requests in Yaak via MCP, send them
+against the running server (`/tmp/tango serve --port 3080` over the compose Postgres), and record
+the observed status codes in the phase progress log. A checkbox for an HTTP feature may only be
+ticked after its Yaak check passes.
+
+Organization mirrors the upstream spec (<https://pocket-id.org/docs/api>, source
+`https://pocket-id.org/swagger.yaml`) — one Yaak folder per upstream tag:
+
+| Yaak folder (upstream tag) | Phase | Coverage |
+| -------------------------- | ----- | -------- |
+| Users | 1, 2, 5 | `/api/users*`, profile, webauthn-credentials, one-time access, email verification, signup |
+| User Groups | 2 | `/api/user-groups*` |
+| Custom Claims | 2 | `/api/custom-claims*` |
+| Audit Logs | 2 | `/api/audit-logs*` |
+| Well Known | 3 | `/.well-known/jwks.json`, `/.well-known/openid-configuration` |
+| OIDC | 4 | `/api/oidc/clients*`, introspect, end-session, authorized clients |
+| OAuth | 4 | `/api/oidc/token`, `/api/oidc/userinfo` |
+| API Keys | 6 | `/api/api-keys*` |
+| APIs | 6 | `/api/apis*`, `/api/api-access*` |
+| Device Login | 5 | `/api/device-login*` |
+| Application Configuration | 8 | `/api/application-configuration*` (incl. `sync-ldap`, `test-email`) |
+| Application Images | 8 | `/api/application-images*` |
+| SCIM | 8 | `/api/scim/service-provider*` |
+| Version | 1 (done) | `/api/version/*`, `/healthz` |
+| Storage | 8 | `/api/storage/*` |
+| Tango Extensions (auth) | 1 (done) | Not in upstream spec: `POST /api/auth/sign-in`, `POST /api/auth/sign-out`, `GET /api/auth/session` |
+
+Request naming: `<METHOD> <path>` (e.g. `GET /api/users/{id}`). Session cookies flow through
+Yaak's cookie jar; for anonymous-401 checks use curl (the jar re-sends cookies).
 
 ## Pocket ID Source Map (porting reference)
 

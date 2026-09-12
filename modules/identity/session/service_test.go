@@ -32,7 +32,7 @@ func newTestStack(t *testing.T, opts ...ServiceOption) (*Service, *password.Serv
 
 	users := user.NewPostgresStore(ds)
 	passwords := password.NewService(password.NewPostgresStore(ds),
-		crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmArgon2id), nil)
+		crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt), nil)
 	sessions := NewService(NewPostgresStore(ds), passwords, users, nil, opts...)
 	return sessions, passwords, users
 }

@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_f5tKpWWR9L
+createdAt: 2026-09-12T06:54:37.488500
+updatedAt: 2026-09-12T06:54:37.488501
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_t3sGoeSaUF
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Echo live session + user via cookie
+headers: []
+method: GET
+name: Current Session
+sortPriority: 0.0
+url: http://127.0.0.1:3080/api/auth/session
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

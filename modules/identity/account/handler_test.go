@@ -40,7 +40,7 @@ func newTestStack(t *testing.T) (chi.Router, *Service, *session.Service, *passwo
 
 	users := user.NewPostgresStore(ds)
 	passwords := password.NewService(password.NewPostgresStore(ds),
-		crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmArgon2id), nil)
+		crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt), nil)
 	sessions := session.NewService(session.NewPostgresStore(ds), passwords, users, nil)
 
 	svc := NewService(users, passwords, sessions, nil)

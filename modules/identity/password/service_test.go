@@ -14,7 +14,7 @@ import (
 // newTestService builds the credential service on the real store.
 func newTestService(t *testing.T) (*Service, user.User) {
 	store, users := newTestStack(t)
-	svc := NewService(store, crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmArgon2id), nil)
+	svc := NewService(store, crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt), nil)
 	return svc, createUser(t, users, "svc_"+strconv.FormatInt(time.Now().UnixNano(), 10)[:6])
 }
 

@@ -37,7 +37,7 @@ func withLDAPSync(deps Deps) identity.Feature  { return ldapsync.New() }
 // sign-in/sign-out routes; account mounts self-service under the
 // same guard.
 func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature, []identity.Feature) {
-	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmArgon2id)
+	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, auditAdapter(audit))
 	sessions := session.NewService(
