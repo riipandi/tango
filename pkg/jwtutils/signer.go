@@ -1,6 +1,7 @@
 package jwtutils
 
 import (
+	"fmt"
 	"time"
 
 	jsonv2 "encoding/json/v2"
@@ -27,7 +28,43 @@ func NewSigner[T any](key jwk.Key, algorithm jwa.SignatureAlgorithm) (*Signer[T]
 	if key == nil {
 		return nil, ErrMissingKey
 	}
+	if err := validateHMACKeySize(key, algorithm); err != nil {
+		return nil, err
+	}
 	return &Signer[T]{key: key, algorithm: algorithm}, nil
+}
+
+// minHMACKeySize maps HS* algorithms to the RFC 7518 §3.2 minimum
+// key size (the hash output length); 0 for non-HMAC algorithms.
+func minHMACKeySize(alg jwa.SignatureAlgorithm) int {
+	switch alg.String() {
+	case "HS256":
+		return 32
+	case "HS384":
+		return 48
+	case "HS512":
+		return 64
+	default:
+		return 0
+	}
+}
+
+// validateHMACKeySize enforces the key-size floor for symmetric
+// algorithms; asymmetric keys pass through untouched.
+func validateHMACKeySize(key jwk.Key, alg jwa.SignatureAlgorithm) error {
+	minimum := minHMACKeySize(alg)
+	if minimum == 0 {
+		return nil
+	}
+	sym, ok := key.(jwk.SymmetricKey)
+	if !ok {
+		return nil
+	}
+	octets, exists := sym.Octets()
+	if !exists || len(octets) >= minimum {
+		return nil
+	}
+	return fmt.Errorf("%w: %s requires at least %d bytes, got %d", ErrWeakHMACKey, alg, minimum, len(octets))
 }
 
 // WithIssuer sets the default iss claim, applied when Standard
@@ -119,6 +156,9 @@ func (s *Signer[T]) Sign(claims T, std Standard) (string, error) {
 		return "", unmarshalErr
 	}
 	for name, value := range private {
+		if registeredClaims[name] {
+			return "", fmt.Errorf("%w: %q", ErrReservedClaim, name)
+		}
 		if setErr := tok.Set(name, value); setErr != nil {
 			return "", setErr
 		}

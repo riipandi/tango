@@ -2,6 +2,7 @@ package jwtutils
 
 import (
 	"errors"
+	"time"
 
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
@@ -13,23 +14,37 @@ import (
 var (
 	ErrMissingKey    = errors.New("jwtutils: signing key is required")
 	ErrMissingKeySet = errors.New("jwtutils: verification key set is empty")
+	// ErrReservedClaim is returned when a typed claim set carries a
+	// field whose JSON tag collides with a registered claim name —
+	// it would hijack claims the verifier relies on.
+	ErrReservedClaim = errors.New("jwtutils: private claim collides with a registered claim")
+	// ErrWeakHMACKey is returned when an HMAC key is shorter than
+	// the RFC 7518 minimum for the algorithm.
+	ErrWeakHMACKey = errors.New("jwtutils: HMAC key too short")
 )
 
 // Verifier checks the signature and registered-claim constraints of a
 // JWT, then decodes its private claims into the typed set T. Like the
 // signer, the With* methods return modified copies.
 type Verifier[T any] struct {
-	key       jwk.Key
-	algorithm jwa.SignatureAlgorithm
-	keySet    jwk.Set
-	issuer    string
-	audience  string
+	key            jwk.Key
+	algorithm      jwa.SignatureAlgorithm
+	keySet         jwk.Set
+	issuer         string
+	audience       string
+	clockSkew      time.Duration
+	requiredClaims []string
 }
 
 // NewVerifier builds a verifier over a single key with the given
 // signature algorithm. The key may be nil when verification will use
 // a key set instead (WithKeySet).
 func NewVerifier[T any](key jwk.Key, algorithm jwa.SignatureAlgorithm) (*Verifier[T], error) {
+	if key != nil {
+		if err := validateHMACKeySize(key, algorithm); err != nil {
+			return nil, err
+		}
+	}
 	return &Verifier[T]{key: key, algorithm: algorithm}, nil
 }
 
@@ -55,6 +70,24 @@ func (v *Verifier[T]) WithAudience(audience string) *Verifier[T] {
 	return &clone
 }
 
+// WithClockSkew tolerates exp/iat/nbf timestamps differing from the
+// local clock by the given duration — the norm between servers whose
+// clocks drift within NTP bounds.
+func (v *Verifier[T]) WithClockSkew(skew time.Duration) *Verifier[T] {
+	clone := *v
+	clone.clockSkew = skew
+	return &clone
+}
+
+// WithRequiredClaims enforces the presence of the named registered
+// claims (e.g. "exp") — absent claims fail verification even though
+// the RFC leaves them optional.
+func (v *Verifier[T]) WithRequiredClaims(names ...string) *Verifier[T] {
+	clone := *v
+	clone.requiredClaims = append(clone.requiredClaims, names...)
+	return &clone
+}
+
 // Verify checks the signature and constraints, then decodes the
 // typed private claims.
 func (v *Verifier[T]) Verify(encoded string) (Verified[T], error) {
@@ -75,6 +108,12 @@ func (v *Verifier[T]) Verify(encoded string) (Verified[T], error) {
 	}
 	if v.audience != "" {
 		opts = append(opts, jwt.WithAudience(v.audience))
+	}
+	if v.clockSkew > 0 {
+		opts = append(opts, jwt.WithAcceptableSkew(v.clockSkew))
+	}
+	for _, name := range v.requiredClaims {
+		opts = append(opts, jwt.WithRequiredClaim(name))
 	}
 
 	tok, err := jwt.Parse([]byte(encoded), opts...)

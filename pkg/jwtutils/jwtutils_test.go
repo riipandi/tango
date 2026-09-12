@@ -34,9 +34,22 @@ func (c *normalizingClaims) DecodePrivateClaims(params map[string]any) error {
 	return nil
 }
 
+// hijackingClaims tries to override a registered claim through a
+// JSON tag — rejected at Sign time.
+type hijackingClaims struct {
+	ExpiresAt time.Time `json:"exp"`
+}
+
 func hmacKey(t *testing.T, secret string) jwk.Key {
 	t.Helper()
-	key, err := jwk.Import([]byte(secret))
+	// Stretch to the RFC 7518 floor for HS256 (32 bytes) so helper
+	// keys pass the constructor check; tests that need a weak key
+	// build one explicitly.
+	raw := make([]byte, 32)
+	for i := range raw {
+		raw[i] = secret[i%len(secret)]
+	}
+	key, err := jwk.Import(raw)
 	require.NoError(t, err)
 	return key
 }
@@ -203,6 +216,61 @@ func TestOptionalPrivateClaimDecoder(t *testing.T) {
 func TestSignerRejectsMissingKey(t *testing.T) {
 	_, err := NewSigner[accessClaims](nil, jwa.HS256())
 	assert.ErrorIs(t, err, ErrMissingKey)
+}
+
+func TestSignerRejectsReservedClaimHijack(t *testing.T) {
+	// A claim set must not be able to override registered claims —
+	// the verifier relies on them (e.g. exp).
+	signer, err := NewSigner[hijackingClaims](hmacKey(t, "secret-1"), jwa.HS256())
+	require.NoError(t, err)
+
+	_, err = signer.Sign(hijackingClaims{ExpiresAt: time.Now().Add(time.Hour)}, Standard{})
+	assert.ErrorIs(t, err, ErrReservedClaim)
+}
+
+func TestVerifyAcceptsClockSkew(t *testing.T) {
+	token, err := mustSigner[accessClaims](t, hmacKey(t, "secret-1"), jwa.HS256()).
+		Sign(accessClaims{}, Standard{ExpiresAt: time.Now().Add(-30 * time.Second)})
+	require.NoError(t, err)
+
+	strict, err := NewVerifier[accessClaims](hmacKey(t, "secret-1"), jwa.HS256())
+	require.NoError(t, err)
+	_, err = strict.Verify(token)
+	assert.Error(t, err, "expired without skew must fail")
+
+	lenient := mustVerifier[accessClaims](t, hmacKey(t, "secret-1"), jwa.HS256()).
+		WithClockSkew(time.Minute)
+	verified, err := lenient.Verify(token)
+	require.NoError(t, err)
+	assert.NotZero(t, verified.ExpiresAt)
+}
+
+func TestVerifyEnforcesRequiredClaims(t *testing.T) {
+	// A token without exp: legal per RFC 7519, rejected when required.
+	signer, err := NewSigner[accessClaims](hmacKey(t, "secret-1"), jwa.HS256())
+	require.NoError(t, err)
+	token, err := signer.Sign(accessClaims{Plan: "pro"}, Standard{Subject: "user_1"})
+	require.NoError(t, err)
+
+	verifier := mustVerifier[accessClaims](t, hmacKey(t, "secret-1"), jwa.HS256()).
+		WithRequiredClaims("exp", "jti")
+	_, err = verifier.Verify(token)
+	assert.Error(t, err, "missing exp/jti must fail")
+}
+
+func TestRejectsWeakHMACKeys(t *testing.T) {
+	short, err := jwk.Import([]byte("too-short"))
+	require.NoError(t, err)
+
+	_, err = NewSigner[accessClaims](short, jwa.HS256())
+	assert.ErrorIs(t, err, ErrWeakHMACKey)
+
+	_, err = NewVerifier[accessClaims](short, jwa.HS256())
+	assert.ErrorIs(t, err, ErrWeakHMACKey)
+
+	// Asymmetric keys are not subject to the HMAC floor.
+	_, err = NewSigner[accessClaims](ed25519Key(t), jwa.EdDSA())
+	require.NoError(t, err)
 }
 
 func mustSigner[T any](t *testing.T, key jwk.Key, algorithm jwa.SignatureAlgorithm) *Signer[T] {
