@@ -25,12 +25,15 @@ func TestQueueProcessTypedPayload(t *testing.T) {
 	assert.Equal(t, "abc", got.Val)
 }
 
-func TestQueuesGetUnregisteredQueuePanics(t *testing.T) {
-	s := &queues{}
-	assert.PanicsWithValue(t,
-		"queue 'test' not registered, ensure all queues are registered before calling Client.Start()",
-		func() { s.get(testTask{}.Config().Name) },
-	)
+func TestQueuesLookupUnregistered(t *testing.T) {
+	s := &queues{registry: make(map[string]Queue)}
+	_, ok := s.lookup("test")
+	assert.False(t, ok, "unregistered queue found")
+
+	s.registry["test"] = NewQueue(func(_ context.Context, _ testTask) error { return nil })
+	q, ok := s.lookup("test")
+	assert.True(t, ok)
+	assert.Equal(t, "test", q.Config().Name)
 }
 
 func TestQueuesAddMissingNamePanics(t *testing.T) {

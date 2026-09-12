@@ -44,14 +44,47 @@ func TestQueuedTaskClaim(t *testing.T) {
 	}
 
 	// Claiming an empty set is a no-op.
-	require.NoError(t, queuedTasks{}.claim(ctx, store))
+	claimed, err := queuedTasks{}.claim(ctx, store, now())
+	require.NoError(t, err)
+	assert.Empty(t, claimed)
 
-	require.NoError(t, tasks.claim(ctx, store))
+	claimed, err = tasks.claim(ctx, store, now().Add(-time.Second))
+	require.NoError(t, err)
+	assert.Len(t, claimed, 2)
+
 	got := getTasks(t, store)
 	for _, task := range got {
 		assert.NotNil(t, task.claimedAt, "task %s should be claimed", task.id)
 		assert.Equal(t, 1, task.attempts, "claim increments attempts")
 	}
+}
+
+func TestQueuedTaskClaimContention(t *testing.T) {
+	store := newPool(t)
+	ctx := context.Background()
+
+	task := &queuedTask{id: nextTaskID(), queue: "test", task: []byte("x")}
+	insertTask(t, store, task)
+
+	// The first dispatcher wins the claim.
+	claimed, err := (queuedTasks{task}).claim(ctx, store, now().Add(-time.Second))
+	require.NoError(t, err)
+	require.Len(t, claimed, 1)
+
+	// A competing dispatcher with a non-expired deadline loses: no double claim.
+	stale := &queuedTask{id: task.id, queue: "test", task: []byte("x")}
+	claimed, err = (queuedTasks{stale}).claim(ctx, store, now().Add(-time.Second))
+	require.NoError(t, err)
+	assert.Empty(t, claimed)
+
+	// Once the claim expires, the task is reclaimed and attempts increment again.
+	claimed, err = (queuedTasks{stale}).claim(ctx, store, now().Add(time.Hour))
+	require.NoError(t, err)
+	require.Len(t, claimed, 1)
+
+	got := getTasks(t, store)
+	require.Len(t, got, 1)
+	assert.Equal(t, 2, got[0].attempts, "attempts")
 }
 
 func TestQueuedTaskFail(t *testing.T) {

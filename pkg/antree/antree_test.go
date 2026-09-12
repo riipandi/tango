@@ -168,7 +168,8 @@ func TestClientStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, TaskStatusPending, s)
 
-	require.NoError(t, (queuedTasks{{id: id}}).claim(ctx, c.db))
+	_, err = (queuedTasks{{id: id}}).claim(ctx, c.db, now().Add(-time.Second))
+	require.NoError(t, err)
 	s, err = c.Status(ctx, id)
 	require.NoError(t, err)
 	assert.Equal(t, TaskStatusRunning, s)

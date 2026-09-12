@@ -18,8 +18,8 @@ import (
 // Identity feature selectors, one line each in New. Placeholders
 // until implemented: no routes, no storage.
 func withSession(deps Deps) identity.Feature   { return session.New() }
-func withWebAuthn(deps Deps) identity.Feature  { return webauthn.New() }
 func withPassword(deps Deps) identity.Feature  { return password.New() }
+func withWebAuthn(deps Deps) identity.Feature  { return webauthn.New() }
 func withAPIKeys(deps Deps) identity.Feature   { return apikey.New() }
 func withAPIAccess(deps Deps) identity.Feature { return apiaccess.New() }
 func withLDAPSync(deps Deps) identity.Feature  { return ldapsync.New() }

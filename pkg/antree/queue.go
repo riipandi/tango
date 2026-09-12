@@ -113,14 +113,11 @@ func (q *queues) add(queue Queue) {
 	q.registry[queue.Config().Name] = queue
 }
 
-// get loads a queue from the registry by name, panicking when it was never
-// registered.
-func (q *queues) get(name string) Queue {
+// lookup loads a queue from the registry by name; false is returned when it
+// was never registered.
+func (q *queues) lookup(name string) (Queue, bool) {
 	q.RLock()
 	defer q.RUnlock()
 	val, ok := q.registry[name]
-	if !ok {
-		panic(fmt.Sprintf("queue '%s' not registered, ensure all queues are registered before calling Client.Start()", name))
-	}
-	return val
+	return val, ok
 }

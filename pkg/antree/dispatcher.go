@@ -3,6 +3,7 @@ package antree
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -21,23 +22,15 @@ type (
 		Notify()
 	}
 
-	// dispatcher implements Dispatcher.
+	// dispatcher implements Dispatcher. Each Start runs one generation of
+	// goroutines on channels captured as locals, so a restart never races a
+	// draining previous generation.
 	dispatcher struct {
 		// client is the Client this dispatcher belongs to.
 		client *Client
 
 		// log is the logger.
 		log Logger
-
-		// ctx is the context used to start the dispatcher.
-		ctx context.Context
-
-		// shutdownCtx is an internal context used when attempting a graceful
-		// shutdown.
-		shutdownCtx context.Context
-
-		// shutdown cancels shutdownCtx.
-		shutdown context.CancelFunc
 
 		// numWorkers is the number of goroutines opened to execute tasks.
 		numWorkers int
@@ -50,6 +43,19 @@ type (
 
 		// running indicates if the dispatcher is currently running.
 		running atomic.Bool
+
+		// wg tracks all goroutines of the current generation.
+		wg sync.WaitGroup
+
+		// ctx is the context used to start the dispatcher.
+		ctx context.Context
+
+		// shutdownCtx is an internal context used when attempting a graceful
+		// shutdown.
+		shutdownCtx context.Context
+
+		// shutdown cancels shutdownCtx.
+		shutdown context.CancelFunc
 
 		// ticker fetches tasks from the database when the next task is delayed.
 		ticker *time.Ticker
@@ -73,12 +79,14 @@ type (
 )
 
 // Start starts the dispatcher. Cancel the provided context for a hard stop;
-// call Stop for a graceful one.
+// call Stop for a graceful one. A restart waits for the previous generation
+// to fully drain before re-initializing.
 func (d *dispatcher) Start(ctx context.Context) {
 	// Abort if the dispatcher is already running.
 	if d.running.Load() {
 		return
 	}
+	d.wg.Wait()
 
 	d.ctx = ctx
 	d.shutdownCtx, d.shutdown = context.WithCancel(context.Background())
@@ -90,18 +98,28 @@ func (d *dispatcher) Start(ctx context.Context) {
 	d.availableWorkers = make(chan struct{}, d.numWorkers)
 	d.running.Store(true)
 
-	for range d.numWorkers {
-		go d.worker()
-		d.availableWorkers <- struct{}{}
-	}
+	// Goroutines of this generation only touch these locals, never the fields.
+	tasks, ready, trigger, available := d.tasks, d.ready, d.trigger, d.availableWorkers
+	ticker, shutdownCtx := d.ticker, d.shutdownCtx
+
+	d.wg.Add(1)
+	go d.triggerer(ctx, shutdownCtx, ready, trigger)
+
+	d.wg.Add(1)
+	go d.fetcher(ctx, shutdownCtx, tasks, ticker, ready, trigger)
 
 	if d.cleanupInterval > 0 {
-		go d.cleaner()
+		d.wg.Add(1)
+		go d.cleaner(ctx, shutdownCtx)
 	}
 
-	go d.triggerer()
-	go d.fetcher()
-	d.ready <- struct{}{}
+	for range d.numWorkers {
+		d.wg.Add(1)
+		go d.worker(ctx, shutdownCtx, tasks, available, ready)
+		available <- struct{}{}
+	}
+
+	ready <- struct{}{}
 	d.log.Info("task dispatcher started")
 }
 
@@ -133,16 +151,18 @@ func (d *dispatcher) Stop(ctx context.Context) bool {
 // triggerer listens to the ready channel and forwards a trigger to the fetcher
 // only when one is not already pending, collapsing many ready signals into a
 // single database fetch.
-func (d *dispatcher) triggerer() {
+func (d *dispatcher) triggerer(ctx, shutdownCtx context.Context, ready, trigger chan struct{}) {
+	defer d.wg.Done()
+
 	for {
 		select {
-		case <-d.ready:
+		case <-ready:
 			if d.triggered.CompareAndSwap(false, true) {
-				d.trigger <- struct{}{}
+				trigger <- struct{}{}
 			}
-		case <-d.shutdownCtx.Done():
+		case <-shutdownCtx.Done():
 			return
-		case <-d.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -150,61 +170,66 @@ func (d *dispatcher) triggerer() {
 
 // fetcher fetches tasks from the database when the ticker ticks or a trigger
 // signal arrives from the triggerer.
-func (d *dispatcher) fetcher() {
+func (d *dispatcher) fetcher(ctx, shutdownCtx context.Context, tasks chan *queuedTask, ticker *time.Ticker, ready, trigger chan struct{}) {
+	defer d.wg.Done()
 	defer func() {
 		d.running.Store(false)
-		d.ticker.Stop()
-		close(d.tasks)
+		ticker.Stop()
+		close(tasks)
 		d.log.Info("shutting down dispatcher")
 	}()
 
 	for {
 		select {
-		case <-d.ticker.C:
-			d.ticker.Stop()
-			d.fetch()
-		case <-d.trigger:
-			d.fetch()
-		case <-d.shutdownCtx.Done():
+		case <-ticker.C:
+			ticker.Stop()
+			d.fetch(ctx, tasks, ticker, ready, trigger)
+		case <-trigger:
+			d.fetch(ctx, tasks, ticker, ready, trigger)
+		case <-shutdownCtx.Done():
 			return
-		case <-d.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}
 }
 
 // worker processes incoming tasks.
-func (d *dispatcher) worker() {
+func (d *dispatcher) worker(ctx, shutdownCtx context.Context, tasks chan *queuedTask, available, ready chan struct{}) {
+	defer d.wg.Done()
+
 	for {
 		select {
-		case row := <-d.tasks:
+		case row := <-tasks:
 			if row == nil {
 				break
 			}
-			d.processTask(row)
-			d.availableWorkers <- struct{}{}
-		case <-d.shutdownCtx.Done():
+			d.processTask(ctx, ready, row)
+			available <- struct{}{}
+		case <-shutdownCtx.Done():
 			return
-		case <-d.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}
 }
 
 // cleaner periodically deletes expired completed tasks from the database.
-func (d *dispatcher) cleaner() {
+func (d *dispatcher) cleaner(ctx, shutdownCtx context.Context) {
+	defer d.wg.Done()
+
 	ticker := time.NewTicker(d.cleanupInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			if err := deleteExpiredCompletedTasks(d.ctx, d.client.db); err != nil {
+			if err := deleteExpiredCompletedTasks(ctx, d.client.db); err != nil {
 				d.log.Error("failed to delete expired completed tasks", "error", err)
 			}
-		case <-d.shutdownCtx.Done():
+		case <-shutdownCtx.Done():
 			return
-		case <-d.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -213,17 +238,17 @@ func (d *dispatcher) cleaner() {
 // waitForWorkers blocks until at least one worker is available and returns the
 // number that are available. Zero is returned when the dispatcher shuts down
 // while waiting.
-func (d *dispatcher) waitForWorkers() int {
+func (d *dispatcher) waitForWorkers(ctx context.Context, available chan struct{}) int {
 	for {
 		select {
 		case <-d.shutdownCtx.Done():
 			return 0
-		case <-d.ctx.Done():
+		case <-ctx.Done():
 			return 0
 		default:
 		}
 
-		if w := len(d.availableWorkers); w > 0 {
+		if w := len(available); w > 0 {
 			return w
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -232,14 +257,14 @@ func (d *dispatcher) waitForWorkers() int {
 
 // fetch fetches tasks from the database for execution and coordinates when the
 // dispatcher needs to fetch again.
-func (d *dispatcher) fetch() {
+func (d *dispatcher) fetch(ctx context.Context, tasks chan *queuedTask, ticker *time.Ticker, ready, trigger chan struct{}) {
 	var err error
 
 	// If we failed at any point, schedule another fetch.
 	defer func() {
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
-			d.ready <- struct{}{}
+			ready <- struct{}{}
 		}
 	}()
 
@@ -247,14 +272,14 @@ func (d *dispatcher) fetch() {
 	d.triggered.Store(false)
 
 	// Fetch only as many tasks as there are workers available.
-	workers := d.waitForWorkers()
+	workers := d.waitForWorkers(ctx, d.availableWorkers)
 	if workers == 0 {
 		return // shutting down
 	}
 
 	// Fetch tasks for each available worker plus the next upcoming task, so the
 	// scheduler knows when to query the database again without polling.
-	tasks, err := getScheduledTasks(d.ctx, d.client.db, now().Add(-d.releaseAfter), workers+1)
+	queued, err := getScheduledTasks(ctx, d.client.db, now().Add(-d.releaseAfter), workers+1)
 	if err != nil {
 		d.log.Error("fetch tasks query failed", "error", err)
 		return
@@ -262,11 +287,11 @@ func (d *dispatcher) fetch() {
 
 	var next *queuedTask
 	nextUp := func(i int) {
-		next = tasks[i]
-		tasks = tasks[:i]
+		next = queued[i]
+		queued = queued[:i]
 	}
 
-	for i := range tasks {
+	for i := range queued {
 		// The workers are full.
 		if (i + 1) > workers {
 			nextUp(i)
@@ -274,64 +299,80 @@ func (d *dispatcher) fetch() {
 		}
 
 		// This task is not ready yet.
-		if tasks[i].waitUntil != nil && tasks[i].waitUntil.After(now()) {
+		if queued[i].waitUntil != nil && queued[i].waitUntil.After(now()) {
 			nextUp(i)
 			break
 		}
 	}
 
-	if err = tasks.claim(d.ctx, d.client.db); err != nil {
-		d.log.Error("failed to claim tasks", "error", err)
+	// Claim only the tasks we win; a task claimed by another dispatcher within
+	// the deadline stays with the winner and is never executed twice.
+	claimed, claimErr := queued.claim(ctx, d.client.db, now().Add(-d.releaseAfter))
+	if claimErr != nil {
+		err = claimErr
+		d.log.Error("failed to claim tasks", "error", claimErr)
 		return
 	}
-
-	for i := range tasks {
-		tasks[i].attempts++
-		<-d.availableWorkers
-		d.tasks <- tasks[i]
+	won := make(map[string]struct{}, len(claimed))
+	for _, id := range claimed {
+		won[id] = struct{}{}
 	}
 
-	d.schedule(next)
+	for i := range queued {
+		if _, ok := won[queued[i].id]; !ok {
+			continue // lost the claim
+		}
+		queued[i].attempts++
+		<-d.availableWorkers
+		tasks <- queued[i]
+	}
+
+	d.schedule(ticker, ready, next)
 }
 
 // schedule adjusts the dispatcher schedule based on the next up task.
-func (d *dispatcher) schedule(t *queuedTask) {
-	d.ticker.Stop()
+func (d *dispatcher) schedule(ticker *time.Ticker, ready chan struct{}, t *queuedTask) {
+	ticker.Stop()
 
 	if t == nil {
 		return
 	}
 
 	if t.waitUntil == nil {
-		d.ready <- struct{}{}
+		ready <- struct{}{}
 		return
 	}
 
 	dur := t.waitUntil.Sub(now())
 	if dur < 0 {
-		d.ready <- struct{}{}
+		ready <- struct{}{}
 		return
 	}
-	d.ticker.Reset(dur)
+	ticker.Reset(dur)
 }
 
 // processTask attempts to execute a given task.
-func (d *dispatcher) processTask(t *queuedTask) {
-	var (
-		err    error
-		ctx    context.Context
-		cancel context.CancelFunc
-	)
+func (d *dispatcher) processTask(ctx context.Context, ready chan struct{}, t *queuedTask) {
+	var err error
 
-	q := d.client.queues.get(t.queue)
+	q, ok := d.client.queues.lookup(t.queue)
+	if !ok {
+		// Never registered: the task can never execute. Discard it instead of
+		// re-claiming it forever or crashing the worker.
+		d.log.Error("queue not registered, discarding task", "id", t.id, "queue", t.queue)
+		if delErr := t.deleteTx(ctx, d.client.db); delErr != nil {
+			d.log.Error("failed to discard task", "id", t.id, "queue", t.queue, "error", delErr)
+		}
+		return
+	}
 	cfg := q.Config()
 
-	// Set a context timeout, if desired.
+	// Set a context timeout, if desired. The timeout counts real time from the
+	// execution start, independent of the clock the queue uses elsewhere.
 	if cfg.Timeout > 0 {
-		ctx, cancel = context.WithDeadline(d.ctx, now().Add(cfg.Timeout))
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
 		defer cancel()
-	} else {
-		ctx = d.ctx
 	}
 
 	// Store the client in the context so the processor can add more tasks.
@@ -346,18 +387,18 @@ func (d *dispatcher) processTask(t *queuedTask) {
 		}
 
 		if err != nil {
-			d.taskFailure(q, t, start, time.Since(start), err)
+			d.taskFailure(ctx, ready, q, t, start, time.Since(start), err)
 		}
 	}()
 
 	if err = q.Process(ctx, t.task); err == nil {
-		d.taskSuccess(q, t, start, time.Since(start))
+		d.taskSuccess(ctx, q, t, start, time.Since(start))
 	}
 }
 
 // taskSuccess removes a successfully executed task from the queue and
 // optionally retains it in the completed tasks table.
-func (d *dispatcher) taskSuccess(q Queue, t *queuedTask, started time.Time, dur time.Duration) {
+func (d *dispatcher) taskSuccess(ctx context.Context, q Queue, t *queuedTask, started time.Time, dur time.Duration) {
 	d.log.Info("task processed", "id", t.id, "queue", t.queue, "duration", dur, "attempt", t.attempts)
 
 	var err error
@@ -367,7 +408,7 @@ func (d *dispatcher) taskSuccess(q Queue, t *queuedTask, started time.Time, dur 
 		}
 	}()
 
-	tx, err := d.client.db.Begin(d.ctx)
+	tx, err := d.client.db.Begin(ctx)
 	if err != nil {
 		return
 	}
@@ -375,51 +416,53 @@ func (d *dispatcher) taskSuccess(q Queue, t *queuedTask, started time.Time, dur 
 		if err == nil {
 			return
 		}
-		if rollbackErr := tx.Rollback(d.ctx); rollbackErr != nil {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
 			d.log.Error("failed to rollback task success", "id", t.id, "queue", t.queue, "error", rollbackErr)
 		}
 	}()
 
-	if err = t.deleteTx(d.ctx, tx); err != nil {
+	if err = t.deleteTx(ctx, tx); err != nil {
 		return
 	}
-	if err = d.taskComplete(tx, q, t, started, dur, nil); err != nil {
+	if err = d.taskComplete(ctx, tx, q, t, started, dur, nil); err != nil {
 		return
 	}
-	err = tx.Commit(d.ctx)
+	err = tx.Commit(ctx)
 }
 
 // taskFailure releases a failed task back to the queue when attempts remain,
 // otherwise deletes it from the queue and optionally moves it to the completed
 // tasks table.
-func (d *dispatcher) taskFailure(q Queue, t *queuedTask, started time.Time, dur time.Duration, taskErr error) {
+func (d *dispatcher) taskFailure(ctx context.Context, ready chan struct{}, q Queue, t *queuedTask, started time.Time, dur time.Duration, taskErr error) {
 	remaining := q.Config().MaxAttempts - t.attempts
 	d.log.Error("task processing failed", "id", t.id, "queue", t.queue, "duration", dur, "attempt", t.attempts, "remaining", remaining)
 
 	if remaining >= 1 {
 		t.lastExecutedAt = &started
-		if err := t.fail(d.ctx, d.client.db, now().Add(q.Config().Backoff)); err != nil {
+		if err := t.fail(ctx, d.client.db, now().Add(q.Config().Backoff)); err != nil {
 			d.log.Error("failed to update task failure", "id", t.id, "queue", t.queue, "error", err)
 		}
-		d.ready <- struct{}{}
+		// The task is queued for a retry: schedule a fetch so the dispatcher
+		// learns the new wait time.
+		ready <- struct{}{}
 		return
 	}
 
-	tx, err := d.client.db.Begin(d.ctx)
+	tx, err := d.client.db.Begin(ctx)
 	if err != nil {
 		d.log.Error("failed to update task failure", "id", t.id, "queue", t.queue, "error", err)
 		return
 	}
 
-	err = t.deleteTx(d.ctx, tx)
+	err = t.deleteTx(ctx, tx)
 	if err == nil {
-		err = d.taskComplete(tx, q, t, started, dur, taskErr)
+		err = d.taskComplete(ctx, tx, q, t, started, dur, taskErr)
 	}
 	if err == nil {
-		err = tx.Commit(d.ctx)
+		err = tx.Commit(ctx)
 	}
 	if err != nil {
-		if rollbackErr := tx.Rollback(d.ctx); rollbackErr != nil {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
 			d.log.Error("failed to rollback task failure", "id", t.id, "queue", t.queue, "error", rollbackErr)
 		}
 		d.log.Error("failed to update task failure", "id", t.id, "queue", t.queue, "error", err)
@@ -427,7 +470,7 @@ func (d *dispatcher) taskFailure(q Queue, t *queuedTask, started time.Time, dur 
 }
 
 // taskComplete creates a completed task from a given task.
-func (d *dispatcher) taskComplete(exec Executor, q Queue, t *queuedTask, started time.Time, dur time.Duration, taskErr error) error {
+func (d *dispatcher) taskComplete(ctx context.Context, exec Executor, q Queue, t *queuedTask, started time.Time, dur time.Duration, taskErr error) error {
 	ret := q.Config().Retention
 	if ret == nil {
 		return nil
@@ -460,7 +503,7 @@ func (d *dispatcher) taskComplete(exec Executor, q Queue, t *queuedTask, started
 		c.task = t.task
 	}
 
-	return c.insertTx(d.ctx, exec)
+	return c.insertTx(ctx, exec)
 }
 
 // Notify tells the dispatcher that a new task was added.

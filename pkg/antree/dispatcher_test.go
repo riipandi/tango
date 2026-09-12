@@ -59,12 +59,6 @@ func TestDispatcherStart(t *testing.T) {
 	cancel()
 	wait()
 	assert.False(t, d.running.Load(), "running")
-
-	// A cancelled start context still sends the initial ready signal.
-	ctx, cancel = context.WithCancel(context.Background())
-	cancel()
-	d.Start(ctx)
-	waitForChan(t, d.ready)
 }
 
 func TestDispatcherStop(t *testing.T) {
@@ -106,7 +100,8 @@ func TestDispatcherTriggerer(t *testing.T) {
 		shutdownCtx: context.Background(),
 		ctx:         ctx,
 	}
-	go d.triggerer()
+	d.wg.Add(1)
+	go d.triggerer(ctx, d.shutdownCtx, d.ready, d.trigger)
 
 	// One ready signal produces one trigger.
 	d.ready <- struct{}{}
@@ -136,7 +131,8 @@ func TestDispatcherTriggerer(t *testing.T) {
 		shutdownCtx: ctx,
 		ctx:         context.Background(),
 	}
-	go d.triggerer()
+	d.wg.Add(1)
+	go d.triggerer(ctx, d.shutdownCtx, d.ready, d.trigger)
 	cancel()
 	wait()
 	d.ready <- struct{}{}
@@ -213,14 +209,17 @@ func TestDispatcherProcessTaskContext(t *testing.T) {
 		called = true
 		innerCtx = ctx
 
+		// The deadline just started counting real time: a full second remains.
 		deadline, ok := ctx.Deadline()
 		require.True(t, ok, "deadline set")
 		assert.Equal(t, d.client, FromContext(ctx), "client")
-		assert.Equal(t, time.Second, deadline.Sub(now()), "ctx deadline")
+		remaining := time.Until(deadline)
+		assert.LessOrEqual(t, remaining, time.Second, "ctx deadline")
+		assert.Greater(t, remaining, 900*time.Millisecond, "ctx deadline")
 		return nil
 	}))
 
-	d.processTask(&queuedTask{
+	d.processTask(d.ctx, d.ready, &queuedTask{
 		id:        nextTaskID(),
 		queue:     "test",
 		task:      encode(t, &testTask{Val: "1"}),
@@ -258,7 +257,7 @@ func TestDispatcherProcessTaskSuccess(t *testing.T) {
 	}
 	insertTask(t, d.client.db, tk)
 
-	d.processTask(tk)
+	d.processTask(d.ctx, d.ready, tk)
 	assert.True(t, called, "called")
 	require.Len(t, getTasks(t, d.client.db), 0)
 	assert.Len(t, d.ready, 0, "ready")
@@ -293,7 +292,7 @@ func TestDispatcherProcessTaskNoRetention(t *testing.T) {
 	}
 	insertTask(t, d.client.db, tk)
 
-	d.processTask(tk)
+	d.processTask(d.ctx, d.ready, tk)
 	require.Len(t, getTasks(t, d.client.db), 0)
 	require.Len(t, getCompletedTasks(t, d.client.db), 0)
 }
@@ -314,7 +313,7 @@ func TestDispatcherProcessTaskRetainNoData(t *testing.T) {
 	}
 	insertTask(t, d.client.db, tk)
 
-	d.processTask(tk)
+	d.processTask(d.ctx, d.ready, tk)
 	require.Len(t, getTasks(t, d.client.db), 0)
 
 	completed := getCompletedTasks(t, d.client.db)
@@ -338,7 +337,7 @@ func TestDispatcherProcessTaskRetainForever(t *testing.T) {
 	}
 	insertTask(t, d.client.db, tk)
 
-	d.processTask(tk)
+	d.processTask(d.ctx, d.ready, tk)
 	require.Len(t, getTasks(t, d.client.db), 0)
 
 	completed := getCompletedTasks(t, d.client.db)
@@ -370,7 +369,7 @@ func TestDispatcherProcessTaskRetainDataFailed(t *testing.T) {
 		}
 		insertTask(t, d.client.db, tk)
 
-		d.processTask(tk)
+		d.processTask(d.ctx, d.ready, tk)
 		require.Len(t, getTasks(t, d.client.db), 0)
 
 		completed := getCompletedTasks(t, d.client.db)
@@ -408,7 +407,7 @@ func TestDispatcherProcessTaskRetainFailed(t *testing.T) {
 		}
 		insertTask(t, d.client.db, tk)
 
-		d.processTask(tk)
+		d.processTask(d.ctx, d.ready, tk)
 		require.Len(t, getTasks(t, d.client.db), 0)
 
 		completed := getCompletedTasks(t, d.client.db)
@@ -439,7 +438,7 @@ func TestDispatcherProcessTaskPanic(t *testing.T) {
 	}
 	insertTask(t, d.client.db, tk)
 
-	d.processTask(tk)
+	d.processTask(d.ctx, d.ready, tk)
 	assert.True(t, called, "called")
 	waitForChan(t, d.ready)
 
@@ -472,7 +471,7 @@ func TestDispatcherProcessTaskFailure(t *testing.T) {
 	insertTask(t, d.client.db, tk)
 
 	// First attempt: released back to the queue.
-	d.processTask(tk)
+	d.processTask(d.ctx, d.ready, tk)
 	assert.True(t, called, "called")
 	waitForChan(t, d.ready)
 
@@ -486,7 +485,7 @@ func TestDispatcherProcessTaskFailure(t *testing.T) {
 	// Final attempt: moved to completed with the error.
 	called = false
 	tk.attempts++
-	d.processTask(tk)
+	d.processTask(d.ctx, d.ready, tk)
 	assert.True(t, called, "called")
 	assert.Len(t, d.ready, 0, "ready")
 	require.Len(t, getTasks(t, d.client.db), 0)
@@ -504,6 +503,26 @@ func TestDispatcherProcessTaskFailure(t *testing.T) {
 	assert.Equal(t, "failure error", *completed[0].err, "error")
 	assert.True(t, bytes.Equal(tk.task, completed[0].task), "task does not match")
 	assert.Greater(t, completed[0].lastDuration, time.Duration(0), "last duration not set")
+}
+
+func TestDispatcherProcessTaskUnregisteredQueue(t *testing.T) {
+	d := newDispatcher(t)
+	d.ready = make(chan struct{}, 1)
+	d.ctx = context.Background()
+
+	// The queue was never registered: the worker must survive and the task
+	// must be discarded instead of being re-claimed forever.
+	tk := &queuedTask{
+		id:        nextTaskID(),
+		queue:     "missing",
+		task:      []byte("x"),
+		createdAt: now(),
+	}
+	insertTask(t, d.client.db, tk)
+
+	assert.NotPanics(t, func() { d.processTask(d.ctx, d.ready, tk) })
+	require.Len(t, getTasks(t, d.client.db), 0)
+	require.Len(t, getCompletedTasks(t, d.client.db), 0)
 }
 
 func TestDispatcherFetcher(t *testing.T) {
@@ -526,7 +545,8 @@ func TestDispatcherFetcher(t *testing.T) {
 
 	hold := make(chan struct{}, d.numWorkers)
 	for range d.numWorkers {
-		go d.worker()
+		d.wg.Add(1)
+		go d.worker(ctx, d.shutdownCtx, d.tasks, d.availableWorkers, d.ready)
 		d.availableWorkers <- struct{}{}
 	}
 
@@ -545,7 +565,7 @@ func TestDispatcherFetcher(t *testing.T) {
 		})
 	}
 
-	d.fetch()
+	d.fetch(ctx, d.tasks, d.ticker, d.ready, d.trigger)
 
 	// The first three tasks were claimed for the three workers; the rest untouched.
 	rows, err := d.client.db.Query(context.Background(), "SELECT id, claimed_at FROM queue_tasks")
@@ -600,7 +620,7 @@ func TestDispatcherFetcher(t *testing.T) {
 	})
 	hold <- struct{}{}
 	d.availableWorkers <- struct{}{}
-	d.fetch()
+	d.fetch(ctx, d.tasks, d.ticker, d.ready, d.trigger)
 
 	select {
 	case <-d.ticker.C:

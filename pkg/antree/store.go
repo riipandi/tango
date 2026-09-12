@@ -90,10 +90,13 @@ func (t *queuedTask) fail(ctx context.Context, exec Executor, waitUntil time.Tim
 // queuedTasks is a slice of queued tasks.
 type queuedTasks []*queuedTask
 
-// claim marks the tasks as claimed for execution.
-func (t queuedTasks) claim(ctx context.Context, exec Executor) error {
+// claim marks unclaimed (or expired-claim) tasks as claimed for execution and
+// returns the IDs that were actually claimed. Tasks claimed by another
+// dispatcher within the deadline are left to the winner, so contended tasks
+// are never executed twice.
+func (t queuedTasks) claim(ctx context.Context, exec Executor, deadline time.Time) ([]string, error) {
 	if len(t) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	ids := make([]any, 0, len(t))
@@ -104,13 +107,32 @@ func (t queuedTasks) claim(ctx context.Context, exec Executor) error {
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update("queue_tasks")
 	ub.Set("attempts = attempts + 1", ub.Assign("claimed_at", time.Now()))
-	ub.Where(ub.In("id", ids...))
+	ub.Where(
+		ub.In("id", ids...),
+		ub.Or("claimed_at IS NULL", ub.LT("claimed_at", deadline)),
+	)
+	ub.Returning("id")
 
 	query, args := ub.Build()
-	if _, err := exec.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("antree: claim tasks: %w", err)
+	rows, err := exec.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("antree: claim tasks: %w", err)
 	}
-	return nil
+	defer rows.Close()
+
+	claimed := make([]string, 0, len(t))
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("antree: claim tasks: %w", err)
+		}
+		claimed = append(claimed, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("antree: claim tasks: %w", err)
+	}
+
+	return claimed, nil
 }
 
 // scanQueuedTasks loads queued tasks from the database using the given query.
