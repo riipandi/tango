@@ -10,9 +10,8 @@ import (
 )
 
 type (
-	// Queue represents a queue containing tasks to be executed.
+	// Queue contains tasks to be executed.
 	Queue interface {
-		// Config returns the queue configuration.
 		Config() *QueueConfig
 
 		// Process executes a task payload.
@@ -21,41 +20,39 @@ type (
 
 	// QueueConfig holds the configuration options for a queue.
 	QueueConfig struct {
-		// Name is the queue name and must be unique.
+		// Name is unique per queue.
 		Name string
 
-		// MaxAttempts is the maximum number of execution attempts before the task
-		// is marked as completed.
+		// MaxAttempts is the maximum number of execution attempts before the
+		// task is marked as completed.
 		MaxAttempts int
 
-		// Timeout is the duration set on the context while executing a task.
+		// Timeout bounds the context of a task execution.
 		Timeout time.Duration
 
-		// Backoff is the duration a failed task waits in the queue before retry.
+		// Backoff is how long a failed task waits before retry.
 		Backoff time.Duration
 
-		// Retention dictates if and how completed tasks are retained in the
-		// database. If nil, no completed tasks are retained.
+		// Retention dictates if and how completed tasks are retained. If nil,
+		// no completed tasks are retained.
 		Retention *Retention
 	}
 
-	// Retention is the policy for retaining completed tasks in the database.
+	// Retention is the policy for retaining completed tasks.
 	Retention struct {
-		// Duration is how long a completed task is retained. If omitted, the task
-		// is retained forever.
+		// Duration is how long a completed task is retained. If omitted,
+		// the task is retained forever.
 		Duration time.Duration
 
 		// OnlyFailed retains only failed tasks.
 		OnlyFailed bool
 
-		// Data provides options for retaining task payload data. If nil, no task
-		// payload data is retained.
+		// Data retains task payload data. If nil, no payload data is retained.
 		Data *RetainData
 	}
 
-	// RetainData is the policy for retaining task payload data of completed tasks.
+	// RetainData is the policy for retaining payload data of completed tasks.
 	RetainData struct {
-		// OnlyFailed retains payload data only for failed tasks.
 		OnlyFailed bool
 	}
 
@@ -98,8 +95,7 @@ func (q *queue[T]) Process(ctx context.Context, payload []byte) error {
 	return q.processor(ctx, obj)
 }
 
-// add adds a queue to the registry, panicking when the name is missing or
-// already registered.
+// add registers a queue, panicking when the name is missing or taken.
 func (q *queues) add(queue Queue) {
 	if len(queue.Config().Name) == 0 {
 		panic("queue name is missing")
@@ -113,8 +109,7 @@ func (q *queues) add(queue Queue) {
 	q.registry[queue.Config().Name] = queue
 }
 
-// lookup loads a queue from the registry by name; false is returned when it
-// was never registered.
+// lookup returns the queue registered under name, if any.
 func (q *queues) lookup(name string) (Queue, bool) {
 	q.RLock()
 	defer q.RUnlock()

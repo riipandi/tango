@@ -59,9 +59,7 @@ func TestMigrationsLifecycle(t *testing.T) {
 	).Scan(&extensions))
 	assert.Equal(t, 4, extensions)
 
-	// All tables land in the public schema (reference layout:
-	// domainaja-app), asserted by name so test litter cannot skew
-	// the count.
+	// All tables land in the public schema, asserted by name so test litter cannot skew the count.
 	for schema, names := range map[string][]string{
 		"public": {
 			"deleted_records", "app_settings",

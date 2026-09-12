@@ -39,8 +39,8 @@ type queuedTask struct {
 }
 
 // insertTx inserts a queued task as part of the given executor. The ID is
-// generated in the app (UUIDv7) so callers can reference the task before the
-// insert commits, and because it is time-sortable.
+// generated in the app (UUIDv7) so callers can reference the task before
+// the insert commits, and because it is time-sortable.
 func (t *queuedTask) insertTx(ctx context.Context, exec Executor) error {
 	if len(t.id) == 0 {
 		t.id = uuid.NewV7().String()
@@ -94,13 +94,12 @@ func (t *queuedTask) fail(ctx context.Context, exec Executor, waitUntil time.Tim
 	return nil
 }
 
-// queuedTasks is a slice of queued tasks.
 type queuedTasks []*queuedTask
 
-// claim marks unclaimed (or expired-claim) tasks as claimed for execution and
-// returns the IDs that were actually claimed. Tasks claimed by another
-// dispatcher within the deadline are left to the winner, so contended tasks
-// are never executed twice.
+// claim marks unclaimed (or expired-claim) tasks as claimed and returns the
+// IDs actually claimed. Tasks claimed by another dispatcher within the
+// deadline are left to the winner, so contended tasks are never executed
+// twice.
 func (t queuedTasks) claim(ctx context.Context, exec Executor, deadline time.Time) ([]string, error) {
 	if len(t) == 0 {
 		return nil, nil
@@ -166,8 +165,8 @@ func scanQueuedTasks(ctx context.Context, exec Executor, query string, args ...a
 }
 
 // getScheduledTasks loads the next tasks up for execution, ordered by
-// execution time. Tasks are not filtered by readiness; the deadline includes
-// tasks whose claim expired, so the dispatcher can release them again.
+// execution time. The deadline includes tasks whose claim expired, so the
+// dispatcher can release them again.
 func getScheduledTasks(ctx context.Context, exec Executor, deadline time.Time, limit int) (queuedTasks, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("id", "queue", "task", "attempts", "wait_until", "created_at", "last_executed_at", "NULL")
@@ -245,7 +244,7 @@ func scanCompletedTasks(ctx context.Context, exec Executor, query string, args .
 	return tasks, nil
 }
 
-// deleteExpiredCompletedTasks removes completed tasks whose expiration is in the past.
+// deleteExpiredCompletedTasks removes completed tasks whose expiry passed.
 func deleteExpiredCompletedTasks(ctx context.Context, exec Executor) error {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(completedTasksTable)

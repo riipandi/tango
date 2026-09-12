@@ -11,11 +11,10 @@ import (
 type (
 	// Dispatcher pulls queued tasks and executes them via queue processors.
 	Dispatcher interface {
-		// Start starts the dispatcher.
 		Start(context.Context)
 
-		// Stop gracefully stops the dispatcher, returning true when all workers
-		// finished their tasks.
+		// Stop stops gracefully, returning true when all workers finished
+		// their tasks.
 		Stop(context.Context) bool
 
 		// Notify tells the dispatcher that a new task was added.
@@ -23,66 +22,50 @@ type (
 	}
 
 	// dispatcher implements Dispatcher. Each Start runs one generation of
-	// goroutines on channels captured as locals, so a restart never races a
-	// draining previous generation.
+	// goroutines on channels captured as locals, so a restart never races
+	// a draining previous generation.
 	dispatcher struct {
-		// client is the Client this dispatcher belongs to.
-		client *Client
-
-		// log is the logger.
-		log Logger
-
-		// numWorkers is the number of goroutines opened to execute tasks.
-		numWorkers int
-
-		// releaseAfter is the duration to reclaim a task if it never completed.
-		releaseAfter time.Duration
-
-		// cleanupInterval is how often expired completed tasks are removed.
+		client          *Client
+		log             Logger
+		numWorkers      int
+		releaseAfter    time.Duration
 		cleanupInterval time.Duration
 
-		// running indicates if the dispatcher is currently running.
 		running atomic.Bool
 
 		// wg tracks all goroutines of the current generation.
 		wg sync.WaitGroup
 
-		// ctx is the context used to start the dispatcher.
 		ctx context.Context
 
-		// shutdownCtx is an internal context used when attempting a graceful
-		// shutdown.
+		// shutdownCtx is an internal context used during graceful shutdown.
 		shutdownCtx context.Context
+		shutdown    context.CancelFunc
 
-		// shutdown cancels shutdownCtx.
-		shutdown context.CancelFunc
-
-		// ticker fetches tasks from the database when the next task is delayed.
+		// ticker fetches tasks when the next task is delayed, avoiding polling.
 		ticker *time.Ticker
 
 		// tasks transmits tasks to the workers.
 		tasks chan *queuedTask
 
-		// availableWorkers tracks the number of workers available to receive a task.
+		// availableWorkers tracks workers available to receive a task.
 		availableWorkers chan struct{}
 
 		// ready tells the dispatcher that a database fetch is required.
 		ready chan struct{}
 
-		// trigger instructs the dispatcher to fetch tasks from the database now.
+		// trigger instructs the dispatcher to fetch from the database now.
 		trigger chan struct{}
 
-		// triggered indicates a trigger was sent but not yet received, allowing
-		// many ready signals to collapse into a single database fetch.
+		// triggered marks a trigger as sent but not yet received, letting many
+		// ready signals collapse into a single database fetch.
 		triggered atomic.Bool
 	}
 )
 
-// Start starts the dispatcher. Cancel the provided context for a hard stop;
-// call Stop for a graceful one. A restart waits for the previous generation
-// to fully drain before re-initializing.
+// Start starts the dispatcher. Cancel the context for a hard stop; call Stop
+// for a graceful one.
 func (d *dispatcher) Start(ctx context.Context) {
-	// Abort if the dispatcher is already running.
 	if d.running.Load() {
 		return
 	}
@@ -92,7 +75,7 @@ func (d *dispatcher) Start(ctx context.Context) {
 	d.shutdownCtx, d.shutdown = context.WithCancel(context.Background())
 	d.tasks = make(chan *queuedTask, d.numWorkers)
 	d.ticker = time.NewTicker(time.Second)
-	d.ticker.Stop() // No need to tick yet.
+	d.ticker.Stop()
 	d.ready = make(chan struct{}, 1000)
 	d.trigger = make(chan struct{}, 10)
 	d.availableWorkers = make(chan struct{}, d.numWorkers)
@@ -123,15 +106,13 @@ func (d *dispatcher) Start(ctx context.Context) {
 	d.log.Info("task dispatcher started")
 }
 
-// Stop attempts to gracefully shut down the dispatcher, blocking until the
-// context is cancelled or all workers are done with their task. True is
-// returned when all workers were able to complete.
+// Stop shuts down gracefully, blocking until the context is cancelled or all
+// workers are done. True when all workers completed in time.
 func (d *dispatcher) Stop(ctx context.Context) bool {
 	if !d.running.Load() {
 		return true
 	}
 
-	// Call the internal shutdown to gracefully close all goroutines.
 	d.shutdown()
 
 	var count int
@@ -148,9 +129,8 @@ func (d *dispatcher) Stop(ctx context.Context) bool {
 	}
 }
 
-// triggerer listens to the ready channel and forwards a trigger to the fetcher
-// only when one is not already pending, collapsing many ready signals into a
-// single database fetch.
+// triggerer forwards ready signals to the fetcher, collapsing many into a
+// single trigger while one is still pending.
 func (d *dispatcher) triggerer(ctx, shutdownCtx context.Context, ready, trigger chan struct{}) {
 	defer d.wg.Done()
 
@@ -168,8 +148,7 @@ func (d *dispatcher) triggerer(ctx, shutdownCtx context.Context, ready, trigger 
 	}
 }
 
-// fetcher fetches tasks from the database when the ticker ticks or a trigger
-// signal arrives from the triggerer.
+// fetcher fetches tasks when the ticker ticks or a trigger arrives.
 func (d *dispatcher) fetcher(ctx, shutdownCtx context.Context, tasks chan *queuedTask, ticker *time.Ticker, ready, trigger chan struct{}) {
 	defer d.wg.Done()
 	defer func() {
@@ -214,7 +193,7 @@ func (d *dispatcher) worker(ctx, shutdownCtx context.Context, tasks chan *queued
 	}
 }
 
-// cleaner periodically deletes expired completed tasks from the database.
+// cleaner periodically deletes expired completed tasks.
 func (d *dispatcher) cleaner(ctx, shutdownCtx context.Context) {
 	defer d.wg.Done()
 
@@ -235,9 +214,8 @@ func (d *dispatcher) cleaner(ctx, shutdownCtx context.Context) {
 	}
 }
 
-// waitForWorkers blocks until at least one worker is available and returns the
-// number that are available. Zero is returned when the dispatcher shuts down
-// while waiting.
+// waitForWorkers blocks until at least one worker is available and returns
+// the number available. Zero when the dispatcher shuts down while waiting.
 func (d *dispatcher) waitForWorkers(ctx context.Context, available chan struct{}) int {
 	for {
 		select {
@@ -255,12 +233,11 @@ func (d *dispatcher) waitForWorkers(ctx context.Context, available chan struct{}
 	}
 }
 
-// fetch fetches tasks from the database for execution and coordinates when the
-// dispatcher needs to fetch again.
+// fetch loads due tasks from the database and hands them to the workers.
 func (d *dispatcher) fetch(ctx context.Context, tasks chan *queuedTask, ticker *time.Ticker, ready, trigger chan struct{}) {
 	var err error
 
-	// If we failed at any point, schedule another fetch.
+	// On any failure, schedule another fetch.
 	defer func() {
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
@@ -268,17 +245,17 @@ func (d *dispatcher) fetch(ctx context.Context, tasks chan *queuedTask, ticker *
 		}
 	}()
 
-	// Incoming task additions from this point on should trigger another fetch.
+	// Task additions from this point on should trigger another fetch.
 	d.triggered.Store(false)
 
 	// Fetch only as many tasks as there are workers available.
 	workers := d.waitForWorkers(ctx, d.availableWorkers)
 	if workers == 0 {
-		return // shutting down
+		return
 	}
 
-	// Fetch tasks for each available worker plus the next upcoming task, so the
-	// scheduler knows when to query the database again without polling.
+	// One extra row beyond the workers: the next upcoming task, so the
+	// scheduler knows when to query again without polling.
 	queued, err := getScheduledTasks(ctx, d.client.db, now().Add(-d.releaseAfter), workers+1)
 	if err != nil {
 		d.log.Error("fetch tasks query failed", "error", err)
@@ -292,21 +269,21 @@ func (d *dispatcher) fetch(ctx context.Context, tasks chan *queuedTask, ticker *
 	}
 
 	for i := range queued {
-		// The workers are full.
+		// Workers are full.
 		if (i + 1) > workers {
 			nextUp(i)
 			break
 		}
 
-		// This task is not ready yet.
+		// Task is not ready yet.
 		if queued[i].waitUntil != nil && queued[i].waitUntil.After(now()) {
 			nextUp(i)
 			break
 		}
 	}
 
-	// Claim only the tasks we win; a task claimed by another dispatcher within
-	// the deadline stays with the winner and is never executed twice.
+	// Tasks claimed by another dispatcher within the deadline stay with the
+	// winner and are never executed twice.
 	claimed, claimErr := queued.claim(ctx, d.client.db, now().Add(-d.releaseAfter))
 	if claimErr != nil {
 		err = claimErr
@@ -320,7 +297,7 @@ func (d *dispatcher) fetch(ctx context.Context, tasks chan *queuedTask, ticker *
 
 	for i := range queued {
 		if _, ok := won[queued[i].id]; !ok {
-			continue // lost the claim
+			continue
 		}
 		queued[i].attempts++
 		<-d.availableWorkers
@@ -330,7 +307,7 @@ func (d *dispatcher) fetch(ctx context.Context, tasks chan *queuedTask, ticker *
 	d.schedule(ticker, ready, next)
 }
 
-// schedule adjusts the dispatcher schedule based on the next up task.
+// schedule re-arms the fetch timer based on the next up task.
 func (d *dispatcher) schedule(ticker *time.Ticker, ready chan struct{}, t *queuedTask) {
 	ticker.Stop()
 
@@ -367,20 +344,19 @@ func (d *dispatcher) processTask(ctx context.Context, ready chan struct{}, t *qu
 	}
 	cfg := q.Config()
 
-	// Set a context timeout, if desired. The timeout counts real time from the
-	// execution start, independent of the clock the queue uses elsewhere.
+	// The timeout counts real time from the execution start, independent of
+	// the clock the queue uses elsewhere.
 	if cfg.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
 		defer cancel()
 	}
 
-	// Store the client in the context so the processor can add more tasks.
+	// Processors reach the client via context to add more tasks.
 	ctx = context.WithValue(ctx, ctxKeyClient{}, d.client)
 
 	start := now()
 	defer func() {
-		// Recover from panics from within the task processor.
 		if rec := recover(); rec != nil {
 			d.log.Error("panic processing task", "id", t.id, "queue", t.queue, "error", rec)
 			err = fmt.Errorf("%v", rec)
@@ -431,8 +407,7 @@ func (d *dispatcher) taskSuccess(ctx context.Context, q Queue, t *queuedTask, st
 }
 
 // taskFailure releases a failed task back to the queue when attempts remain,
-// otherwise deletes it from the queue and optionally moves it to the completed
-// tasks table.
+// otherwise deletes it and optionally moves it to the completed tasks table.
 func (d *dispatcher) taskFailure(ctx context.Context, ready chan struct{}, q Queue, t *queuedTask, started time.Time, dur time.Duration, taskErr error) {
 	remaining := q.Config().MaxAttempts - t.attempts
 	d.log.Error("task processing failed", "id", t.id, "queue", t.queue, "duration", dur, "attempt", t.attempts, "remaining", remaining)
@@ -442,8 +417,7 @@ func (d *dispatcher) taskFailure(ctx context.Context, ready chan struct{}, q Que
 		if err := t.fail(ctx, d.client.db, now().Add(q.Config().Backoff)); err != nil {
 			d.log.Error("failed to update task failure", "id", t.id, "queue", t.queue, "error", err)
 		}
-		// The task is queued for a retry: schedule a fetch so the dispatcher
-		// learns the new wait time.
+		// Schedule a fetch so the dispatcher learns the new wait time.
 		ready <- struct{}{}
 		return
 	}
@@ -469,7 +443,7 @@ func (d *dispatcher) taskFailure(ctx context.Context, ready chan struct{}, q Que
 	}
 }
 
-// taskComplete creates a completed task from a given task.
+// taskComplete records a completed task when the queue retains them.
 func (d *dispatcher) taskComplete(ctx context.Context, exec Executor, q Queue, t *queuedTask, started time.Time, dur time.Duration, taskErr error) error {
 	ret := q.Config().Retention
 	if ret == nil {
