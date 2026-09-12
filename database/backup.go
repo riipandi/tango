@@ -120,14 +120,9 @@ func backupDirFor(override string) string {
 	return filepath.Join(os.TempDir(), "tango-"+defaultBackupSubdir)
 }
 
-// backupPath returns the backup file path for a database and
-// suffix, creating the backup directory.
-func backupPath(database, suffix, ext string) (string, error) {
-	return backupPathIn(backupDirFor(""), database, suffix, ext)
-}
-
-// backupPathIn is backupPath with an explicit directory, so the
-// launcher can thread the configured backup dir through.
+// backupPathIn builds the backup file path inside dir, creating
+// the directory. The launcher threads the configured backup dir
+// (cfg.BackupDir()) through; tests pass their own temp dir.
 func backupPathIn(dir, database, suffix, ext string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create backup dir: %w", err)

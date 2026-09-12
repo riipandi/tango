@@ -216,6 +216,7 @@ func generateJWTKeyPair(outDir string, useRSA, useMLDSA bool) (string, string, e
 }
 
 // upsertEnvFile replaces the value when the key exists, appends otherwise.
+// The file holds secrets, so it is created (and kept) at 0600.
 func upsertEnvFile(envFile, key, value string) error {
 	data, err := os.ReadFile(envFile)
 	if err != nil {
@@ -235,5 +236,5 @@ func upsertEnvFile(envFile, key, value string) error {
 		lines = append(lines, key+"="+value)
 	}
 
-	return os.WriteFile(envFile, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
+	return os.WriteFile(envFile, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 }
