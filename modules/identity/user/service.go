@@ -2,23 +2,42 @@ package user
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/riipandi/tango/modules/identity"
 )
+
+// RouteGuard wraps a handler with authentication middleware
+// (stdlib shape, so this package stays transport-agnostic).
+type RouteGuard func(http.Handler) http.Handler
 
 // Service holds the user business rules and HTTP surface. It is the
 // identity module's mandatory core feature.
 type Service struct {
 	store    Store
 	recorder identity.Recorder
+	guard    RouteGuard
 }
 
 var _ identity.APIFeature = (*Service)(nil)
 
+// ServiceOption configures the user core.
+type ServiceOption func(*Service)
+
+// WithAdminGuard protects the admin API routes; without it the
+// routes stay open (tests, isolated tooling).
+func WithAdminGuard(g RouteGuard) ServiceOption {
+	return func(s *Service) { s.guard = g }
+}
+
 // NewService builds the user core on top of the given store. The
 // optional recorder captures audit events.
-func NewService(store Store, recorder identity.Recorder) *Service {
-	return &Service{store: store, recorder: recorder}
+func NewService(store Store, recorder identity.Recorder, opts ...ServiceOption) *Service {
+	s := &Service{store: store, recorder: recorder}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Name implements identity.Feature.

@@ -1,4 +1,281 @@
 package session
 
-// TODO: Store contract with file-per-backend implementations
-// (store_memory.go, store_postgres.go).
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/huandu/go-sqlbuilder"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/modules/identity/user"
+)
+
+// sessionsTable is the table backing sign-in sessions.
+const sessionsTable = "public.sessions"
+
+// PostgresStore persists sessions in public.sessions; the token hash
+// is the lookup key, the TypeID string is the public identifier.
+type PostgresStore struct {
+	exec datastore.Executor
+}
+
+var _ Store = (*PostgresStore)(nil)
+
+// NewPostgresStore builds the production session store.
+func NewPostgresStore(exec datastore.Executor) *PostgresStore {
+	return &PostgresStore{exec: exec}
+}
+
+// Create inserts a session; ID, TokenHash, and ExpiresAt are preset
+// by the service.
+func (s *PostgresStore) Create(ctx context.Context, se *Session) error {
+	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+	ib.InsertInto(sessionsTable)
+	ib.Cols("id", "user_id", "provider", "token_hash", "user_agent", "device_name", "ip_address", "expires_at")
+	ib.Values(se.ID, se.UserID.UUIDBytes(), se.Provider, se.TokenHash,
+		textOrNull(deref(se.UserAgent)), textOrNull(deref(se.DeviceName)), textOrNull(deref(se.IPAddress)), se.ExpiresAt)
+	ib.Returning("created_at")
+
+	query, args := ib.Build()
+	var createdAt pgtype.Timestamptz
+	if err := s.exec.QueryRow(ctx, query, args...).Scan(&createdAt); err != nil {
+		return mapErr(err)
+	}
+	se.CreatedAt = createdAt.Time
+	return nil
+}
+
+// ValidByTokenHash resolves one live session with its user; expired
+// and revoked rows are invisible (indistinguishable from missing).
+func (s *PostgresStore) ValidByTokenHash(ctx context.Context, tokenHash string) (Session, user.User, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select(
+		"s.id", "s.provider", "s.token_hash", "s.user_agent", "s.device_name", "s.ip_address",
+		"s.created_at", "s.expires_at", "s.refreshed_at", "s.revoked_at",
+		"u.id", "u.username", "u.email", "u.first_name", "u.last_name",
+		"u.display_name", "u.avatar_url", "u.locale", "u.is_admin", "u.disabled",
+		"u.email_verified_at", "u.created_at", "u.updated_at", "u.last_login_at",
+	)
+	sb.From(sessionsTable + " s")
+	sb.Join("public.users u ON u.id = s.user_id")
+	sb.Where(sb.E("s.token_hash", tokenHash), sb.IsNull("s.revoked_at"),
+		sb.GT("s.expires_at", time.Now().UTC()))
+
+	query, args := sb.Build()
+
+	var (
+		se          Session
+		userAgent   pgtype.Text
+		deviceName  pgtype.Text
+		ipAddress   pgtype.Text
+		refreshedAt pgtype.Timestamptz
+		revokedAt   pgtype.Timestamptz
+
+		uid             string
+		username        string
+		email           string
+		firstName       pgtype.Text
+		lastName        pgtype.Text
+		displayName     string
+		avatarURL       pgtype.Text
+		locale          pgtype.Text
+		isAdmin         bool
+		disabled        bool
+		emailVerifiedAt pgtype.Timestamptz
+		uCreatedAt      pgtype.Timestamptz
+		uUpdatedAt      pgtype.Timestamptz
+		uLastLoginAt    pgtype.Timestamptz
+	)
+	err := s.exec.QueryRow(ctx, query, args...).Scan(
+		&se.ID, &se.Provider, &se.TokenHash, &userAgent, &deviceName, &ipAddress,
+		&se.CreatedAt, &se.ExpiresAt, &refreshedAt, &revokedAt,
+		&uid, &username, &email, &firstName, &lastName,
+		&displayName, &avatarURL, &locale, &isAdmin, &disabled,
+		&emailVerifiedAt, &uCreatedAt, &uUpdatedAt, &uLastLoginAt,
+	)
+	if err != nil {
+		return Session{}, user.User{}, mapErr(err)
+	}
+
+	se.UserID = user.MustID(uid)
+	se.UserAgent = textPtr(userAgent)
+	se.DeviceName = textPtr(deviceName)
+	se.IPAddress = textPtr(ipAddress)
+	se.RefreshedAt = timePtr(refreshedAt)
+	se.RevokedAt = timePtr(revokedAt)
+
+	u := user.User{
+		ID:              se.UserID,
+		Username:        username,
+		Email:           email,
+		FirstName:       textPtr(firstName),
+		LastName:        textPtr(lastName),
+		AvatarURL:       textPtr(avatarURL),
+		Locale:          textPtr(locale),
+		DisplayName:     displayName,
+		IsAdmin:         isAdmin,
+		Disabled:        disabled,
+		EmailVerifiedAt: timePtr(emailVerifiedAt),
+		CreatedAt:       uCreatedAt.Time,
+		UpdatedAt:       timePtr(uUpdatedAt),
+		LastLoginAt:     timePtr(uLastLoginAt),
+	}
+	return se, u, nil
+}
+
+// Touch extends a live session's expiry (sliding window) and marks
+// the refresh time.
+func (s *PostgresStore) Touch(ctx context.Context, id string, expiresAt time.Time) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(sessionsTable)
+	ub.Set(ub.Assign("expires_at", expiresAt), ub.Assign("refreshed_at", time.Now().UTC()))
+	ub.Where(ub.E("id", id), ub.IsNull("revoked_at"))
+
+	query, args := ub.Build()
+	_, err := s.exec.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("session touch: %w", err)
+	}
+	return nil
+}
+
+// RevokeByTokenHash revokes the session matching a token hash.
+func (s *PostgresStore) RevokeByTokenHash(ctx context.Context, tokenHash string) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(sessionsTable)
+	ub.Set(ub.Assign("revoked_at", time.Now().UTC()))
+	ub.Where(ub.E("token_hash", tokenHash), ub.IsNull("revoked_at"))
+
+	query, args := ub.Build()
+	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("session revoke: %w", err)
+	}
+	return nil
+}
+
+// RevokeForUser revokes one session owned by the user; unknown or
+// foreign session IDs surface ErrNotFound.
+func (s *PostgresStore) RevokeForUser(ctx context.Context, userID user.UserID, sessionID string) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(sessionsTable)
+	ub.Set(ub.Assign("revoked_at", time.Now().UTC()))
+	ub.Where(ub.E("id", sessionID), ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"))
+
+	query, args := ub.Build()
+	tag, err := s.exec.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("session revoke: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// RevokeAllForUser revokes every live session, optionally sparing
+// one (the caller's current session).
+func (s *PostgresStore) RevokeAllForUser(ctx context.Context, userID user.UserID, exceptID string) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(sessionsTable)
+	ub.Set(ub.Assign("revoked_at", time.Now().UTC()))
+	if exceptID == "" {
+		ub.Where(ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"))
+	} else {
+		ub.Where(ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"),
+			ub.NE("id", exceptID))
+	}
+
+	query, args := ub.Build()
+	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("session revoke all: %w", err)
+	}
+	return nil
+}
+
+// ListActiveForUser returns live sessions, newest first.
+func (s *PostgresStore) ListActiveForUser(ctx context.Context, userID user.UserID) ([]Session, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("id", "user_id", "provider", "token_hash", "user_agent", "device_name",
+		"ip_address", "created_at", "expires_at", "refreshed_at", "revoked_at")
+	sb.From(sessionsTable)
+	sb.Where(sb.E("user_id", userID.UUIDBytes()), sb.IsNull("revoked_at"),
+		sb.GT("expires_at", time.Now().UTC()))
+	sb.OrderBy("created_at DESC")
+
+	query, args := sb.Build()
+	rows, err := s.exec.Query(ctx, query, args...)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	defer rows.Close()
+
+	out := []Session{}
+	for rows.Next() {
+		var (
+			se          Session
+			uid         string
+			userAgent   pgtype.Text
+			deviceName  pgtype.Text
+			ipAddress   pgtype.Text
+			createdAt   pgtype.Timestamptz
+			expiresAt   pgtype.Timestamptz
+			refreshedAt pgtype.Timestamptz
+			revokedAt   pgtype.Timestamptz
+		)
+		if scanErr := rows.Scan(&se.ID, &uid, &se.Provider, &se.TokenHash, &userAgent,
+			&deviceName, &ipAddress, &createdAt, &expiresAt, &refreshedAt, &revokedAt); scanErr != nil {
+			continue
+		}
+		se.UserID = user.MustID(uid)
+		se.UserAgent = textPtr(userAgent)
+		se.DeviceName = textPtr(deviceName)
+		se.IPAddress = textPtr(ipAddress)
+		se.CreatedAt = createdAt.Time
+		se.ExpiresAt = expiresAt.Time
+		se.RefreshedAt = timePtr(refreshedAt)
+		se.RevokedAt = timePtr(revokedAt)
+		out = append(out, se)
+	}
+	return out, rows.Err()
+}
+
+// mapErr folds driver errors into the Store contract.
+func mapErr(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return fmt.Errorf("session store: %w", err)
+}
+
+func textOrNull(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// deref flattens an optional string for SQL NULL handling.
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func textPtr(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	return &t.String
+}
+
+func timePtr(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	return &t.Time
+}

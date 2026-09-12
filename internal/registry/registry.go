@@ -82,16 +82,8 @@ func New(deps Deps) *kernel.Registry {
 	reg.Register(audit)
 
 	// Internal authn/authz: user core + selected auth features.
-	reg.Register(identity.New(
-		user.NewService(user.NewPostgresStore(deps.DB), auditAdapter(audit)),
-		// Feature selection: add/remove a line to change the set.
-		withSession(deps),
-		withWebAuthn(deps),
-		withPassword(deps),
-		withAPIKeys(deps),
-		withAPIAccess(deps),
-		withLDAPSync(deps),
-	))
+	core, identityFeatures := newIdentityFeatures(deps, audit)
+	reg.Register(identity.New(core, identityFeatures...))
 
 	// Identity provider (OIDC, SCIM, discovery) — optional surface
 	// for other systems. Delete this line (and

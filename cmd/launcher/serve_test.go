@@ -39,7 +39,7 @@ func TestServeRunLifecycle(t *testing.T) {
 		runErr <- serve.Run(&CLI{})
 	}()
 
-	url := fmt.Sprintf("http://127.0.0.1:%d/api/users", port)
+	url := fmt.Sprintf("http://127.0.0.1:%d/api/healthz", port)
 
 	// Wait for the server to accept connections; every probe body
 	// is closed inside the closure.

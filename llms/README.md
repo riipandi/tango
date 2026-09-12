@@ -7,7 +7,7 @@ tango foundation. Reference: https://pocket-id.org/docs/api
 
 | Phase | File                                                             | Scope                                             | Status  | Updated    |
 | ----- | ---------------------------------------------------------------- | ------------------------------------------------- | ------- | ---------- |
-| 1     | [phase-01-auth-core.md](./phase-01-auth-core.md)                 | Auth middleware, session, password, account       | planned | 2026-09-12 |
+| 1     | [phase-01-auth-core.md](./phase-01-auth-core.md)                 | Auth middleware, session, password, account       | done    | 2026-09-12 |
 | 2     | [phase-02-identity-admin.md](./phase-02-identity-admin.md)       | User groups, custom claims, audit API, admin CRUD | planned | 2026-09-12 |
 | 3     | [phase-03-jwks-wellknown.md](./phase-03-jwks-wellknown.md)       | JWKS provider, discovery endpoints                | planned | 2026-09-12 |
 | 4     | [phase-04-oidc-provider.md](./phase-04-oidc-provider.md)         | Authorize (PKCE), token, userinfo                 | planned | 2026-09-12 |

@@ -101,7 +101,7 @@ func (s *PostgresStore) Create(ctx context.Context, params CreateParams) (User, 
 	}
 
 	return User{
-		ID:          mustUserID(id),
+		ID:          MustID(id),
 		Username:    params.Username,
 		Email:       params.Email,
 		FirstName:   textPtr(firstName),
@@ -128,6 +128,67 @@ func (s *PostgresStore) GetByID(ctx context.Context, id UserID) (User, error) {
 		return User{}, err
 	}
 	return user, nil
+}
+
+// UpdateProfile patches profile columns and returns the fresh row.
+// Nil params keep their column; named fields stay constraint-checked
+// by the database (display_name > 0).
+func (s *PostgresStore) UpdateProfile(ctx context.Context, id UserID, params UpdateProfileParams) (User, error) {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+
+	var assignments []string
+	apply := func(column string, value any) {
+		assignments = append(assignments, ub.Assign(column, value))
+	}
+	if params.FirstName != nil {
+		apply("first_name", textOrNull(*params.FirstName))
+	}
+	if params.LastName != nil {
+		apply("last_name", textOrNull(*params.LastName))
+	}
+	if params.DisplayName != nil {
+		apply("display_name", *params.DisplayName)
+	}
+	if params.AvatarURL != nil {
+		apply("avatar_url", textOrNull(*params.AvatarURL))
+	}
+	if params.Locale != nil {
+		apply("locale", textOrNull(*params.Locale))
+	}
+
+	if len(assignments) == 0 {
+		return s.GetByID(ctx, id)
+	}
+
+	ub.Update(usersTable)
+	ub.Set(assignments...)
+	ub.Where(ub.E("id", id.UUIDBytes()))
+	ub.Returning(userColumns...)
+
+	query, args := ub.Build()
+	user, err := scanUser(s.exec.QueryRow(ctx, query, args...))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return User{}, ErrNotFound
+		}
+		return User{}, err
+	}
+	return user, nil
+}
+
+// MarkLogin records a successful sign-in timestamp.
+func (s *PostgresStore) MarkLogin(ctx context.Context, id UserID) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(usersTable)
+	ub.Set(ub.Assign("last_login_at", time.Now().UTC()))
+	ub.Where(ub.E("id", id.UUIDBytes()))
+
+	query, args := ub.Build()
+	_, err := s.exec.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("mark login: %w", err)
+	}
+	return nil
 }
 
 // scanner covers pgx.Rows and pgx.Row.
@@ -162,7 +223,7 @@ func scanUser(row scanner) (User, error) {
 	}
 
 	return User{
-		ID:              mustUserID(id),
+		ID:              MustID(id),
 		Username:        username,
 		Email:           email,
 		FirstName:       textPtr(firstName),
@@ -201,9 +262,10 @@ func timePtr(t pgtype.Timestamptz) *time.Time {
 	return &t.Time
 }
 
-// mustUserID converts a stored UUID to the typed ID. TypeIDs wrap
-// UUIDs losslessly, so failure is a programmer error.
-func mustUserID(uuidText string) UserID {
+// MustID converts a stored UUID to the typed ID. TypeIDs wrap
+// UUIDs losslessly, so failure is a programmer error. Exported for
+// stores that join the users table.
+func MustID(uuidText string) UserID {
 	id, err := typeid.FromUUID[UserID](uuidText)
 	if err != nil {
 		panic(fmt.Sprintf("user: stored id %q is not a UUID: %v", uuidText, err))

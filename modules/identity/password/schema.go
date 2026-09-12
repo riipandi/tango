@@ -1,18 +1,9 @@
-// Package password adds password sign-in alongside passkeys:
-// credential storage, login, change, and email-based reset flows.
+// Package password owns credential hashing and verification: one
+// argon2id/scrypt hash per user (PHC format via pkg/crypto), plus
+// the identity lookup used by the sign-in flow. HTTP sign-in routes
+// belong to the session feature.
 package password
 
-import (
-	"github.com/riipandi/tango/modules/identity"
-)
-
-// Feature is the wireable password unit.
-type Feature struct{}
-
-// New returns the placeholder feature.
-func New() Feature { return Feature{} }
-
-// Name implements identity.Feature.
-func (Feature) Name() string { return "password" }
-
-var _ identity.Feature = Feature{}
+// userPasswordsTable is the table backing credential hashes. Its
+// primary key is the owning user_id, so there is no separate ID type.
+const userPasswordsTable = "public.user_passwords"

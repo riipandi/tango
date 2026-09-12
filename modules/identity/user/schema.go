@@ -60,6 +60,19 @@ type Store interface {
 	List(ctx context.Context) []User
 	Create(ctx context.Context, params CreateParams) (User, error)
 	GetByID(ctx context.Context, id UserID) (User, error)
+	UpdateProfile(ctx context.Context, id UserID, params UpdateProfileParams) (User, error)
+	MarkLogin(ctx context.Context, id UserID) error
+}
+
+// UpdateProfileParams patches the profile fields. Nil pointers keep
+// the current value; a non-nil pointer replaces the column (an empty
+// string clears nullable columns; display name must stay non-empty).
+type UpdateProfileParams struct {
+	FirstName   *string
+	LastName    *string
+	DisplayName *string
+	AvatarURL   *string
+	Locale      *string
 }
 
 // Errors surfaced by stores and mapped to HTTP statuses by handlers.

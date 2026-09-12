@@ -17,6 +17,7 @@ var defaultConfig = Config{
 	Auth: AuthConfig{
 		AccessTokenExpiry:  900,
 		RefreshTokenExpiry: 7200,
+		SessionLifetime:    2592000,
 	},
 
 	Database: DatabaseConfig{

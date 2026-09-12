@@ -23,11 +23,23 @@ type createUserRequest struct {
 	IsAdmin     bool   `json:"is_admin"`
 }
 
-// APIRoutes mounts the user endpoints inside the shared /api group.
+// APIRoutes mounts the user endpoints inside the shared /api group,
+// behind the admin guard when one is wired.
 func (s *Service) APIRoutes(r chi.Router) {
-	r.Post("/users", s.createUser)
-	r.Get("/users", s.listUsers)
-	r.Get("/users/{id}", s.getUser)
+	mount := func(ar chi.Router) {
+		ar.Post("/users", s.createUser)
+		ar.Get("/users", s.listUsers)
+		ar.Get("/users/{id}", s.getUser)
+	}
+
+	if s.guard == nil {
+		mount(r)
+		return
+	}
+	r.Group(func(ar chi.Router) {
+		ar.Use(s.guard)
+		mount(ar)
+	})
 }
 
 func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
