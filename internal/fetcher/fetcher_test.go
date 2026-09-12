@@ -21,7 +21,7 @@ func TestGetJSONDecodes(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"name":"tango"}`))
+		_, _ = w.Write([]byte(`{"name":"dummy"}`))
 	}))
 	defer server.Close()
 
@@ -32,7 +32,7 @@ func TestGetJSONDecodes(t *testing.T) {
 	resp, err := f.GetJSON(t.Context(), server.URL, &out)
 	require.NoError(t, err)
 	assert.True(t, resp.IsStatusSuccess())
-	assert.Equal(t, "tango", out.Name)
+	assert.Equal(t, "dummy", out.Name)
 }
 
 func TestGetJSONSurfacesNon2xx(t *testing.T) {

@@ -57,7 +57,7 @@ func TestPostgresExecutorRoundTrip(t *testing.T) {
 	var id int
 	err = store.QueryRow(ctx,
 		fmt.Sprintf("INSERT INTO %s VALUES ($1, $2) RETURNING id", table),
-		1, "tango").Scan(&id)
+		1, "dummy").Scan(&id)
 	require.NoError(t, err)
 	assert.Equal(t, 1, id)
 
@@ -68,7 +68,7 @@ func TestPostgresExecutorRoundTrip(t *testing.T) {
 	require.True(t, rows.Next())
 	var name string
 	require.NoError(t, rows.Scan(&name))
-	assert.Equal(t, "tango", name)
+	assert.Equal(t, "dummy", name)
 	require.False(t, rows.Next())
 	require.NoError(t, rows.Err())
 }

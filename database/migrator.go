@@ -13,6 +13,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" driver
 	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 )
 
 //go:embed migrations/*.sql
@@ -36,13 +37,24 @@ type MigrationStatus struct {
 	AppliedAt time.Time
 }
 
-// openProvider opens the db and builds a Provider over src.
+// openProvider opens the db and builds a Provider over src. A
+// session-level advisory lock serializes concurrent runners (two
+// deploys racing migrate:up); without it goose allows parallel
+// application.
 func openProvider(dsn string, src fs.FS) (*sql.DB, *goose.Provider, error) {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open database: %w", err)
 	}
-	p, err := goose.NewProvider("postgres", db, src, goose.WithTableName(appMigrationTableName))
+	sessionLocker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		db.Close()
+		return nil, nil, fmt.Errorf("build session locker: %w", err)
+	}
+	p, err := goose.NewProvider("postgres", db, src,
+		goose.WithTableName(appMigrationTableName),
+		goose.WithSessionLocker(sessionLocker),
+	)
 	if err != nil {
 		db.Close()
 		return nil, nil, fmt.Errorf("build migrator: %w", err)

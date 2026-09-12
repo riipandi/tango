@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/logger"
@@ -78,6 +80,21 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		return fmt.Errorf("connect database: %w", err)
 	}
 	defer db.Close()
+
+	// Schema version check: warn (don't fail) when the database is
+	// behind the compiled-in migration target; operators run
+	// `tango db migrate:up` explicitly.
+	checkCtx, checkCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	current, target, err := database.MigrateVersion(checkCtx, cfg.Database.URL)
+	checkCancel()
+	switch {
+	case err != nil:
+		lg.WithError(err).Warn("schema version check failed")
+	case current < target:
+		lg.Warn(fmt.Sprintf(
+			"database schema is behind: applied version %d, target %d — run `%s db migrate:up`",
+			current, target, config.AppName))
+	}
 
 	// Transactional email from embedded React Email templates.
 	templates, err := fs.Sub(web.EmailTemplates, "email")

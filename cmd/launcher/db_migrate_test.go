@@ -7,6 +7,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,7 +80,7 @@ func parseOnly(t *testing.T, args ...string) string {
 	t.Helper()
 
 	parser, err := kong.New(&CLI{},
-		kong.Name("tango"),
+		kong.Name(config.AppName),
 		kong.UsageOnError(),
 		versionVars(),
 	)
@@ -102,7 +103,7 @@ func runMigrate(t *testing.T, interactive bool, stdin io.Reader, args ...string)
 	t.Cleanup(func() { stdinReader, stdinIsInteractive = prevReader, prevInteractive })
 
 	parser, err := kong.New(&CLI{},
-		kong.Name("tango"),
+		kong.Name(config.AppName),
 		kong.Writers(io.Discard, io.Discard),
 		versionVars(),
 	)

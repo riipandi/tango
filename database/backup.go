@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/riipandi/tango/internal/config"
 )
 
 const (
@@ -107,16 +109,26 @@ func backupDirFor(override string) string {
 	if strings.TrimSpace(override) != "" {
 		return override
 	}
-	return filepath.Join(os.TempDir(), "tango-"+defaultBackupSubdir)
+	return filepath.Join(os.TempDir(), config.AppName+"-"+defaultBackupSubdir)
 }
 
 // backupPathIn builds the file path inside dir, creating it.
+// 0700: backups hold full application data.
 func backupPathIn(dir, database, suffix, ext string) (string, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create backup dir: %w", err)
 	}
 	stamp := time.Now().Format(timestampLayout)
 	return filepath.Join(dir, fmt.Sprintf("%s_%s_%s.%s", database, suffix, stamp, ext)), nil
+}
+
+// restrictBackupFile narrows a finished dump to owner-only access;
+// pg_dump follows the process umask, which is usually world-readable.
+func restrictBackupFile(target string) error {
+	if err := os.Chmod(target, 0o600); err != nil {
+		return fmt.Errorf("restrict backup file: %w", err)
+	}
+	return nil
 }
 
 // Dump writes a custom-format backup. all = schema+data,
@@ -150,7 +162,10 @@ func Dump(ctx context.Context, dsn, mode, dir string) (string, error) {
 	args = append(args, strings.Fields(systemSchemaExcludes)...)
 	args = append(args, "--no-owner", "--no-acl")
 
-	return target, runTool(ctx, parts, "pg_dump", args...)
+	if err := runTool(ctx, parts, "pg_dump", args...); err != nil {
+		return "", err
+	}
+	return target, restrictBackupFile(target)
 }
 
 // Export writes a plain-SQL backup. all = schema+data with clean
@@ -185,7 +200,10 @@ func Export(ctx context.Context, dsn, mode, dir string) (string, error) {
 	args = append(args, strings.Fields(systemSchemaExcludes)...)
 	args = append(args, "--no-owner", "--no-acl")
 
-	return target, runTool(ctx, parts, "pg_dump", args...)
+	if err := runTool(ctx, parts, "pg_dump", args...); err != nil {
+		return "", err
+	}
+	return target, restrictBackupFile(target)
 }
 
 // Restore loads a custom-format dump. all = schema+data (--clean),

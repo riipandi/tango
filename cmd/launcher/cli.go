@@ -1,4 +1,4 @@
-// package launcher implements the tango command line.
+// package launcher implements the application command line.
 //
 // Grammar is declared once as a struct (kong); config is layered
 // separately by internal/config. Kong flags stay zero-valued.
@@ -182,7 +182,7 @@ func formatSize(bytes int64) string {
 func RunCLI(args []string, opts ...kong.Option) error {
 	cli := &CLI{}
 	base := []kong.Option{
-		kong.Name("tango"),
+		kong.Name(config.AppName),
 		kong.Description("A fullstack web application built with Go, Chi, and React."),
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{Compact: true}),

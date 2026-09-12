@@ -23,7 +23,7 @@ func runCommand(t *testing.T, args ...string) string {
 
 	cli := &CLI{}
 	base := []kong.Option{
-		kong.Name("tango"),
+		kong.Name(config.AppName),
 		kong.Description("A fullstack web application built with Go, Chi, and React."),
 		kong.Writers(io.Discard, io.Discard),
 		versionVars(),
@@ -47,7 +47,7 @@ func TestVersionFlag(t *testing.T) {
 	for _, args := range [][]string{{"--version"}, {"-V"}} {
 		out := &strings.Builder{}
 		parser, err := kong.New(&CLI{},
-			kong.Name("tango"),
+			kong.Name(config.AppName),
 			kong.Writers(out, io.Discard),
 			kong.Exit(func(int) {}), // --version exits; stub it for tests
 			versionVars(),
@@ -62,7 +62,7 @@ func TestVersionFlag(t *testing.T) {
 func TestHelpListsCommands(t *testing.T) {
 	help := &strings.Builder{}
 	opts := []kong.Option{
-		kong.Name("tango"),
+		kong.Name(config.AppName),
 		kong.Writers(help, io.Discard),
 		kong.Exit(func(int) {}), // --help must not os.Exit in tests
 		versionVars(),

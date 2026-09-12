@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/kong"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +15,7 @@ import (
 func TestSecretsRegistered(t *testing.T) {
 	help := &strings.Builder{}
 	parser, err := kong.New(&CLI{},
-		kong.Name("tango"),
+		kong.Name(config.AppName),
 		kong.Writers(help, io.Discard),
 		kong.Exit(func(int) {}), // --help must not os.Exit in tests
 		versionVars(),

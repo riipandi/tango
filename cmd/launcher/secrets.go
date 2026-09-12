@@ -27,12 +27,12 @@ type SecretsCmd struct {
 
 // Help shows usage examples.
 func (s *SecretsCmd) Help() string {
-	return "\nExamples:\n" +
-		"  tango secrets\n" +
-		"  tango secrets --apply\n" +
-		"  tango secrets --out .env.staging --apply\n" +
-		"  tango secrets --rsa\n" +
-		"  tango secrets --mldsa\n"
+	return fmt.Sprintf("\nExamples:\n"+
+		"  %[1]s secrets\n"+
+		"  %[1]s secrets --apply\n"+
+		"  %[1]s secrets --out .env.staging --apply\n"+
+		"  %[1]s secrets --rsa\n"+
+		"  %[1]s secrets --mldsa\n", config.AppName)
 }
 
 // Run generates keys, then prints or applies them.

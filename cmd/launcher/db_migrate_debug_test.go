@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/kong"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,7 +16,7 @@ func parseOnlyDebug(t *testing.T, args ...string) string {
 	t.Helper()
 
 	parser, err := kong.New(&CLI{},
-		kong.Name("tango"),
+		kong.Name(config.AppName),
 		kong.UsageOnError(),
 		versionVars(),
 	)

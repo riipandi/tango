@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/kong"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,7 +24,7 @@ func TestDBCommandGrammar(t *testing.T) {
 	require.Equal(t, "db migrate:status", parseOnly(t, "db", "migrate:status"))
 	require.Equal(t, "db migrate:version", parseOnly(t, "db", "migrate:version"))
 
-	parser, err := kong.New(&CLI{}, kong.Name("tango"))
+	parser, err := kong.New(&CLI{}, kong.Name(config.AppName))
 	require.NoError(t, err)
 
 	_, err = parser.Parse([]string{"db", "migrate:create", "x"})

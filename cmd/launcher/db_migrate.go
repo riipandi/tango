@@ -142,10 +142,25 @@ func (c *MigrateVersionCmd) Run(cli *CLI) error {
 }
 
 // migrateDownDryRun lists what down would roll back, read-only.
+// The default single-step case reads the target straight from
+// MigrateDownTarget; larger counts derive the list from status.
 func migrateDownDryRun(ctx context.Context, dsn string, count int) error {
 	if count < 1 {
 		count = 1
 	}
+	if count == 1 {
+		target, err := database.MigrateDownTarget(ctx, dsn)
+		if err != nil {
+			return fmt.Errorf("db migrate:down: %w", err)
+		}
+		if target == nil {
+			fmt.Printf("%snothing to roll back%s\n", colorCyan, colorReset)
+			return nil
+		}
+		fmt.Printf("%sdry-run%s would roll back 1 migration(s):\n  %s\n", colorCyan, colorReset, target.Path)
+		return nil
+	}
+
 	statuses, err := database.MigrateStatus(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("db migrate:down: %w", err)
