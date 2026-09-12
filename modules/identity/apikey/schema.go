@@ -3,8 +3,20 @@
 package apikey
 
 import (
+	"go.jetify.com/typeid"
+
 	"github.com/riipandi/tango/modules/identity"
 )
+
+// Typed IDs for the api key tables: UUIDv7 suffix, snake_case prefix
+// matching the singular table name.
+type (
+	apiKeyPrefix struct{}
+
+	APIKeyID = typeid.TypeID[apiKeyPrefix]
+)
+
+func (apiKeyPrefix) Prefix() string { return "api_key" }
 
 // Feature is the wireable apikey unit.
 type Feature struct{}

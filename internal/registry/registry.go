@@ -117,13 +117,13 @@ func auditAdapter(audit *auditlog.Module) identity.Recorder {
 			Payload: map[string]any{},
 		}
 
-		if actor, err := typeid.Parse[identity.UserID](e.Actor); err == nil {
+		if actor, err := typeid.Parse[user.UserID](e.Actor); err == nil {
 			uuidText := actor.UUID()
 			entry.UserID = &uuidText
 		} else {
 			entry.Payload["actor"] = e.Actor
 		}
-		if target, err := typeid.Parse[identity.UserID](e.Target); err == nil {
+		if target, err := typeid.Parse[user.UserID](e.Target); err == nil {
 			uuidText := target.UUID()
 			entry.ResourceType = "user"
 			entry.ResourceID = &uuidText

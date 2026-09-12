@@ -9,17 +9,57 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"time"
 
-	"github.com/riipandi/tango/modules/identity"
+	"go.jetify.com/typeid"
 )
+
+// usersTable is the table backing the User entity.
+const usersTable = "public.users"
+
+// Typed IDs for the user tables: UUIDv7 suffix, snake_case prefix
+// matching the singular table name.
+type (
+	userPrefix struct{}
+
+	UserID = typeid.TypeID[userPrefix]
+
+	userPhonePrefix struct{}
+
+	UserPhoneID = typeid.TypeID[userPhonePrefix]
+)
+
+func (userPrefix) Prefix() string      { return "user" }
+func (userPhonePrefix) Prefix() string { return "user_phone" }
+
+// User is the core identity entity, shared by all features. Nullable
+// columns use pointers; empty string is never stored for them.
+type User struct {
+	ID        UserID  `json:"id"`
+	Username  string  `json:"username"`
+	Email     string  `json:"email"`
+	FirstName *string `json:"first_name,omitzero"`
+	LastName  *string `json:"last_name,omitzero"`
+	AvatarURL *string `json:"avatar_url,omitzero"`
+	Locale    *string `json:"locale,omitzero"`
+
+	DisplayName string `json:"display_name"`
+	IsAdmin     bool   `json:"is_admin"`
+	Disabled    bool   `json:"disabled"`
+
+	EmailVerifiedAt *time.Time `json:"email_verified_at,omitzero"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       *time.Time `json:"updated_at,omitzero"`
+	LastLoginAt     *time.Time `json:"last_login_at,omitzero"`
+}
 
 // Store abstracts user persistence: the memory store backs tests,
 // the Postgres store backs production. Implementations assign IDs
 // and timestamps.
 type Store interface {
-	List(ctx context.Context) []identity.User
-	Create(ctx context.Context, params CreateParams) (identity.User, error)
-	GetByID(ctx context.Context, id identity.UserID) (identity.User, error)
+	List(ctx context.Context) []User
+	Create(ctx context.Context, params CreateParams) (User, error)
+	GetByID(ctx context.Context, id UserID) (User, error)
 }
 
 // Errors surfaced by stores and mapped to HTTP statuses by handlers.

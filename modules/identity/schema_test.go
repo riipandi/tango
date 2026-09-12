@@ -1,16 +1,26 @@
-package identity
+package identity_test
 
 import (
 	"testing"
 
+	"uuid"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"uuid"
+	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/apikey"
+	"github.com/riipandi/tango/modules/identity/multifactor"
+	"github.com/riipandi/tango/modules/identity/oauthconnections"
+	"github.com/riipandi/tango/modules/identity/session"
+	"github.com/riipandi/tango/modules/identity/signup"
+	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/modules/identity/usergroup"
+	"github.com/riipandi/tango/modules/identity/webauthn"
 )
 
 func TestNewIDGeneratesPrefixedUUIDv7(t *testing.T) {
-	id := NewID[UserID]()
+	id := identity.NewID[user.UserID]()
 
 	assert.Equal(t, "user", id.Prefix())
 
@@ -21,17 +31,17 @@ func TestNewIDGeneratesPrefixedUUIDv7(t *testing.T) {
 }
 
 func TestParseIDRejectsWrongPrefix(t *testing.T) {
-	raw := NewID[UserID]().String()
+	raw := identity.NewID[user.UserID]().String()
 
-	_, err := ParseID[SessionID](raw)
+	_, err := identity.ParseID[session.SessionID](raw)
 
 	require.Error(t, err)
 }
 
 func TestParseIDRoundTrip(t *testing.T) {
-	id := NewID[UserGroupID]()
+	id := identity.NewID[usergroup.UserGroupID]()
 
-	parsed, err := ParseID[UserGroupID](id.String())
+	parsed, err := identity.ParseID[usergroup.UserGroupID](id.String())
 
 	require.NoError(t, err)
 	assert.Equal(t, id, parsed)
@@ -39,11 +49,16 @@ func TestParseIDRoundTrip(t *testing.T) {
 
 func TestEveryPrefixIsLowercaseSnakeCase(t *testing.T) {
 	for _, id := range []interface{ Prefix() string }{
-		NewID[UserID](), NewID[UserGroupID](), NewID[UserPhoneID](),
-		NewID[SessionID](), NewID[AuthTokenID](), NewID[SignupTokenID](),
-		NewID[RefreshTokenID](), NewID[InvitationID](), NewID[MFAKeyID](),
-		NewID[WebauthnCredentialID](), NewID[WebauthnSessionID](),
-		NewID[APIKeyID](), NewID[OAuthConnectionID](),
+		identity.NewID[user.UserID](), identity.NewID[user.UserPhoneID](),
+		identity.NewID[usergroup.UserGroupID](),
+		identity.NewID[session.SessionID](), identity.NewID[session.AuthTokenID](),
+		identity.NewID[session.RefreshTokenID](),
+		identity.NewID[signup.SignupTokenID](), identity.NewID[signup.InvitationID](),
+		identity.NewID[webauthn.WebauthnCredentialID](),
+		identity.NewID[webauthn.WebauthnSessionID](),
+		identity.NewID[multifactor.MFAKeyID](),
+		identity.NewID[apikey.APIKeyID](),
+		identity.NewID[oauthconnections.OAuthConnectionID](),
 	} {
 		prefix := id.Prefix()
 		assert.NotEmpty(t, prefix)

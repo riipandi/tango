@@ -1,4 +1,4 @@
-package federation
+package federation_test
 
 import (
 	"testing"
@@ -6,20 +6,25 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"go.jetify.com/typeid"
+
+	"github.com/riipandi/tango/modules/federation/customclaim"
+	"github.com/riipandi/tango/modules/federation/jwks"
+	"github.com/riipandi/tango/modules/federation/oidc"
+	"github.com/riipandi/tango/modules/federation/scimsync"
 )
 
 func TestEveryPrefixIsLowercaseSnakeCase(t *testing.T) {
 	for _, id := range []interface{ Prefix() string }{
-		typeid.Must(typeid.New[JWKID]()),
-		typeid.Must(typeid.New[OIDCClientID]()),
-		typeid.Must(typeid.New[CustomClaimID]()),
-		typeid.Must(typeid.New[AuthorizationCodeID]()),
-		typeid.Must(typeid.New[OIDCRefreshTokenID]()),
-		typeid.Must(typeid.New[DeviceCodeID]()),
-		typeid.Must(typeid.New[OAuth2SessionID]()),
-		typeid.Must(typeid.New[OAuth2JTIID]()),
-		typeid.Must(typeid.New[InteractionSessionID]()),
-		typeid.Must(typeid.New[SCIMServiceProviderID]()),
+		typeid.Must(typeid.New[jwks.JWKID]()),
+		typeid.Must(typeid.New[oidc.OIDCClientID]()),
+		typeid.Must(typeid.New[oidc.AuthorizationCodeID]()),
+		typeid.Must(typeid.New[oidc.OIDCRefreshTokenID]()),
+		typeid.Must(typeid.New[oidc.DeviceCodeID]()),
+		typeid.Must(typeid.New[oidc.OAuth2SessionID]()),
+		typeid.Must(typeid.New[oidc.OAuth2JTIID]()),
+		typeid.Must(typeid.New[oidc.InteractionSessionID]()),
+		typeid.Must(typeid.New[customclaim.CustomClaimID]()),
+		typeid.Must(typeid.New[scimsync.SCIMServiceProviderID]()),
 	} {
 		prefix := id.Prefix()
 		assert.NotEmpty(t, prefix)

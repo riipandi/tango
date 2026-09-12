@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
 )
 
@@ -44,7 +43,7 @@ func NewUserFactory(svc *user.Service, seed uint64) *UserFactory {
 
 // Create builds one user with the next sequential suffix,
 // wrapping past 9999 back to 0000.
-func (f *UserFactory) Create(ctx context.Context, base string) (identity.User, error) {
+func (f *UserFactory) Create(ctx context.Context, base string) (user.User, error) {
 	if base == "" {
 		base = "user"
 	}
@@ -59,7 +58,7 @@ func (f *UserFactory) Create(ctx context.Context, base string) (identity.User, e
 		Email:    name + "@users.local",
 	})
 	if err != nil {
-		return identity.User{}, fmt.Errorf("seed user %q: %w", name, err)
+		return user.User{}, fmt.Errorf("seed user %q: %w", name, err)
 	}
 	return created, nil
 }
@@ -82,8 +81,8 @@ func sanitizeBase(base string) string {
 
 // CreateMany builds count users sharing the same base name,
 // returning them in creation order.
-func (f *UserFactory) CreateMany(ctx context.Context, base string, count int) ([]identity.User, error) {
-	users := make([]identity.User, 0, count)
+func (f *UserFactory) CreateMany(ctx context.Context, base string, count int) ([]user.User, error) {
+	users := make([]user.User, 0, count)
 	for range count {
 		created, err := f.Create(ctx, base)
 		if err != nil {

@@ -14,7 +14,6 @@ import (
 	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/modules/identity"
 )
 
 // PostgresStore persists users in public.users. It builds on the
@@ -41,20 +40,20 @@ var userColumns = []string{
 
 // List returns every user, newest first. Unreadable rows are
 // skipped; a failed query yields an empty slice.
-func (s *PostgresStore) List(ctx context.Context) []identity.User {
+func (s *PostgresStore) List(ctx context.Context) []User {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select(userColumns...)
-	sb.From("public.users")
+	sb.From(usersTable)
 	sb.OrderBy("created_at DESC", "id DESC")
 
 	query, args := sb.Build()
 	rows, err := s.exec.Query(ctx, query, args...)
 	if err != nil {
-		return []identity.User{}
+		return []User{}
 	}
 	defer rows.Close()
 
-	users := []identity.User{}
+	users := []User{}
 	for rows.Next() {
 		user, scanErr := scanUser(rows)
 		if scanErr != nil {
@@ -68,7 +67,7 @@ func (s *PostgresStore) List(ctx context.Context) []identity.User {
 // Create inserts a user and returns the stored row. Optional names
 // store as NULL (nil pointers); the display name falls back to the
 // email local part before the insert.
-func (s *PostgresStore) Create(ctx context.Context, params CreateParams) (identity.User, error) {
+func (s *PostgresStore) Create(ctx context.Context, params CreateParams) (User, error) {
 	displayName := params.DisplayName
 	if displayName == "" {
 		local, _, _ := strings.Cut(params.Email, "@")
@@ -76,7 +75,7 @@ func (s *PostgresStore) Create(ctx context.Context, params CreateParams) (identi
 	}
 
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
-	ib.InsertInto("public.users")
+	ib.InsertInto(usersTable)
 	ib.Cols("username", "email", "first_name", "last_name", "display_name", "is_admin")
 	ib.Values(
 		params.Username,
@@ -98,10 +97,10 @@ func (s *PostgresStore) Create(ctx context.Context, params CreateParams) (identi
 	)
 	err := s.exec.QueryRow(ctx, query, args...).Scan(&id, &firstName, &lastName, &createdAt)
 	if err != nil {
-		return identity.User{}, mapStoreError(err)
+		return User{}, mapStoreError(err)
 	}
 
-	return identity.User{
+	return User{
 		ID:          mustUserID(id),
 		Username:    params.Username,
 		Email:       params.Email,
@@ -114,19 +113,19 @@ func (s *PostgresStore) Create(ctx context.Context, params CreateParams) (identi
 }
 
 // GetByID resolves one user; unknown IDs surface ErrNotFound.
-func (s *PostgresStore) GetByID(ctx context.Context, id identity.UserID) (identity.User, error) {
+func (s *PostgresStore) GetByID(ctx context.Context, id UserID) (User, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select(userColumns...)
-	sb.From("public.users")
+	sb.From(usersTable)
 	sb.Where(sb.E("id", id.UUIDBytes()))
 
 	query, args := sb.Build()
 	user, err := scanUser(s.exec.QueryRow(ctx, query, args...))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return identity.User{}, ErrNotFound
+			return User{}, ErrNotFound
 		}
-		return identity.User{}, err
+		return User{}, err
 	}
 	return user, nil
 }
@@ -138,7 +137,7 @@ type scanner interface {
 
 // scanUser scans one row into the domain type; keep the column
 // order in sync with userColumns.
-func scanUser(row scanner) (identity.User, error) {
+func scanUser(row scanner) (User, error) {
 	var (
 		id              string
 		username        string
@@ -159,10 +158,10 @@ func scanUser(row scanner) (identity.User, error) {
 		&avatarURL, &locale, &isAdmin, &disabled,
 		&emailVerifiedAt, &createdAt, &updatedAt, &lastLoginAt)
 	if err != nil {
-		return identity.User{}, mapStoreError(err)
+		return User{}, mapStoreError(err)
 	}
 
-	return identity.User{
+	return User{
 		ID:              mustUserID(id),
 		Username:        username,
 		Email:           email,
@@ -204,8 +203,8 @@ func timePtr(t pgtype.Timestamptz) *time.Time {
 
 // mustUserID converts a stored UUID to the typed ID. TypeIDs wrap
 // UUIDs losslessly, so failure is a programmer error.
-func mustUserID(uuidText string) identity.UserID {
-	id, err := typeid.FromUUID[identity.UserID](uuidText)
+func mustUserID(uuidText string) UserID {
+	id, err := typeid.FromUUID[UserID](uuidText)
 	if err != nil {
 		panic(fmt.Sprintf("user: stored id %q is not a UUID: %v", uuidText, err))
 	}

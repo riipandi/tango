@@ -51,7 +51,7 @@ func (s *Service) listUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) getUser(w http.ResponseWriter, r *http.Request) {
-	id, err := identity.ParseID[identity.UserID](chi.URLParam(r, "id"))
+	id, err := identity.ParseID[UserID](chi.URLParam(r, "id"))
 	if err != nil {
 		responder.NotFoundJSON(w, r)
 		return

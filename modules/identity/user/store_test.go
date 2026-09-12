@@ -103,13 +103,13 @@ func TestPostgresStoreErrors(t *testing.T) {
 	assert.ErrorIs(t, err, ErrDuplicate)
 
 	// Unknown ID → ErrNotFound.
-	_, err = store.GetByID(ctx, identity.NewID[identity.UserID]())
+	_, err = store.GetByID(ctx, identity.NewID[UserID]())
 	assert.ErrorIs(t, err, ErrNotFound)
 
 	// A CHECK-violating email (bypassing service validation via raw
 	// SQL) maps to the domain validation error.
 	_, rawErr := store.exec.Exec(ctx,
-		`INSERT INTO public.users (username, email, display_name) VALUES ($1, $2, $3)`,
+		`INSERT INTO `+usersTable+` (username, email, display_name) VALUES ($1, $2, $3)`,
 		"rawbadmail_"+stamp, "not-an-email", "raw")
 	require.Error(t, rawErr)
 	assert.ErrorIs(t, mapStoreError(rawErr), ErrInvalidEmail)

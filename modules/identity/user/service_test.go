@@ -50,7 +50,7 @@ func TestServiceCreateAndGet(t *testing.T) {
 	assert.True(t, strings.HasPrefix(got.Username, "john_"))
 	assert.Equal(t, user.Email, got.Email)
 
-	missing := identity.NewID[identity.UserID]()
+	missing := identity.NewID[UserID]()
 	_, err = svc.GetByID(t.Context(), missing)
 	assert.ErrorIs(t, err, ErrNotFound)
 }
