@@ -9,7 +9,7 @@ import (
 	"github.com/riipandi/tango/modules/identity"
 )
 
-// MemoryStore is an in-memory Store, guarded by a mutex. Postgres
+// MemoryStore is an in-memory Store guarded by a mutex. A Postgres
 // implementation lands later as store_postgres.go in this package.
 type MemoryStore struct {
 	mu    sync.Mutex
@@ -31,7 +31,7 @@ func (s *MemoryStore) List(_ context.Context) []identity.User {
 func (s *MemoryStore) Create(_ context.Context, name string) (identity.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// UUIDv7: time-ordered (index-friendly) per RFC 9562, stdlib uuid.
+	// UUIDv7: time-ordered (index-friendly) per RFC 9562.
 	user := identity.User{ID: uuid.NewV7().String(), Name: name}
 	s.users = append(s.users, user)
 	return user, nil

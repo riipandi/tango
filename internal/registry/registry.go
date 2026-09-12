@@ -1,5 +1,10 @@
 // Package registry wires feature modules: add = import + one
 // Register line, remove = delete the line.
+//
+// The identity provider surface is isolated in
+// modules/federation. To exclude it, delete the
+// federation Register line below (plus federation_features.go) — the
+// binary keeps all internal authn/authz.
 package registry
 
 import (
@@ -10,9 +15,9 @@ import (
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/modules/auditlog"
+	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
-	"github.com/riipandi/tango/modules/wellknown"
 )
 
 // Deps are shared dependencies for modules. No globals;
@@ -42,7 +47,8 @@ func New(deps Deps) *kernel.Registry {
 
 	audit := auditlog.New()
 	reg.Register(audit)
-	reg.Register(wellknown.New())
+
+	// Internal authn/authz: user core + selected auth features.
 	reg.Register(identity.New(
 		user.NewService(user.NewMemoryStore(), func(e identity.AuditEvent) {
 			audit.Record(auditlog.Event{Action: e.Action, Actor: e.Actor, Target: e.Target})
@@ -53,9 +59,16 @@ func New(deps Deps) *kernel.Registry {
 		withPassword(deps),
 		withAPIKeys(deps),
 		withAPIAccess(deps),
-		withOIDC(deps),
 		withLDAPSync(deps),
+	))
+
+	// Identity provider (OIDC, SCIM, discovery) — optional surface
+	// for other systems. Delete this line (and
+	// federation_features.go) to exclude the provider entirely.
+	reg.Register(federation.New(
+		withOIDC(deps),
 		withSCIMSync(deps),
+		withDiscovery(deps),
 	))
 
 	return reg

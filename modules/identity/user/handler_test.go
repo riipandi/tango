@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newTestRouter mounts the user core the way the identity module does:
-// inside the shared /api group.
+// newTestRouter mounts the user core inside the shared /api group,
+// the way the identity module does.
 func newTestRouter() chi.Router {
 	svc := NewService(NewMemoryStore(), nil)
 

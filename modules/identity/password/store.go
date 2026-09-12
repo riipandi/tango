@@ -1,5 +1,4 @@
 package password
 
-// TODO: credential persistence, file-per-backend in this package:
-// store_memory.go now, store_postgres.go later. One user may have a
-// password and passkeys at the same time.
+// TODO: credential store, file-per-backend in this package. One user
+// may hold a password and passkeys at the same time.

@@ -3,8 +3,8 @@ package auditlog
 
 import "time"
 
-// Event is a single audit entry. Other modules record events through
-// the module's public API instead of touching storage directly.
+// Event is a single audit entry, recorded through the module's
+// public API instead of touching storage directly.
 type Event struct {
 	Action    string    `json:"action"`
 	Actor     string    `json:"actor"`

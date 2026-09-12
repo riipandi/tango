@@ -1,6 +1,5 @@
-// Package identity owns user management and all authn/authz concerns:
-// HTTP layer, business rules, and storage. Mounted inside the shared
-// /api group.
+// Package identity owns internal authn/authz concerns: HTTP layer,
+// business rules, and storage. Mounted inside the shared /api group.
 package identity
 
 import (
@@ -17,7 +16,7 @@ import (
 const ModuleName = "identity"
 
 // Module is the identity feature unit: the mandatory user core plus
-// whichever authn/authz features the composition root selected.
+// the selected features.
 type Module struct {
 	core APIFeature
 
@@ -26,10 +25,9 @@ type Module struct {
 	seen     map[string]bool
 }
 
-// New builds the identity module from its mandatory user core plus
-// the selected authn/authz features. A feature not passed here does
-// not exist: no routes, no storage, no lifecycle. Construction fails
-// fast on a malformed feature set.
+// New builds the module from the mandatory user core plus the
+// selected features; anything omitted has no routes, storage, or
+// lifecycle. Fails fast on a malformed feature set.
 func New(core APIFeature, features ...Feature) kernel.Module {
 	if core == nil {
 		panic("identity: nil user core")
@@ -57,9 +55,7 @@ func New(core APIFeature, features ...Feature) kernel.Module {
 func (m *Module) Name() string { return ModuleName }
 
 // APIRoutes mounts the user core and every selected feature's
-// endpoints inside the shared /api group. The group's index endpoint
-// is owned by the transport layer, not by this module.
-// Implements kernel.APIRoutable.
+// endpoints inside the shared /api group. Implements kernel.APIRoutable.
 func (m *Module) APIRoutes(r chi.Router) {
 	m.core.APIRoutes(r)
 
@@ -70,9 +66,8 @@ func (m *Module) APIRoutes(r chi.Router) {
 	}
 }
 
-// Routes mounts root-router routes (outside /api) declared by
-// root-routable features — e.g. the OIDC /authorize endpoint.
-// Implements kernel.RootRoutable.
+// Routes mounts root-router routes declared by root-routable
+// features. Implements kernel.RootRoutable.
 func (m *Module) Routes(r chi.Router) {
 	for _, f := range m.features {
 		if rf, ok := f.(RootRoutableFeature); ok {
@@ -100,8 +95,9 @@ func (m *Module) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops startable features in reverse selection order (core last)
-// and joins all errors so one failing feature does not block the rest.
+// Stop stops startable features in reverse selection order (core
+// last) and joins all errors so one failing feature does not block
+// the rest.
 func (m *Module) Stop(ctx context.Context) error {
 	var errs []error
 	for _, f := range slices.Backward(m.features) {

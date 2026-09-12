@@ -12,10 +12,11 @@ func TestNewRegistersAllModules(t *testing.T) {
 	modules := reg.Modules()
 	assert.Len(t, modules, 3)
 
-	wantOrder := []string{"auditlog", "wellknown", "identity"}
+	wantOrder := []string{"auditlog", "identity", "federation"}
 	for i, want := range wantOrder {
 		assert.Equal(t, want, modules[i].Name())
 	}
 
 	assert.NotNil(t, reg.Get("identity"))
+	assert.NotNil(t, reg.Get("federation"))
 }

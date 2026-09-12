@@ -28,6 +28,7 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 
 	r.Get("/healthz", HealthCheckHandler)
 	r.Get("/static/*", StaticAssetsHandler)
+	r.Get("/.well-known/version", VersionHandler)
 
 	registry.Apply(r)
 

@@ -7,20 +7,17 @@ import (
 	"github.com/riipandi/tango/modules/identity"
 )
 
-// Service holds the user business rules and the subdomain's HTTP
-// surface. It is the identity module's mandatory core feature.
+// Service holds the user business rules and HTTP surface. It is the
+// identity module's mandatory core feature.
 type Service struct {
 	store    Store
 	recorder identity.Recorder
 }
 
-// Compile-time contract checks: the core satisfies the identity
-// mounting capability.
 var _ identity.APIFeature = (*Service)(nil)
 
 // NewService builds the user core on top of the given store. The
-// optional recorder captures audit events (consumer-side interface —
-// pass e.g. the auditlog module).
+// optional recorder captures audit events.
 func NewService(store Store, recorder identity.Recorder) *Service {
 	return &Service{store: store, recorder: recorder}
 }

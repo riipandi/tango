@@ -14,7 +14,6 @@ type createUserRequest struct {
 }
 
 // APIRoutes mounts the user endpoints inside the shared /api group.
-// Implements identity.APIFeature.
 func (s *Service) APIRoutes(r chi.Router) {
 	r.Post("/users", s.createUser)
 	r.Get("/users", s.listUsers)

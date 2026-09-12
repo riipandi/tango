@@ -29,6 +29,20 @@ func APIRootHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// VersionHandler serves RFC 8615 /.well-known/version: the same
+// build metadata as the /api index. Identity-provider discovery
+// (openid-configuration, jwks.json) lives in the optional
+// federation module, not here.
+func VersionHandler(w http.ResponseWriter, r *http.Request) {
+	responder.WriteJSON(w, http.StatusOK, map[string]string{
+		"name":     config.AppName,
+		"version":  config.AppVersion,
+		"platform": config.Platform,
+		"build":    config.BuildDate,
+		"hash":     config.BuildHash,
+	})
+}
+
 func StaticAssetsHandler(w http.ResponseWriter, r *http.Request) {
 	path := chi.URLParam(r, "*")
 	responder.WriteJSON(w, http.StatusOK, map[string]string{

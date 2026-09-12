@@ -37,10 +37,16 @@ func (s *SecretsCmd) Help() string {
 
 // Run generates keys, then prints or applies them.
 func (s *SecretsCmd) Run(cli *CLI) error {
+	outFile, err := sanitizeOutputPath(s.OutFile, "env file")
+	if err != nil {
+		return err
+	}
+
 	if s.Apply {
-		if _, err := os.Stat(s.OutFile); err != nil {
+		info, statErr := os.Stat(outFile)
+		if statErr != nil || info.IsDir() {
 			fmt.Printf("%sERROR: %s not found, the --apply flag requires %s to exist%s\n",
-				colorRed, s.OutFile, s.OutFile, colorReset)
+				colorRed, outFile, outFile, colorReset)
 			fmt.Printf("Create the file first, or run without --apply to generate secrets only\n\n")
 			return nil
 		}
@@ -57,7 +63,7 @@ func (s *SecretsCmd) Run(cli *CLI) error {
 	}
 
 	if s.Apply {
-		return applySecrets(s.OutFile, keys)
+		return applySecrets(outFile, keys)
 	}
 	printSecrets(keys)
 	return nil
@@ -100,6 +106,19 @@ func printSecrets(keys secretsBundle) {
 	}
 }
 
+// sanitizeOutputPath cleans an operator-supplied output path and
+// rejects traversal that escapes the working directory via leading
+// ".." components (gosec G703). Absolute paths stay allowed:
+// operators may target any location explicitly.
+func sanitizeOutputPath(path, label string) (string, error) {
+	cleaned := filepath.Clean(path)
+	if cleaned == "." || cleaned == ".." ||
+		strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%s path %q must not traverse outside the working directory", label, path)
+	}
+	return cleaned, nil
+}
+
 // applySecrets writes the bundle into the env file.
 func applySecrets(outFile string, keys secretsBundle) error {
 	fmt.Printf("%sUpdating %s file...%s\n\n", colorBold, outFile, colorReset)
@@ -134,6 +153,9 @@ func upsertEnvFile(envFile, key, value string) error {
 		lines = append(lines, key+"="+value)
 	}
 
+	// #nosec G703 -- envFile is the operator-supplied --out target,
+	// sanitized by sanitizeOutputPath (clean + traversal rejection)
+	// and verified to exist as a regular file before this call.
 	return os.WriteFile(envFile, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 }
 
@@ -223,7 +245,9 @@ func writeKeyPair(outDir string, derPrivate, derPublic []byte) error {
 	if err := os.WriteFile(filepath.Join(outDir, "private_key.pem"), privatePEM, 0o600); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(outDir, "public_key.pem"), publicPEM, 0o644); err != nil {
+	// 0600: the whole key directory holds secret material; no
+	// need for group/other read on the public half either.
+	if err := os.WriteFile(filepath.Join(outDir, "public_key.pem"), publicPEM, 0o600); err != nil {
 		return err
 	}
 	return nil

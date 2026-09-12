@@ -1,9 +1,5 @@
 package password
 
-// TODO: business rules for password authentication.
-//
-//	hash      — argon2id (golang.org/x/crypto/argon2), constant-time verify
-//	verify    — email + password check, audit event on success/failure
-//	change    — requires current password (self) or admin privilege
-//	reset     — single-use reset token, expiry, invalidate old sessions
-//	policy    — min length + strength rules from appconfig
+// TODO: argon2id hashing, email+password verify with audit events,
+// change (current password or admin), single-use reset tokens that
+// invalidate old sessions; policy from appconfig.

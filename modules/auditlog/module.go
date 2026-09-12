@@ -1,5 +1,5 @@
-// Package auditlog provides the audit trail module: it captures
-// domain events from other modules and exposes them via /api/audit-logs.
+// Package auditlog captures domain events from other modules and
+// exposes them via /api/audit-logs.
 package auditlog
 
 import (
@@ -14,9 +14,9 @@ import (
 // ModuleName identifies the audit log module in the registry.
 const ModuleName = "auditlog"
 
-// Module is the audit log feature: an in-memory sink plus a read-only
-// listing endpoint. Swap the sink for a DB-backed implementation
-// when persistence lands.
+// Module is the audit log feature: an in-memory sink plus a
+// read-only listing endpoint. Swap the sink for a DB-backed
+// implementation when persistence lands.
 type Module struct {
 	mu     sync.Mutex
 	events []Event
