@@ -27,9 +27,11 @@ func TestMigrationsLifecycle(t *testing.T) {
 
 	applied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, applied, 1)
+	require.Len(t, applied, 21)
 	assert.Equal(t, int64(1), applied[0].Version)
 	assert.Contains(t, applied[0].Path, "initialize_schema")
+	assert.Equal(t, int64(21), applied[20].Version)
+	assert.Contains(t, applied[20].Path, "queue_tables")
 
 	db, err := sql.Open("pgx", pg.DSN)
 	require.NoError(t, err)
@@ -51,6 +53,32 @@ func TestMigrationsLifecycle(t *testing.T) {
 	).Scan(&extensions))
 	assert.Equal(t, 4, extensions)
 
+	// All tables land in the public schema (reference layout:
+	// domainaja-app), asserted by name so test litter cannot skew
+	// the count.
+	for schema, names := range map[string][]string{
+		"public": {
+			"deleted_records", "app_settings",
+			"users", "user_passwords", "user_groups", "user_groups_users",
+			"user_phones", "sessions", "auth_tokens", "signup_tokens",
+			"signup_tokens_user_groups", "refresh_tokens", "audit_logs",
+			"file_stores", "webhook_events", "webhook_logs", "jwks",
+			"invitations", "mfa_keys", "webauthn_credentials",
+			"webauthn_sessions", "oauth_connections", "oidc_clients",
+			"custom_claims", "oidc_authorization_codes",
+			"user_authorized_oidc_clients", "oidc_clients_allowed_user_groups",
+			"oidc_refresh_tokens", "oidc_device_codes", "scim_service_providers",
+			"api_keys", "rate_limits", "queue_tasks", "queue_tasks_completed",
+		},
+	} {
+		var found int
+		require.NoError(t, db.QueryRow(
+			"SELECT count(*) FROM information_schema.tables WHERE table_schema = $1 AND table_name = ANY($2)",
+			schema, names,
+		).Scan(&found), "count tables in %s", schema)
+		assert.Equal(t, len(names), found, "expected tables in the %s schema", schema)
+	}
+
 	// The metadata table is the project-renamed one, not goose's
 	// goose_db_version default.
 	var tables int
@@ -68,7 +96,7 @@ func TestMigrationsLifecycle(t *testing.T) {
 	target, err := MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
-	assert.Equal(t, int64(1), target.Version)
+	assert.Equal(t, int64(21), target.Version)
 	assert.Equal(t, "applied", target.State)
 
 	// Roll back the most recent migration, verify the state
@@ -76,16 +104,17 @@ func TestMigrationsLifecycle(t *testing.T) {
 	outcome, err := MigrateDown(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, outcome)
-	assert.Equal(t, int64(1), outcome.Version)
+	assert.Equal(t, int64(21), outcome.Version)
 
 	target, err = MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
-	assert.Nil(t, target, "nothing applied after rollback")
+	require.NotNil(t, target)
+	assert.Equal(t, int64(20), target.Version, "next down target follows the rollback")
 
 	statuses, err := MigrateStatus(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, statuses, 1)
-	assert.Equal(t, "pending", statuses[0].State)
+	require.Len(t, statuses, 21)
+	assert.Equal(t, "pending", statuses[20].State)
 
 	reapplied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)

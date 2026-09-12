@@ -21,7 +21,7 @@ type DBCmd struct {
 	MigrateCreate  MigrateCreateCmd   `cmd:"" name:"migrate:create" help:"Create a new sequential migration file"`
 	MigrateFix     MigrateFixCmd      `cmd:"" name:"migrate:fix" help:"Reorder migration files"`
 	MigrateVal     MigrateValidateCmd `cmd:"" name:"migrate:validate" help:"Check the migration files"`
-	MigrateReset   MigrateResetCmd    `cmd:"" name:"migrate:reset" help:"Rollback all migrations"`
+	MigrateReset   MigrateResetCmd    `cmd:"" name:"migrate:reset" help:"Rollback all migrations (--up re-applies them)"`
 	Restore        DBRestoreCmd       `cmd:"" help:"Restore from a dump file (custom format)"`
 }
 
@@ -73,6 +73,7 @@ func (c *MigrateCreateCmd) Run(cli *CLI) error {
 type MigrateResetCmd struct {
 	Force  bool `help:"Skip the confirmation prompt"`
 	DryRun bool `help:"Print what would be rolled back without changing anything"`
+	Up     bool `help:"Re-apply all migrations after the rollback (fresh schema)"`
 }
 
 // Run rolls back every migration after confirmation.
@@ -86,7 +87,7 @@ func (c *MigrateResetCmd) Run(cli *CLI) error {
 	dsn := cfg.Database.URL
 
 	if c.DryRun {
-		return migrateResetDryRun(ctx, dsn)
+		return migrateResetDryRun(ctx, dsn, c.Up)
 	}
 
 	if confirmErr := confirmDestructive(c.Force); confirmErr != nil {
@@ -99,11 +100,23 @@ func (c *MigrateResetCmd) Run(cli *CLI) error {
 	for _, outcome := range rolled {
 		fmt.Printf("%srolled back%s %s (%s)\n", colorGreen, colorReset, outcome.Path, outcome.Duration)
 	}
+	if !c.Up {
+		return nil
+	}
+
+	applied, upErr := database.MigrateUp(ctx, dsn)
+	if upErr != nil {
+		return fmt.Errorf("db migrate:reset --up: %w", upErr)
+	}
+	for _, outcome := range applied {
+		fmt.Printf("%sapplied%s %s (%s)\n", colorGreen, colorReset, outcome.Path, outcome.Duration)
+	}
 	return nil
 }
 
-// migrateResetDryRun lists what reset would roll back, read-only.
-func migrateResetDryRun(ctx context.Context, dsn string) error {
+// migrateResetDryRun lists what reset would roll back, read-only;
+// with re-apply it also reports how many would come back.
+func migrateResetDryRun(ctx context.Context, dsn string, reapply bool) error {
 	statuses, err := database.MigrateStatus(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("db migrate:reset: %w", err)
@@ -121,6 +134,9 @@ func migrateResetDryRun(ctx context.Context, dsn string) error {
 	fmt.Printf("%sdry-run%s would roll back %d migration(s):\n", colorCyan, colorReset, len(applied))
 	for _, entry := range applied {
 		fmt.Printf("  %s\n", entry.Path)
+	}
+	if reapply {
+		fmt.Printf("%sdry-run%s would re-apply %d migration(s)\n", colorCyan, colorReset, len(statuses))
 	}
 	return nil
 }

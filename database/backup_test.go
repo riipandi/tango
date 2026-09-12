@@ -101,6 +101,9 @@ func TestBackupRoundTrip(t *testing.T) {
 	require.NoError(t, db.QueryRow("SELECT id FROM import_marker_test LIMIT 1").Scan(&value))
 	assert.Equal(t, 42, value)
 
+	_, err = db.Exec("DROP TABLE import_marker_test")
+	require.NoError(t, err, "test table must not litter the shared database")
+
 	badFile := filepath.Join(t.TempDir(), "bad.sql")
 	require.NoError(t, os.WriteFile(badFile, []byte("SELECT * FROM missing_table_xyz;\n"), 0o644))
 	assert.Error(t, Import(ctx, pg.DSN, badFile), "failing statement must abort the import")

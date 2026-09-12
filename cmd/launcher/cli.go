@@ -31,7 +31,8 @@ const (
 // kong's type-based binding (ctx.Run(cli)).
 type CLI struct {
 	// EnvFile loads a dotenv file, below the system environment.
-	EnvFile string `help:"Load environment variables from a dotenv file"`
+	// Empty defaults to .env.local when it exists.
+	EnvFile string `help:"Load environment variables from a dotenv file (default: .env.local when present)"`
 
 	// DataDir is the single root for logs, backups, keys.
 	// Wins over APP_DATA_DIR and the env file.
@@ -64,8 +65,18 @@ func globalOverrides(cli *CLI) map[string]any {
 }
 
 // loadConfig loads layered config: global flags (--data-dir,
-// --env-file) plus command overrides. Global flags win.
+// --env-file) plus command overrides. Global flags win. With no
+// --env-file, .env.local is loaded when present so plain
+// `tango <cmd>` sees the same DSNs as the task runner; compose and
+// systemd users set real env vars instead.
 func loadConfig(cli *CLI, extra map[string]any) (*config.Config, error) {
+	envFile := cli.EnvFile
+	if envFile == "" {
+		if _, err := os.Stat(".env.local"); err == nil {
+			envFile = ".env.local"
+		}
+	}
+
 	overrides := map[string]any{}
 	for key, value := range extra {
 		overrides[key] = value
@@ -73,7 +84,7 @@ func loadConfig(cli *CLI, extra map[string]any) (*config.Config, error) {
 	for key, value := range globalOverrides(cli) {
 		overrides[key] = value
 	}
-	cfg, err := config.Load(config.LoadOptions{EnvFile: cli.EnvFile, Overrides: overrides})
+	cfg, err := config.Load(config.LoadOptions{EnvFile: envFile, Overrides: overrides})
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}

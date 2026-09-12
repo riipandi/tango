@@ -71,14 +71,16 @@ func TestLoadEnvFileLayer(t *testing.T) {
 	assert.Equal(t, "debug", cfg.App.LogLevel)
 }
 
-func TestLoadEnvFileOverridesSystemEnv(t *testing.T) {
+func TestLoadSystemEnvOverridesEnvFile(t *testing.T) {
+	// 12-factor layering: a real environment (compose, systemd)
+	// beats the dotenv file.
 	t.Setenv("PORT", "7777")
 	path := writeEnvFile(t, "PORT=1234\nAPP_LOG_LEVEL=debug\n")
 
 	cfg, err := Load(LoadOptions{EnvFile: path})
 	require.NoError(t, err)
 
-	assert.Equal(t, 1234, cfg.Port, "--env-file must win over the system environment")
+	assert.Equal(t, 7777, cfg.Port, "system environment must win over --env-file")
 	assert.Equal(t, "debug", cfg.App.LogLevel)
 }
 

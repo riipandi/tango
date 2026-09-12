@@ -70,16 +70,8 @@ func Load(opts LoadOptions) (*Config, error) {
 		return nil, fmt.Errorf("load defaults: %w", err)
 	}
 
-	// System env, below the env file.
-	if layer, err := envLayer(); err != nil {
-		return nil, err
-	} else if len(layer) > 0 {
-		if err := k.Load(confmap.Provider(layer, "."), nil); err != nil {
-			return nil, fmt.Errorf("load environment: %w", err)
-		}
-	}
-
-	// Optional --env-file, wins over system env.
+	// Optional --env-file, above defaults, below the system env:
+	// real environment (compose, systemd) always wins over dotenv.
 	if opts.EnvFile != "" {
 		layer, err := envFileLayer(opts.EnvFile)
 		if err != nil {
@@ -89,6 +81,15 @@ func Load(opts LoadOptions) (*Config, error) {
 			if err := k.Load(confmap.Provider(layer, "."), nil); err != nil {
 				return nil, fmt.Errorf("load env file: %w", err)
 			}
+		}
+	}
+
+	// System env, above the env file.
+	if layer, err := envLayer(); err != nil {
+		return nil, err
+	} else if len(layer) > 0 {
+		if err := k.Load(confmap.Provider(layer, "."), nil); err != nil {
+			return nil, fmt.Errorf("load environment: %w", err)
 		}
 	}
 

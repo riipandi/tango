@@ -40,6 +40,30 @@ func runCommand(t *testing.T, args ...string) string {
 	return out
 }
 
+// TestLoadConfigDefaultsEnvFile proves plain `tango <cmd>` picks up
+// .env.local without --env-file, and an explicit flag still wins.
+func TestLoadConfigDefaultsEnvFile(t *testing.T) {
+	t.Setenv("DATABASE_URL", "") // keep the host environment out
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeEnv := func(name, dsn string) {
+		t.Helper()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name),
+			[]byte("DATABASE_URL="+dsn+"\n"), 0o600))
+	}
+
+	writeEnv(".env.local", "postgresql://envfile:envfile@localhost:5432/envfile")
+	cfg, err := loadConfig(&CLI{}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "postgresql://envfile:envfile@localhost:5432/envfile", cfg.Database.URL)
+
+	writeEnv("other.env", "postgresql://other:other@localhost:5432/other")
+	cfg, err = loadConfig(&CLI{EnvFile: "other.env"}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "postgresql://other:other@localhost:5432/other", cfg.Database.URL)
+}
+
 func TestVersionFlag(t *testing.T) {
 	want := fmt.Sprintf("%s %s %s (%s %s)",
 		config.AppName, config.AppVersion, config.Platform, config.BuildHash, config.BuildDate)
