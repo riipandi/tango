@@ -27,11 +27,17 @@ func TestMigrationsLifecycle(t *testing.T) {
 
 	applied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, applied, 21)
+	require.Len(t, applied, 10)
 	assert.Equal(t, int64(1), applied[0].Version)
 	assert.Contains(t, applied[0].Path, "initialize_schema")
-	assert.Equal(t, int64(21), applied[20].Version)
-	assert.Contains(t, applied[20].Path, "queue_tables")
+	assert.Equal(t, int64(4), applied[3].Version)
+	assert.Contains(t, applied[3].Path, "identity_tables")
+	assert.Equal(t, int64(5), applied[4].Version)
+	assert.Contains(t, applied[4].Path, "webauthn_tables")
+	assert.Equal(t, int64(6), applied[5].Version)
+	assert.Contains(t, applied[5].Path, "federation_tables")
+	assert.Equal(t, int64(10), applied[9].Version)
+	assert.Contains(t, applied[9].Path, "queue_tables")
 
 	db, err := sql.Open("pgx", pg.DSN)
 	require.NoError(t, err)
@@ -69,6 +75,7 @@ func TestMigrationsLifecycle(t *testing.T) {
 			"user_authorized_oidc_clients", "oidc_clients_allowed_user_groups",
 			"oidc_refresh_tokens", "oidc_device_codes", "scim_service_providers",
 			"api_keys", "rate_limits", "queue_tasks", "queue_tasks_completed",
+			"oauth2_sessions", "oauth2_jtis", "interaction_sessions",
 		},
 	} {
 		var found int
@@ -96,7 +103,7 @@ func TestMigrationsLifecycle(t *testing.T) {
 	target, err := MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
-	assert.Equal(t, int64(21), target.Version)
+	assert.Equal(t, int64(10), target.Version)
 	assert.Equal(t, "applied", target.State)
 
 	// Roll back the most recent migration, verify the state
@@ -104,17 +111,17 @@ func TestMigrationsLifecycle(t *testing.T) {
 	outcome, err := MigrateDown(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, outcome)
-	assert.Equal(t, int64(21), outcome.Version)
+	assert.Equal(t, int64(10), outcome.Version)
 
 	target, err = MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
-	assert.Equal(t, int64(20), target.Version, "next down target follows the rollback")
+	assert.Equal(t, int64(9), target.Version, "next down target follows the rollback")
 
 	statuses, err := MigrateStatus(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, statuses, 21)
-	assert.Equal(t, "pending", statuses[20].State)
+	require.Len(t, statuses, 10)
+	assert.Equal(t, "pending", statuses[9].State)
 
 	reapplied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)

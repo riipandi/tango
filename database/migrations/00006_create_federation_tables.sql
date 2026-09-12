@@ -2,12 +2,57 @@
 -- +goose StatementBegin
 
 -- --------------------------------------------------------
+-- Table: public.jwks — JSON Web Key Sets for signing/verifying JWTs
+-- This table is optional, depending on whether you want to manage your own keys
+-- or use a third-party service. Example use case: multi-tenant applications.
+-- --------------------------------------------------------
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'jwt_algorithm') THEN
+    CREATE TYPE public.jwt_algorithm AS ENUM (
+        'HS256',
+        'HS384',
+        'HS512',
+        'RS256',
+        'RS384',
+        'RS512',
+        'ES256',
+        'ES384',
+        'ES512'
+    );
+END IF; END$$;
+
+CREATE TABLE IF NOT EXISTS public.jwks (
+    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    key_id TEXT NOT NULL UNIQUE, -- kid
+    algorithm public.jwt_algorithm NOT NULL DEFAULT 'HS256',
+    key_type TEXT NOT NULL, -- e.g. RSA, EC, oct
+    public_key BYTEA NOT NULL, -- public key for verification (encrypted)
+    private_key BYTEA, -- nullable, only for internal use (encrypted)
+    use_for TEXT NOT NULL DEFAULT 'sig', -- 'sig' (signature) or 'enc' (encryption)
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    expires_at TIMESTAMPTZ DEFAULT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT NULL
+) USING heap;
+
+-- Create trigger for updated_at column
+CREATE TRIGGER trg_jwks_updated_at BEFORE UPDATE ON public.jwks FOR EACH ROW EXECUTE FUNCTION fn_updated_at_value();
+
+-- Indexes for `public.jwks` table
+CREATE INDEX IF NOT EXISTS idx_jwks_active ON public.jwks(is_active);
+CREATE INDEX IF NOT EXISTS idx_jwks_algorithm ON public.jwks(algorithm);
+CREATE INDEX IF NOT EXISTS idx_jwks_use_for ON public.jwks(use_for);
+CREATE INDEX IF NOT EXISTS idx_jwks_expires_at ON public.jwks(expires_at);
+CREATE INDEX IF NOT EXISTS idx_jwks_active_algorithm_use_for ON public.jwks(is_active, algorithm, use_for);
+
+-- --------------------------------------------------------
 -- Table: public.oidc_clients
 -- --------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS public.oidc_clients (
     id TEXT NOT NULL PRIMARY KEY,
     name TEXT,
+    description TEXT NOT NULL DEFAULT '',
     secret TEXT,
     callback_urls JSONB,
     logout_callback_urls JSONB,
@@ -17,8 +62,16 @@ CREATE TABLE IF NOT EXISTS public.oidc_clients (
     credentials JSONB,
     is_public BOOLEAN DEFAULT FALSE,
     pkce_enabled BOOLEAN DEFAULT FALSE CHECK (pkce_enabled IN (TRUE, FALSE)),
+    pkce_supported BOOLEAN NOT NULL DEFAULT FALSE,
     requires_reauthentication BOOLEAN NOT NULL DEFAULT FALSE,
+    requires_pushed_authorization_requests BOOLEAN NOT NULL DEFAULT FALSE,
+    skip_consent BOOLEAN NOT NULL DEFAULT FALSE,
     is_group_restricted BOOLEAN NOT NULL DEFAULT FALSE,
+    client_type TEXT NOT NULL DEFAULT 'standard', -- 'standard' or 'cimd' (Client-ID Metadata Document)
+    metadata_expires_at TIMESTAMPTZ, -- CIMD document refresh deadline
+    metadata_grant_types JSONB, -- Grant types allowed by the CIMD document
+    access_token_duration_minutes BIGINT NOT NULL DEFAULT 60,
+    refresh_token_duration_minutes BIGINT NOT NULL DEFAULT 43200,
     created_by_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (created_by_id) REFERENCES public.users(id) ON DELETE SET NULL
@@ -73,7 +126,7 @@ CREATE INDEX IF NOT EXISTS idx_oidc_authorization_codes_expires_at ON public.oid
 CREATE TABLE IF NOT EXISTS public.user_authorized_oidc_clients (
     user_id UUID NOT NULL,
     client_id TEXT NOT NULL,
-    scope TEXT,
+    scope JSONB NOT NULL DEFAULT '[]', -- granted scopes as a JSON array
     last_used_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, client_id),
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
@@ -136,6 +189,69 @@ CREATE TABLE IF NOT EXISTS public.oidc_device_codes (
 CREATE INDEX IF NOT EXISTS idx_oidc_device_codes_expires_at ON public.oidc_device_codes USING btree (expires_at);
 
 -- --------------------------------------------------------
+-- Table: public.oauth2_sessions (Fosite-style OAuth 2.0 storage)
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.oauth2_sessions (
+    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    kind TEXT NOT NULL,
+    key TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    access_token_signature TEXT NOT NULL DEFAULT '',
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    request_data JSONB NOT NULL,
+    client_id TEXT NOT NULL,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE,
+    CONSTRAINT chk_oauth2_sessions_client_id
+        CHECK (client_id = request_data ->> 'client_id')
+) USING heap;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth2_sessions_kind_key ON public.oauth2_sessions (kind, key);
+CREATE INDEX IF NOT EXISTS idx_oauth2_sessions_kind_request ON public.oauth2_sessions (kind, request_id);
+CREATE INDEX IF NOT EXISTS idx_oauth2_sessions_expires_at ON public.oauth2_sessions (expires_at);
+CREATE INDEX IF NOT EXISTS idx_oauth2_sessions_client_subject
+    ON public.oauth2_sessions (client_id, (request_data #>> '{session,subject}'), kind, active);
+
+-- --------------------------------------------------------
+-- Table: public.oauth2_jtis (replay-protected JWT IDs)
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.oauth2_jtis (
+    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    jti TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+) USING heap;
+
+CREATE INDEX IF NOT EXISTS idx_oauth2_jtis_expires_at ON public.oauth2_jtis (expires_at);
+
+-- --------------------------------------------------------
+-- Table: public.interaction_sessions (OIDC login/consent flow state)
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.interaction_sessions (
+    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    consent_required BOOLEAN NOT NULL DEFAULT FALSE,
+    reauthentication_required BOOLEAN NOT NULL DEFAULT FALSE,
+    authentication_required BOOLEAN NOT NULL DEFAULT FALSE,
+    account_selection_required BOOLEAN NOT NULL DEFAULT FALSE,
+    scopes JSONB NOT NULL DEFAULT '[]',
+    client_id TEXT NOT NULL,
+    user_id UUID,
+    requested_at TIMESTAMPTZ NOT NULL,
+    reauthenticated_at TIMESTAMPTZ,
+    parameters JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
+) USING heap;
+
+CREATE INDEX IF NOT EXISTS idx_interaction_sessions_client_id ON public.interaction_sessions (client_id);
+CREATE INDEX IF NOT EXISTS idx_interaction_sessions_user_id ON public.interaction_sessions (user_id);
+
+-- --------------------------------------------------------
 -- Table: public.scim_service_providers
 -- --------------------------------------------------------
 
@@ -154,15 +270,33 @@ CREATE TABLE IF NOT EXISTS public.scim_service_providers (
 -- +goose Down
 -- +goose StatementBegin
 
+-- Drop triggers in reverse order
+DROP TRIGGER IF EXISTS trg_jwks_updated_at ON public.jwks;
+
 -- Drop indexes in reverse order of creation
+DROP INDEX IF EXISTS idx_interaction_sessions_client_id;
+DROP INDEX IF EXISTS idx_interaction_sessions_user_id;
+DROP INDEX IF EXISTS idx_oauth2_jtis_expires_at;
+DROP INDEX IF EXISTS idx_oauth2_sessions_client_subject;
+DROP INDEX IF EXISTS idx_oauth2_sessions_expires_at;
+DROP INDEX IF EXISTS idx_oauth2_sessions_kind_request;
+DROP INDEX IF EXISTS idx_oauth2_sessions_kind_key;
 DROP INDEX IF EXISTS idx_oidc_device_codes_expires_at;
 DROP INDEX IF EXISTS idx_oidc_refresh_tokens_expires_at;
 DROP INDEX IF EXISTS idx_oidc_authorization_codes_expires_at;
 DROP INDEX IF EXISTS idx_user_authorized_oidc_clients_last_used_at;
 DROP INDEX IF EXISTS idx_custom_claims_user_group_id;
 DROP INDEX IF EXISTS idx_custom_claims_user_id;
+DROP INDEX IF EXISTS idx_jwks_active_algorithm_use_for;
+DROP INDEX IF EXISTS idx_jwks_expires_at;
+DROP INDEX IF EXISTS idx_jwks_use_for;
+DROP INDEX IF EXISTS idx_jwks_algorithm;
+DROP INDEX IF EXISTS idx_jwks_active;
 
 -- Drop tables in reverse order of creation (tables with FKs first)
+DROP TABLE IF EXISTS public.interaction_sessions;
+DROP TABLE IF EXISTS public.oauth2_jtis;
+DROP TABLE IF EXISTS public.oauth2_sessions;
 DROP TABLE IF EXISTS public.scim_service_providers;
 DROP TABLE IF EXISTS public.oidc_device_codes;
 DROP TABLE IF EXISTS public.oidc_refresh_tokens;
@@ -171,5 +305,9 @@ DROP TABLE IF EXISTS public.user_authorized_oidc_clients;
 DROP TABLE IF EXISTS public.oidc_authorization_codes;
 DROP TABLE IF EXISTS public.custom_claims;
 DROP TABLE IF EXISTS public.oidc_clients;
+DROP TABLE IF EXISTS public.jwks;
+
+-- Drop the custom enum type
+DROP TYPE IF EXISTS public.jwt_algorithm;
 
 -- +goose StatementEnd

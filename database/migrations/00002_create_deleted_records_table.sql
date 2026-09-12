@@ -1,33 +1,14 @@
----
---- Soft Delete Implementation Using "Deleted Record Insert" Pattern.
----
---- This migration implements an alternative to traditional `deleted_at` soft
---- deletion based on: https://brandur.org/fragments/deleted-record-insert
----
---- Why this pattern:
----  - No need to include `deleted_at IS NULL` in every live query
----  - No foreign key problems that plague traditional soft deletion
----  - Doesn't interfere with mainline code
----  - Works automatically in the background via triggers
----  - Audit-only, no expectation of undeletion
----
---- Benefits:
----  - Saves from bugs caused by accidentally omitting `deleted_at IS NULL`
----  - Countless hours of debugging time saved
----  - No performance impact on main queries
----
---- When a record is deleted from any table with a trigger, the deleted data
---- is automatically captured as JSONB in the `deleted_records` table.
----
---- @see https://brandur.org/fragments/deleted-record-insert
----
-
 -- +goose Up
 -- +goose StatementBegin
 
 -- ============================================================================
--- Create application settings table
+-- Soft Delete Implementation Using "Deleted Record Insert" Pattern.
+--
+-- When a record is deleted from any table with a trigger, the deleted data
+-- is automatically captured as JSONB in the `deleted_records` table.
+-- @see https://brandur.org/fragments/deleted-record-insert
 -- ============================================================================
+
 CREATE TABLE IF NOT EXISTS public.deleted_records (
     id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
     object_id UUID NOT NULL, -- ID for the object (PK)
@@ -65,7 +46,6 @@ LANGUAGE plpgsql;
 
 -- Drop trigger before dropping the table
 DROP TRIGGER IF EXISTS trg_deleted_records_updated_at ON public.deleted_records;
-DROP FUNCTION IF EXISTS fn_soft_delete();
 
 -- Drop indexes in reverse order of creation
 DROP INDEX IF EXISTS idx_deleted_records_deleted_at;
@@ -75,5 +55,8 @@ DROP INDEX IF EXISTS idx_deleted_records_object_id;
 
 -- Drop the table itself
 DROP TABLE IF EXISTS public.deleted_records;
+
+-- Drop the trigger function
+DROP FUNCTION IF EXISTS fn_soft_delete();
 
 -- +goose StatementEnd

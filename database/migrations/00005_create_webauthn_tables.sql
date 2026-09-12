@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS public.webauthn_sessions (
     challenge_type TEXT NOT NULL CHECK (challenge_type IN ('registration', 'authentication')),
     user_verification TEXT NOT NULL DEFAULT 'preferred' CHECK (user_verification IN ('required', 'preferred', 'discouraged')),
     credential_params JSONB NOT NULL DEFAULT '[]'::JSONB,
+    extensions JSONB NOT NULL DEFAULT '{}', -- Authenticator extension data from ceremonies
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMPTZ NOT NULL CHECK (expires_at > CURRENT_TIMESTAMP)
 ) USING heap;
