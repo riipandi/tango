@@ -2,9 +2,10 @@ package logger
 
 import (
 	"bytes"
-	"encoding/json"
 	"log/slog"
 	"testing"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,13 +34,13 @@ func TestQueueLogger(t *testing.T) {
 	require.Len(t, lines, 2)
 
 	var info map[string]any
-	require.NoError(t, json.Unmarshal(lines[0], &info))
+	require.NoError(t, jsonv2.Unmarshal(lines[0], &info))
 	assert.Equal(t, "task processed", info["msg"])
 	assert.Equal(t, "abc", info["id"])
 	assert.Equal(t, float64(1), info["attempt"])
 
 	var failure map[string]any
-	require.NoError(t, json.Unmarshal(lines[1], &failure))
+	require.NoError(t, jsonv2.Unmarshal(lines[1], &failure))
 	assert.Equal(t, "task failed", failure["msg"])
 	assert.Equal(t, "email", failure["queue"])
 }

@@ -8,12 +8,13 @@ package antree
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riipandi/tango/database"
@@ -77,9 +78,9 @@ func mustNewClient(t *testing.T) *Client {
 // encode serializes a value the same way the client does.
 func encode(t *testing.T, v any) []byte {
 	t.Helper()
-	b := bytes.NewBuffer(nil)
-	require.NoError(t, json.NewEncoder(b).Encode(v))
-	return b.Bytes()
+	b, err := jsonv2.Marshal(v)
+	require.NoError(t, err)
+	return b
 }
 
 // pointer returns a pointer to v.
@@ -92,7 +93,7 @@ func getTasks(t *testing.T, exec Executor) queuedTasks {
 	t.Helper()
 	tasks, err := scanQueuedTasks(context.Background(), exec,
 		`SELECT id, queue, task, attempts, wait_until, created_at, last_executed_at, claimed_at
-		 FROM queue_tasks ORDER BY id ASC`)
+		 FROM `+tasksTable+` ORDER BY id ASC`)
 	require.NoError(t, err)
 	return tasks
 }
@@ -106,7 +107,7 @@ func insertTask(t *testing.T, exec Executor, task *queuedTask) {
 // deleteTasks removes all queued tasks.
 func deleteTasks(t *testing.T, exec Executor) {
 	t.Helper()
-	_, err := exec.Exec(context.Background(), "DELETE FROM queue_tasks")
+	_, err := exec.Exec(context.Background(), "DELETE FROM "+tasksTable)
 	require.NoError(t, err)
 }
 
@@ -115,7 +116,7 @@ func getCompletedTasks(t *testing.T, exec Executor) []*completedTask {
 	t.Helper()
 	tasks, err := scanCompletedTasks(context.Background(), exec,
 		`SELECT id, created_at, queue, last_executed_at, attempts, last_duration_micro, succeeded, task, expires_at, error
-		 FROM queue_tasks_completed ORDER BY id ASC`)
+		 FROM `+completedTasksTable+` ORDER BY id ASC`)
 	require.NoError(t, err)
 	return tasks
 }
@@ -129,7 +130,7 @@ func insertCompleted(t *testing.T, exec Executor, task completedTask) {
 // deleteCompletedTasks removes all completed tasks.
 func deleteCompletedTasks(t *testing.T, exec Executor) {
 	t.Helper()
-	_, err := exec.Exec(context.Background(), "DELETE FROM queue_tasks_completed")
+	_, err := exec.Exec(context.Background(), "DELETE FROM "+completedTasksTable)
 	require.NoError(t, err)
 }
 

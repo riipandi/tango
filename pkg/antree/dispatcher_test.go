@@ -568,7 +568,7 @@ func TestDispatcherFetcher(t *testing.T) {
 	d.fetch(ctx, d.tasks, d.ticker, d.ready, d.trigger)
 
 	// The first three tasks were claimed for the three workers; the rest untouched.
-	rows, err := d.client.db.Query(context.Background(), "SELECT id, claimed_at FROM queue_tasks")
+	rows, err := d.client.db.Query(context.Background(), "SELECT id, claimed_at FROM "+tasksTable)
 	require.NoError(t, err)
 	defer rows.Close()
 

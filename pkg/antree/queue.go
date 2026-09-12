@@ -1,12 +1,12 @@
 package antree
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 )
 
 type (
@@ -92,7 +92,7 @@ func (q *queue[T]) Config() *QueueConfig {
 
 func (q *queue[T]) Process(ctx context.Context, payload []byte) error {
 	var obj T
-	if err := json.NewDecoder(bytes.NewReader(payload)).Decode(&obj); err != nil {
+	if err := jsonv2.Unmarshal(payload, &obj); err != nil {
 		return err
 	}
 	return q.processor(ctx, obj)

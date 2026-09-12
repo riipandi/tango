@@ -10,10 +10,11 @@ package antree
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"sync"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
@@ -187,7 +188,7 @@ func (c *Client) save(op *TaskAddOp) ([]string, error) {
 	insert := func(exec Executor) error {
 		for i, t := range op.tasks {
 			buf.Reset()
-			if err = json.NewEncoder(buf).Encode(t); err != nil {
+			if err = jsonv2.MarshalWrite(buf, t); err != nil {
 				return err
 			}
 

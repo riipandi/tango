@@ -11,6 +11,13 @@ import (
 	"uuid"
 )
 
+// Table names owned by the queue schema migrations. Qualified with
+// the schema to match the project's other stores.
+const (
+	tasksTable          = "public.queue_tasks"
+	completedTasksTable = "public.queue_tasks_completed"
+)
+
 // Executor is the minimal query surface the queue needs; both a pgx pool and
 // an open pgx transaction satisfy it.
 type Executor interface {
@@ -44,7 +51,7 @@ func (t *queuedTask) insertTx(ctx context.Context, exec Executor) error {
 	}
 
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
-	ib.InsertInto("queue_tasks")
+	ib.InsertInto(tasksTable)
 	ib.Cols("id", "created_at", "queue", "task", "attempts", "wait_until")
 	ib.Values(t.id, t.createdAt, t.queue, t.task, t.attempts, t.waitUntil)
 
@@ -58,7 +65,7 @@ func (t *queuedTask) insertTx(ctx context.Context, exec Executor) error {
 // deleteTx deletes a queued task as part of the given executor.
 func (t *queuedTask) deleteTx(ctx context.Context, exec Executor) error {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
-	db.DeleteFrom("queue_tasks")
+	db.DeleteFrom(tasksTable)
 	db.Where(db.Equal("id", t.id))
 
 	query, args := db.Build()
@@ -72,7 +79,7 @@ func (t *queuedTask) deleteTx(ctx context.Context, exec Executor) error {
 // another execution.
 func (t *queuedTask) fail(ctx context.Context, exec Executor, waitUntil time.Time) error {
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
-	ub.Update("queue_tasks")
+	ub.Update(tasksTable)
 	ub.Set(
 		ub.Assign("claimed_at", nil),
 		ub.Assign("wait_until", waitUntil),
@@ -105,7 +112,7 @@ func (t queuedTasks) claim(ctx context.Context, exec Executor, deadline time.Tim
 	}
 
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
-	ub.Update("queue_tasks")
+	ub.Update(tasksTable)
 	ub.Set("attempts = attempts + 1", ub.Assign("claimed_at", time.Now()))
 	ub.Where(
 		ub.In("id", ids...),
@@ -164,7 +171,7 @@ func scanQueuedTasks(ctx context.Context, exec Executor, query string, args ...a
 func getScheduledTasks(ctx context.Context, exec Executor, deadline time.Time, limit int) (queuedTasks, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("id", "queue", "task", "attempts", "wait_until", "created_at", "last_executed_at", "NULL")
-	sb.From("queue_tasks")
+	sb.From(tasksTable)
 	sb.Where(sb.Or("claimed_at IS NULL", sb.LT("claimed_at", deadline)))
 	// Ready tasks (NULL wait_until) must come first, ahead of scheduled ones.
 	sb.OrderBy("wait_until ASC NULLS FIRST", "id ASC")
@@ -191,7 +198,7 @@ type completedTask struct {
 // insertTx inserts a completed task as part of the given executor.
 func (t *completedTask) insertTx(ctx context.Context, exec Executor) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
-	ib.InsertInto("queue_tasks_completed")
+	ib.InsertInto(completedTasksTable)
 	ib.Cols("id", "created_at", "queue", "last_executed_at", "attempts", "last_duration_micro", "succeeded", "task", "expires_at", "error")
 	ib.Values(
 		t.id,
@@ -241,7 +248,7 @@ func scanCompletedTasks(ctx context.Context, exec Executor, query string, args .
 // deleteExpiredCompletedTasks removes completed tasks whose expiration is in the past.
 func deleteExpiredCompletedTasks(ctx context.Context, exec Executor) error {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
-	db.DeleteFrom("queue_tasks_completed")
+	db.DeleteFrom(completedTasksTable)
 	db.Where("expires_at IS NOT NULL", db.LTE("expires_at", time.Now()))
 
 	query, args := db.Build()
