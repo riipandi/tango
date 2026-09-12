@@ -309,6 +309,24 @@ Notifies the dispatcher that a new task was added. **Only required when adding t
 external transaction** (via `TaskAddOp.Tx()`), because the dispatcher cannot observe transaction
 commits.
 
+### `(*Client).Flush(ctx context.Context) (int64, error)`
+
+Deletes all pending (unclaimed) tasks and returns how many were removed. Claimed tasks — in
+flight or awaiting release — are untouched and will finish their lifecycle normally.
+
+```go
+removed, err := client.Flush(ctx)
+```
+
+### `(*Client).FlushCompleted(ctx context.Context) (int64, error)`
+
+Deletes all completed task records, bypassing retention expiry, and returns how many were
+removed.
+
+```go
+removed, err := client.FlushCompleted(ctx)
+```
+
 ### `FromContext(ctx context.Context) *Client`
 
 Retrieves the client from a processor context, allowing processors to enqueue follow-up tasks:

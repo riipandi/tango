@@ -143,6 +143,18 @@ func (c *Client) Notify() {
 	c.dispatcher.Notify()
 }
 
+// Flush deletes all pending (unclaimed) tasks and returns how many were
+// removed. Claimed tasks — in flight or awaiting release — are untouched.
+func (c *Client) Flush(ctx context.Context) (int64, error) {
+	return flushTasks(ctx, c.db)
+}
+
+// FlushCompleted deletes all completed task records and returns how many
+// were removed, bypassing retention expiry.
+func (c *Client) FlushCompleted(ctx context.Context) (int64, error) {
+	return flushCompletedTasks(ctx, c.db)
+}
+
 // save persists a task add operation and returns the task IDs.
 func (c *Client) save(op *TaskAddOp) ([]string, error) {
 	var err error

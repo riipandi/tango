@@ -186,3 +186,36 @@ func TestClientStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, TaskStatusFailure, s)
 }
+
+func TestClientFlush(t *testing.T) {
+	c := mustNewClient(t)
+
+	pending := &queuedTask{queue: "test", task: encode(t, &testTask{Val: "1"})}
+	claimed := &queuedTask{queue: "test", task: encode(t, &testTask{Val: "2"})}
+	insertTask(t, c.db, pending)
+	insertTask(t, c.db, claimed)
+	_, err := c.db.Exec(context.Background(),
+		"UPDATE "+tasksTable+" SET claimed_at = now() WHERE id = $1", claimed.id)
+	require.NoError(t, err)
+
+	n, err := c.Flush(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), n)
+
+	tasks := getTasks(t, c.db)
+	require.Len(t, tasks, 1)
+	assert.Equal(t, claimed.id, tasks[0].id)
+}
+
+func TestClientFlushCompleted(t *testing.T) {
+	c := mustNewClient(t)
+
+	insertCompleted(t, c.db, completedTask{id: nextTaskID(), queue: "test"})
+	insertCompleted(t, c.db, completedTask{id: nextTaskID(), queue: "test", succeeded: true})
+	require.Len(t, getCompletedTasks(t, c.db), 2)
+
+	n, err := c.FlushCompleted(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), n)
+	assert.Empty(t, getCompletedTasks(t, c.db))
+}

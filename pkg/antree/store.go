@@ -256,3 +256,30 @@ func deleteExpiredCompletedTasks(ctx context.Context, exec Executor) error {
 	}
 	return nil
 }
+
+// flushTasks deletes every unclaimed queued task and returns the count.
+func flushTasks(ctx context.Context, exec Executor) (int64, error) {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(tasksTable)
+	db.Where("claimed_at IS NULL")
+
+	query, args := db.Build()
+	tag, err := exec.Exec(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("antree: flush tasks: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// flushCompletedTasks deletes every completed task record and returns the count.
+func flushCompletedTasks(ctx context.Context, exec Executor) (int64, error) {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(completedTasksTable)
+
+	query, args := db.Build()
+	tag, err := exec.Exec(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("antree: flush completed tasks: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
