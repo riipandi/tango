@@ -1,10 +1,11 @@
 package logger
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,7 @@ func TestNewFileJSON(t *testing.T) {
 	require.NotEmpty(t, data)
 
 	var entry map[string]any
-	require.NoError(t, json.Unmarshal(data, &entry), "file output must be one JSON object per line")
+	require.NoError(t, jsonv2.Unmarshal(data, &entry), "file output must be one JSON object per line")
 	assert.Equal(t, "hello file", entry["msg"])
 	assert.Equal(t, "INFO", entry["level"])
 }

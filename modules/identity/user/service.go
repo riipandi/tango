@@ -29,7 +29,7 @@ func (s *Service) List(ctx context.Context) []identity.User {
 	return s.store.List(ctx)
 }
 
-func (s *Service) GetByID(ctx context.Context, id string) (identity.User, error) {
+func (s *Service) GetByID(ctx context.Context, id identity.UserID) (identity.User, error) {
 	user, ok := s.store.GetByID(ctx, id)
 	if !ok {
 		return identity.User{}, errors.New("user not found")
@@ -48,7 +48,7 @@ func (s *Service) Create(ctx context.Context, name string) (identity.User, error
 	}
 
 	if s.recorder != nil {
-		s.recorder(identity.AuditEvent{Action: "user.created", Actor: user.ID, Target: user.ID})
+		s.recorder(identity.AuditEvent{Action: "user.created", Actor: user.ID.String(), Target: user.ID.String()})
 	}
 	return user, nil
 }

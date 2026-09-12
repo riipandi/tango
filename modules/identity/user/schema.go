@@ -17,7 +17,7 @@ import (
 type Store interface {
 	List(ctx context.Context) []identity.User
 	Create(ctx context.Context, name string) (identity.User, error)
-	GetByID(ctx context.Context, id string) (identity.User, bool)
+	GetByID(ctx context.Context, id identity.UserID) (identity.User, bool)
 }
 
 // ErrInvalidName is returned when a user payload fails validation.

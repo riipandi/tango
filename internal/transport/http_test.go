@@ -2,12 +2,13 @@ package transport
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
@@ -66,9 +67,15 @@ func TestNewHTTPServerMountsModules(t *testing.T) {
 
 	require.Equal(t, http.StatusCreated, w.Code)
 
-	var user map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &user))
-	assert.Equal(t, "John", user["name"])
+	var payload struct {
+		Status string `json:"status"`
+		Data   struct {
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &payload))
+	assert.Equal(t, "success", payload.Status)
+	assert.Equal(t, "John", payload.Data.Name)
 }
 
 func TestHTTPServerShutdown(t *testing.T) {

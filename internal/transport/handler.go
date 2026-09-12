@@ -20,7 +20,7 @@ func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 // APIRootHandler is the /api index: build metadata from
 // ldflags globals, no runtime config needed.
 func APIRootHandler(w http.ResponseWriter, r *http.Request) {
-	responder.WriteJSON(w, http.StatusOK, map[string]string{
+	responder.Success(w, r, http.StatusOK, map[string]string{
 		"name":     config.AppName,
 		"version":  config.AppVersion,
 		"platform": config.Platform,

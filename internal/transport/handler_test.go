@@ -1,10 +1,11 @@
 package transport
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/kernel"
@@ -13,7 +14,7 @@ import (
 )
 
 func jsonUnmarshal(data []byte, v any) error {
-	return json.Unmarshal(data, v)
+	return jsonv2.Unmarshal(data, v)
 }
 
 func testConfig() *config.Config {
@@ -44,10 +45,23 @@ func TestAPIRootHandler(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
 
-	var body map[string]string
+	var body struct {
+		Status string `json:"status"`
+		Data   struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+		} `json:"data"`
+		Metadata struct {
+			StatusCode int    `json:"status_code"`
+			RequestID  string `json:"request_id"`
+		} `json:"metadata"`
+	}
 	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &body))
-	assert.Equal(t, config.AppName, body["name"])
-	assert.Equal(t, config.AppVersion, body["version"])
+	assert.Equal(t, "success", body.Status)
+	assert.Equal(t, config.AppName, body.Data.Name)
+	assert.Equal(t, config.AppVersion, body.Data.Version)
+	assert.Equal(t, http.StatusOK, body.Metadata.StatusCode)
+	assert.NotEmpty(t, body.Metadata.RequestID)
 }
 
 func TestStaticAssetsHandler(t *testing.T) {
@@ -60,6 +74,6 @@ func TestStaticAssetsHandler(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
 	assert.Equal(t, "app.js", body["path"])
 }

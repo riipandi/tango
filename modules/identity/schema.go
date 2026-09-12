@@ -6,13 +6,113 @@ package identity
 
 import (
 	"github.com/go-chi/chi/v5"
+	"go.jetify.com/typeid"
+
 	"github.com/riipandi/tango/internal/kernel"
 )
+
+// NewID generates a fresh UUIDv7-backed ID of the given type. It
+// panics only on an invalid prefix, which cannot happen for the
+// prefixes declared here.
+func NewID[T typeid.Subtype, PT typeid.SubtypePtr[T]]() T {
+	return typeid.Must(typeid.New[T, PT]())
+}
+
+// ParseID decodes and validates a typed ID string, rejecting
+// mismatches between the wire prefix and the expected type.
+func ParseID[T typeid.Subtype, PT typeid.SubtypePtr[T]](s string) (T, error) {
+	return typeid.Parse[T, PT](s)
+}
+
+// Typed IDs for the identity tables: a UUIDv7 suffix plus a
+// snake_case prefix matching the singular table name, so values are
+// self-describing in logs, URLs, and API payloads while staying
+// K-sortable and index-friendly in Postgres.
+type (
+	userPrefix struct{}
+
+	// UserID identifies a users row.
+	UserID = typeid.TypeID[userPrefix]
+
+	userGroupPrefix struct{}
+
+	// UserGroupID identifies a user_groups row.
+	UserGroupID = typeid.TypeID[userGroupPrefix]
+
+	userPhonePrefix struct{}
+
+	// UserPhoneID identifies a user_phones row.
+	UserPhoneID = typeid.TypeID[userPhonePrefix]
+
+	sessionPrefix struct{}
+
+	// SessionID identifies a sessions row (stored as the full TypeID string).
+	SessionID = typeid.TypeID[sessionPrefix]
+
+	authTokenPrefix struct{}
+
+	// AuthTokenID identifies an auth_tokens row.
+	AuthTokenID = typeid.TypeID[authTokenPrefix]
+
+	signupTokenPrefix struct{}
+
+	// SignupTokenID identifies a signup_tokens row.
+	SignupTokenID = typeid.TypeID[signupTokenPrefix]
+
+	refreshTokenPrefix struct{}
+
+	// RefreshTokenID identifies a refresh_tokens row.
+	RefreshTokenID = typeid.TypeID[refreshTokenPrefix]
+
+	invitationPrefix struct{}
+
+	// InvitationID identifies an invitations row.
+	InvitationID = typeid.TypeID[invitationPrefix]
+
+	mfaKeyPrefix struct{}
+
+	// MFAKeyID identifies an mfa_keys row.
+	MFAKeyID = typeid.TypeID[mfaKeyPrefix]
+
+	webauthnCredentialPrefix struct{}
+
+	// WebauthnCredentialID identifies a webauthn_credentials row.
+	WebauthnCredentialID = typeid.TypeID[webauthnCredentialPrefix]
+
+	webauthnSessionPrefix struct{}
+
+	// WebauthnSessionID identifies a webauthn_sessions row.
+	WebauthnSessionID = typeid.TypeID[webauthnSessionPrefix]
+
+	apiKeyPrefix struct{}
+
+	// APIKeyID identifies an api_keys row.
+	APIKeyID = typeid.TypeID[apiKeyPrefix]
+
+	oauthConnectionPrefix struct{}
+
+	// OAuthConnectionID identifies an oauth_connections row.
+	OAuthConnectionID = typeid.TypeID[oauthConnectionPrefix]
+)
+
+func (userPrefix) Prefix() string               { return "user" }
+func (userGroupPrefix) Prefix() string          { return "user_group" }
+func (userPhonePrefix) Prefix() string          { return "user_phone" }
+func (sessionPrefix) Prefix() string            { return "session" }
+func (authTokenPrefix) Prefix() string          { return "auth_token" }
+func (signupTokenPrefix) Prefix() string        { return "signup_token" }
+func (refreshTokenPrefix) Prefix() string       { return "refresh_token" }
+func (invitationPrefix) Prefix() string         { return "invitation" }
+func (mfaKeyPrefix) Prefix() string             { return "mfa_key" }
+func (webauthnCredentialPrefix) Prefix() string { return "webauthn_credential" }
+func (webauthnSessionPrefix) Prefix() string    { return "webauthn_session" }
+func (apiKeyPrefix) Prefix() string             { return "api_key" }
+func (oauthConnectionPrefix) Prefix() string    { return "oauth_connection" }
 
 // User is the core entity, shared by all features. The optional
 // federation module consumes it via adapters.
 type User struct {
-	ID   string `json:"id"`
+	ID   UserID `json:"id"`
 	Name string `json:"name"`
 }
 

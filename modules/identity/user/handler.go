@@ -1,11 +1,13 @@
 package user
 
 import (
-	"encoding/json"
 	"net/http"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -22,30 +24,36 @@ func (s *Service) APIRoutes(r chi.Router) {
 
 func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		responder.BadRequestJSON(w, "invalid request body")
+	if err := jsonv2.UnmarshalRead(r.Body, &req); err != nil {
+		responder.BadRequestJSON(w, r, "invalid request body")
 		return
 	}
 
 	user, err := s.Create(r.Context(), req.Name)
 	if err != nil {
-		responder.BadRequestJSON(w, err.Error())
+		responder.BadRequestJSON(w, r, err.Error())
 		return
 	}
 
-	responder.WriteJSON(w, http.StatusCreated, user)
+	responder.Success(w, r, http.StatusCreated, user)
 }
 
 func (s *Service) listUsers(w http.ResponseWriter, r *http.Request) {
-	responder.WriteJSON(w, http.StatusOK, s.List(r.Context()))
+	responder.Success(w, r, http.StatusOK, s.List(r.Context()))
 }
 
 func (s *Service) getUser(w http.ResponseWriter, r *http.Request) {
-	user, err := s.GetByID(r.Context(), chi.URLParam(r, "id"))
+	id, err := identity.ParseID[identity.UserID](chi.URLParam(r, "id"))
 	if err != nil {
 		responder.NotFoundJSON(w, r)
 		return
 	}
 
-	responder.WriteJSON(w, http.StatusOK, user)
+	user, err := s.GetByID(r.Context(), id)
+	if err != nil {
+		responder.NotFoundJSON(w, r)
+		return
+	}
+
+	responder.Success(w, r, http.StatusOK, user)
 }

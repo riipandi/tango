@@ -3,6 +3,7 @@ package seeders
 import (
 	"testing"
 
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,7 +40,7 @@ func TestUserFactoryUniqueIDs(t *testing.T) {
 	users, err := factory.CreateMany(t.Context(), "dev", 5)
 	require.NoError(t, err)
 
-	seen := map[string]bool{}
+	seen := map[identity.UserID]bool{}
 	for _, u := range users {
 		assert.NotEmpty(t, u.ID)
 		assert.False(t, seen[u.ID], "IDs must be unique")

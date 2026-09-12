@@ -4,8 +4,6 @@ import (
 	"context"
 	"sync"
 
-	"uuid"
-
 	"github.com/riipandi/tango/modules/identity"
 )
 
@@ -31,13 +29,13 @@ func (s *MemoryStore) List(_ context.Context) []identity.User {
 func (s *MemoryStore) Create(_ context.Context, name string) (identity.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// UUIDv7: time-ordered (index-friendly) per RFC 9562.
-	user := identity.User{ID: uuid.NewV7().String(), Name: name}
+	// TypeID wraps a UUIDv7: time-ordered (index-friendly), self-describing prefix.
+	user := identity.User{ID: identity.NewID[identity.UserID](), Name: name}
 	s.users = append(s.users, user)
 	return user, nil
 }
 
-func (s *MemoryStore) GetByID(_ context.Context, id string) (identity.User, bool) {
+func (s *MemoryStore) GetByID(_ context.Context, id identity.UserID) (identity.User, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, u := range s.users {

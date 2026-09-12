@@ -4,12 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"uuid"
-
-	"github.com/riipandi/tango/modules/identity"
 )
 
 func TestServiceCreateAndGet(t *testing.T) {
@@ -19,9 +17,12 @@ func TestServiceCreateAndGet(t *testing.T) {
 
 	user, err := svc.Create(context.Background(), "John")
 	require.NoError(t, err)
-	_, parseErr := uuid.Parse(user.ID)
+	assert.Equal(t, "user", user.ID.Prefix())
+
+	// The suffix decodes to a UUIDv7 (RFC 9562): version nibble is 7.
+	gotUUID, parseErr := uuid.Parse(user.ID.UUID())
 	require.NoError(t, parseErr)
-	assert.Equal(t, byte(7), user.ID[14]-'0')
+	assert.Equal(t, uuid.Version(7), gotUUID.Version())
 	assert.Equal(t, "John", user.Name)
 
 	require.Len(t, recorded, 1)
@@ -31,7 +32,8 @@ func TestServiceCreateAndGet(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "John", got.Name)
 
-	_, err = svc.GetByID(context.Background(), "99")
+	missing := identity.NewID[identity.UserID]()
+	_, err = svc.GetByID(context.Background(), missing)
 	assert.Error(t, err)
 }
 

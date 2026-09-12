@@ -1,11 +1,12 @@
 package auditlog
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/internal/kernel"
@@ -56,7 +57,7 @@ func TestListEventsEndpoint(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var events []Event
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &events))
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &events))
 	require.Len(t, events, 1)
 	assert.Equal(t, "user.created", events[0].Action)
 }
