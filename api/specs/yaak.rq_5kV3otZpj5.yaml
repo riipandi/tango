@@ -1,21 +1,20 @@
 type: http_request
 model: http_request
-id: rq_8bhwyqijeA
-createdAt: 2026-09-12T06:54:01.871712
-updatedAt: 2026-09-13T13:38:41.011448
+id: rq_5kV3otZpj5
+createdAt: 2026-09-13T16:09:15.285877
+updatedAt: 2026-09-13T16:09:15.285878
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
-body:
-  text: '{"identity":"admin","secret":"Admin123!"}'
-bodyType: application/json
-description: Sign in as seeded admin; sets the tango_session cookie
+body: {}
+bodyType: null
+description: "Admin: delete a passkey credential. 204 on success."
 headers: []
-method: POST
-name: Sign In
+method: DELETE
+name: DELETE /users/{id}/webauthn-credentials/{credId}
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/auth/sign-in
+url: http://127.0.0.1:3080/api/users/user_01m2dd47arf4e9g6qd0r85b5rz/webauthn-credentials/cred_01m00000000000000000000000
 urlParameters: []
 settingSendCookies:
   enabled: false

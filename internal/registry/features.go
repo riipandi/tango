@@ -9,33 +9,59 @@ import (
 
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/auditlog"
+	"github.com/riipandi/tango/modules/federation"
+	"github.com/riipandi/tango/modules/federation/discovery"
 	"github.com/riipandi/tango/modules/federation/jwks"
+	"github.com/riipandi/tango/modules/federation/oidc"
+	"github.com/riipandi/tango/modules/federation/scimsync"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/account"
 	"github.com/riipandi/tango/modules/identity/apiaccess"
 	"github.com/riipandi/tango/modules/identity/apikey"
 	"github.com/riipandi/tango/modules/identity/customclaim"
+	"github.com/riipandi/tango/modules/identity/devicelogin"
+	"github.com/riipandi/tango/modules/identity/emailverification"
 	"github.com/riipandi/tango/modules/identity/ldapsync"
+	"github.com/riipandi/tango/modules/identity/onetimeaccess"
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/session"
+	"github.com/riipandi/tango/modules/identity/signup"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/usergroup"
 	"github.com/riipandi/tango/modules/identity/webauthn"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
-
-	"github.com/riipandi/tango/modules/federation"
-	"github.com/riipandi/tango/modules/federation/discovery"
-	"github.com/riipandi/tango/modules/federation/oidc"
-	"github.com/riipandi/tango/modules/federation/scimsync"
 )
 
 // Identity feature selectors, one line each in the feature list.
 // Placeholders until implemented: no routes, no storage.
-func withWebAuthn(deps Deps) identity.Feature  { return webauthn.New() }
 func withAPIKeys(deps Deps) identity.Feature   { return apikey.New() }
 func withAPIAccess(deps Deps) identity.Feature { return apiaccess.New() }
 func withLDAPSync(deps Deps) identity.Feature  { return ldapsync.New() }
+
+// withWebAuthn builds the passkey feature over the shared key
+// material: session issue via the sessions feature, app URL as the
+// relying-party identity, admin guard + self auth at mount time.
+// The error path panics only on an invalid app URL shape (boot
+// misconfiguration).
+func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, adminAuth func(http.Handler) http.Handler) identity.Feature {
+	appURL := strings.TrimRight(deps.Config.Public.BaseURL, "/")
+	service, err := webauthn.NewService(
+		webauthn.NewPostgresStore(deps.DB),
+		user.NewPostgresStore(deps.DB),
+		func(ctx context.Context, userID user.UserID) (string, error) {
+			return sessions.IssueForUser(ctx, userID, "passkey", session.Meta{})
+		},
+		appURL,
+		auditAdapter(audit),
+		webauthn.WithCookieSecure(deps.Config.App.Mode != "development"),
+		webauthn.WithCookieName(session.CookieName),
+	)
+	if err != nil {
+		panic("registry: webauthn init: " + err.Error())
+	}
+	return webauthn.New(service).WithAdminGuard(adminAuth).WithSelfAuth(sessions, session.CookieName)
+}
 
 // newIdentityFeatures builds the mandatory user core plus the
 // selected features. The guard chain: session cookie auth wraps
@@ -75,7 +101,34 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature
 		sessions,
 		usergroup.NewService(usergroup.NewPostgresStore(deps.DB), auditAdapter(audit), usergroup.WithAdminGuard(adminAuth)),
 		customclaim.NewService(customclaim.NewPostgresStore(deps.DB), auditAdapter(audit), customclaim.WithAdminGuard(adminAuth)),
-		withWebAuthn(deps),
+		withWebAuthn(deps, audit, sessions, adminAuth),
+		devicelogin.New(devicelogin.NewService(
+			devicelogin.NewPostgresStore(deps.DB),
+			sessions,
+			user.NewPostgresStore(deps.DB),
+			auditAdapter(audit),
+			devicelogin.WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
+		)).WithSelfAuth(sessions, session.CookieName, deps.Config.App.Mode != "development"),
+		onetimeaccess.New(onetimeaccess.NewService(
+			onetimeaccess.NewPostgresStore(deps.DB),
+			user.NewPostgresStore(deps.DB),
+			sessions,
+			auditAdapter(audit),
+		)).WithAdminGuard(adminAuth).
+			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
+		emailverification.New(emailverification.NewService(
+			emailverification.NewPostgresStore(deps.DB),
+			emailVerificationAdapter(user.NewPostgresStore(deps.DB)),
+			auditAdapter(audit),
+		)).WithSelfAuth(sessions, session.CookieName),
+		signup.New(signup.NewService(
+			signup.NewPostgresStore(deps.DB),
+			user.NewPostgresStore(deps.DB),
+			usergroup.NewPostgresStore(deps.DB),
+			sessions,
+			auditAdapter(audit),
+		)).WithAdminGuard(adminAuth).
+			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		withAPIKeys(deps),
 		withAPIAccess(deps),
 		withLDAPSync(deps),
@@ -116,6 +169,25 @@ func federationAuditAdapter(audit *auditlog.Module) func(context.Context, string
 		}
 		_ = audit.Record(ctx, &entry)
 	}
+}
+
+// emailVerificationVerifier adapts the emailverification Verifier
+// contract to the user store (typed IDs at the boundary).
+type emailVerificationVerifier struct {
+	users user.Store
+}
+
+func (a emailVerificationVerifier) MarkEmailVerified(ctx context.Context, userID string) error {
+	id, err := identity.ParseID[user.UserID](userID)
+	if err != nil {
+		return err
+	}
+	return a.users.MarkEmailVerified(ctx, id)
+}
+
+// emailVerificationAdapter returns the verifier adapter value.
+func emailVerificationAdapter(users user.Store) emailverification.Verifier {
+	return emailVerificationVerifier{users: users}
 }
 
 // withSCIMSync is a placeholder until its phase lands: no routes, no storage.

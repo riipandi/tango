@@ -91,32 +91,59 @@ func (s *Service) SignIn(ctx context.Context, identityText, secret string, meta 
 		return "", user.User{}, Session{}, ErrInvalidCredentials
 	}
 
+	token, se, err := s.issueSession(ctx, u, "password", meta)
+	if err != nil {
+		return "", user.User{}, Session{}, err
+	}
+	return token, u, se, nil
+}
+
+// IssueForUser mints a session for an already-authenticated
+// identity — the alternative sign-in providers (passkeys, device
+// login, one-time access) call this after verifying their own
+// ceremony.
+func (s *Service) IssueForUser(ctx context.Context, userID user.UserID, provider string, meta Meta) (string, error) {
+	u, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return "", fmt.Errorf("session: load user: %w", err)
+	}
+	if u.Disabled {
+		return "", fmt.Errorf("session: %w: user is disabled", ErrInvalidCredentials)
+	}
+
+	token, _, err := s.issueSession(ctx, u, provider, meta)
+	return token, err
+}
+
+// issueSession creates the session row + audit trail; returns the
+// raw cookie token.
+func (s *Service) issueSession(ctx context.Context, u user.User, provider string, meta Meta) (string, Session, error) {
 	token, err := newToken()
 	if err != nil {
-		return "", user.User{}, Session{}, fmt.Errorf("session: token: %w", err)
+		return "", Session{}, fmt.Errorf("session: token: %w", err)
 	}
 
 	now := s.now()
 	se := Session{
 		ID:        identity.NewID[SessionID]().String(),
 		UserID:    u.ID,
-		Provider:  "password",
+		Provider:  provider,
 		TokenHash: hashToken(token),
 		ExpiresAt: now.Add(s.lifetime),
 	}
 	applyMeta(&se, meta)
 
 	if err := s.store.Create(ctx, &se); err != nil {
-		return "", user.User{}, Session{}, err
+		return "", Session{}, err
 	}
 	if err := s.users.MarkLogin(ctx, u.ID); err != nil {
-		return "", user.User{}, Session{}, fmt.Errorf("session: mark login: %w", err)
+		return "", Session{}, fmt.Errorf("session: mark login: %w", err)
 	}
 
 	if s.recorder != nil {
 		s.recorder(ctx, identity.AuditEvent{Action: "user.signed_in", Actor: u.ID.String(), Target: se.ID})
 	}
-	return token, u, se, nil
+	return token, se, nil
 }
 
 // Resolve maps a cookie token back to its principal and live

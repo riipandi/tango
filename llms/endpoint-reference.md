@@ -84,12 +84,12 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 
 ## Device Login
 
-| Method | Endpoint                                   | Summary / Yaak Title          | Status            |
-| ------ | ------------------------------------------ | ----------------------------- | ----------------- |
-| POST   | `/api/device-login/requests`               | Create device login request   | planned (phase 5) |
-| POST   | `/api/device-login/requests/{id}/exchange` | Exchange device login request | planned (phase 5) |
-| POST   | `/api/device-login/verification`           | Inspect device login request  | planned (phase 5) |
-| POST   | `/api/device-login/verification/decision`  | Decide device login request   | planned (phase 5) |
+| Method | Endpoint                                   | Summary / Yaak Title          | Status |
+| ------ | ------------------------------------------ | ----------------------------- | ------ |
+| POST   | `/api/device-login/requests`               | Create device login request   | done   |
+| POST   | `/api/device-login/requests/{id}/exchange` | Exchange device login request | done   |
+| POST   | `/api/device-login/verification`           | Inspect device login request  | done   |
+| POST   | `/api/device-login/verification/decision`  | Decide device login request   | done   |
 
 ## Health
 
@@ -110,8 +110,8 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 | DELETE | `/api/oidc/clients/{id}/logo`                      | Delete client logo                            | planned (phase 8)                           |
 | GET    | `/api/oidc/clients/{id}/logo`                      | Get client logo                               | planned (phase 8)                           |
 | POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            | planned (phase 8)                           |
-| GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           | planned (phase 5)                           |
-| GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             | planned (phase 5)                           |
+| GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           | done                                        |
+| GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             | done                                        |
 | POST   | `/api/oidc/clients/{id}/refresh`                   | Refresh client metadata document              | planned (phase 8 — CIMD)                    |
 | GET    | `/api/oidc/clients/{id}/scim-service-provider`     | Get SCIM service provider                     | planned (phase 8)                           |
 | GET    | `/api/oidc/clients/{id}/secrets`                   | List client secrets                           | done — multi-secret, values shown once      |
@@ -123,7 +123,7 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 | DELETE | `/api/oidc/users/me/authorized-clients/{clientId}` | Revoke authorization for an OIDC client       | done — revocation cascades to active tokens |
 | GET    | `/api/oidc/users/me/clients`                       | List accessible OIDC clients for current user | done                                        |
 | GET    | `/api/oidc/users/{id}/authorized-clients`          | List authorized clients for a user            | done — revocation cascades to active tokens |
-| PUT    | `/api/user-groups/{id}/allowed-oidc-clients`       | Update allowed OIDC clients                   | planned (phase 5)                           |
+| PUT    | `/api/user-groups/{id}/allowed-oidc-clients`       | Update allowed OIDC clients                   | done                                        |
 
 ## SCIM
 
@@ -155,33 +155,43 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 
 | Method | Endpoint                                              | Summary / Yaak Title                          | Status                                                 |
 | ------ | ----------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------ |
-| POST   | `/api/one-time-access-email`                          | Request one-time access email                 | planned (phase 5)                                      |
-| POST   | `/api/one-time-access-token/{token}`                  | Exchange one-time access token                | planned (phase 5)                                      |
-| POST   | `/api/signup`                                         | Sign up                                       | planned (phase 5)                                      |
-| GET    | `/api/signup-tokens`                                  | List signup tokens                            | planned (phase 5)                                      |
-| POST   | `/api/signup-tokens`                                  | Create signup token                           | planned (phase 5)                                      |
-| DELETE | `/api/signup-tokens/{id}`                             | Delete signup token                           | planned (phase 5)                                      |
-| POST   | `/api/signup/setup`                                   | Sign up initial admin user                    | planned (phase 5)                                      |
+| POST   | `/api/one-time-access-email`                          | Request one-time access email                 | done                                                   |
+| POST   | `/api/one-time-access-token/{token}`                  | Exchange one-time access token                | done                                                   |
+| POST   | `/api/signup`                                         | Sign up                                       | done                                                   |
+| GET    | `/api/signup-tokens`                                  | List signup tokens                            | done                                                   |
+| POST   | `/api/signup-tokens`                                  | Create signup token                           | done                                                   |
+| DELETE | `/api/signup-tokens/{id}`                             | Delete signup token                           | done                                                   |
+| POST   | `/api/signup/setup`                                   | Sign up initial admin user                    | done                                                   |
 | GET    | `/api/users`                                          | List users                                    | done                                                   |
 | POST   | `/api/users`                                          | Create user                                   | done                                                   |
 | GET    | `/api/users/me`                                       | Get current user                              | done                                                   |
 | PUT    | `/api/users/me`                                       | Update current user                           | partial — profile fields only; email stays admin-gated |
 | DELETE | `/api/users/me/profile-picture`                       | Reset current user's profile picture          | planned (phase 8)                                      |
 | PUT    | `/api/users/me/profile-picture`                       | Update current user's profile picture         | planned (phase 8)                                      |
-| POST   | `/api/users/me/send-email-verification`               | Send email verification                       | planned (phase 5)                                      |
-| POST   | `/api/users/me/verify-email`                          | Verify email                                  | planned (phase 5)                                      |
+| POST   | `/api/users/me/send-email-verification`               | Send email verification                       | done                                                   |
+| POST   | `/api/users/me/verify-email`                          | Verify email                                  | done                                                   |
 | DELETE | `/api/users/{id}`                                     | Delete user                                   | done                                                   |
 | GET    | `/api/users/{id}`                                     | Get user by ID                                | done                                                   |
 | PUT    | `/api/users/{id}`                                     | Update user                                   | done                                                   |
 | GET    | `/api/users/{id}/groups`                              | Get user groups                               | done                                                   |
-| POST   | `/api/users/{id}/one-time-access-email`               | Request one-time access email (admin)         | planned (phase 5)                                      |
-| POST   | `/api/users/{id}/one-time-access-token`               | Create one-time access token for user (admin) | planned (phase 5)                                      |
+| POST   | `/api/users/{id}/one-time-access-email`               | Request one-time access email (admin)         | done                                                   |
+| POST   | `/api/users/{id}/one-time-access-token`               | Create one-time access token for user (admin) | done                                                   |
 | DELETE | `/api/users/{id}/profile-picture`                     | Reset user profile picture                    | planned (phase 8)                                      |
 | PUT    | `/api/users/{id}/profile-picture`                     | Update user profile picture                   | planned (phase 8)                                      |
 | GET    | `/api/users/{id}/profile-picture.png`                 | Get user profile picture                      | planned (phase 8)                                      |
-| PUT    | `/api/users/{id}/user-groups`                         | Update user groups                            | planned (phase 5)                                      |
-| GET    | `/api/users/{id}/webauthn-credentials`                | List user passkeys                            | planned (phase 5)                                      |
-| DELETE | `/api/users/{id}/webauthn-credentials/{credentialId}` | Delete user passkey                           | planned (phase 5)                                      |
+| PUT    | `/api/users/{id}/user-groups`                         | Update user groups                            | done                                                   |
+| GET    | `/api/users/{id}/webauthn-credentials`                | List user passkeys                            | done                                                   |
+| PUT    | `/api/users/{id}/webauthn-credentials/{credentialId}` | Rename user passkey                           | done                                                   |
+| DELETE | `/api/users/{id}/webauthn-credentials/{credentialId}` | Delete user passkey                           | done                                                   |
+
+## WebAuthn
+
+| Method | Endpoint                        | Summary / Yaak Title              | Status |
+| ------ | ------------------------------- | --------------------------------- | ------ |
+| POST   | `/api/webauthn/register/begin`  | Begin passkey registration        | done   |
+| POST   | `/api/webauthn/register/finish` | Finish passkey registration       | done   |
+| POST   | `/api/webauthn/login/begin`     | Begin discoverable passkey login  | done   |
+| POST   | `/api/webauthn/login/finish`    | Finish discoverable passkey login | done   |
 
 ## Version
 

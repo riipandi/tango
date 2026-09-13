@@ -282,6 +282,21 @@ func (s *PostgresStore) MarkLogin(ctx context.Context, id UserID) error {
 	return nil
 }
 
+// MarkEmailVerified stamps the email-verified timestamp.
+func (s *PostgresStore) MarkEmailVerified(ctx context.Context, id UserID) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(usersTable)
+	ub.Set(ub.Assign("email_verified_at", time.Now().UTC()))
+	ub.Where(ub.E("id", id.UUIDBytes()))
+
+	query, args := ub.Build()
+	_, err := s.exec.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("mark email verified: %w", err)
+	}
+	return nil
+}
+
 // scanner covers pgx.Rows and pgx.Row.
 type scanner interface {
 	Scan(dest ...any) error

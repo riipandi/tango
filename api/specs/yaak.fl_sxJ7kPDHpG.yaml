@@ -1,22 +1,16 @@
-type: http_request
-model: http_request
-id: rq_8bhwyqijeA
-createdAt: 2026-09-12T06:54:01.871712
-updatedAt: 2026-09-13T13:38:41.011448
+type: folder
+model: folder
+id: fl_sxJ7kPDHpG
+createdAt: 2026-09-13T16:10:47.972322
+updatedAt: 2026-09-13T16:10:47.972323
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: null
 authentication: {}
 authenticationType: null
-body:
-  text: '{"identity":"admin","secret":"Admin123!"}'
-bodyType: application/json
-description: Sign in as seeded admin; sets the tango_session cookie
+description: "Upstream tag: Signup — self signup, first-admin setup, signup token management (admin)"
 headers: []
-method: POST
-name: Sign In
+name: Signup
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/auth/sign-in
-urlParameters: []
 settingSendCookies:
   enabled: false
   value: true
@@ -32,6 +26,9 @@ settingFollowRedirects:
 settingRequestTimeout:
   enabled: false
   value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
 settingHttpVersion:
   enabled: false
   value: auto

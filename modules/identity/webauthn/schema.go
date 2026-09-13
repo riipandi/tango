@@ -1,36 +1,48 @@
-// Package webauthn is the primary sign-in method: passkey
-// credentials and the begin/finish ceremony endpoints for login and
-// re-authentication.
+// Package webauthn implements passkey sign-in: registration and
+// assertion ceremonies via go-webauthn, credential storage, and the
+// admin credential CRUD. The challenge state lives in
+// webauthn_sessions rows; nothing sensitive is stored raw.
 package webauthn
 
 import (
+	"errors"
+	"time"
+
 	"go.jetify.com/typeid"
-
-	"github.com/riipandi/tango/modules/identity"
 )
 
-// Typed IDs for the webauthn tables: UUIDv7 suffix, snake_case
-// prefix matching the singular table name.
+// Typed IDs: only the URL-facing credential ID carries a TypeID;
+// session rows are addressed by their unique challenge.
 type (
-	webauthnCredentialPrefix struct{}
+	credentialPrefix struct{}
 
-	WebauthnCredentialID = typeid.TypeID[webauthnCredentialPrefix]
-
-	webauthnSessionPrefix struct{}
-
-	WebauthnSessionID = typeid.TypeID[webauthnSessionPrefix]
+	CredentialID = typeid.TypeID[credentialPrefix]
 )
 
-func (webauthnCredentialPrefix) Prefix() string { return "webauthn_credential" }
-func (webauthnSessionPrefix) Prefix() string    { return "webauthn_session" }
+func (credentialPrefix) Prefix() string { return "webauthn_credential" }
 
-// Feature is the wireable webauthn unit.
-type Feature struct{}
+// Ceremony constants.
+const (
+	ChallengeRegistration   = "registration"
+	ChallengeAuthentication = "authentication"
 
-// New returns the placeholder feature.
-func New() Feature { return Feature{} }
+	credentialsTable = "public.webauthn_credentials"
+	sessionsTable    = "public.webauthn_sessions"
+)
 
-// Name implements identity.Feature.
-func (Feature) Name() string { return "webauthn" }
+// Errors surfaced to handlers (mapped to HTTP by the caller).
+var (
+	// ErrInvalidSession is returned when a ceremony session is
+	// unknown, expired, or already consumed.
+	ErrInvalidSession = errors.New("webauthn: invalid or expired ceremony session")
+	// ErrNotFound is returned when a credential does not exist.
+	ErrNotFound = errors.New("webauthn: credential not found")
+	// ErrVerificationRequired maps to the missing user-verification
+	// flag on an assertion.
+	ErrVerificationRequired = errors.New("webauthn: user verification required")
+	// ErrAssertionFailed covers assertion/attestation failures.
+	ErrAssertionFailed = errors.New("webauthn: ceremony failed")
+)
 
-var _ identity.Feature = Feature{}
+// ChallengeSessionTTL bounds ceremony sessions.
+const ChallengeSessionTTL = 60 * time.Second

@@ -1,21 +1,20 @@
 type: http_request
 model: http_request
-id: rq_8bhwyqijeA
-createdAt: 2026-09-12T06:54:01.871712
-updatedAt: 2026-09-13T13:38:41.011448
+id: rq_JdxrQT2WuM
+createdAt: 2026-09-13T16:08:43.616852
+updatedAt: 2026-09-13T16:08:43.616853
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
-body:
-  text: '{"identity":"admin","secret":"Admin123!"}'
-bodyType: application/json
-description: Sign in as seeded admin; sets the tango_session cookie
+body: {}
+bodyType: null
+description: "Admin: list passkey credentials registered for a user."
 headers: []
-method: POST
-name: Sign In
+method: GET
+name: GET /users/{id}/webauthn-credentials
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/auth/sign-in
+url: http://127.0.0.1:3080/api/users/user_01m2dd47arf4e9g6qd0r85b5rz/webauthn-credentials
 urlParameters: []
 settingSendCookies:
   enabled: false

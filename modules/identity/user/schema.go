@@ -72,6 +72,7 @@ type Store interface {
 	UpdateAdmin(ctx context.Context, id UserID, params AdminUpdateParams) (User, error)
 	UpdateProfile(ctx context.Context, id UserID, params UpdateProfileParams) (User, error)
 	MarkLogin(ctx context.Context, id UserID) error
+	MarkEmailVerified(ctx context.Context, id UserID) error
 	Delete(ctx context.Context, id UserID) error
 }
 

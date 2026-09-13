@@ -1,21 +1,20 @@
 type: http_request
 model: http_request
-id: rq_8bhwyqijeA
-createdAt: 2026-09-12T06:54:01.871712
-updatedAt: 2026-09-13T13:38:41.011448
+id: rq_vGKt7CfDmj
+createdAt: 2026-09-13T16:10:03.029522
+updatedAt: 2026-09-13T16:10:03.029522
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
-body:
-  text: '{"identity":"admin","secret":"Admin123!"}'
-bodyType: application/json
-description: Sign in as seeded admin; sets the tango_session cookie
+body: {}
+bodyType: null
+description: "Anonymous: exchange a one-time access token for a session (sets the session cookie). 404 when invalid/expired/used."
 headers: []
 method: POST
-name: Sign In
+name: POST /one-time-access-token/{token}
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/auth/sign-in
+url: http://127.0.0.1:3080/api/one-time-access-token/REPLACE_RAW_TOKEN
 urlParameters: []
 settingSendCookies:
   enabled: false

@@ -16,7 +16,7 @@ References:
 | 2     | [phase-02-identity-admin.md](./phase-02-identity-admin.md)       | User groups, custom claims, audit API, admin CRUD | done    | 2026-09-12 |
 | 3     | [phase-03-jwks-wellknown.md](./phase-03-jwks-wellknown.md)       | JWKS provider, discovery endpoints                | done    | 2026-09-13 |
 | 4     | [phase-04-oidc-provider.md](./phase-04-oidc-provider.md)         | Authorize (PKCE), token, userinfo                 | done    | 2026-09-13 |
-| 5     | [phase-05-passkeys-signin.md](./phase-05-passkeys-signin.md)     | WebAuthn, device login, one-time access, signup   | planned | 2026-09-12 |
+| 5     | [phase-05-passkeys-signin.md](./phase-05-passkeys-signin.md)     | WebAuthn, device login, one-time access, signup   | done    | 2026-09-13 |
 | 6     | [phase-06-apikeys-ratelimit.md](./phase-06-apikeys-ratelimit.md) | API keys, resource APIs, rate limiter             | planned | 2026-09-12 |
 | 7     | [phase-07-jobs-webhooks.md](./phase-07-jobs-webhooks.md)         | Antree consumers, webhooks, scheduler             | planned | 2026-09-12 |
 | 8     | [phase-08-sync-storage.md](./phase-08-sync-storage.md)           | LDAP, SCIM, S3 storage, app images                | planned | 2026-09-12 |
@@ -126,7 +126,7 @@ Yaak's cookie jar; for anonymous-401 checks use curl (the jar re-sends cookies).
 | `appconfig`, `auditlogs`, `storage`, `email`, `job`                           | `modules/appconfig`, `modules/auditlog`, `internal/storage`, `internal/mailer`, `pkg/antree` |
 | `ldapsync`, `scimsync`                                                        | `modules/identity/ldapsync`, `modules/federation/scimsync`                                   |
 
-## Gotchas (phases 1–4)
+## Gotchas (phases 1–5)
 
 Hard-won notes; re-read before touching the same area.
 
@@ -171,6 +171,17 @@ Hard-won notes; re-read before touching the same area.
   POST/PUT bodies manually in the UI, and verify mutations live via curl.
 - **Yaak's cookie jar re-sends session cookies** — anonymous-401 checks must use curl with a
   clean jar, not Yaak.
+- **Token rows are keyed by SHA-256, but user_id stays a UUID** — the phase 5 token stores
+  (onetimeaccess, emailverification) upsert into `auth_tokens` by `(user_id, purpose)`. Two
+  live failures came from this boundary: binding a typeid string into the UUID `user_id`
+  column (fix: `userUUID()` at the store edge) and comparing a scanned UUID against
+  `userID.String()` (typeid form) in the owner check — compare `userID.UUID()` instead. The
+  second bug looks like "tokens vanish" because verify consumes the row, then 404s.
+- **`signup/setup` creates the first admin** (upstream parity): it succeeds while no admin
+  exists and 409s afterwards — it is not a general signup variant.
+- **Admin password is not seeded by migrations** — migration 00004 inserts the admin user row
+  but leaves `user_passwords` empty; first sign-in fails with 401 until a password hash is
+  written (dev: seed via the password service or a one-off insert).
 
 ## Endpoint Gap Register (swagger.yaml vs tango, post-phase-4)
 
@@ -185,10 +196,10 @@ different path/shape), `ok` (implemented, parity).
 | `/api/users/me` GET/PUT (+ profile-picture)                                                                                  | deviation       | implemented (session auth, profile fields only — email stays admin-gated); picture lands in phase 8                     |
 | `/api/users/{id}/user-groups` PUT                                                                                            | ok              | completion pass (usergroup store: ReplaceGroupsForUser)                                                                 |
 | `/api/users/{id}/profile-picture*`                                                                                           | missing-backend | phase 8 (storage)                                                                                                       |
-| `/api/users/{id}/webauthn-credentials*`, `/api/users/me/send-email-verification`, `/api/users/me/verify-email`               | missing-backend | phase 5                                                                                                                 |
-| `/api/users/{id}/one-time-access-email` + `/api/users/{id}/one-time-access-token`                                            | missing-backend | phase 5                                                                                                                 |
-| `/api/one-time-access-email`, `/api/one-time-access-token/{token}`                                                           | missing-backend | phase 5                                                                                                                 |
-| `/api/signup`, `/api/signup/setup`, `/api/signup-tokens*`                                                                    | missing-backend | phase 5                                                                                                                 |
+| `/api/users/{id}/webauthn-credentials*`, `/api/users/me/send-email-verification`, `/api/users/me/verify-email`               | ok              | phase 5 (credentials admin CRUD + rename; verification self-service)                                                    |
+| `/api/users/{id}/one-time-access-email` + `/api/users/{id}/one-time-access-token`                                            | ok              | phase 5 (mint returns raw token once; email send deferred to phase 7 queue)                                             |
+| `/api/one-time-access-email`, `/api/one-time-access-token/{token}`                                                           | deviation       | phase 5 (anonymous email request 204-without-mint until appconfig policy, phase 8; exchange live)                       |
+| `/api/signup`, `/api/signup/setup`, `/api/signup-tokens*`                                                                    | ok              | phase 5 (setup = first-admin bootstrap; token CRUD + group grants; invitations land later)                              |
 | `/api/user-groups*`, `/api/user-groups/{id}/users` PUT                                                                       | ok              | phase 2                                                                                                                 |
 | `/api/user-groups/{id}/allowed-oidc-clients` PUT                                                                             | missing-backend | phase 5 (allowlist editable from the client side today)                                                                 |
 | `/api/custom-claims/suggestions`, `/api/custom-claims/user` + `/user-group` CRUD                                             | ok              | completion pass: list-replace PUT + single-claim POST/PUT/DELETE both live                                              |
@@ -204,10 +215,11 @@ different path/shape), `ok` (implemented, parity).
 | `/api/oidc/users/me/clients`, `/api/oidc/users/me/authorized-clients*`, `/api/oidc/users/{id}/authorized-clients`            | ok              | completion pass (revocation cascades to active tokens)                                                                  |
 | `/authorize` (authorize code + PKCE), `/api/oidc/end-session`                                                                | ok              | completion pass: end-session clears the cookie + logout-callback redirect; family revocation lands phase 5              |
 | `/api/api-keys*`, `/api/apis*`, `/api/api-access/{clientId}/*`                                                               | missing-backend | phase 6                                                                                                                 |
-| `/api/device-login/*` (requests, exchange, verification, decision)                                                           | missing-backend | phase 5                                                                                                                 |
+| `/api/device-login/*` (requests, exchange, verification, decision)                                                           | ok              | phase 5 (own table `device_login_requests`; upstream uses the francis actor framework — noted deviation)                |
 | `/api/application-configuration*`, `/api/application-images/*`, `/api/scim/service-provider*`, `/api/storage/sqlite-warning` | missing-backend | phase 8 (sqlite-warning is upstream-specific — likely never ported; Postgres-only)                                      |
 
-Yaak folder coverage after the completion pass: Users, User Groups, Custom Claims, Audit Logs,
-Well Known (incl. oauth-authorization-server), OIDC (incl. introspect), OAuth, Version, and
-Tango Extensions (auth) hold the implemented requests; missing _requests_ inside existing
+Yaak folder coverage after phase 5: Users (webauthn-credentials, one-time access, email
+verification), User Groups, Custom Claims, Audit Logs, Well Known (incl.
+oauth-authorization-server), OIDC (incl. introspect), OAuth, Version, Device Login, Signup,
+and Tango Extensions (auth) hold the implemented requests; missing _requests_ inside existing
 folders mirror the `missing-backend` rows above and get created as each phase lands.

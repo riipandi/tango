@@ -107,7 +107,7 @@ func TestSuccessWithOptions(t *testing.T) {
 
 	Success(w, r, http.StatusCreated, nil,
 		WithMessage("user created"),
-		WithLinks(Links{"self": Link("/api/users/1"), "next": nil}),
+		WithLinks(Links{"self": new("/api/users/1"), "next": nil}),
 		WithPagination(NewPagination(PaginationParams{Page: 2, Limit: 10}, 35)),
 	)
 

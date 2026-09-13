@@ -93,9 +93,6 @@ type RateLimit struct {
 // marshals as null.
 type Links map[string]*string
 
-// Link returns a pointer for a Links value; a nil entry renders as null.
-func Link(url string) *string { return &url }
-
 // Option customizes the envelope built by Success and Fail.
 type Option func(*Envelope)
 
@@ -136,7 +133,7 @@ func WithLink(rel, url string) Option {
 		if e.Links == nil {
 			e.Links = Links{}
 		}
-		e.Links[rel] = Link(url)
+		e.Links[rel] = new(url)
 	}
 }
 

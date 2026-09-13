@@ -1,21 +1,22 @@
 type: http_request
 model: http_request
-id: rq_8bhwyqijeA
-createdAt: 2026-09-12T06:54:01.871712
-updatedAt: 2026-09-13T13:38:41.011448
+id: rq_8ui66md5rn
+createdAt: 2026-09-13T16:11:02.884497
+updatedAt: 2026-09-13T16:11:02.884498
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_sxJ7kPDHpG
 authentication: {}
 authenticationType: null
 body:
-  text: '{"identity":"admin","secret":"Admin123!"}'
+  bodyType: application/json
+  text: '{"username": "newuser", "email": "newuser@example.com", "first_name": "New", "token": "REPLACE_RAW_TOKEN"}'
 bodyType: application/json
-description: Sign in as seeded admin; sets the tango_session cookie
+description: "Anonymous: sign up with a valid signup token; issues a session."
 headers: []
 method: POST
-name: Sign In
+name: POST /signup
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/auth/sign-in
+url: http://127.0.0.1:3080/api/signup
 urlParameters: []
 settingSendCookies:
   enabled: false

@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_z7AXTcG7wN
+createdAt: 2026-09-13T16:08:36.116262
+updatedAt: 2026-09-13T16:08:36.116262
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_R5pypBKj8u
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: "Anonymous long-poll: exchange an approved device request for a session (needs the device_token cookie from create). Returns the user + session cookie; 401 pending, 403 denied, 404 consumed/invalid."
+headers: []
+method: POST
+name: POST /device-login/requests/{id}/exchange
+sortPriority: 0.0
+url: http://127.0.0.1:3080/api/device-login/requests/01a00000-0000-0000-0000-000000000000/exchange
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

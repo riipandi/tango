@@ -1,21 +1,22 @@
 type: http_request
 model: http_request
-id: rq_8bhwyqijeA
-createdAt: 2026-09-12T06:54:01.871712
-updatedAt: 2026-09-13T13:38:41.011448
+id: rq_gupY9SysnN
+createdAt: 2026-09-13T16:09:46.254124
+updatedAt: 2026-09-13T16:09:46.254125
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body:
-  text: '{"identity":"admin","secret":"Admin123!"}'
+  bodyType: application/json
+  text: '{"email": "user@example.com"}'
 bodyType: application/json
-description: Sign in as seeded admin; sets the tango_session cookie
+description: "Anonymous: request a one-time access email (204; mail delivery rides the phase 7 queue)."
 headers: []
 method: POST
-name: Sign In
+name: POST /one-time-access-email
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/auth/sign-in
+url: http://127.0.0.1:3080/api/one-time-access-email
 urlParameters: []
 settingSendCookies:
   enabled: false
