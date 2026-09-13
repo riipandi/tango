@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
-description: 'Upstream tag: Users — /api/users*, profile, webauthn-credentials, one-time access, email verification'
+description: "Upstream tag: Users — /api/users*, profile, webauthn-credentials, one-time access, email verification"
 headers: []
 name: Users
 sortPriority: 0.0

@@ -47,8 +47,7 @@ can sign in with username/password and manage their account.
       admin `/api/users` routes guarded.
 - [x] Tests: store tests (testcontainers), service tests, middleware tests with `httptest`;
       sign-in → cookie → session → sign-out round trip.
-- [x] Yaak: folder "Tango Extensions (auth)" (sign-in/out/session) + "Users" (guarded `/api/users`)
-      + "Version" (`/api/healthz`, `/api/version/*` in phase 3 work) — live-tested on :3080,
+- [x] Yaak: folder "Tango Extensions (auth)" (sign-in/out/session) + "Users" (guarded `/api/users`) + "Version" (`/api/healthz`, `/api/version/*` in phase 3 work) — live-tested on :3080,
       observed 200/401 per matrix in the progress log.
 
 ## Validation
