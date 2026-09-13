@@ -1,21 +1,16 @@
-type: http_request
-model: http_request
-id: rq_YqheRWskKv
-createdAt: 2026-09-12T06:27:47.763631
-updatedAt: 2026-09-13T06:13:52.045701
+type: folder
+model: folder
+id: fl_YNuU3gaJNQ
+createdAt: 2026-09-13T06:23:01.744642
+updatedAt: 2026-09-13T06:23:01.744643
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
-body: {}
-bodyType: null
-description: ""
+description: RFC 8615 discovery endpoints (phase 3)
 headers: []
-method: GET
-name: System Health Check
-sortPriority: -1789194467762.0
-url: ${[ apiBaseURL ]}/api/healthz
-urlParameters: []
+name: Well Known
+sortPriority: 0.0
 settingSendCookies:
   enabled: false
   value: true
@@ -31,6 +26,9 @@ settingFollowRedirects:
 settingRequestTimeout:
   enabled: false
   value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
 settingHttpVersion:
   enabled: false
   value: auto

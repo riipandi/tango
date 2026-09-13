@@ -89,10 +89,12 @@ func New(deps Deps) *kernel.Registry {
 	// Identity provider (OIDC, SCIM, discovery) — optional surface
 	// for other systems. Delete this line (and
 	// federation_features.go) to exclude the provider entirely.
+	keyService := newKeyService(deps)
 	reg.Register(federation.New(
 		withOIDC(deps),
 		withSCIMSync(deps),
-		withDiscovery(deps),
+		keyService,
+		withDiscovery(deps, keyService),
 	))
 
 	return reg

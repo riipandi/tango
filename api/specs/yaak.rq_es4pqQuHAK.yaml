@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /api/user-groups
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/user-groups?page=1&limit=10
+url: ${[ apiBaseURL ]}/api/user-groups?page=1&limit=10
 urlParameters: []
 settingSendCookies:
   enabled: false

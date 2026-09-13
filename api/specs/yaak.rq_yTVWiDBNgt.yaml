@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /api/audit-logs/filters/users
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/audit-logs/filters/users
+url: ${[ apiBaseURL ]}/api/audit-logs/filters/users
 urlParameters: []
 settingSendCookies:
   enabled: false

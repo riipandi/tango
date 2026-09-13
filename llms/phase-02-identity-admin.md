@@ -1,6 +1,6 @@
 ---
 status: done
-updated: 2026-09-12
+updated: 2026-09-13
 ---
 
 # Phase 2 — Identity Admin Surface

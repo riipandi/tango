@@ -14,7 +14,7 @@ headers: []
 method: POST
 name: POST /api/user-groups
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/user-groups
+url: ${[ apiBaseURL ]}/api/user-groups
 urlParameters: []
 settingSendCookies:
   enabled: false

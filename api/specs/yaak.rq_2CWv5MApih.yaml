@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: Users (guarded, anonymous)
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/users
+url: ${[ apiBaseURL ]}/api/users
 urlParameters: []
 settingSendCookies:
   enabled: false

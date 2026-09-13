@@ -1,11 +1,13 @@
 package registry
 
 import (
+	"crypto/sha256"
 	"net/http"
 	"time"
 
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/auditlog"
+	"github.com/riipandi/tango/modules/federation/jwks"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/account"
 	"github.com/riipandi/tango/modules/identity/apiaccess"
@@ -18,6 +20,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/usergroup"
 	"github.com/riipandi/tango/modules/identity/webauthn"
 	"github.com/riipandi/tango/pkg/crypto"
+	"github.com/riipandi/tango/pkg/jwtutils"
 
 	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/federation/discovery"
@@ -81,6 +84,25 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature
 // no storage. The federation module is optional: removing its
 // registration (and this file's federation imports) yields a
 // pure internal-identity binary.
-func withOIDC(deps Deps) federation.Feature      { return oidc.New() }
-func withSCIMSync(deps Deps) federation.Feature  { return scimsync.New() }
-func withDiscovery(deps Deps) federation.Feature { return discovery.New() }
+func withOIDC(deps Deps) federation.Feature     { return oidc.New() }
+func withSCIMSync(deps Deps) federation.Feature { return scimsync.New() }
+
+// newKeyService builds the JWKS key service (private halves
+// encrypted at rest under a digest of auth.secret_key). It is a
+// startable feature: registry startup guarantees a signing key
+// exists before the server binds.
+func newKeyService(deps Deps) *jwks.Service {
+	cipherKey := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
+	cipher, err := crypto.NewCipher(cipherKey[:])
+	if err != nil {
+		panic("registry: cipher key derivation is always 32 bytes: " + err.Error())
+	}
+	return jwks.NewService(jwks.NewPostgresStore(deps.DB), cipher, jwks.RS256)
+}
+
+// withDiscovery mounts the well-known endpoints in front of the
+// TTL-cached key provider shared with token issuance.
+func withDiscovery(deps Deps, keys *jwks.Service) federation.Feature {
+	provider := jwtutils.NewCachedKeyProvider(keys, jwks.CacheTTL)
+	return discovery.New(provider, deps.Config.Public.BaseURL)
+}

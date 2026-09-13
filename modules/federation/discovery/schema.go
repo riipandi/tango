@@ -4,42 +4,74 @@ package discovery
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/riipandi/tango/modules/federation"
+	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// Feature is the wireable discovery unit.
-type Feature struct{}
+// Well-known endpoint paths and cache policy.
+const (
+	JWKSPath   = "/.well-known/jwks.json"
+	ConfigPath = "/.well-known/openid-configuration"
 
-// New returns the placeholder feature. The real constructor takes
-// the signing-key provider from the oidc package via a
-// consumer-side adapter in the registry.
-func New() Feature { return Feature{} }
+	jwksCacheControl = "public, max-age=300, must-revalidate"
+)
+
+// OIDC endpoint paths advertised in the discovery document. Each
+// becomes an absolute URL under the issuer; phase 4 owns their
+// implementation.
+const (
+	AuthorizeEndpoint  = "/authorize"
+	TokenEndpoint      = "/api/oidc/token"
+	UserInfoEndpoint   = "/api/oidc/userinfo"
+	EndSessionEndpoint = "/api/oidc/end-session"
+	JWKSURI            = "/.well-known/jwks.json"
+)
+
+// Feature serves the discovery document and JWKS from the shared
+// key provider.
+type Feature struct {
+	provider jwtutils.KeyProvider
+	issuer   string
+}
+
+var _ federation.RootRoutableFeature = Feature{}
+
+// New builds the feature; issuer is the public base URL (a
+// trailing slash is trimmed).
+func New(provider jwtutils.KeyProvider, issuer string) Feature {
+	return Feature{provider: provider, issuer: strings.TrimRight(issuer, "/")}
+}
 
 // Name implements federation.Feature.
 func (Feature) Name() string { return "discovery" }
 
-var _ federation.Feature = Feature{}
-
 // Routes mounts the discovery endpoints on the root router.
-func (Feature) Routes(r chi.Router) {
-	r.Get("/.well-known/jwks.json", jwks)
-	r.Get("/.well-known/openid-configuration", openIDConfiguration)
+func (f Feature) Routes(r chi.Router) {
+	r.Get(JWKSPath, f.jwks)
+	r.Get(ConfigPath, f.openIDConfiguration)
 }
 
-func jwks(w http.ResponseWriter, _ *http.Request) {
-	// TODO: serve real JWKS from the configured signing keys.
-	responder.WriteJSON(w, http.StatusOK, map[string]any{
-		"message": "Not yet implemented",
-	})
+// jwks publishes the public halves of every currently published
+// signing key, including retired keys inside the rotation overlap.
+// The set is built from public PEMs only, so no private material
+// can leak; no envelope — clients expect a bare JWKS document.
+func (f Feature) jwks(w http.ResponseWriter, r *http.Request) {
+	set, err := f.provider.VerifyKeySet(r.Context())
+	if err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "failed to load signing keys")
+		return
+	}
+
+	w.Header().Set("Cache-Control", jwksCacheControl)
+	responder.WriteJSON(w, http.StatusOK, set)
 }
 
-func openIDConfiguration(w http.ResponseWriter, _ *http.Request) {
-	// TODO: full OIDC discovery document once the oidc package
-	// exposes its token endpoints.
-	responder.WriteJSON(w, http.StatusOK, map[string]any{
-		"message": "Not yet implemented",
-	})
+// openIDConfiguration serves the OIDC discovery document.
+func (f Feature) openIDConfiguration(w http.ResponseWriter, r *http.Request) {
+	responder.WriteJSON(w, http.StatusOK, newDiscoveryDocument(f.issuer))
 }
