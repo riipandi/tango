@@ -104,6 +104,7 @@ tasks:
     cmds:
       - go vet ./...
       - pnpm exec oxfmt --check
+      - pnpm exec oxlint --type-aware
 
   lint:
     desc: Run all linters (Go + JS)

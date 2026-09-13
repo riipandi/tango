@@ -310,7 +310,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     if (buildTimer) clearTimeout(buildTimer);
 
     buildTimer = setTimeout(() => {
-      runBuild("rebuild").then((ok) => {
+      void runBuild("rebuild").then((ok) => {
         buildTimer = null;
 
         if (!ok && opts.stopOnError) killGo();
@@ -352,7 +352,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
       command = config.command;
     },
     configureServer(_server: ViteDevServer) {
-      initialBuild();
+      void initialBuild();
 
       _server.watcher.on("change", (file: string) => {
         if (disposed) return;

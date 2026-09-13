@@ -44,7 +44,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: securedb
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
-      POSTGRES_DATABASES: testdb,experimental
+      POSTGRES_DATABASES: testdb,pocketid
     configs: [{ source: pgsql_multidb, target: /docker-entrypoint-initdb.d/multidb.sh }]
     security_opt: ["no-new-privileges:true"]
     shm_size: 256m # set shared memory limit
@@ -136,6 +136,29 @@ services:
       interval: 3s
       timeout: 10s
       retries: 3
+
+  pocketid:
+    <<: *common
+    image: ghcr.io/pocket-id/pocket-id:${POCKETID_VERSION:-v2}
+    hostname: pocketid
+    ports: ["1411:1411"]
+    environment:
+      APP_URL: http://localhost:1411
+      DB_CONNECTION_STRING: postgresql://postgres:securedb@pgsql:5432/pocketid?sslmode=disable
+      ENCRYPTION_KEY_FILE: /app/encryption_key
+      TRUST_PROXY: true
+    volumes:
+      # openssl rand -base64 32 > .storage/encryption_key
+      - ".storage/encryption_key:/app/encryption_key:ro"
+      - ".storage/pocketid_data:/app/data:rw"
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "/app/pocket-id", "healthcheck"]
+      interval: 3s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      pgsql: { condition: service_healthy }
 
   nginx:
     <<: *common

@@ -38,6 +38,7 @@
         "npm-check-updates": "^23.1.0",
         "oxfmt": "^0.67.0",
         "oxlint": "^1.82.0",
+        "oxlint-tsgolint": "^7.0.2001",
         "react-email": "^6.9.5",
         "tsx": "^4.23.13",
         "typescript": "^7.0.2",
