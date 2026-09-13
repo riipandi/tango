@@ -139,7 +139,7 @@ services:
 
   pocketid:
     <<: *common
-    image: ghcr.io/pocket-id/pocket-id:${POCKETID_VERSION:-v2}
+    image: ghcr.io/pocket-id/pocket-id:${POCKETID_VERSION:-v2.14-distroless}
     hostname: pocketid
     ports: ["1411:1411"]
     environment:
