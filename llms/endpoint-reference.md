@@ -12,30 +12,30 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 
 ## API Keys
 
-| Method | Endpoint                   | Summary / Yaak Title | Status            |
-| ------ | -------------------------- | -------------------- | ----------------- |
-| GET    | `/api/api-keys`            | List API keys        | planned (phase 6) |
-| POST   | `/api/api-keys`            | Create API key       | planned (phase 6) |
-| DELETE | `/api/api-keys/{id}`       | Revoke API key       | planned (phase 6) |
-| POST   | `/api/api-keys/{id}/renew` | Renew API key        | planned (phase 6) |
+| Method | Endpoint                   | Summary / Yaak Title | Status |
+| ------ | -------------------------- | -------------------- | ------ |
+| GET    | `/api/api-keys`            | List API keys        | done   |
+| POST   | `/api/api-keys`            | Create API key       | done   |
+| DELETE | `/api/api-keys/{id}`       | Revoke API key       | done   |
+| POST   | `/api/api-keys/{id}/renew` | Renew API key        | done   |
 
 ## APIs
 
-| Method | Endpoint                                     | Summary / Yaak Title                                    | Status            |
-| ------ | -------------------------------------------- | ------------------------------------------------------- | ----------------- |
-| GET    | `/api/api-access/{clientId}/apis`            | List APIs a client may access                           | planned (phase 6) |
-| GET    | `/api/api-access/{clientId}/assignable-apis` | List APIs a client can still be granted access to       | planned (phase 6) |
-| GET    | `/api/apis`                                  | List APIs                                               | planned (phase 6) |
-| POST   | `/api/apis`                                  | Create API                                              | planned (phase 6) |
-| DELETE | `/api/apis/{id}`                             | Delete API                                              | planned (phase 6) |
-| GET    | `/api/apis/{id}`                             | Get API by ID                                           | planned (phase 6) |
-| PUT    | `/api/apis/{id}`                             | Update API                                              | planned (phase 6) |
-| GET    | `/api/apis/{id}/assignable-clients`          | List clients that can still be granted access to an API | planned (phase 6) |
-| PUT    | `/api/apis/{id}/cimd-access`                 | Update metadata document client access                  | planned (phase 6) |
-| GET    | `/api/apis/{id}/clients`                     | List clients with access to an API                      | planned (phase 6) |
-| DELETE | `/api/apis/{id}/clients/{clientId}`          | Revoke a client's access to an API                      | planned (phase 6) |
-| PUT    | `/api/apis/{id}/clients/{clientId}`          | Update a client's access to an API                      | planned (phase 6) |
-| PUT    | `/api/apis/{id}/permissions`                 | Update API permissions                                  | planned (phase 6) |
+| Method | Endpoint                                     | Summary / Yaak Title                                    | Status |
+| ------ | -------------------------------------------- | ------------------------------------------------------- | ------ |
+| GET    | `/api/api-access/{clientId}/apis`            | List APIs a client may access                           | done   |
+| GET    | `/api/api-access/{clientId}/assignable-apis` | List APIs a client can still be granted access to       | done   |
+| GET    | `/api/apis`                                  | List APIs                                               | done   |
+| POST   | `/api/apis`                                  | Create API                                              | done   |
+| DELETE | `/api/apis/{id}`                             | Delete API                                              | done   |
+| GET    | `/api/apis/{id}`                             | Get API by ID                                           | done   |
+| PUT    | `/api/apis/{id}`                             | Update API                                              | done   |
+| GET    | `/api/apis/{id}/assignable-clients`          | List clients that can still be granted access to an API | done   |
+| PUT    | `/api/apis/{id}/cimd-access`                 | Update metadata document client access                  | done   |
+| GET    | `/api/apis/{id}/clients`                     | List clients with access to an API                      | done   |
+| DELETE | `/api/apis/{id}/clients/{clientId}`          | Revoke a client's access to an API                      | done   |
+| PUT    | `/api/apis/{id}/clients/{clientId}`          | Update a client's access to an API                      | done   |
+| PUT    | `/api/apis/{id}/permissions`                 | Update API permissions                                  | done   |
 
 ## Application Configuration
 

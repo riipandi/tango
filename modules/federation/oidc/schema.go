@@ -12,6 +12,7 @@
 package oidc
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -83,6 +84,19 @@ const (
 	ScopeProfile = "profile"
 	ScopeGroups  = "groups"
 )
+
+// APIAccessProvider is implemented by the identity apiaccess
+// feature; it lets the provider resolve RFC 8707 resources to
+// audiences and per-client permission keys without importing the
+// identity tree.
+type APIAccessProvider interface {
+	// AllowedScopesForAudience returns the permission keys the
+	// client may request for the API behind the resource, whether
+	// such an API exists, and whether the client may reach it at
+	// all. A client with access but no permission gets an empty
+	// scope list with hasAccess true.
+	AllowedScopesForAudience(ctx context.Context, clientID, resource string, subjectType string) (scopes []string, apiExists bool, hasAccess bool, err error)
+}
 
 // Feature is the wireable oidc unit backed by the provider service.
 // The admin guard (auth → RequireAdmin) applies to client

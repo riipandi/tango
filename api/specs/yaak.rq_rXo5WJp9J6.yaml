@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_rXo5WJp9J6
+createdAt: 2026-09-13T19:23:45.436032
+updatedAt: 2026-09-13T19:25:58.138553
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_LY5TXMhFfG
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '{"permissions":[{"key":"read","name":"Read"},{"key":"write","name":"Write"}]}'
+bodyType: null
+description: ""
+headers: []
+method: PUT
+name: Update API Permissions
+sortPriority: 0.0
+url: http://localhost:3080/api/apis/{{ apiId }}/permissions
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

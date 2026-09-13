@@ -130,6 +130,7 @@ func (s *Service) exchangeCode(w http.ResponseWriter, r *http.Request, client Cl
 	}
 	redirectURI, _ := seed.RequestData["redirect_uri"].(string)
 	sid, _ := seed.RequestData["sid"].(string)
+	audience, _ := seed.RequestData["audience"].(string)
 	if redirectURI != r.PostFormValue("redirect_uri") || !client.MatchesCallback(redirectURI) {
 		tokenError(w, r, "invalid_grant", http.StatusBadRequest)
 		return
@@ -140,7 +141,7 @@ func (s *Service) exchangeCode(w http.ResponseWriter, r *http.Request, client Cl
 	}
 
 	family := seedFamily(seed.RequestID, sid, consumed.AuthMethod, seedCreatedAt(seed))
-	response, err := s.mintTokens(ctx, client, consumed.UserID, consumed.Scope, consumed.Nonce, family)
+	response, err := s.mintTokens(ctx, client, consumed.UserID, consumed.Scope, consumed.Nonce, audience, family)
 	if err != nil {
 		tokenError(w, r, "server_error", http.StatusInternalServerError)
 		return
@@ -213,7 +214,8 @@ func (s *Service) exchangeRefresh(w http.ResponseWriter, r *http.Request, client
 	}
 
 	family := seedFamily(session.RequestID, sid, authMethod, authTime)
-	response, err := s.mintTokens(ctx, client, userID, scope, "", family)
+	audience, _ := session.RequestData["audience"].(string)
+	response, err := s.mintTokens(ctx, client, userID, scope, "", audience, family)
 	if err != nil {
 		tokenError(w, r, "server_error", http.StatusInternalServerError)
 		return
@@ -252,7 +254,7 @@ type refreshContext struct {
 // mintTokens creates the access token, refresh token, and ID token,
 // persisting session rows in one family. The access token carries
 // the same jti as its oauth2_sessions row.
-func (s *Service) mintTokens(ctx context.Context, client Client, userID, scope, nonce string, family refreshContext) (*tokenResponse, error) {
+func (s *Service) mintTokens(ctx context.Context, client Client, userID, scope, nonce, audience string, family refreshContext) (*tokenResponse, error) {
 	accessTTL := time.Duration(client.AccessTokenDurationMinutes) * time.Minute
 	refreshTTL := time.Duration(client.RefreshTokenDurationMinutes) * time.Minute
 	if accessTTL <= 0 {
@@ -260,6 +262,10 @@ func (s *Service) mintTokens(ctx context.Context, client Client, userID, scope, 
 	}
 	if refreshTTL <= 0 {
 		refreshTTL = RefreshTokenTTL
+	}
+	// Default audience: the requesting client (plain login token).
+	if audience == "" {
+		audience = client.ID.String()
 	}
 
 	signKey, err := s.keys.SignKey(ctx)
@@ -277,7 +283,7 @@ func (s *Service) mintTokens(ctx context.Context, client Client, userID, scope, 
 		"scope":     scope,
 		"jti":       accessJTI,
 		"sid":       family.sid,
-	}, accessTTL, claims.Subject)
+	}, accessTTL, claims.Subject, audience)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +348,7 @@ func (s *Service) mintTokens(ctx context.Context, client Client, userID, scope, 
 // signToken builds a compact access-token JWT with the given
 // private claims; a "jti" entry promotes to the registered JWT ID
 // claim instead of colliding with it.
-func (s *Service) signToken(ctx context.Context, key jwk.Key, private map[string]any, ttl time.Duration, subject string) (string, error) {
+func (s *Service) signToken(ctx context.Context, key jwk.Key, private map[string]any, ttl time.Duration, subject, audience string) (string, error) {
 	signer, err := jwtutils.NewSigner[map[string]any](key, jwa.RS256())
 	if err != nil {
 		return "", err
@@ -352,6 +358,7 @@ func (s *Service) signToken(ctx context.Context, key jwk.Key, private map[string
 	std := jwtutils.Standard{
 		Issuer:    s.issuer,
 		Subject:   subject,
+		Audience:  []string{audience},
 		IssuedAt:  now,
 		ExpiresAt: now.Add(ttl),
 	}

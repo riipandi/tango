@@ -19,6 +19,7 @@ type Service struct {
 	store         Store
 	keys          jwtutils.KeyProvider
 	authenticator middleware.Authenticator
+	apiAccess     APIAccessProvider
 	issuer        string
 	cookieName    string
 	cookieSecure  bool
@@ -43,6 +44,10 @@ type Option func(*Service)
 
 // WithAudit attaches the audit adapter.
 func WithAudit(l AuditLogger) Option { return func(s *Service) { s.audit = l } }
+
+// WithAPIAccess attaches the resource-API resolver used to enforce
+// RFC 8707 resource audiences and permission scopes.
+func WithAPIAccess(p APIAccessProvider) Option { return func(s *Service) { s.apiAccess = p } }
 
 // WithAuthenticator injects the session cookie resolver used by the
 // optional-auth /authorize flow.

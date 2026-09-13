@@ -19,7 +19,8 @@ type HTTPServer struct {
 }
 
 // NewHTTPServer wires middleware, core routes, then registry modules.
-func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Logger) *HTTPServer {
+// The /api group runs behind the rate limiter when one is provided.
+func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Logger, limiter func(http.Handler) http.Handler) *HTTPServer {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -35,6 +36,9 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 
 	// Shared /api group; modules register inside it.
 	r.Route("/api", func(r chi.Router) {
+		if limiter != nil {
+			r.Use(limiter)
+		}
 		r.Get("/", APIRootHandler)
 		r.Get("/healthz", HealthCheckHandler)
 		r.Get("/version/current", VersionCurrentHandler)

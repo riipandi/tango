@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_RukPJ5xRuk
+createdAt: 2026-09-13T19:22:36.805633
+updatedAt: 2026-09-13T19:22:36.805634
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_5dL7rZY8Un
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '{"expires_at":"2027-06-01T00:00:00Z"}'
+bodyType: null
+description: ""
+headers: []
+method: POST
+name: Renew API Key
+sortPriority: 0.0
+url: http://localhost:3080/api/api-keys/{{ apiKeyId }}/renew
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

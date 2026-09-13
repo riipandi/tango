@@ -367,7 +367,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
     updated_at TIMESTAMPTZ DEFAULT NULL,
     last_used_at TIMESTAMPTZ DEFAULT NULL,
     revoked_at TIMESTAMPTZ DEFAULT NULL,
-    CONSTRAINT chk_name_format CHECK (name ~ '^[a-zA-Z0-9_\\- ]{3,64}$')
+    CONSTRAINT chk_name_format CHECK (name ~ '^[a-zA-Z0-9_ -]{3,64}$')
 ) USING heap;
 
 -- Create trigger for updated_at column

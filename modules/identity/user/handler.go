@@ -92,12 +92,20 @@ func (s *Service) APIRoutes(r chi.Router) {
 
 	if s.guard == nil {
 		mount(r)
-		return
+	} else {
+		r.Group(func(ar chi.Router) {
+			ar.Use(s.guard)
+			mount(ar)
+		})
 	}
-	r.Group(func(ar chi.Router) {
-		ar.Use(s.guard)
-		mount(ar)
-	})
+
+	// Machine surface: the same admin routes behind X-API-KEY.
+	if s.apiGuard != nil {
+		r.Group(func(ar chi.Router) {
+			ar.Use(s.apiGuard)
+			mount(ar)
+		})
+	}
 }
 
 // getCurrentUser serves GET /users/me: the signed-in user's own

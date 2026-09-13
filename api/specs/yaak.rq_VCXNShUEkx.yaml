@@ -1,0 +1,40 @@
+type: http_request
+model: http_request
+id: rq_VCXNShUEkx
+createdAt: 2026-09-13T19:22:58.293516
+updatedAt: 2026-09-13T19:22:58.293517
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_5dL7rZY8Un
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Machine call with X-API-KEY header
+headers:
+  - enabled: true
+    name: X-API-KEY
+    value: f_Bw36Lqd9tV6lLA1BU2k00X7wXzlcIcFKeZvNi_6uw
+    id: null
+method: GET
+name: Users via X-API-KEY
+sortPriority: 0.0
+url: http://localhost:3080/api/users
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

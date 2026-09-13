@@ -83,7 +83,7 @@ func New(deps Deps) *kernel.Registry {
 	reg.Register(audit)
 
 	// Internal authn/authz: user core + selected auth features.
-	core, identityFeatures, adminGuard, sessions := newIdentityFeatures(deps, audit)
+	core, identityFeatures, adminGuard, sessions, apiAccess := newIdentityFeatures(deps, audit)
 	audit.MountAdminAPI(adminGuard)
 	audit.MountSelfAPI(sessions, session.CookieName)
 	reg.Register(identity.New(core, identityFeatures...))
@@ -93,7 +93,7 @@ func New(deps Deps) *kernel.Registry {
 	// federation_features.go) to exclude the provider entirely.
 	keyService := newKeyService(deps)
 	reg.Register(federation.New(
-		withOIDC(deps, audit, keyService, sessions, adminGuard),
+		withOIDC(deps, audit, keyService, sessions, adminGuard, apiAccess),
 		withSCIMSync(deps),
 		keyService,
 		withDiscovery(deps, keyService),

@@ -35,9 +35,17 @@ import (
 
 // Identity feature selectors, one line each in the feature list.
 // Placeholders until implemented: no routes, no storage.
-func withAPIKeys(deps Deps) identity.Feature   { return apikey.New() }
-func withAPIAccess(deps Deps) identity.Feature { return apiaccess.New() }
-func withLDAPSync(deps Deps) identity.Feature  { return ldapsync.New() }
+func withLDAPSync(deps Deps) identity.Feature { return ldapsync.New() }
+
+// withAPIKeys builds the machine-credential feature: self-scoped
+// key CRUD plus the X-API-KEY verifier for the transport middleware.
+func withAPIKeys(deps Deps, sessions *session.Service, audit *auditlog.Module) *apikey.Service {
+	return apikey.NewService(
+		apikey.NewPostgresStore(deps.DB),
+		auditAdapter(audit),
+		apikey.WithSelfAuth(sessions),
+	)
+}
 
 // withWebAuthn builds the passkey feature over the shared key
 // material: session issue via the sessions feature, app URL as the
@@ -70,7 +78,7 @@ func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, 
 // sign-in/sign-out routes; account mounts self-service under the
 // same guard. Returns the sessions feature so the federation
 // surface can resolve session cookies (optional-auth /authorize).
-func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service) {
+func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, auditAdapter(audit))
@@ -88,10 +96,13 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature
 		return auth(middleware.RequireAdmin(next))
 	}
 
+	apiKeys := withAPIKeys(deps, sessions, audit)
+
 	core := user.NewService(
 		user.NewPostgresStore(deps.DB),
 		auditAdapter(audit),
 		user.WithAdminGuard(adminAuth),
+		user.WithAPIKeyGuard(middleware.RequireAPIKey(apiKeys.Verify)),
 		user.WithSelfAuth(sessions, session.CookieName),
 	)
 
@@ -129,11 +140,11 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature
 			auditAdapter(audit),
 		)).WithAdminGuard(adminAuth).
 			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
-		withAPIKeys(deps),
-		withAPIAccess(deps),
+		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), auditAdapter(audit), apiaccess.WithAdminGuard(adminAuth)),
+		apiKeys,
 		withLDAPSync(deps),
 	}
-	return core, features, adminAuth, sessions
+	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB)
 }
 
 // withOIDC builds the provider feature: claim readers from the
@@ -141,7 +152,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature
 // resolution via the identity session feature (optional-auth
 // /authorize), the audit adapter, and the admin guard for client
 // management.
-func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler) federation.Feature {
+func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler, apiAccess *apiaccess.PostgresStore) federation.Feature {
 	issuer := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service := oidc.NewService(
 		oidc.NewPostgresStore(deps.DB),
@@ -150,6 +161,7 @@ func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *s
 		session.CookieName,
 		oidc.WithAudit(federationAuditAdapter(audit)),
 		oidc.WithAuthenticator(sessions),
+		oidc.WithAPIAccess(apiAccess),
 		oidc.WithCookieSecure(deps.Config.App.Mode != "development"),
 	)
 	return oidc.New(service).

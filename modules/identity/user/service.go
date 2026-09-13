@@ -19,6 +19,7 @@ type Service struct {
 	store    Store
 	recorder identity.Recorder
 	guard    RouteGuard
+	apiGuard RouteGuard
 	selfAuth middleware.Authenticator
 	cookie   string
 }
@@ -32,6 +33,13 @@ type ServiceOption func(*Service)
 // routes stay open (tests, isolated tooling).
 func WithAdminGuard(g RouteGuard) ServiceOption {
 	return func(s *Service) { s.guard = g }
+}
+
+// WithAPIKeyGuard adds a second admin route mount accepting the
+// X-API-KEY header, so machine clients reach the same admin surface
+// without a browser session.
+func WithAPIKeyGuard(g RouteGuard) ServiceOption {
+	return func(s *Service) { s.apiGuard = g }
 }
 
 // WithSelfAuth wires the session resolver for the self-service

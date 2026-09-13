@@ -17,7 +17,7 @@ func TestMintTokensDirect(t *testing.T) {
 	createdUser := userFixture(ctx, t, userStore, stamp())
 	client := clientFixture(ctx, t, store, "rp-"+stamp())
 
-	response, err := service.mintTokens(ctx, client, createdUser.String(), "openid email profile groups", "n-1", seedFamily(NewID().String(), "sid-1", "password", time.Now().UTC()))
+	response, err := service.mintTokens(ctx, client, createdUser.String(), "openid email profile groups", "n-1", "", seedFamily(NewID().String(), "sid-1", "password", time.Now().UTC()))
 	if err != nil {
 		t.Fatalf("mintTokens: %v", err)
 	}

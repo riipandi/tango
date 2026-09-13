@@ -19,6 +19,7 @@ import (
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport"
+	tmiddleware "github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/web"
 )
 
@@ -48,6 +49,12 @@ func flagOverrides(host, port string) (map[string]any, error) {
 
 // Run loads config, starts modules, serves until signal.
 // Every failure returns so deferred closes always run.
+// rateLimiter adapts the datastore pool to the transport limiter
+// contract; a nil return degrades to an unthrottled server (tests).
+func rateLimiter(db *datastore.Postgres) func(http.Handler) http.Handler {
+	return tmiddleware.RateLimit(db, tmiddleware.RateClassDefault)
+}
+
 func (s *ServeCmd) Run(cli *CLI) error {
 	overrides, err := flagOverrides(s.Host, s.Port)
 	if err != nil {
@@ -111,11 +118,8 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		return fmt.Errorf("start modules: %w", err)
 	}
 
-	srv := transport.NewHTTPServer(reg, cfg, lg)
+	srv := transport.NewHTTPServer(reg, cfg, lg, rateLimiter(db))
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
-
-	// Serve errors can't return through Run; buffer for after shutdown.
-	// http.ErrServerClosed is the normal path, not an error.
 	serveErr := make(chan error, 1)
 	go func() {
 		lg.Info("listening on http://" + addr)

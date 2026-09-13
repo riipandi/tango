@@ -17,7 +17,7 @@ References:
 | 3     | [phase-03-jwks-wellknown.md](./phase-03-jwks-wellknown.md)       | JWKS provider, discovery endpoints                | done    | 2026-09-13 |
 | 4     | [phase-04-oidc-provider.md](./phase-04-oidc-provider.md)         | Authorize (PKCE), token, userinfo                 | done    | 2026-09-13 |
 | 5     | [phase-05-passkeys-signin.md](./phase-05-passkeys-signin.md)     | WebAuthn, device login, one-time access, signup   | done    | 2026-09-13 |
-| 6     | [phase-06-apikeys-ratelimit.md](./phase-06-apikeys-ratelimit.md) | API keys, resource APIs, rate limiter             | planned | 2026-09-12 |
+| 6     | [phase-06-apikeys-ratelimit.md](./phase-06-apikeys-ratelimit.md) | API keys, resource APIs, rate limiter             | done    | 2026-09-14 |
 | 7     | [phase-07-jobs-webhooks.md](./phase-07-jobs-webhooks.md)         | Antree consumers, webhooks, scheduler             | planned | 2026-09-12 |
 | 8     | [phase-08-sync-storage.md](./phase-08-sync-storage.md)           | LDAP, SCIM, S3 storage, app images                | planned | 2026-09-12 |
 

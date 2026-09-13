@@ -73,6 +73,7 @@ type authorizeParams struct {
 	RedirectURI         string
 	ResponseType        string
 	Scope               string
+	Resource            string
 	State               string
 	Nonce               string
 	CodeChallenge       string
@@ -89,6 +90,7 @@ func parseAuthorizeRequest(r *http.Request) (*authorizeParams, error) {
 		RedirectURI:         query.Get("redirect_uri"),
 		ResponseType:        query.Get("response_type"),
 		Scope:               query.Get("scope"),
+		Resource:            query.Get("resource"),
 		State:               query.Get("state"),
 		Nonce:               query.Get("nonce"),
 		CodeChallenge:       query.Get("code_challenge"),
@@ -185,9 +187,18 @@ func (s *Service) loadInteraction(w http.ResponseWriter, r *http.Request) (Inter
 	return session, nil
 }
 
-// issueCodeRedirect mints the one-time code and redirects back to
-// the relying party with code + state.
+// issueCodeRedirect resolves the RFC 8707 resource (if any), mints
+// the one-time code with the granted scope subset, and redirects
+// back to the relying party with code + state.
 func (s *Service) issueCodeRedirect(w http.ResponseWriter, r *http.Request, client Client, params *authorizeParams, principal middleware.Principal) {
+	audience, granted, errName := s.resolveResource(r.Context(), client.ID.String(), params.Resource, params.Scope, SubjectUser)
+	if errName != "" {
+		s.redirectError(w, r, params, errName)
+		return
+	}
+	params.Resource = audience
+	params.Scope = strings.Join(granted, " ")
+
 	code, err := s.issueCode(r.Context(), client, principal, params.Scope, params)
 	if err != nil {
 		s.redirectError(w, r, params, ErrInvalidRequest)
@@ -223,19 +234,23 @@ func (s *Service) issueCode(ctx context.Context, client Client, principal middle
 
 	// Park the authorize context for the token exchange: redirect
 	// check + sid continuity live here, not on the code row.
+	requestData := map[string]any{
+		"client_id":    client.ID.String(),
+		"subject":      principal.UserID,
+		"redirect_uri": params.RedirectURI,
+		"scope":        scope,
+		"sid":          principal.SessionID,
+	}
+	if params.Resource != "" {
+		requestData["audience"] = params.Resource
+	}
 	if err := s.store.PutSession(ctx, OAuth2Session{
-		Kind:      KindAuthorizeCode,
-		Key:       sum,
-		RequestID: NewID().String(),
-		Active:    true,
-		RequestData: map[string]any{
-			"client_id":    client.ID.String(),
-			"subject":      principal.UserID,
-			"redirect_uri": params.RedirectURI,
-			"scope":        scope,
-			"sid":          principal.SessionID,
-		},
-		ClientID: client.ID.String(),
+		Kind:        KindAuthorizeCode,
+		Key:         sum,
+		RequestID:   NewID().String(),
+		Active:      true,
+		RequestData: requestData,
+		ClientID:    client.ID.String(),
 	}); err != nil {
 		return "", err
 	}
@@ -290,10 +305,15 @@ func buildCallback(redirectURI, code, state string) string {
 // callable with a verified redirect_uri (client + MatchesCallback
 // already checked), which is what keeps this off the open-redirect
 // path.
-func (s *Service) redirectError(w http.ResponseWriter, r *http.Request, params *authorizeParams, cause error) {
+func (s *Service) redirectError(w http.ResponseWriter, r *http.Request, params *authorizeParams, cause any) {
 	errorCode := "invalid_request"
-	if cause == ErrAccessDenied {
-		errorCode = "access_denied"
+	switch c := cause.(type) {
+	case error:
+		if c == ErrAccessDenied {
+			errorCode = "access_denied"
+		}
+	case string:
+		errorCode = c
 	}
 
 	callback, err := url.Parse(params.RedirectURI)

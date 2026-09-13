@@ -89,7 +89,7 @@ func TestAPIRootHandler(t *testing.T) {
 
 func TestStaticAssetsHandler(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger())
+	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger(), nil)
 
 	w := httptest.NewRecorder()
 	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/static/app.js", nil))
