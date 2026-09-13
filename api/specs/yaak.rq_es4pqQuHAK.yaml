@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_es4pqQuHAK
+createdAt: 2026-09-13T05:47:03.867624
+updatedAt: 2026-09-13T05:47:03.867625
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_t3sGoeSaUF
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: List user groups (paginated) — expect 200 + metadata. Bodyless GET.
+headers: []
+method: GET
+name: GET /api/user-groups
+sortPriority: 0.0
+url: http://127.0.0.1:3080/api/user-groups?page=1&limit=10
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

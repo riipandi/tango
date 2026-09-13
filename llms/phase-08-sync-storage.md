@@ -39,6 +39,8 @@ Enterprise directory integration and blob storage parity with Pocket ID.
       changes into identity stores (event → auditlog).
 - [ ] Config keys: `LDAP_*`, `SCIM_*`, `STORAGE_*` verified against `.env.example`.
 - [ ] Tests: sync idempotence (re-run = no-op), SCIM filter minimal support, storage round trip.
+- [ ] Yaak: folders "Application Configuration" (incl. `sync-ldap`, `test-email`),
+      "Application Images", "SCIM", "Storage" — live-tested.
 
 ## Validation
 

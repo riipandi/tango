@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_LHMCsHN2Ec
+createdAt: 2026-09-13T05:46:29.228891
+updatedAt: 2026-09-13T05:46:29.228892
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_t3sGoeSaUF
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Create a user group (admin) — expect 201; duplicate name → 409. Body set separately.
+headers: []
+method: POST
+name: POST /api/user-groups
+sortPriority: 0.0
+url: http://127.0.0.1:3080/api/user-groups
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

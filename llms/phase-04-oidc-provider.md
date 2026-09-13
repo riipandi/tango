@@ -16,14 +16,14 @@ code, exchange it for tokens, and read userinfo.
 ## Deliverables
 
 - `modules/federation/oidc` — real implementation replacing placeholders:
-  - `authorize.go` — `/authorize` (root router): client validation, PKCE (S256 required, plain
-    rejected), consent/interaction hand-off, code issue (one-time, short TTL).
-  - `token.go` — `/api/oidc/token`: code exchange, refresh token rotation with `oauth2_jtis`
-    reuse detection, access tokens signed via Phase 3 KeyProvider.
-  - `userinfo.go` — `/api/oidc/userinfo`: Bearer access token, claims incl. custom claims
-    (Phase 2) and group claims.
-  - `client.go` — OIDC client CRUD: secrets hashed, redirect URI patterns with wildcards
-    (callback-url-wildcards doc), public clients (no secret, PKCE only).
+    - `authorize.go` — `/authorize` (root router): client validation, PKCE (S256 required, plain
+      rejected), consent/interaction hand-off, code issue (one-time, short TTL).
+    - `token.go` — `/api/oidc/token`: code exchange, refresh token rotation with `oauth2_jtis`
+      reuse detection, access tokens signed via Phase 3 KeyProvider.
+    - `userinfo.go` — `/api/oidc/userinfo`: Bearer access token, claims incl. custom claims
+      (Phase 2) and group claims.
+    - `client.go` — OIDC client CRUD: secrets hashed, redirect URI patterns with wildcards
+      (callback-url-wildcards doc), public clients (no secret, PKCE only).
 - `interaction_sessions` flow — minimal consent/interaction state machine for the SPA.
 
 ## Tasks
@@ -40,6 +40,8 @@ code, exchange it for tokens, and read userinfo.
 - [ ] Validate authorize/token inputs via `pkg/validate` (redirect URI shape, PKCE pair, scopes).
 - [ ] End-to-end handler test: discover → authorize (cookie session) → code → token → userinfo,
       against testcontainers Postgres.
+- [ ] Yaak: folders "OIDC" (client CRUD, authorized clients) + "OAuth" (token, userinfo) —
+      live-tested incl. refresh-reuse revocation.
 
 ## Validation
 

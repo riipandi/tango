@@ -3,6 +3,7 @@ package auditlog
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -12,11 +13,17 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// userStoreForAuditTest builds a user store for FK-valid rows.
+func userStoreForAuditTest(ds datastore.Store) *user.PostgresStore {
+	return user.NewPostgresStore(ds)
+}
 
 var fixedTime = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -69,7 +76,7 @@ func TestRecordPersistsEnumsAndPayload(t *testing.T) {
 	}
 	require.NoError(t, store.Record(t.Context(), &entry))
 
-	entries, total, err := store.List(t.Context(), responder.PaginationParams{Page: 1, Limit: 10})
+	entries, total, err := store.List(t.Context(), ListFilters{}, responder.PaginationParams{Page: 1, Limit: 10})
 	require.NoError(t, err)
 	require.Positive(t, total)
 	require.NotEmpty(t, entries)
@@ -162,3 +169,79 @@ func TestModuleContracts(t *testing.T) {
 func TestNewRejectsNilStore(t *testing.T) {
 	require.Panics(t, func() { New(nil) })
 }
+
+func TestAdminGuardProtectsListing(t *testing.T) {
+	mod := New(newTestStore(t))
+	mod.MountAdminAPI(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("X-Admin") == "" {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	reg := kernel.NewRegistry()
+	reg.Register(mod)
+	r := chi.NewRouter()
+	r.Route("/api", reg.ApplyAPI)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/audit-logs", nil))
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	w = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs", nil)
+	req.Header.Set("X-Admin", "1")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Filter values live behind the same guard.
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/audit-logs/filters/users", nil)
+	req.Header.Set("X-Admin", "1")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListFiltersByUserAndEvent(t *testing.T) {
+	ctx := t.Context()
+
+	pg := testutils.StartPostgres(ctx, t)
+	if _, err := database.MigrateUp(ctx, pg.DSN); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+	ds, err := datastore.New(ctx, datastore.Options{DSN: pg.DSN})
+	require.NoError(t, err)
+	t.Cleanup(func() { ds.Close() })
+	store := NewPostgresStore(ds)
+	users := userStoreForAuditTest(ds)
+
+	u, err := users.Create(ctx, user.CreateParams{
+		Username: "audit_" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		Email:    "audit-" + strconv.FormatInt(time.Now().UnixNano(), 10) + "@example.com"})
+	require.NoError(t, err)
+
+	entry := Entry{Event: "user.signed_in", UserID: ptr(u.ID.UUID())}
+	require.NoError(t, store.Record(ctx, &entry))
+	require.NoError(t, store.Record(ctx, &Entry{Event: "user.signed_out"}))
+
+	filtered, total, err := store.List(ctx, ListFilters{Event: "user.signed_in"}, responder.PaginationParams{Page: 1, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, filtered, 1)
+	assert.Equal(t, "user.signed_in", filtered[0].Event)
+	assert.Equal(t, 1, total)
+
+	byUser, _, err := store.List(ctx, ListFilters{UserID: u.ID.UUID()},
+		responder.PaginationParams{Page: 1, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, byUser, 1)
+
+	filterUsers, err := store.UserFilterValues(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, filterUsers)
+	assert.Contains(t, filterUsers[0], u.ID.UUID())
+}
+
+func ptr(s string) *string { return &s }

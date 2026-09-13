@@ -1,16 +1,5 @@
-// Package customclaim injects per-user key/value claims into OIDC
-// tokens; consumed by the oidc package via the federation root's
-// contracts.
+// Package customclaim injects per-user and per-group claims into
+// OIDC tokens. Claim ownership and CRUD live in the identity side
+// (modules/identity/customclaim) — this package only reads them via
+// a consumer-side adapter at token time.
 package customclaim
-
-import "go.jetify.com/typeid"
-
-// Typed IDs for the custom claim tables: UUIDv7 suffix, snake_case
-// prefix matching the singular table name.
-type (
-	customClaimPrefix struct{}
-
-	CustomClaimID = typeid.TypeID[customClaimPrefix]
-)
-
-func (customClaimPrefix) Prefix() string { return "custom_claim" }

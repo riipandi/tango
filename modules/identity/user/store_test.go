@@ -9,6 +9,7 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,8 +130,9 @@ func TestPostgresStoreListNewestFirst(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	users := store.List(ctx)
-	require.GreaterOrEqual(t, len(users), 2)
+	users, total, err := store.List(ctx, ListParams{PaginationParams: responder.PaginationParams{Page: 1, Limit: 10}})
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, total, 2)
 	// The two just-created users are the newest; newest first.
 	assert.Equal(t, second.ID, users[0].ID)
 	assert.Equal(t, first.ID, users[1].ID)

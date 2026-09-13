@@ -153,7 +153,8 @@ func TestGetUserInvalidID(t *testing.T) {
 
 func TestUserMethodNotAllowed(t *testing.T) {
 	r := newTestRouter(t)
-	w := do(r, http.MethodDelete, "/api/users/1", "")
+	// PATCH is not part of the admin surface (PUT is).
+	w := do(r, http.MethodPatch, "/api/users/1", "")
 
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }

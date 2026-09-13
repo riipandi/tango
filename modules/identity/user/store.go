@@ -38,30 +38,51 @@ var userColumns = []string{
 	"email_verified_at", "created_at", "updated_at", "last_login_at",
 }
 
-// List returns every user, newest first. Unreadable rows are
-// skipped; a failed query yields an empty slice.
-func (s *PostgresStore) List(ctx context.Context) []User {
+// List returns matching users newest first plus the total count.
+// Query matches username, email, or display name (case-insensitive).
+func (s *PostgresStore) List(ctx context.Context, params ListParams) ([]User, int, error) {
+	csb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	csb.Select("count(*)")
+	csb.From(usersTable)
+	if params.Query != "" {
+		pattern := "%" + params.Query + "%"
+		csb.Where(csb.Or(csb.Like("username", pattern), csb.Like("email", pattern), csb.Like("display_name", pattern)))
+	}
+
+	countQuery, countArgs := csb.Build()
+	var total int
+	if err := s.exec.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("user store: count: %w", err)
+	}
+
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select(userColumns...)
 	sb.From(usersTable)
+	if params.Query != "" {
+		pattern := "%" + params.Query + "%"
+		sb.Where(sb.Or(sb.Like("username", pattern), sb.Like("email", pattern), sb.Like("display_name", pattern)))
+	}
 	sb.OrderBy("created_at DESC", "id DESC")
+	if !params.All() && params.Limit > 0 {
+		sb.Limit(params.Limit).Offset(params.Offset())
+	}
 
 	query, args := sb.Build()
 	rows, err := s.exec.Query(ctx, query, args...)
 	if err != nil {
-		return []User{}
+		return nil, 0, fmt.Errorf("user store: list: %w", err)
 	}
 	defer rows.Close()
 
 	users := []User{}
 	for rows.Next() {
-		user, scanErr := scanUser(rows)
+		u, scanErr := scanUser(rows)
 		if scanErr != nil {
 			continue
 		}
-		users = append(users, user)
+		users = append(users, u)
 	}
-	return users
+	return users, total, rows.Err()
 }
 
 // Create inserts a user and returns the stored row. Optional names
@@ -128,6 +149,76 @@ func (s *PostgresStore) GetByID(ctx context.Context, id UserID) (User, error) {
 		return User{}, err
 	}
 	return user, nil
+}
+
+// UpdateAdmin patches administrative fields (email, names, flags)
+// and returns the fresh row.
+func (s *PostgresStore) UpdateAdmin(ctx context.Context, id UserID, params AdminUpdateParams) (User, error) {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+
+	var assignments []string
+	apply := func(column string, value any) {
+		assignments = append(assignments, ub.Assign(column, value))
+	}
+	if params.Email != nil {
+		apply("email", *params.Email)
+	}
+	if params.FirstName != nil {
+		apply("first_name", textOrNull(*params.FirstName))
+	}
+	if params.LastName != nil {
+		apply("last_name", textOrNull(*params.LastName))
+	}
+	if params.DisplayName != nil {
+		apply("display_name", *params.DisplayName)
+	}
+	if params.IsAdmin != nil {
+		apply("is_admin", *params.IsAdmin)
+	}
+	if params.Disabled != nil {
+		apply("disabled", *params.Disabled)
+	}
+
+	if len(assignments) == 0 {
+		return s.GetByID(ctx, id)
+	}
+
+	ub.Update(usersTable)
+	ub.Set(assignments...)
+	ub.Where(ub.E("id", id.UUIDBytes()))
+	ub.Returning(userColumns...)
+
+	query, args := ub.Build()
+	u, err := scanUser(s.exec.QueryRow(ctx, query, args...))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return User{}, ErrNotFound
+		}
+		return User{}, err
+	}
+	return u, nil
+}
+
+// Delete removes the user row; the database fn_soft_delete trigger
+// archives the row into public.deleted_records. Unknown IDs surface
+// ErrNotFound.
+func (s *PostgresStore) Delete(ctx context.Context, id UserID) error {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(usersTable)
+	db.Where(db.E("id", id.UUIDBytes()))
+
+	query, args := db.Build()
+	tag, err := s.exec.Exec(ctx, query, args...)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("user store: delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // UpdateProfile patches profile columns and returns the fresh row.

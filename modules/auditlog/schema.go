@@ -58,11 +58,22 @@ type Entry struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Store abstracts audit persistence: memory for tests, Postgres for
-// production. Record assigns Entry.ID (and CreatedAt when zero) on
+// ListFilters narrows the listing. UserID is a raw UUID string
+// (columns stay decoupled from other domains' typed IDs).
+type ListFilters struct {
+	UserID string
+	Event  string
+	From   *time.Time
+	To     *time.Time
+}
+
+// Store abstracts audit persistence: Postgres for production, no
+// memory store. Record assigns Entry.ID (and CreatedAt when zero) on
 // the pointed-to entry. List returns the matching entries (newest
 // first) plus the total row count.
 type Store interface {
 	Record(ctx context.Context, entry *Entry) error
-	List(ctx context.Context, params responder.PaginationParams) ([]Entry, int, error)
+	List(ctx context.Context, filters ListFilters, params responder.PaginationParams) ([]Entry, int, error)
+	UserFilterValues(ctx context.Context) ([]string, error)
+	ClientNameFilterValues(ctx context.Context) ([]string, error)
 }

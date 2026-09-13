@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_H9jvVtHSdC
+createdAt: 2026-09-13T05:47:26.823969
+updatedAt: 2026-09-13T05:47:26.823969
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_7wm4R7MYfg
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Audit log listing (admin) with pagination + event filter
+headers: []
+method: GET
+name: GET /api/audit-logs
+sortPriority: 0.0
+url: http://127.0.0.1:3080/api/audit-logs?page=1&limit=5
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

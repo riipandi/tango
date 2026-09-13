@@ -79,12 +79,13 @@ func (s *PostgresStore) Record(ctx context.Context, entry *Entry) error {
 	return nil
 }
 
-// List returns entries newest first plus the total count. All-page
-// params (-1) skip LIMIT/OFFSET.
-func (s *PostgresStore) List(ctx context.Context, params responder.PaginationParams) ([]Entry, int, error) {
+// List returns matching entries newest first plus the total count.
+// All-page params (-1) skip LIMIT/OFFSET.
+func (s *PostgresStore) List(ctx context.Context, filters ListFilters, params responder.PaginationParams) ([]Entry, int, error) {
 	csb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	csb.Select("count(*)")
 	csb.From("public.audit_logs")
+	applyFilters(csb, filters)
 
 	countQuery, countArgs := csb.Build()
 	var total int
@@ -95,6 +96,7 @@ func (s *PostgresStore) List(ctx context.Context, params responder.PaginationPar
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select(entryColumns...)
 	sb.From("public.audit_logs")
+	applyFilters(sb, filters)
 	sb.OrderBy("created_at DESC", "id DESC")
 	if !params.All() && params.Limit > 0 {
 		sb.Limit(params.Limit).Offset(params.Offset())
@@ -116,6 +118,76 @@ func (s *PostgresStore) List(ctx context.Context, params responder.PaginationPar
 		entries = append(entries, entry)
 	}
 	return entries, total, nil
+}
+
+// UserFilterValues lists distinct users appearing in the log as
+// "id:username" pairs joined from users.
+func (s *PostgresStore) UserFilterValues(ctx context.Context) ([]string, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("DISTINCT l.user_id, u.username")
+	sb.From("public.audit_logs l")
+	sb.Join("public.users u ON u.id = l.user_id")
+	sb.OrderBy("u.username")
+
+	query, args := sb.Build()
+	rows, err := s.exec.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("auditlog store: user filters: %w", err)
+	}
+	defer rows.Close()
+
+	out := []string{}
+	for rows.Next() {
+		var id, username string
+		if scanErr := rows.Scan(&id, &username); scanErr != nil {
+			continue
+		}
+		out = append(out, id+":"+username)
+	}
+	return out, rows.Err()
+}
+
+// ClientNameFilterValues lists distinct client names recorded in
+// payloads (oidc clients carry client_name).
+func (s *PostgresStore) ClientNameFilterValues(ctx context.Context) ([]string, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("DISTINCT payload->>'client_name'")
+	sb.From("public.audit_logs")
+	sb.Where(sb.IsNotNull("payload->>'client_name'"))
+	sb.OrderBy("payload->>'client_name'")
+
+	query, args := sb.Build()
+	rows, err := s.exec.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("auditlog store: client name filters: %w", err)
+	}
+	defer rows.Close()
+
+	out := []string{}
+	for rows.Next() {
+		var name string
+		if scanErr := rows.Scan(&name); scanErr != nil || name == "" {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
+// applyFilters composes the shared WHERE clauses.
+func applyFilters(sb *sqlbuilder.SelectBuilder, filters ListFilters) {
+	if filters.UserID != "" {
+		sb.Where(sb.E("user_id", filters.UserID))
+	}
+	if filters.Event != "" {
+		sb.Where(sb.E("event", filters.Event))
+	}
+	if filters.From != nil {
+		sb.Where(sb.GE("created_at", *filters.From))
+	}
+	if filters.To != nil {
+		sb.Where(sb.LE("created_at", *filters.To))
+	}
 }
 
 // scanner covers pgx.Rows and pgx.Row.

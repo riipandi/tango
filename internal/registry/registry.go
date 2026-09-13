@@ -82,7 +82,8 @@ func New(deps Deps) *kernel.Registry {
 	reg.Register(audit)
 
 	// Internal authn/authz: user core + selected auth features.
-	core, identityFeatures := newIdentityFeatures(deps, audit)
+	core, identityFeatures, adminGuard := newIdentityFeatures(deps, audit)
+	audit.MountAdminAPI(adminGuard)
 	reg.Register(identity.New(core, identityFeatures...))
 
 	// Identity provider (OIDC, SCIM, discovery) — optional surface

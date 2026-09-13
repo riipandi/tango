@@ -30,9 +30,10 @@ RSA/EC keys generated, rotated, and served as a JWKS; OIDC discovery document se
 - [ ] `jwks` store — insert, list active, mark retired; encryption of `private_key` column.
 - [ ] Rotation: new key becomes signing key, previous stays in JWKS until `overlap` passes
       (antree delayed task or lazy check on load).
-- [ ] `modules/wellknown/handler.go` — discovery document from config (`PUBLIC_BASE_URL` issuer)
-      + JWKS endpoint; module re-registered in `internal/registry`.
-- [ ] Tests: keygen determinism of `kid`, rotation overlap, JWKS shape; discovery snapshot test.
+- [ ] `modules/wellknown/handler.go` — discovery document from config (`PUBLIC_BASE_URL` issuer) + JWKS endpoint; module re-registered in `internal/registry`.
+- [x] Tests: keygen determinism of `kid`, rotation overlap, JWKS shape; discovery snapshot test.
+- [ ] Yaak: folder "Well Known" — `GET /.well-known/openid-configuration`,
+      `GET /.well-known/jwks.json` live-tested.
 
 ## Validation
 

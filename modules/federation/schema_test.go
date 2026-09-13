@@ -7,7 +7,6 @@ import (
 
 	"go.jetify.com/typeid"
 
-	"github.com/riipandi/tango/modules/federation/customclaim"
 	"github.com/riipandi/tango/modules/federation/jwks"
 	"github.com/riipandi/tango/modules/federation/oidc"
 	"github.com/riipandi/tango/modules/federation/scimsync"
@@ -23,7 +22,6 @@ func TestEveryPrefixIsLowercaseSnakeCase(t *testing.T) {
 		typeid.Must(typeid.New[oidc.OAuth2SessionID]()),
 		typeid.Must(typeid.New[oidc.OAuth2JTIID]()),
 		typeid.Must(typeid.New[oidc.InteractionSessionID]()),
-		typeid.Must(typeid.New[customclaim.CustomClaimID]()),
 		typeid.Must(typeid.New[scimsync.SCIMServiceProviderID]()),
 	} {
 		prefix := id.Prefix()

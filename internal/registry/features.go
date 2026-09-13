@@ -10,10 +10,12 @@ import (
 	"github.com/riipandi/tango/modules/identity/account"
 	"github.com/riipandi/tango/modules/identity/apiaccess"
 	"github.com/riipandi/tango/modules/identity/apikey"
+	"github.com/riipandi/tango/modules/identity/customclaim"
 	"github.com/riipandi/tango/modules/identity/ldapsync"
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/modules/identity/usergroup"
 	"github.com/riipandi/tango/modules/identity/webauthn"
 	"github.com/riipandi/tango/pkg/crypto"
 
@@ -36,7 +38,7 @@ func withLDAPSync(deps Deps) identity.Feature  { return ldapsync.New() }
 // Password verifies credentials headlessly; session owns the
 // sign-in/sign-out routes; account mounts self-service under the
 // same guard.
-func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature, []identity.Feature) {
+func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, auditAdapter(audit))
@@ -64,12 +66,14 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature
 		account.NewService(user.NewPostgresStore(deps.DB), passwords, sessions, auditAdapter(audit)),
 		passwords,
 		sessions,
+		usergroup.NewService(usergroup.NewPostgresStore(deps.DB), auditAdapter(audit), usergroup.WithAdminGuard(adminAuth)),
+		customclaim.NewService(customclaim.NewPostgresStore(deps.DB), auditAdapter(audit), customclaim.WithAdminGuard(adminAuth)),
 		withWebAuthn(deps),
 		withAPIKeys(deps),
 		withAPIAccess(deps),
 		withLDAPSync(deps),
 	}
-	return core, features
+	return core, features, adminAuth
 }
 
 // Identity-provider feature selectors, one line each in

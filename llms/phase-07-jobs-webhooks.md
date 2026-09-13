@@ -34,6 +34,8 @@ webhooks with signed payloads; recurring jobs have a home.
       backoff retry via queue, log per attempt.
 - [ ] Webhook endpoint DTOs validated via `pkg/validate`.
 - [ ] Tests: signing vectors, outbox-to-delivery flow on testcontainers, retry on failure.
+- [ ] Yaak: folder "Tango Extensions (webhooks)" — endpoint CRUD + delivery test against a local
+      receiver; not part of the upstream spec.
 
 ## Validation
 

@@ -8,7 +8,7 @@ tango foundation. Reference: <https://pocket-id.org/docs/api>
 | Phase | File                                                             | Scope                                             | Status  | Updated    |
 | ----- | ---------------------------------------------------------------- | ------------------------------------------------- | ------- | ---------- |
 | 1     | [phase-01-auth-core.md](./phase-01-auth-core.md)                 | Auth middleware, session, password, account       | done    | 2026-09-12 |
-| 2     | [phase-02-identity-admin.md](./phase-02-identity-admin.md)       | User groups, custom claims, audit API, admin CRUD | planned | 2026-09-12 |
+| 2     | [phase-02-identity-admin.md](./phase-02-identity-admin.md)       | User groups, custom claims, audit API, admin CRUD | done    | 2026-09-12 |
 | 3     | [phase-03-jwks-wellknown.md](./phase-03-jwks-wellknown.md)       | JWKS provider, discovery endpoints                | planned | 2026-09-12 |
 | 4     | [phase-04-oidc-provider.md](./phase-04-oidc-provider.md)         | Authorize (PKCE), token, userinfo                 | planned | 2026-09-12 |
 | 5     | [phase-05-passkeys-signin.md](./phase-05-passkeys-signin.md)     | WebAuthn, device login, one-time access, signup   | planned | 2026-09-12 |
@@ -89,24 +89,24 @@ ticked after its Yaak check passes.
 Organization mirrors the upstream spec (<https://pocket-id.org/docs/api>, source
 `https://pocket-id.org/swagger.yaml`) — one Yaak folder per upstream tag:
 
-| Yaak folder (upstream tag) | Phase | Coverage |
-| -------------------------- | ----- | -------- |
-| Users | 1, 2, 5 | `/api/users*`, profile, webauthn-credentials, one-time access, email verification, signup |
-| User Groups | 2 | `/api/user-groups*` |
-| Custom Claims | 2 | `/api/custom-claims*` |
-| Audit Logs | 2 | `/api/audit-logs*` |
-| Well Known | 3 | `/.well-known/jwks.json`, `/.well-known/openid-configuration` |
-| OIDC | 4 | `/api/oidc/clients*`, introspect, end-session, authorized clients |
-| OAuth | 4 | `/api/oidc/token`, `/api/oidc/userinfo` |
-| API Keys | 6 | `/api/api-keys*` |
-| APIs | 6 | `/api/apis*`, `/api/api-access*` |
-| Device Login | 5 | `/api/device-login*` |
-| Application Configuration | 8 | `/api/application-configuration*` (incl. `sync-ldap`, `test-email`) |
-| Application Images | 8 | `/api/application-images*` |
-| SCIM | 8 | `/api/scim/service-provider*` |
-| Version | 1 (done) | `/api/version/*`, `/healthz` |
-| Storage | 8 | `/api/storage/*` |
-| Tango Extensions (auth) | 1 (done) | Not in upstream spec: `POST /api/auth/sign-in`, `POST /api/auth/sign-out`, `GET /api/auth/session` |
+| Yaak folder (upstream tag) | Phase    | Coverage                                                                                           |
+| -------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| Users                      | 1, 2, 5  | `/api/users*`, profile, webauthn-credentials, one-time access, email verification, signup          |
+| User Groups                | 2        | `/api/user-groups*`                                                                                |
+| Custom Claims              | 2        | `/api/custom-claims*`                                                                              |
+| Audit Logs                 | 2        | `/api/audit-logs*`                                                                                 |
+| Well Known                 | 3        | `/.well-known/jwks.json`, `/.well-known/openid-configuration`                                      |
+| OIDC                       | 4        | `/api/oidc/clients*`, introspect, end-session, authorized clients                                  |
+| OAuth                      | 4        | `/api/oidc/token`, `/api/oidc/userinfo`                                                            |
+| API Keys                   | 6        | `/api/api-keys*`                                                                                   |
+| APIs                       | 6        | `/api/apis*`, `/api/api-access*`                                                                   |
+| Device Login               | 5        | `/api/device-login*`                                                                               |
+| Application Configuration  | 8        | `/api/application-configuration*` (incl. `sync-ldap`, `test-email`)                                |
+| Application Images         | 8        | `/api/application-images*`                                                                         |
+| SCIM                       | 8        | `/api/scim/service-provider*`                                                                      |
+| Version                    | 1 (done) | `/api/version/*`, `/healthz`                                                                       |
+| Storage                    | 8        | `/api/storage/*`                                                                                   |
+| Tango Extensions (auth)    | 1 (done) | Not in upstream spec: `POST /api/auth/sign-in`, `POST /api/auth/sign-out`, `GET /api/auth/session` |
 
 Request naming: `<METHOD> <path>` (e.g. `GET /api/users/{id}`). Session cookies flow through
 Yaak's cookie jar; for anonymous-401 checks use curl (the jar re-sends cookies).

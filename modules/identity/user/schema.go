@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"go.jetify.com/typeid"
+
+	"github.com/riipandi/tango/pkg/responder"
 )
 
 // usersTable is the table backing the User entity.
@@ -53,15 +55,35 @@ type User struct {
 	LastLoginAt     *time.Time `json:"last_login_at,omitzero"`
 }
 
+// ListParams narrows and pages the admin listing.
+type ListParams struct {
+	Query string // matches username, email, display name (ILIKE)
+	// PaginationParams pages the result set.
+	responder.PaginationParams
+}
+
 // Store abstracts user persistence: the memory store backs tests,
 // the Postgres store backs production. Implementations assign IDs
 // and timestamps.
 type Store interface {
-	List(ctx context.Context) []User
+	List(ctx context.Context, params ListParams) ([]User, int, error)
 	Create(ctx context.Context, params CreateParams) (User, error)
 	GetByID(ctx context.Context, id UserID) (User, error)
+	UpdateAdmin(ctx context.Context, id UserID, params AdminUpdateParams) (User, error)
 	UpdateProfile(ctx context.Context, id UserID, params UpdateProfileParams) (User, error)
 	MarkLogin(ctx context.Context, id UserID) error
+	Delete(ctx context.Context, id UserID) error
+}
+
+// AdminUpdateParams patches administrative fields. Nil pointers keep
+// the current value.
+type AdminUpdateParams struct {
+	Email       *string
+	FirstName   *string
+	LastName    *string
+	DisplayName *string
+	IsAdmin     *bool
+	Disabled    *bool
 }
 
 // UpdateProfileParams patches the profile fields. Nil pointers keep
@@ -87,8 +109,9 @@ var (
 	ErrInvalidEmail = errors.New("email is not a valid address")
 )
 
-// usernamePattern mirrors the database CHECK constraint.
-var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_]{3,32}$`)
+// UsernamePattern mirrors the database CHECK constraint; admin DTOs
+// reuse it for validation.
+var UsernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_]{3,32}$`)
 
 // emailPattern mirrors the database CHECK constraint.
 var emailPattern = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
@@ -114,7 +137,7 @@ func (p CreateParams) Validate() (displayName string, err error) {
 	p.FirstName = strings.TrimSpace(p.FirstName)
 	p.LastName = strings.TrimSpace(p.LastName)
 
-	if !usernamePattern.MatchString(p.Username) {
+	if !UsernamePattern.MatchString(p.Username) {
 		return "", ErrInvalidUsername
 	}
 	if !emailPattern.MatchString(p.Email) {

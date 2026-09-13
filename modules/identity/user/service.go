@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/riipandi/tango/modules/identity"
 )
@@ -43,9 +44,10 @@ func NewService(store Store, recorder identity.Recorder, opts ...ServiceOption) 
 // Name implements identity.Feature.
 func (s *Service) Name() string { return "user" }
 
-// List returns all users, newest first.
-func (s *Service) List(ctx context.Context) []User {
-	return s.store.List(ctx)
+// List returns matching users, newest first, with pagination
+// metadata support.
+func (s *Service) List(ctx context.Context, params ListParams) ([]User, int, error) {
+	return s.store.List(ctx, params)
 }
 
 // GetByID resolves one user; unknown IDs surface ErrNotFound.
@@ -71,4 +73,36 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (User, error)
 		s.recorder(ctx, identity.AuditEvent{Action: "user.created", Actor: user.ID.String(), Target: user.ID.String()})
 	}
 	return user, nil
+}
+
+// Update patches administrative fields and records the change.
+func (s *Service) Update(ctx context.Context, id UserID, params AdminUpdateParams) (User, error) {
+	if params.Email != nil {
+		trimmed := strings.TrimSpace(*params.Email)
+		if !emailPattern.MatchString(trimmed) {
+			return User{}, ErrInvalidEmail
+		}
+		params.Email = &trimmed
+	}
+
+	u, err := s.store.UpdateAdmin(ctx, id, params)
+	if err != nil {
+		return User{}, err
+	}
+	if s.recorder != nil {
+		s.recorder(ctx, identity.AuditEvent{Action: "user.updated", Actor: u.ID.String(), Target: u.ID.String()})
+	}
+	return u, nil
+}
+
+// Delete removes the account (the DB trigger archives it) and
+// records the event.
+func (s *Service) Delete(ctx context.Context, id UserID) error {
+	if err := s.store.Delete(ctx, id); err != nil {
+		return err
+	}
+	if s.recorder != nil {
+		s.recorder(ctx, identity.AuditEvent{Action: "user.deleted", Actor: id.String(), Target: id.String()})
+	}
+	return nil
 }

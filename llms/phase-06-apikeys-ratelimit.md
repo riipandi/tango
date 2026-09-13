@@ -36,6 +36,8 @@ pairs for resource APIs; abusive clients get throttled.
 - [ ] Wire limiter into `/api` group + auth endpoints (tighter class).
 - [ ] Tests: key verification, scope denial, limiter windows on the shared container (limit-based
       assertions, per-test cleanup).
+- [ ] Yaak: folders "API Keys" (CRUD, renew) + "APIs" (resources, permissions, grants) —
+      live-tested with `X-API-KEY`.
 
 ## Validation
 

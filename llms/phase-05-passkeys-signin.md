@@ -40,6 +40,8 @@ signup.
 - [ ] Request bodies (device code, OTP, signup) validated via `pkg/validate`.
 - [ ] Tests per ceremony against testcontainers; WebAuthn ceremony unit tests with fixed challenge
       inputs.
+- [ ] Yaak: folders "Device Login" + "Users" additions (webauthn-credentials, one-time access,
+      signup, verify-email) — live-tested per ceremony.
 
 ## Validation
 
