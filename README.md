@@ -52,6 +52,20 @@ Go files are watched and auto-rebuilt.
 | `task test`       | Run tests (frontend and backend)                |
 | `task lint`       | Run all linters (Go + JS)                       |
 
+### Generate Certificates
+
+```sh
+# Generate local development certificates
+mkdir -p storage/certs && mkcert
+  -key-file storage/certs/localhost_key.pem \
+  -cert-file storage/certs/localhost_crt.pem \
+  localhost 127.0.0.1 ::1 host.docker.internal \
+  "*.localhost.test"
+
+# Install the local CA in the system trust store.
+mkcert -install
+```
+
 ## 🏗 Architecture
 
 A modular monolith: one binary, features are self-contained modules.

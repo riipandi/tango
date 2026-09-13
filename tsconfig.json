@@ -30,7 +30,10 @@
         "types": ["vite/client", "vitest/config"],
         "useDefineForClassFields": true,
         "verbatimModuleSyntax": true,
-        "paths": { "#/*": ["./app/*"] }
+        "paths": {
+            "#/*": ["./app/*"],
+            "~/apiclient/*": ["./api/client/*"]
+        }
     },
     "include": ["**/*.ts", "**/*.tsx"],
     "exclude": [".output", ".tanstack", "build", "dist", "public", "temp", "web"]

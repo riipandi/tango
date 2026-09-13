@@ -35,7 +35,6 @@ services:
     <<: *common
     # image: dhi.io/postgres:${PGSQL_VERSION:-18} # production
     # image: dhi.io/postgres:${PGSQL_VERSION:-18-debian13-dev}
-    # image: docker.io/cleanstart/postgres:${PGSQL_VERSION:-18.1}
     image: docker.io/postgres:${PGSQL_VERSION:-18-alpine}
     hostname: postgres
     ports: ["5432:5432"]
@@ -142,7 +141,8 @@ services:
     <<: *common
     image: docker.io/nginx:${NGINX_VERSION:-mainline-alpine-slim}
     hostname: nginx
-    ports: ["9180:9180"]
+    ports: ["9180:9180", "3443:3443"]
+    volumes: ["./storage/certs:/etc/nginx/certs:ro"]
     configs: [{ source: nginx_config, target: /etc/nginx/templates/default.conf.template }]
     security_opt: ["no-new-privileges:true"]
     shm_size: 128m # set shared memory limit
@@ -177,6 +177,36 @@ configs:
           proxy_send_timeout 300;
           proxy_read_timeout 300;
           send_timeout 300;
+        }
+      }
+      server {
+        listen 3443 ssl;
+        server_name localhost;
+        ssl_certificate /etc/nginx/certs/localhost_crt.pem;
+        ssl_certificate_key /etc/nginx/certs/localhost_key.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Access-Control-Allow-Origin * always;
+        add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, HEAD, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization" always;
+        add_header Access-Control-Expose-Headers "Content-Length,Content-Range,ETag" always;
+        location / {
+          proxy_pass http://host.docker.internal:3080;
+          proxy_http_version 1.1;
+          proxy_set_header Connection "";
+          proxy_buffering off;
+          proxy_redirect off;
+          proxy_connect_timeout 300;
+          proxy_send_timeout 300;
+          proxy_read_timeout 300;
+          send_timeout 300;
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_set_header X-Forwarded-Ssl on;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
         }
       }
 
