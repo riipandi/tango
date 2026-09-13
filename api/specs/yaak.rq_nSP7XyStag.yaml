@@ -1,21 +1,20 @@
 type: http_request
 model: http_request
-id: rq_8bhwyqijeA
-createdAt: 2026-09-12T06:54:01.871712
-updatedAt: 2026-09-13T08:10:19.493521
+id: rq_nSP7XyStag
+createdAt: 2026-09-13T08:48:44.907010
+updatedAt: 2026-09-13T08:48:44.907010
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
 authenticationType: null
-body:
-  text: '{"identity":"admin","secret":"Admin123!"}'
-bodyType: application/json
-description: Sign in as seeded admin; sets the tango_session cookie
+body: {}
+bodyType: null
+description: "Upstream-parity alias of /api/account (phase 1-4 completion). PUT body: display_name/first_name/last_name/locale."
 headers: []
-method: POST
-name: Sign In
+method: GET
+name: GET /api/users/me
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/auth/sign-in
+url: http://localhost:3080/api/users/me
 urlParameters: []
 settingSendCookies:
   enabled: false

@@ -17,35 +17,19 @@ import (
 	"time"
 
 	"go.jetify.com/typeid"
+
+	"github.com/riipandi/tango/internal/transport/middleware"
 )
 
 // Typed IDs for the OIDC/OAuth 2.0 tables: UUIDv7 suffix, snake_case
 // prefix matching the singular table name (lowercase letters and
-// underscores only, per the TypeID spec).
+// underscores only, per the TypeID spec). Only IDs that appear in
+// URLs or cross-module references carry a TypeID — token/code rows
+// are addressed by their SHA-256 key and keep their DB uuidv7 IDs.
 type (
 	oidcClientPrefix struct{}
 
 	OIDCClientID = typeid.TypeID[oidcClientPrefix]
-
-	authorizationCodePrefix struct{}
-
-	AuthorizationCodeID = typeid.TypeID[authorizationCodePrefix]
-
-	oidcRefreshTokenPrefix struct{}
-
-	OIDCRefreshTokenID = typeid.TypeID[oidcRefreshTokenPrefix]
-
-	deviceCodePrefix struct{}
-
-	DeviceCodeID = typeid.TypeID[deviceCodePrefix]
-
-	oauthSessionPrefix struct{}
-
-	OAuth2SessionID = typeid.TypeID[oauthSessionPrefix]
-
-	oauthJtiPrefix struct{}
-
-	OAuth2JTIID = typeid.TypeID[oauthJtiPrefix]
 
 	interactionSessionPrefix struct{}
 
@@ -53,11 +37,6 @@ type (
 )
 
 func (oidcClientPrefix) Prefix() string         { return "oidc_client" }
-func (authorizationCodePrefix) Prefix() string  { return "authorization_code" }
-func (oidcRefreshTokenPrefix) Prefix() string   { return "oidc_refresh_token" }
-func (deviceCodePrefix) Prefix() string         { return "device_code" }
-func (oauthSessionPrefix) Prefix() string       { return "oauth_session" }
-func (oauthJtiPrefix) Prefix() string           { return "oauth_jti" }
 func (interactionSessionPrefix) Prefix() string { return "interaction_session" }
 
 // NewID mints a client ID; its string form is the clients.id TEXT
@@ -107,11 +86,13 @@ const (
 
 // Feature is the wireable oidc unit backed by the provider service.
 // The admin guard (auth → RequireAdmin) applies to client
-// management at mount time (handler.go); without a guard those
-// routes fail closed in requireAdmin.
+// management at mount time (handler.go); the self authenticator
+// gates the users/me surfaces. Both fail closed when absent.
 type Feature struct {
 	service    *Service
 	adminGuard func(http.Handler) http.Handler
+	selfAuth   middleware.Authenticator
+	cookieName string
 }
 
 // New wires the feature to its service.
@@ -123,6 +104,12 @@ func (Feature) Name() string { return "oidc" }
 // WithAdminGuard registers the admin guard for client management.
 func (f Feature) WithAdminGuard(guard func(http.Handler) http.Handler) Feature {
 	f.adminGuard = guard
+	return f
+}
+
+// WithSelfAuth registers the session resolver for users/me surfaces.
+func (f Feature) WithSelfAuth(auth middleware.Authenticator, cookieName string) Feature {
+	f.selfAuth, f.cookieName = auth, cookieName
 	return f
 }
 

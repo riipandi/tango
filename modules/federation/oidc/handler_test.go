@@ -39,9 +39,11 @@ func (f *fakeAuthenticator) ResolveSession(_ context.Context, token string) (mid
 // guard mounted for client management.
 func newRouter(t *testing.T, service *Service, auth *fakeAuthenticator) chi.Router {
 	t.Helper()
-	feature := New(service).WithAdminGuard(func(next http.Handler) http.Handler {
-		return middleware.RequireAuth(auth, "tango_session")(middleware.RequireAdmin(next))
-	})
+	feature := New(service).
+		WithAdminGuard(func(next http.Handler) http.Handler {
+			return middleware.RequireAuth(auth, "tango_session")(middleware.RequireAdmin(next))
+		}).
+		WithSelfAuth(auth, "tango_session")
 
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {

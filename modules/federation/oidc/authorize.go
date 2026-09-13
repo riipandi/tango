@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"net/http"
 	"net/url"
 	"strings"
@@ -349,4 +350,11 @@ func randomToken() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// randomHex returns n random bytes as lowercase hex.
+func randomHex(n int) string {
+	buf := make([]byte, n)
+	_, _ = rand.Read(buf) // crypto/rand never fails per contract
+	return hex.EncodeToString(buf)
 }

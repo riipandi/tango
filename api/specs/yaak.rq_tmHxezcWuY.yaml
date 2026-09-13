@@ -1,21 +1,20 @@
 type: http_request
 model: http_request
-id: rq_8bhwyqijeA
-createdAt: 2026-09-12T06:54:01.871712
-updatedAt: 2026-09-13T08:10:19.493521
+id: rq_tmHxezcWuY
+createdAt: 2026-09-13T08:47:56.195463
+updatedAt: 2026-09-13T08:47:56.195464
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_GfrmzYcuVx
 authentication: {}
 authenticationType: null
-body:
-  text: '{"identity":"admin","secret":"Admin123!"}'
-bodyType: application/json
-description: Sign in as seeded admin; sets the tango_session cookie
+body: {}
+bodyType: null
+description: ""
 headers: []
 method: POST
-name: Sign In
+name: POST /api/oidc/introspect
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/auth/sign-in
+url: http://localhost:3080/api/oidc/introspect
 urlParameters: []
 settingSendCookies:
   enabled: false

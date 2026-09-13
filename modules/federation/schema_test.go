@@ -16,11 +16,6 @@ func TestEveryPrefixIsLowercaseSnakeCase(t *testing.T) {
 	for _, id := range []interface{ Prefix() string }{
 		typeid.Must(typeid.New[jwks.JWKID]()),
 		typeid.Must(typeid.New[oidc.OIDCClientID]()),
-		typeid.Must(typeid.New[oidc.AuthorizationCodeID]()),
-		typeid.Must(typeid.New[oidc.OIDCRefreshTokenID]()),
-		typeid.Must(typeid.New[oidc.DeviceCodeID]()),
-		typeid.Must(typeid.New[oidc.OAuth2SessionID]()),
-		typeid.Must(typeid.New[oidc.OAuth2JTIID]()),
 		typeid.Must(typeid.New[oidc.InteractionSessionID]()),
 		typeid.Must(typeid.New[scimsync.SCIMServiceProviderID]()),
 	} {

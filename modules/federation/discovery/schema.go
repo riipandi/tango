@@ -17,6 +17,9 @@ import (
 const (
 	JWKSPath   = "/.well-known/jwks.json"
 	ConfigPath = "/.well-known/openid-configuration"
+	// OAuthServerPath is the RFC 8414 authorization-server metadata
+	// mirror of the OIDC discovery document.
+	OAuthServerPath = "/.well-known/oauth-authorization-server"
 
 	jwksCacheControl = "public, max-age=300, must-revalidate"
 )
@@ -54,6 +57,7 @@ func (Feature) Name() string { return "discovery" }
 func (f Feature) Routes(r chi.Router) {
 	r.Get(JWKSPath, f.jwks)
 	r.Get(ConfigPath, f.openIDConfiguration)
+	r.Get(OAuthServerPath, f.oauthServerMetadata)
 }
 
 // jwks publishes the public halves of every currently published
@@ -73,5 +77,11 @@ func (f Feature) jwks(w http.ResponseWriter, r *http.Request) {
 
 // openIDConfiguration serves the OIDC discovery document.
 func (f Feature) openIDConfiguration(w http.ResponseWriter, r *http.Request) {
+	responder.WriteJSON(w, http.StatusOK, newDiscoveryDocument(f.issuer))
+}
+
+// oauthServerMetadata serves the RFC 8414 authorization-server
+// metadata — the same capability set under the OAuth 2.0 name.
+func (f Feature) oauthServerMetadata(w http.ResponseWriter, r *http.Request) {
 	responder.WriteJSON(w, http.StatusOK, newDiscoveryDocument(f.issuer))
 }

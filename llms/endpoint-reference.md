@@ -6,16 +6,16 @@ request checklist: one request per row, named `<METHOD> <path>`. The Gap Registe
 
 ## API Keys
 
-| Method | Endpoint                   | Summary / Yaak Title |
-| ------ | -------------------------- | -------------------- |
-| GET    | `/api/api-keys`            | List API keys        |
-| POST   | `/api/api-keys`            | Create API key       |
-| DELETE | `/api/api-keys/{id}`       | Revoke API key       |
-| POST   | `/api/api-keys/{id}/renew` | Renew API key        |
+| Method | Endpoint                   | Summary        |
+| ------ | -------------------------- | -------------- |
+| GET    | `/api/api-keys`            | List API keys  |
+| POST   | `/api/api-keys`            | Create API key |
+| DELETE | `/api/api-keys/{id}`       | Revoke API key |
+| POST   | `/api/api-keys/{id}/renew` | Renew API key  |
 
 ## APIs
 
-| Method | Endpoint                                     | Summary / Yaak Title                                    |
+| Method | Endpoint                                     | Summary                                                 |
 | ------ | -------------------------------------------- | ------------------------------------------------------- |
 | GET    | `/api/api-access/{clientId}/apis`            | List APIs a client may access                           |
 | GET    | `/api/api-access/{clientId}/assignable-apis` | List APIs a client can still be granted access to       |
@@ -33,7 +33,7 @@ request checklist: one request per row, named `<METHOD> <path>`. The Gap Registe
 
 ## Application Configuration
 
-| Method | Endpoint                                    | Summary / Yaak Title                   |
+| Method | Endpoint                                    | Summary                                |
 | ------ | ------------------------------------------- | -------------------------------------- |
 | GET    | `/api/application-configuration`            | List public application configurations |
 | PUT    | `/api/application-configuration`            | Update application configurations      |
@@ -43,7 +43,7 @@ request checklist: one request per row, named `<METHOD> <path>`. The Gap Registe
 
 ## Application Images
 
-| Method | Endpoint                                          | Summary / Yaak Title                 |
+| Method | Endpoint                                          | Summary                              |
 | ------ | ------------------------------------------------- | ------------------------------------ |
 | DELETE | `/api/application-images/background`              | Delete background image              |
 | GET    | `/api/application-images/background`              | Get background image                 |
@@ -61,16 +61,16 @@ request checklist: one request per row, named `<METHOD> <path>`. The Gap Registe
 
 ## Audit Logs
 
-| Method | Endpoint                               | Summary / Yaak Title |
-| ------ | -------------------------------------- | -------------------- |
-| GET    | `/api/audit-logs`                      | List audit logs      |
-| GET    | `/api/audit-logs/all`                  | List all audit logs  |
-| GET    | `/api/audit-logs/filters/client-names` | List client names    |
-| GET    | `/api/audit-logs/filters/users`        | List users with IDs  |
+| Method | Endpoint                               | Summary             |
+| ------ | -------------------------------------- | ------------------- |
+| GET    | `/api/audit-logs`                      | List audit logs     |
+| GET    | `/api/audit-logs/all`                  | List all audit logs |
+| GET    | `/api/audit-logs/filters/client-names` | List client names   |
+| GET    | `/api/audit-logs/filters/users`        | List users with IDs |
 
 ## Custom Claims
 
-| Method | Endpoint                                      | Summary / Yaak Title                  |
+| Method | Endpoint                                      | Summary                               |
 | ------ | --------------------------------------------- | ------------------------------------- |
 | GET    | `/api/custom-claims/suggestions`              | Get custom claim suggestions          |
 | PUT    | `/api/custom-claims/user-group/{userGroupId}` | Update custom claims for a user group |
@@ -78,7 +78,7 @@ request checklist: one request per row, named `<METHOD> <path>`. The Gap Registe
 
 ## Device Login
 
-| Method | Endpoint                                   | Summary / Yaak Title          |
+| Method | Endpoint                                   | Summary                       |
 | ------ | ------------------------------------------ | ----------------------------- |
 | POST   | `/api/device-login/requests`               | Create device login request   |
 | POST   | `/api/device-login/requests/{id}/exchange` | Exchange device login request |
@@ -87,13 +87,13 @@ request checklist: one request per row, named `<METHOD> <path>`. The Gap Registe
 
 ## Health
 
-| Method | Endpoint   | Summary / Yaak Title     |
+| Method | Endpoint   | Summary                  |
 | ------ | ---------- | ------------------------ |
 | GET    | `/healthz` | Responds to healthchecks |
 
 ## OIDC
 
-| Method | Endpoint                                           | Summary / Yaak Title                          |
+| Method | Endpoint                                           | Summary                                       |
 | ------ | -------------------------------------------------- | --------------------------------------------- |
 | GET    | `/api/oidc/clients`                                | List OIDC clients                             |
 | POST   | `/api/oidc/clients`                                | Create OIDC client                            |
@@ -121,7 +121,7 @@ request checklist: one request per row, named `<METHOD> <path>`. The Gap Registe
 
 ## SCIM
 
-| Method | Endpoint                               | Summary / Yaak Title         |
+| Method | Endpoint                               | Summary                      |
 | ------ | -------------------------------------- | ---------------------------- |
 | POST   | `/api/scim/service-provider`           | Create SCIM service provider |
 | DELETE | `/api/scim/service-provider/{id}`      | Delete SCIM service provider |
@@ -130,24 +130,13 @@ request checklist: one request per row, named `<METHOD> <path>`. The Gap Registe
 
 ## Storage
 
-| Method | Endpoint                      | Summary / Yaak Title                                   |
+| Method | Endpoint                      | Summary                                                |
 | ------ | ----------------------------- | ------------------------------------------------------ |
 | GET    | `/api/storage/sqlite-warning` | Get whether the SQLite storage warning should be shown |
 
-## User Groups
-
-| Method | Endpoint                      | Summary / Yaak Title    |
-| ------ | ----------------------------- | ----------------------- |
-| GET    | `/api/user-groups`            | List user groups        |
-| POST   | `/api/user-groups`            | Create user group       |
-| DELETE | `/api/user-groups/{id}`       | Delete user group       |
-| GET    | `/api/user-groups/{id}`       | Get user group by ID    |
-| PUT    | `/api/user-groups/{id}`       | Update user group       |
-| PUT    | `/api/user-groups/{id}/users` | Update users in a group |
-
 ## Users
 
-| Method | Endpoint                                              | Summary / Yaak Title                          |
+| Method | Endpoint                                              | Summary                                       |
 | ------ | ----------------------------------------------------- | --------------------------------------------- |
 | POST   | `/api/one-time-access-email`                          | Request one-time access email                 |
 | POST   | `/api/one-time-access-token/{token}`                  | Exchange one-time access token                |
@@ -158,12 +147,6 @@ request checklist: one request per row, named `<METHOD> <path>`. The Gap Registe
 | POST   | `/api/signup/setup`                                   | Sign up initial admin user                    |
 | GET    | `/api/users`                                          | List users                                    |
 | POST   | `/api/users`                                          | Create user                                   |
-| GET    | `/api/users/me`                                       | Get current user                              |
-| PUT    | `/api/users/me`                                       | Update current user                           |
-| DELETE | `/api/users/me/profile-picture`                       | Reset current user's profile picture          |
-| PUT    | `/api/users/me/profile-picture`                       | Update current user's profile picture         |
-| POST   | `/api/users/me/send-email-verification`               | Send email verification                       |
-| POST   | `/api/users/me/verify-email`                          | Verify email                                  |
 | DELETE | `/api/users/{id}`                                     | Delete user                                   |
 | GET    | `/api/users/{id}`                                     | Get user by ID                                |
 | PUT    | `/api/users/{id}`                                     | Update user                                   |
@@ -176,17 +159,35 @@ request checklist: one request per row, named `<METHOD> <path>`. The Gap Registe
 | PUT    | `/api/users/{id}/user-groups`                         | Update user groups                            |
 | GET    | `/api/users/{id}/webauthn-credentials`                | List user passkeys                            |
 | DELETE | `/api/users/{id}/webauthn-credentials/{credentialId}` | Delete user passkey                           |
+| GET    | `/api/users/me`                                       | Get current user                              |
+| PUT    | `/api/users/me`                                       | Update current user                           |
+| DELETE | `/api/users/me/profile-picture`                       | Reset current user's profile picture          |
+| PUT    | `/api/users/me/profile-picture`                       | Update current user's profile picture         |
+| POST   | `/api/users/me/send-email-verification`               | Send email verification                       |
+| POST   | `/api/users/me/verify-email`                          | Verify email                                  |
+
+## User Groups
+
+| Method | Endpoint                      | Summary                 |
+| ------ | ----------------------------- | ----------------------- |
+| GET    | `/api/user-groups`            | List user groups        |
+| POST   | `/api/user-groups`            | Create user group       |
+| DELETE | `/api/user-groups/{id}`       | Delete user group       |
+| GET    | `/api/user-groups/{id}`       | Get user group by ID    |
+| PUT    | `/api/user-groups/{id}`       | Update user group       |
+| PUT    | `/api/user-groups/{id}/users` | Update users in a group |
+| GET    | `/api/user/{id}/groups`       | Get user groups         |
 
 ## Version
 
-| Method | Endpoint               | Summary / Yaak Title                      |
-| ------ | ---------------------- | ----------------------------------------- |
-| GET    | `/api/version/current` | Get current deployed version of Pocket ID |
-| GET    | `/api/version/latest`  | Get latest available version of Pocket ID |
+| Method | Endpoint               | Summary                      |
+| ------ | ---------------------- | ---------------------------- |
+| GET    | `/api/version/current` | Get current deployed version |
+| GET    | `/api/version/latest`  | Get latest available version |
 
 ## Well Known
 
-| Method | Endpoint                                  | Summary / Yaak Title                        |
+| Method | Endpoint                                  | Summary                                     |
 | ------ | ----------------------------------------- | ------------------------------------------- |
 | GET    | `/.well-known/jwks.json`                  | Get JSON Web Key Set (JWKS)                 |
 | GET    | `/.well-known/oauth-authorization-server` | Get OAuth 2.0 authorization server metadata |

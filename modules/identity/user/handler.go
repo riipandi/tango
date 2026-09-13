@@ -10,6 +10,7 @@ import (
 	"github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
@@ -51,12 +52,36 @@ func (r updateAdminRequest) Validate() error {
 	)
 }
 
+// updateProfileRequest is the PUT /users/me payload (self profile;
+// account fields mirror UpdateProfileParams).
+type updateProfileRequest struct {
+	FirstName   *string `json:"first_name,omitzero"`
+	LastName    *string `json:"last_name,omitzero"`
+	DisplayName *string `json:"display_name,omitzero"`
+	AvatarURL   *string `json:"avatar_url,omitzero"`
+	Locale      *string `json:"locale,omitzero"`
+}
+
+func (r updateProfileRequest) Validate() error {
+	return validation.ValidateStruct(&r,
+		validation.Field(&r.DisplayName, validation.NilOrNotEmpty),
+	)
+}
+
 // adminParams removed: updateAdminRequest converts directly to
 // AdminUpdateParams (identical field sets).
 
-// APIRoutes mounts the user endpoints inside the shared /api group,
-// behind the admin guard when one is wired.
+// APIRoutes mounts the user endpoints inside the shared /api group.
+// Admin CRUD mounts behind the admin guard when one is wired;
+// /users/me is self-service (session auth only) and mounts when a
+// self authenticator is wired.
 func (s *Service) APIRoutes(r chi.Router) {
+	if s.selfAuth != nil {
+		self := r.With(middleware.RequireAuth(s.selfAuth, s.cookie))
+		self.Get("/users/me", s.getCurrentUser)
+		self.Put("/users/me", s.updateCurrentUser)
+	}
+
 	mount := func(ar chi.Router) {
 		ar.Post("/users", s.createUser)
 		ar.Get("/users", s.listUsers)
@@ -73,6 +98,58 @@ func (s *Service) APIRoutes(r chi.Router) {
 		ar.Use(s.guard)
 		mount(ar)
 	})
+}
+
+// getCurrentUser serves GET /users/me: the signed-in user's own
+// record (upstream identity for the SPA).
+func (s *Service) getCurrentUser(w http.ResponseWriter, r *http.Request) {
+	principal, ok := middleware.PrincipalFromContext(r.Context())
+	if !ok {
+		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	id, err := identity.ParseID[UserID](principal.UserID)
+	if err != nil {
+		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	u, err := s.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	responder.Success(w, r, http.StatusOK, u)
+}
+
+// updateCurrentUser serves PUT /users/me: profile self-service —
+// upstream updates name/email; email is admin-gated here (deviation
+// noted in the gap register).
+func (s *Service) updateCurrentUser(w http.ResponseWriter, r *http.Request) {
+	principal, ok := middleware.PrincipalFromContext(r.Context())
+	if !ok {
+		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	id, err := identity.ParseID[UserID](principal.UserID)
+	if err != nil {
+		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req updateProfileRequest
+	if verr := validate.Request(r.Body, &req); verr != nil {
+		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
+			responder.WithError(validate.FieldErrors(verr)))
+		return
+	}
+
+	u, err := s.store.UpdateProfile(r.Context(), id, UpdateProfileParams(req))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	responder.Success(w, r, http.StatusOK, u)
 }
 
 func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {

@@ -19,16 +19,78 @@ import (
 // customClaimsTable backs user/group claims.
 const customClaimsTable = "public.custom_claims"
 
-// PostgresStore persists claims in public.custom_claims.
+// PostgresStore persists claims in public.custom_claims. It keeps
+// the parent Store for WithTx (list-replace runs in a transaction).
 type PostgresStore struct {
-	exec datastore.Executor
+	store datastore.Store
+	exec  datastore.Executor
 }
 
 var _ Store = (*PostgresStore)(nil)
 
 // NewPostgresStore builds the production claim store.
-func NewPostgresStore(exec datastore.Executor) *PostgresStore {
-	return &PostgresStore{exec: exec}
+func NewPostgresStore(store datastore.Store) *PostgresStore {
+	return &PostgresStore{store: store, exec: store}
+}
+
+// ReplaceForUser swaps a user's whole claim set atomically.
+func (s *PostgresStore) ReplaceForUser(ctx context.Context, userID user.UserID, params []UpsertParams) ([]CustomClaim, error) {
+	return s.replace(ctx, func(exec datastore.Executor) error {
+		return s.deleteFor(exec, "user_id", userID.UUIDBytes())
+	}, params)
+}
+
+// ReplaceForGroup swaps a group's whole claim set atomically.
+func (s *PostgresStore) ReplaceForGroup(ctx context.Context, groupID usergroup.UserGroupID, params []UpsertParams) ([]CustomClaim, error) {
+	return s.replace(ctx, func(exec datastore.Executor) error {
+		return s.deleteFor(exec, "user_group_id", groupID.UUIDBytes())
+	}, params)
+}
+
+// replace deletes then re-inserts inside one transaction.
+func (s *PostgresStore) replace(ctx context.Context, wipe func(datastore.Executor) error, params []UpsertParams) ([]CustomClaim, error) {
+	var created []CustomClaim
+	err := s.store.WithTx(ctx, func(tx datastore.Executor) error {
+		if err := wipe(tx); err != nil {
+			return err
+		}
+		created = created[:0]
+		for _, param := range params {
+			ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+			ib.InsertInto(customClaimsTable)
+			ib.Cols("key", "value", "user_id", "user_group_id")
+			ib.Values(param.Key, param.Value, uuidOrNull(param.UserID), uuidOrNull(param.UserGroupID))
+			ib.Returning(claimColumns...)
+
+			query, args := ib.Build()
+			row, err := scanClaim(tx.QueryRow(ctx, query, args...))
+			if err != nil {
+				return mapErr(err)
+			}
+			created = append(created, row)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("customclaim store: replace: %w", err)
+	}
+	if created == nil {
+		created = []CustomClaim{}
+	}
+	return created, nil
+}
+
+// deleteFor removes every claim for one owner column.
+func (s *PostgresStore) deleteFor(exec datastore.Executor, column string, id any) error {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(customClaimsTable)
+	db.Where(db.E(column, id))
+
+	query, args := db.Build()
+	if _, err := exec.Exec(context.Background(), query, args...); err != nil {
+		return err
+	}
+	return nil
 }
 
 // claimColumns is the SELECT list; keep order in sync with scanClaim.

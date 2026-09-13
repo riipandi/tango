@@ -28,6 +28,7 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 	r.Use(middleware.CORS())
 
 	r.Get("/static/*", StaticAssetsHandler)
+	r.Get("/healthz", RootHealthzHandler)
 	r.Get("/.well-known/version", VersionHandler)
 
 	registry.Apply(r)
@@ -36,6 +37,8 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/", APIRootHandler)
 		r.Get("/healthz", HealthCheckHandler)
+		r.Get("/version/current", VersionCurrentHandler)
+		r.Get("/version/latest", VersionLatestHandler)
 		registry.ApplyAPI(r)
 	})
 

@@ -38,6 +38,29 @@ func TestHealthzLiveness(t *testing.T) {
 	assert.Equal(t, "healthy", body["status"])
 }
 
+// TestRootHealthzAndVersionEndpoints covers the upstream-parity
+// additions: bare 204 /healthz and the /api/version/* metadata.
+func TestRootHealthzAndVersionEndpoints(t *testing.T) {
+	w := httptest.NewRecorder()
+	RootHealthzHandler(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	require.Equal(t, http.StatusNoContent, w.Code)
+	require.Empty(t, w.Body.String())
+
+	w = httptest.NewRecorder()
+	VersionCurrentHandler(w, httptest.NewRequest(http.MethodGet, "/api/version/current", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	var current map[string]string
+	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &current))
+	assert.Equal(t, config.AppVersion, current["version"])
+
+	w = httptest.NewRecorder()
+	VersionLatestHandler(w, httptest.NewRequest(http.MethodGet, "/api/version/latest", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	var latest map[string]string
+	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &latest))
+	assert.Equal(t, config.AppVersion, latest["version"])
+}
+
 func TestAPIRootHandler(t *testing.T) {
 	w := httptest.NewRecorder()
 	APIRootHandler(w, httptest.NewRequest(http.MethodGet, "/api/", nil))

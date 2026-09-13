@@ -32,6 +32,34 @@ type updateClaimRequest struct {
 	Value string `json:"value"`
 }
 
+// listReplaceRequest is the PUT list-replace payload (upstream
+// shape): the full new claim set for the owner.
+type listReplaceRequest []createClaimRequest
+
+// Validate runs per-item rules directly — validation.Validate on
+// this slice would call back into Validatable and recurse forever.
+func (r listReplaceRequest) Validate() error {
+	if len(r) == 0 {
+		return validation.Errors{"claims": validation.NewError("validation", "cannot be blank")}
+	}
+	for _, item := range r {
+		if err := item.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// params converts the request items to store params, scoping each
+// to the owner set later by the service call.
+func (r listReplaceRequest) params() []UpsertParams {
+	out := make([]UpsertParams, 0, len(r))
+	for _, item := range r {
+		out = append(out, UpsertParams{Key: item.Key, Value: item.Value})
+	}
+	return out
+}
+
 func (r updateClaimRequest) Validate() error {
 	return validation.ValidateStruct(&r,
 		validation.Field(&r.Value, validation.Required),
@@ -45,10 +73,12 @@ func (s *Service) APIRoutes(r chi.Router) {
 		ar.Get("/custom-claims/suggestions", s.suggestions)
 		ar.Get("/custom-claims/user/{userId}", s.listForUser)
 		ar.Post("/custom-claims/user/{userId}", s.createForUser)
+		ar.Put("/custom-claims/user/{userId}", s.replaceForUser)
 		ar.Put("/custom-claims/user/{userId}/{claimId}", s.updateForUser)
 		ar.Delete("/custom-claims/user/{userId}/{claimId}", s.deleteForUser)
 		ar.Get("/custom-claims/user-group/{userGroupId}", s.listForGroup)
 		ar.Post("/custom-claims/user-group/{userGroupId}", s.createForGroup)
+		ar.Put("/custom-claims/user-group/{userGroupId}", s.replaceForGroup)
 		ar.Put("/custom-claims/user-group/{userGroupId}/{claimId}", s.updateForGroup)
 		ar.Delete("/custom-claims/user-group/{userGroupId}/{claimId}", s.deleteForGroup)
 	}
@@ -152,6 +182,51 @@ func (s *Service) listForGroup(w http.ResponseWriter, r *http.Request) {
 	claims, err := s.ListByGroup(r.Context(), groupID)
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+	responder.Success(w, r, http.StatusOK, claims)
+}
+
+// replaceForUser serves PUT /custom-claims/user/{userId}: list
+// replace (upstream shape) — the full new set in one body.
+func (s *Service) replaceForUser(w http.ResponseWriter, r *http.Request) {
+	userID, err := identity.ParseID[user.UserID](chi.URLParam(r, "userId"))
+	if err != nil {
+		responder.NotFoundJSON(w, r)
+		return
+	}
+
+	var req listReplaceRequest
+	if verr := validate.Request(r.Body, &req); verr != nil {
+		writeValidation(w, r, verr)
+		return
+	}
+
+	claims, err := s.ReplaceForUser(r.Context(), userID, req.params())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	responder.Success(w, r, http.StatusOK, claims)
+}
+
+// replaceForGroup serves PUT /custom-claims/user-group/{userGroupId}.
+func (s *Service) replaceForGroup(w http.ResponseWriter, r *http.Request) {
+	groupID, err := identity.ParseID[usergroup.UserGroupID](chi.URLParam(r, "userGroupId"))
+	if err != nil {
+		responder.NotFoundJSON(w, r)
+		return
+	}
+
+	var req listReplaceRequest
+	if verr := validate.Request(r.Body, &req); verr != nil {
+		writeValidation(w, r, verr)
+		return
+	}
+
+	claims, err := s.ReplaceForGroup(r.Context(), groupID, req.params())
+	if err != nil {
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, claims)

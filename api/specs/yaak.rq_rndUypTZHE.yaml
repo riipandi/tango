@@ -1,21 +1,20 @@
 type: http_request
 model: http_request
-id: rq_8bhwyqijeA
-createdAt: 2026-09-12T06:54:01.871712
-updatedAt: 2026-09-13T08:10:19.493521
+id: rq_rndUypTZHE
+createdAt: 2026-09-13T08:49:31.188481
+updatedAt: 2026-09-13T08:49:31.188482
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_YNuU3gaJNQ
 authentication: {}
 authenticationType: null
-body:
-  text: '{"identity":"admin","secret":"Admin123!"}'
-bodyType: application/json
-description: Sign in as seeded admin; sets the tango_session cookie
+body: {}
+bodyType: null
+description: RFC 8414 mirror of the OIDC discovery document (phase 3 completion)
 headers: []
-method: POST
-name: Sign In
+method: GET
+name: GET /.well-known/oauth-authorization-server
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/auth/sign-in
+url: http://localhost:3080/.well-known/oauth-authorization-server
 urlParameters: []
 settingSendCookies:
   enabled: false

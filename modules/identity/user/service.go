@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 )
 
@@ -18,6 +19,8 @@ type Service struct {
 	store    Store
 	recorder identity.Recorder
 	guard    RouteGuard
+	selfAuth middleware.Authenticator
+	cookie   string
 }
 
 var _ identity.APIFeature = (*Service)(nil)
@@ -29,6 +32,12 @@ type ServiceOption func(*Service)
 // routes stay open (tests, isolated tooling).
 func WithAdminGuard(g RouteGuard) ServiceOption {
 	return func(s *Service) { s.guard = g }
+}
+
+// WithSelfAuth wires the session resolver for the self-service
+// endpoints (/users/me).
+func WithSelfAuth(auth middleware.Authenticator, cookieName string) ServiceOption {
+	return func(s *Service) { s.selfAuth, s.cookie = auth, cookieName }
 }
 
 // NewService builds the user core on top of the given store. The

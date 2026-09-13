@@ -1,6 +1,7 @@
 package auditlog
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/testutils"
@@ -95,20 +97,63 @@ func TestRecordPersistsEnumsAndPayload(t *testing.T) {
 	assert.Equal(t, "user", found.ResourceType)
 }
 
+// fakeAuthenticator resolves any cookie token to the fixed
+// principal — tests only exercise route protection, not tokens.
+type fakeAuthenticator struct{ principal middleware.Principal }
+
+func (f *fakeAuthenticator) ResolveSession(_ context.Context, _ string) (middleware.Principal, error) {
+	return f.principal, nil
+}
+
+// adminTestUser mirrors the principal in the users table for the
+// FK-bound audit rows.
+var fixedPrincipal = middleware.Principal{
+	SessionID: "test-session",
+	UserID:    "01a0996e-9bc3-79b8-a151-d392733a2d58",
+	IsAdmin:   true,
+}
+
+// mountWithGuards builds the router with both guards wired (self
+// auth + admin header guard).
+func mountWithGuards(t *testing.T, mod *Module) chi.Router {
+	t.Helper()
+	mod.MountSelfAPI(&fakeAuthenticator{principal: fixedPrincipal}, "tango_session")
+	mod.MountAdminAPI(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("X-Admin") == "" {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	reg := kernel.NewRegistry()
+	reg.Register(mod)
+	r := chi.NewRouter()
+	r.Route("/api", func(api chi.Router) {
+		api.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				next.ServeHTTP(w, req.WithContext(middleware.WithPrincipal(req.Context(), fixedPrincipal)))
+			})
+		})
+		reg.ApplyAPI(api)
+	})
+	return r
+}
+
 func TestListEndpointEnvelopeAndPagination(t *testing.T) {
 	mod := New(newTestStore(t))
 	for range 3 {
 		require.NoError(t, mod.Record(t.Context(), &Entry{Event: "user.created"}))
 	}
+	router := mountWithGuards(t, mod)
 
-	reg := kernel.NewRegistry()
-	reg.Register(mod)
-	r := chi.NewRouter()
-	r.Route("/api", reg.ApplyAPI)
-
-	// Limited: limit=3 yields exactly the three newest entries.
+	// Admin listing with pagination.
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/audit-logs?page=1&limit=3", nil))
+	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs/all?page=1&limit=3", nil)
+	req.Header.Set("X-Admin", "1")
+	router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var body struct {
@@ -125,7 +170,6 @@ func TestListEndpointEnvelopeAndPagination(t *testing.T) {
 	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
 	assert.Equal(t, "success", body.Status)
 	require.Len(t, body.Data, 3)
-	// The three just-recorded entries are the newest.
 	assert.Equal(t, "user.created", body.Data[0].Event)
 	assert.NotNil(t, body.Metadata.TotalItems)
 	assert.GreaterOrEqual(t, *body.Metadata.TotalItems, 3)
@@ -133,7 +177,9 @@ func TestListEndpointEnvelopeAndPagination(t *testing.T) {
 
 	// Paged: limit=2 yields exactly two entries.
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/audit-logs?page=1&limit=2", nil))
+	req = httptest.NewRequest(http.MethodGet, "/api/audit-logs/all?page=1&limit=2", nil)
+	req.Header.Set("X-Admin", "1")
+	router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
 	require.Len(t, body.Data, 2)
@@ -141,15 +187,60 @@ func TestListEndpointEnvelopeAndPagination(t *testing.T) {
 
 func TestListInvalidPagination(t *testing.T) {
 	mod := New(newTestStore(t))
+	router := mountWithGuards(t, mod)
 
+	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs/all?page=nope", nil)
+	req.Header.Set("X-Admin", "1")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestSelfListingScopesToCurrentUser(t *testing.T) {
+	ctx := t.Context()
+	pg := testutils.StartPostgres(ctx, t)
+	if _, err := database.MigrateUp(ctx, pg.DSN); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+	ds, err := datastore.New(ctx, datastore.Options{DSN: pg.DSN})
+	require.NoError(t, err)
+	t.Cleanup(func() { ds.Close() })
+
+	mod := New(NewPostgresStore(ds))
+	users := user.NewPostgresStore(ds)
+	u, err := users.Create(ctx, user.CreateParams{
+		Username: "self_" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		Email:    "self-" + strconv.FormatInt(time.Now().UnixNano(), 10) + "@example.com",
+	})
+	require.NoError(t, err)
+
+	principal := fixedPrincipal
+	principal.UserID = u.ID.String()
+	require.NoError(t, mod.Record(ctx, &Entry{Event: "user.signed_in", UserID: ptr(u.ID.UUID())}))
+	require.NoError(t, mod.Record(ctx, &Entry{Event: "user.signed_out"}))
+
+	mod.MountSelfAPI(&fakeAuthenticator{principal: principal}, "tango_session")
 	reg := kernel.NewRegistry()
 	reg.Register(mod)
 	r := chi.NewRouter()
 	r.Route("/api", reg.ApplyAPI)
 
+	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs", nil)
+	req.AddCookie(&http.Cookie{Name: "tango_session", Value: "any"})
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/audit-logs?page=nope", nil))
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var body struct {
+		Data []struct {
+			Event string `json:"event"`
+		} `json:"data"`
+	}
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
+	require.NotEmpty(t, body.Data)
+	for _, item := range body.Data {
+		assert.Equal(t, "user.signed_in", item.Event, "self listing must scope to the current user")
+	}
 }
 
 func TestModuleContracts(t *testing.T) {
@@ -159,11 +250,12 @@ func TestModuleContracts(t *testing.T) {
 	reg := kernel.NewRegistry()
 	reg.Register(mod) // must not panic: APIRoutable, unique name
 
+	// Without guards nothing is mounted — fail closed.
 	r := chi.NewRouter()
 	r.Route("/api", reg.ApplyAPI)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/audit-logs", nil))
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestNewRejectsNilStore(t *testing.T) {
@@ -172,36 +264,29 @@ func TestNewRejectsNilStore(t *testing.T) {
 
 func TestAdminGuardProtectsListing(t *testing.T) {
 	mod := New(newTestStore(t))
-	mod.MountAdminAPI(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get("X-Admin") == "" {
-				w.WriteHeader(http.StatusForbidden)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	})
-
-	reg := kernel.NewRegistry()
-	reg.Register(mod)
-	r := chi.NewRouter()
-	r.Route("/api", reg.ApplyAPI)
+	router := mountWithGuards(t, mod)
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/audit-logs", nil))
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/audit-logs/all", nil))
 	assert.Equal(t, http.StatusForbidden, w.Code)
 
-	w = httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs", nil)
+	// With the admin header the listing and filter values open up.
+	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs/all", nil)
 	req.Header.Set("X-Admin", "1")
-	r.ServeHTTP(w, req)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	// Filter values live behind the same guard.
-	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/audit-logs/filters/users", nil)
 	req.Header.Set("X-Admin", "1")
-	r.ServeHTTP(w, req)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	req = httptest.NewRequest(http.MethodGet, "/api/audit-logs/filters/client-names", nil)
+	req.Header.Set("X-Admin", "1")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
@@ -227,7 +312,10 @@ func TestListFiltersByUserAndEvent(t *testing.T) {
 	require.NoError(t, store.Record(ctx, &entry))
 	require.NoError(t, store.Record(ctx, &Entry{Event: "user.signed_out"}))
 
-	filtered, total, err := store.List(ctx, ListFilters{Event: "user.signed_in"}, responder.PaginationParams{Page: 1, Limit: 10})
+	filtered, total, err := store.List(ctx, ListFilters{
+		Event:  "user.signed_in",
+		UserID: u.ID.UUID(),
+	}, responder.PaginationParams{Page: 1, Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, filtered, 1)
 	assert.Equal(t, "user.signed_in", filtered[0].Event)

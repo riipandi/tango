@@ -21,6 +21,7 @@ type Service struct {
 	authenticator middleware.Authenticator
 	issuer        string
 	cookieName    string
+	cookieSecure  bool
 	audit         AuditLogger
 }
 
@@ -47,6 +48,12 @@ func WithAudit(l AuditLogger) Option { return func(s *Service) { s.audit = l } }
 // optional-auth /authorize flow.
 func WithAuthenticator(auth middleware.Authenticator) Option {
 	return func(s *Service) { s.authenticator = auth }
+}
+
+// WithCookieSecure marks the end-session cookie Secure (off in
+// development, mirroring the session module).
+func WithCookieSecure(secure bool) Option {
+	return func(s *Service) { s.cookieSecure = secure }
 }
 
 // record emits an audit event when an adapter is attached.

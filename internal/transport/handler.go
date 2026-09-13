@@ -43,6 +43,29 @@ func VersionHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// RootHealthzHandler serves upstream-parity /healthz: bare 204, no
+// body. The JSON variant stays at /api/healthz (tango extension).
+func RootHealthzHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// VersionCurrentHandler serves GET /api/version/current (upstream
+// parity: bare build metadata object).
+func VersionCurrentHandler(w http.ResponseWriter, r *http.Request) {
+	responder.WriteJSON(w, http.StatusOK, map[string]string{
+		"version": config.AppVersion,
+	})
+}
+
+// VersionLatestHandler serves GET /api/version/latest. The lookup
+// of newer releases is an outbound job (phase 7); for now the
+// deployed version is the freshest known.
+func VersionLatestHandler(w http.ResponseWriter, r *http.Request) {
+	responder.WriteJSON(w, http.StatusOK, map[string]string{
+		"version": config.AppVersion,
+	})
+}
+
 func StaticAssetsHandler(w http.ResponseWriter, r *http.Request) {
 	path := chi.URLParam(r, "*")
 	responder.WriteJSON(w, http.StatusOK, map[string]string{

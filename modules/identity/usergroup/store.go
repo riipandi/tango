@@ -215,6 +215,56 @@ func (s *PostgresStore) SetMembers(ctx context.Context, id UserGroupID, memberID
 	})
 }
 
+// ReplaceGroupsForUser atomically replaces the groups one user
+// belongs to (inverse of SetMembers; upstream PUT
+// /users/{id}/user-groups). Every group ID must exist.
+func (s *PostgresStore) ReplaceGroupsForUser(ctx context.Context, id user.UserID, groupIDs []UserGroupID) error {
+	return s.store.WithTx(ctx, func(tx datastore.Executor) error {
+		db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+		db.DeleteFrom(userGroupsUsersTable)
+		db.Where(db.E("user_id", id.UUIDBytes()))
+
+		delQuery, delArgs := db.Build()
+		if _, err := tx.Exec(ctx, delQuery, delArgs...); err != nil {
+			return fmt.Errorf("usergroup store: clear memberships: %w", err)
+		}
+		if len(groupIDs) == 0 {
+			return nil
+		}
+
+		sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+		sb.Select("count(DISTINCT id)")
+		sb.From(userGroupsTable)
+		ids := make([]any, 0, len(groupIDs))
+		for _, group := range groupIDs {
+			ids = append(ids, group.UUIDBytes())
+		}
+		sb.Where(sb.In("id", ids...))
+
+		query, args := sb.Build()
+		var known int
+		if err := tx.QueryRow(ctx, query, args...).Scan(&known); err != nil {
+			return fmt.Errorf("usergroup store: check groups: %w", err)
+		}
+		if known != len(groupIDs) {
+			return ErrInvalidIDs
+		}
+
+		ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+		ib.InsertInto(userGroupsUsersTable)
+		ib.Cols("user_id", "user_group_id")
+		for _, group := range groupIDs {
+			ib.Values(id.UUIDBytes(), group.UUIDBytes())
+		}
+
+		query, args = ib.Build()
+		if _, err := tx.Exec(ctx, query, args...); err != nil {
+			return fmt.Errorf("usergroup store: add memberships: %w", err)
+		}
+		return nil
+	})
+}
+
 // MemberIDs lists the user IDs of one group.
 func (s *PostgresStore) MemberIDs(ctx context.Context, id UserGroupID) ([]user.UserID, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()

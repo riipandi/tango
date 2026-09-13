@@ -82,13 +82,22 @@ func (s *Service) authenticateClient(w http.ResponseWriter, r *http.Request) (Cl
 	return client, true
 }
 
-// secretMatches compares the presented secret with the stored
-// SHA-256.
+// secretMatches reports whether the presented secret matches any
+// active stored secret (credentials list first, then the legacy
+// single-secret column).
 func secretMatches(client Client, secret string) bool {
+	sum := sha256Hex(secret)
+	for _, entry := range client.Secrets {
+		if !entry.IsActive || (entry.ExpiresAt != nil && entry.ExpiresAt.Before(time.Now().UTC())) {
+			continue
+		}
+		if subtle.ConstantTimeCompare([]byte(entry.SecretHash), []byte(sum)) == 1 {
+			return true
+		}
+	}
 	if client.SecretHash == nil {
 		return false
 	}
-	sum := sha256Hex(secret)
 	return subtle.ConstantTimeCompare([]byte(*client.SecretHash), []byte(sum)) == 1
 }
 

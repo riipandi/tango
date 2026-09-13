@@ -74,6 +74,10 @@ type Store interface {
 	Delete(ctx context.Context, id CustomClaimID) error
 	ListByUser(ctx context.Context, userID user.UserID) ([]CustomClaim, error)
 	ListByGroup(ctx context.Context, groupID usergroup.UserGroupID) ([]CustomClaim, error)
+	// ReplaceForOwner swaps the whole claim set for the owner in one
+	// transaction (upstream list-replace PUT).
+	ReplaceForUser(ctx context.Context, userID user.UserID, params []UpsertParams) ([]CustomClaim, error)
+	ReplaceForGroup(ctx context.Context, groupID usergroup.UserGroupID, params []UpsertParams) ([]CustomClaim, error)
 	SuggestedKeys(ctx context.Context) ([]string, error)
 }
 

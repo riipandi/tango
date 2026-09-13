@@ -49,6 +49,16 @@ func (r setMembersRequest) Validate() error {
 	return nil
 }
 
+// setUserGroupsRequest is the PUT /users/{id}/user-groups payload:
+// the complete group list for one user (upstream userGroupIds).
+type setUserGroupsRequest struct {
+	GroupIDs []string `json:"user_group_ids"`
+}
+
+func (r setUserGroupsRequest) Validate() error {
+	return nil
+}
+
 // groupsResponse carries the group plus its member user IDs.
 type groupsResponse struct {
 	UserGroup
@@ -67,6 +77,7 @@ func (s *Service) APIRoutes(r chi.Router) {
 		ar.Get("/user-groups/{id}/users", s.memberIDs)
 		ar.Put("/user-groups/{id}/users", s.setMembers)
 		ar.Get("/users/{id}/groups", s.groupsForUser)
+		ar.Put("/users/{id}/user-groups", s.replaceUserGroups)
 	}
 
 	if s.guard == nil {
@@ -235,6 +246,58 @@ func (s *Service) groupsForUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	responder.Success(w, r, http.StatusOK, groups)
+}
+
+// replaceUserGroups replaces the groups a user belongs to (upstream
+// PUT /users/{id}/user-groups).
+func (s *Service) replaceUserGroups(w http.ResponseWriter, r *http.Request) {
+	userID, err := identity.ParseID[user.UserID](chi.URLParam(r, "id"))
+	if err != nil {
+		responder.NotFoundJSON(w, r)
+		return
+	}
+
+	var req setUserGroupsRequest
+	if verr := validate.Request(r.Body, &req); verr != nil {
+		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
+			responder.WithError(validate.FieldErrors(verr)))
+		return
+	}
+
+	groups, parseErr := parseGroupIDs(req.GroupIDs)
+	if parseErr != nil {
+		responder.Fail(w, r, http.StatusUnprocessableEntity, ErrInvalidIDs.Error())
+		return
+	}
+
+	if setErr := s.store.ReplaceGroupsForUser(r.Context(), userID, groups); setErr != nil {
+		if errors.Is(setErr, ErrInvalidIDs) || errors.Is(setErr, ErrNotFound) {
+			responder.Fail(w, r, http.StatusUnprocessableEntity, ErrInvalidIDs.Error())
+			return
+		}
+		writeError(w, r, setErr)
+		return
+	}
+
+	updated, err := s.GroupsForUser(r.Context(), userID)
+	if err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+	responder.Success(w, r, http.StatusOK, updated)
+}
+
+// parseGroupIDs converts wire strings to typed IDs.
+func parseGroupIDs(raw []string) ([]UserGroupID, error) {
+	out := make([]UserGroupID, 0, len(raw))
+	for _, text := range raw {
+		id, err := identity.ParseID[UserGroupID](text)
+		if err != nil {
+			return nil, ErrInvalidIDs
+		}
+		out = append(out, id)
+	}
+	return out, nil
 }
 
 // parseMemberIDs converts wire strings to typed IDs.

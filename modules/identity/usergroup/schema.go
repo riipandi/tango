@@ -57,7 +57,8 @@ type UpdateParams struct {
 }
 
 // Store abstracts group persistence. SetMembers replaces the whole
-// membership atomically.
+// membership of one group; ReplaceGroupsForUser is the inverse
+// (upstream PUT /users/{id}/user-groups).
 type Store interface {
 	Create(ctx context.Context, params CreateParams) (UserGroup, error)
 	GetByID(ctx context.Context, id UserGroupID) (UserGroup, error)
@@ -67,6 +68,7 @@ type Store interface {
 	SetMembers(ctx context.Context, id UserGroupID, memberIDs []user.UserID) error
 	MemberIDs(ctx context.Context, id UserGroupID) ([]user.UserID, error)
 	GroupIDsForUser(ctx context.Context, id user.UserID) ([]UserGroup, error)
+	ReplaceGroupsForUser(ctx context.Context, id user.UserID, groupIDs []UserGroupID) error
 }
 
 // ListParams narrows and pages the admin listing.

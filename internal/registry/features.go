@@ -66,6 +66,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature
 		user.NewPostgresStore(deps.DB),
 		auditAdapter(audit),
 		user.WithAdminGuard(adminAuth),
+		user.WithSelfAuth(sessions, session.CookieName),
 	)
 
 	features := []identity.Feature{
@@ -96,8 +97,11 @@ func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *s
 		session.CookieName,
 		oidc.WithAudit(federationAuditAdapter(audit)),
 		oidc.WithAuthenticator(sessions),
+		oidc.WithCookieSecure(deps.Config.App.Mode != "development"),
 	)
-	return oidc.New(service).WithAdminGuard(adminGuard)
+	return oidc.New(service).
+		WithAdminGuard(adminGuard).
+		WithSelfAuth(sessions, session.CookieName)
 }
 
 // federationAuditAdapter adapts auditlog for federation events:

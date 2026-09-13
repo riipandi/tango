@@ -8,6 +8,7 @@ package oidc
 import (
 	"context"
 	"strings"
+	"time"
 )
 
 // createClient validates the request, hashes the secret, and
@@ -112,4 +113,38 @@ func secretHash(secret string) string {
 		return ""
 	}
 	return sha256Hex(secret)
+}
+
+// addSecret creates a new client secret (generated or caller
+// supplied) and returns the view plus the raw value — the only time
+// the value is visible.
+func (s *Service) addSecret(ctx context.Context, id OIDCClientID, req createSecretRequest) (map[string]any, error) {
+	raw := req.Secret
+	if raw == "" {
+		generated, err := randomToken()
+		if err != nil {
+			return nil, err
+		}
+		raw = generated
+	}
+
+	entry := ClientSecret{
+		// Sub-entitas tanpa tabel sendiri: ID acak cukup, tanpa
+		// TypeID.
+		ID:        randomHex(16),
+		CreatedAt: time.Now().UTC(),
+		ExpiresAt: req.ExpiresAt,
+		IsActive:  true,
+	}
+	if err := s.store.AddClientSecret(ctx, id, entry, sha256Hex(raw)); err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
+		"id":         entry.ID,
+		"created_at": entry.CreatedAt,
+		"expires_at": entry.ExpiresAt,
+		"is_active":  entry.IsActive,
+		"secret":     raw,
+	}, nil
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/antree"
 )
@@ -84,6 +85,7 @@ func New(deps Deps) *kernel.Registry {
 	// Internal authn/authz: user core + selected auth features.
 	core, identityFeatures, adminGuard, sessions := newIdentityFeatures(deps, audit)
 	audit.MountAdminAPI(adminGuard)
+	audit.MountSelfAPI(sessions, session.CookieName)
 	reg.Register(identity.New(core, identityFeatures...))
 
 	// Identity provider (OIDC, SCIM, discovery) — optional surface

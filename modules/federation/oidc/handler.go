@@ -15,6 +15,7 @@ import (
 	"github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
@@ -44,14 +45,30 @@ func (f Feature) APIRoutes(r chi.Router) {
 			cr.Get("/{clientId}", f.service.handleGetClient)
 			cr.Put("/{clientId}", f.service.handleUpdateClient)
 			cr.Delete("/{clientId}", f.service.handleDeleteClient)
+			cr.Put("/{clientId}/allowed-user-groups", f.service.handleUpdateAllowedGroups)
+			cr.Get("/{clientId}/secrets", f.service.handleListSecrets)
+			cr.Post("/{clientId}/secrets", f.service.handleCreateSecret)
+			cr.Delete("/{clientId}/secrets/{secretId}", f.service.handleDeleteSecret)
 		})
 		clients.Get(authorizedClientsAPIPrefix, f.service.handleListAuthorizedClients)
+		clients.Get("/oidc/users/{id}/authorized-clients", f.service.handleListUserAuthorizedClients)
+	}
+
+	if f.selfAuth != nil {
+		self := r.With(middleware.RequireAuth(f.selfAuth, f.cookieName))
+		self.Get("/oidc/users/me/clients", f.service.handleAccessibleClients)
+		self.Get("/oidc/users/me/authorized-clients", f.service.handleMyAuthorizedClients)
+		self.Delete("/oidc/users/me/authorized-clients/{clientId}", f.service.handleRevokeMyAuthorization)
 	}
 
 	r.Route(interactionAPIPrefix, func(ir chi.Router) {
 		ir.Get("/{id}", f.service.handleGetInteraction)
 		ir.Post("/{id}/approve", f.service.handleApproveInteraction)
 	})
+
+	r.Post(introspectAPIPath, f.service.handleIntrospect)
+	r.Post(endSessionAPIPath, f.service.handleEndSession)
+	r.Get(endSessionAPIPath, f.service.handleEndSession)
 }
 
 // API mount prefixes (relative to the /api group).
@@ -59,6 +76,8 @@ const (
 	clientsAPIPrefix           = "/oidc/clients"
 	authorizedClientsAPIPrefix = "/oidc/authorized-clients"
 	interactionAPIPrefix       = "/oidc/interaction"
+	introspectAPIPath          = "/oidc/introspect"
+	endSessionAPIPath          = "/oidc/end-session"
 
 	tokenAPIPath    = "/oidc/token"
 	userinfoAPIPath = "/oidc/userinfo"
@@ -183,9 +202,9 @@ func (s *Service) handleDeleteClient(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleListAuthorizedClients serves GET
-// /api/oidc/authorized-clients (consent records).
+// /api/oidc/authorized-clients (consent records, all users).
 func (s *Service) handleListAuthorizedClients(w http.ResponseWriter, r *http.Request) {
-	records, err := s.store.ListAuthorizedClients(r.Context())
+	records, err := s.store.AuthorizedClients(r.Context(), nil)
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "failed to list authorized clients")
 		return

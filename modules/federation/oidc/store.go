@@ -13,7 +13,6 @@ import (
 	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/modules/identity/user"
 )
 
 // Table constants owned by this module.
@@ -59,7 +58,6 @@ type Store interface {
 
 	// Consent memory: scopes the user already granted a client.
 	UpsertAuthorizedClient(ctx context.Context, userID, clientID string, scopes []string) error
-	ListAuthorizedClients(ctx context.Context) ([]AuthorizedClient, error)
 
 	// Interaction bridge for the SPA flow.
 	CreateInteraction(ctx context.Context, session InteractionSession) error
@@ -72,15 +70,29 @@ type Store interface {
 	UserGroups(ctx context.Context, userID string) ([]string, error)
 	CustomClaims(ctx context.Context, userID string) (map[string]string, error)
 	UserInGroup(ctx context.Context, userID, groupID string) bool
+
+	// Client-facing surfaces (upstream /users/me/clients et al).
+	AccessibleClients(ctx context.Context, userID string) ([]Client, error)
+	// AuthorizedClients lists consent records; a nil userID means all users (admin view).
+	AuthorizedClients(ctx context.Context, userID *string) ([]AuthorizedClient, error)
+	DeleteAuthorization(ctx context.Context, userID, clientID string) error
+	// RevokeClientTokens kills a user's active token family rows for one client (authorization revocation cascade).
+	RevokeClientTokens(ctx context.Context, clientID, userID string) error
+
+	// Multi-secret management (credentials JSONB + legacy column).
+	AddClientSecret(ctx context.Context, clientID OIDCClientID, entry ClientSecret, rawHash string) error
+	DeleteClientSecret(ctx context.Context, clientID OIDCClientID, secretID string) error
 }
 
-// Client is a relying party. The raw secret only exists at create
-// time; the store keeps its SHA-256.
+// Client is a relying party. Secrets never round-trip: the store
+// keeps SHA-256 hashes in the credentials JSONB (plus the legacy
+// single-secret column) and only the create-secret call sees raw.
 type Client struct {
 	ID                          OIDCClientID
 	Name                        string
 	Description                 string
 	SecretHash                  *string
+	Secrets                     []ClientSecret
 	CallbackURLs                []string
 	LogoutCallbackURLs          []string
 	LaunchURL                   string
@@ -96,6 +108,29 @@ type Client struct {
 	CreatedAt                   time.Time
 	AllowedGroupIDs             []string
 }
+
+// ClientSecret is one credentials row (metadata; the hash lives in
+// the JSONB, never serialized to clients).
+type ClientSecret struct {
+	ID         string
+	SecretHash string
+	CreatedAt  time.Time
+	ExpiresAt  *time.Time
+	IsActive   bool
+}
+
+// SecretEntryView is the API shape of a stored secret: metadata
+// only, plus an optional clear prefix.
+type SecretEntryView struct {
+	ID        string     `json:"id"`
+	CreatedAt time.Time  `json:"created_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitzero"`
+	IsActive  bool       `json:"is_active"`
+}
+
+// LegacySecretID names the synthetic entry for secrets that predate
+// the credentials list.
+const LegacySecretID = "legacy"
 
 // ClientCreateParams carries admin-supplied client fields.
 type ClientCreateParams struct {
@@ -170,10 +205,10 @@ const (
 // AuthorizedClient is a consent record: user × client + granted
 // scopes + last use.
 type AuthorizedClient struct {
-	UserID     string
-	ClientID   string
-	Scopes     []string
-	LastUsedAt time.Time
+	UserID     string    `json:"user_id"`
+	ClientID   string    `json:"client_id"`
+	Scopes     []string  `json:"scopes"`
+	LastUsedAt time.Time `json:"last_used_at"`
 }
 
 // InteractionSession bridges /authorize to the SPA sign-in/consent
@@ -214,7 +249,7 @@ func NewPostgresStore(store datastore.Store) *PostgresStore {
 
 // clientColumns is the SELECT list; keep in sync with scanClient.
 var clientColumns = []string{
-	"c.id", "c.name", "c.description", "c.secret", "c.callback_urls", "c.logout_callback_urls",
+	"c.id", "c.name", "c.description", "c.secret", "c.credentials", "c.callback_urls", "c.logout_callback_urls",
 	"c.launch_url", "c.is_public", "c.pkce_enabled", "c.pkce_supported",
 	"c.requires_reauthentication", "c.skip_consent", "c.is_group_restricted",
 	"c.access_token_duration_minutes", "c.refresh_token_duration_minutes",
@@ -391,8 +426,17 @@ func (s *PostgresStore) DeleteClient(ctx context.Context, id OIDCClientID) error
 	return nil
 }
 
+// userUUID converts a typed ID string (or bare UUID) to its UUID
+// column form, staying decoupled from the identity packages.
+func userUUID(raw string) string {
+	if id, err := typeid.FromString(raw); err == nil && !id.IsZero() {
+		return id.UUID()
+	}
+	return raw
+}
+
 // SetClientGroups replaces the group allowlist for restricted
-// clients.
+// clients. Group IDs arrive as typeid strings (or UUIDs).
 func (s *PostgresStore) SetClientGroups(ctx context.Context, id OIDCClientID, groupIDs []string) error {
 	deleter := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	deleter.DeleteFrom(oidcClientsAllowedGroupsTable)
@@ -406,7 +450,7 @@ func (s *PostgresStore) SetClientGroups(ctx context.Context, id OIDCClientID, gr
 		ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 		ib.InsertInto(oidcClientsAllowedGroupsTable)
 		ib.Cols("oidc_client_id", "user_group_id")
-		ib.Values(id.String(), groupID)
+		ib.Values(id.String(), userUUID(groupID))
 		query, args := ib.Build()
 		if _, err := s.exec.Exec(ctx, query, args...); err != nil {
 			return fmt.Errorf("oidc store: grant group: %w", err)
@@ -621,39 +665,6 @@ func (s *PostgresStore) UpsertAuthorizedClient(ctx context.Context, userID, clie
 	return nil
 }
 
-// ListAuthorizedClients joins consent records with client names.
-func (s *PostgresStore) ListAuthorizedClients(ctx context.Context) ([]AuthorizedClient, error) {
-	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select("a.user_id", "a.client_id", "a.scope", "a.last_used_at")
-	sb.From(userAuthorizedClientsTable + " a")
-	sb.OrderBy("a.last_used_at DESC")
-
-	query, args := sb.Build()
-	rows, err := s.exec.Query(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("oidc store: list authorized clients: %w", err)
-	}
-	defer rows.Close()
-
-	out := []AuthorizedClient{}
-	for rows.Next() {
-		var (
-			record   AuthorizedClient
-			scopeRaw []byte
-			lastUsed pgtype.Timestamptz
-		)
-		if err := rows.Scan(&record.UserID, &record.ClientID, &scopeRaw, &lastUsed); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(scopeRaw, &record.Scopes); err != nil {
-			record.Scopes = []string{}
-		}
-		record.LastUsedAt = lastUsed.Time
-		out = append(out, record)
-	}
-	return out, rows.Err()
-}
-
 // CreateInteraction inserts an interaction row (state machine
 // seed).
 func (s *PostgresStore) CreateInteraction(ctx context.Context, session InteractionSession) error {
@@ -757,15 +768,6 @@ func (s *PostgresStore) DeleteInteraction(ctx context.Context, id InteractionSes
 		return fmt.Errorf("oidc store: delete interaction: %w", err)
 	}
 	return nil
-}
-
-// userUUID converts a typed user ID string to its UUID column form.
-func userUUID(raw string) string {
-	id, err := typeid.Parse[user.UserID](raw)
-	if err != nil {
-		return raw
-	}
-	return id.UUID()
 }
 
 // UserInGroup checks membership (restricted-client allowlist).
@@ -907,20 +909,224 @@ func nullIfEmpty(value string) any {
 	return value
 }
 
+// AccessibleClients lists the clients a user may reach: everything
+// unrestricted plus restricted clients where the user is in at
+// least one allowed group.
+func (s *PostgresStore) AccessibleClients(ctx context.Context, userID string) ([]Client, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select(clientColumns...)
+	sb.From(oidcClientsTable + " c")
+	sb.Where(sb.Or(
+		sb.E("c.is_group_restricted", false),
+		"EXISTS (SELECT 1 FROM "+oidcClientsAllowedGroupsTable+" g JOIN "+userGroupsUsersTable+" m ON m.user_group_id = g.user_group_id WHERE g.oidc_client_id = c.id AND m.user_id = "+sb.Var(userUUID(userID))+")",
+	))
+	sb.OrderBy("c.created_at DESC")
+
+	query, args := sb.Build()
+	rows, err := s.exec.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("oidc store: accessible clients: %w", err)
+	}
+	defer rows.Close()
+
+	clients := []Client{}
+	for rows.Next() {
+		c, scanErr := scanClient(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		clients = append(clients, *c)
+	}
+	return clients, rows.Err()
+}
+
+// AuthorizedClients lists consent records; a nil userID means all
+// users (admin view).
+func (s *PostgresStore) AuthorizedClients(ctx context.Context, userID *string) ([]AuthorizedClient, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("a.user_id", "a.client_id", "a.scope", "a.last_used_at")
+	sb.From(userAuthorizedClientsTable + " a")
+	if userID != nil {
+		sb.Where(sb.E("a.user_id", userUUID(*userID)))
+	}
+	sb.OrderBy("a.last_used_at DESC")
+
+	query, args := sb.Build()
+	rows, err := s.exec.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("oidc store: authorized clients: %w", err)
+	}
+	defer rows.Close()
+
+	out := []AuthorizedClient{}
+	for rows.Next() {
+		record, scanErr := scanAuthorizedClient(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		out = append(out, *record)
+	}
+	return out, rows.Err()
+}
+
+// scanAuthorizedClient scans one consent row.
+func scanAuthorizedClient(row scanner) (*AuthorizedClient, error) {
+	var (
+		record   AuthorizedClient
+		scopeRaw []byte
+		lastUsed pgtype.Timestamptz
+	)
+	if err := row.Scan(&record.UserID, &record.ClientID, &scopeRaw, &lastUsed); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(scopeRaw, &record.Scopes); err != nil {
+		record.Scopes = []string{}
+	}
+	record.LastUsedAt = lastUsed.Time
+	return &record, nil
+}
+
+// DeleteAuthorization drops the consent row.
+func (s *PostgresStore) DeleteAuthorization(ctx context.Context, userID, clientID string) error {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(userAuthorizedClientsTable)
+	db.Where(db.And(db.E("user_id", userUUID(userID)), db.E("client_id", clientID)))
+
+	query, args := db.Build()
+	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("oidc store: delete authorization: %w", err)
+	}
+	return nil
+}
+
+// RevokeClientTokens deactivates every active token session row of
+// one user for one client (authorization revocation cascade).
+func (s *PostgresStore) RevokeClientTokens(ctx context.Context, clientID, userID string) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(oauth2SessionsTable)
+	ub.Set(ub.Assign("active", false))
+	ub.Where(ub.And(
+		ub.E("client_id", clientID),
+		ub.E("active", true),
+		"request_data->>'subject' = "+ub.Var(userUUID(userID)),
+	))
+
+	query, args := ub.Build()
+	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("oidc store: revoke client tokens: %w", err)
+	}
+	return nil
+}
+
+// AddClientSecret appends a credentials entry. The legacy
+// single-secret column mirrors the FIRST entry only (older
+// readers).
+func (s *PostgresStore) AddClientSecret(ctx context.Context, clientID OIDCClientID, entry ClientSecret, rawHash string) error {
+	credentials, err := s.credentialsJSON(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	entry.SecretHash = rawHash
+	credentials = append(credentials, entry)
+	encoded, marshalErr := json.Marshal(credentials)
+	if marshalErr != nil {
+		return fmt.Errorf("oidc store: marshal credentials: %w", marshalErr)
+	}
+
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(oidcClientsTable)
+	assignments := []string{ub.Assign("credentials", encoded)}
+	if len(credentials) == 1 {
+		assignments = append(assignments, ub.Assign("secret", rawHash))
+	}
+	ub.Set(assignments...)
+	ub.Where(ub.E("id", clientID.String()))
+
+	query, args := ub.Build()
+	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("oidc store: add secret: %w", err)
+	}
+	return nil
+}
+
+// DeleteClientSecret removes one credentials entry; the legacy
+// column clears when the list empties or the removed entry was the
+// legacy hash.
+func (s *PostgresStore) DeleteClientSecret(ctx context.Context, clientID OIDCClientID, secretID string) error {
+	credentials, err := s.credentialsJSON(ctx, clientID)
+	if err != nil {
+		return err
+	}
+
+	kept := credentials[:0]
+	var legacyHash *string
+	for _, entry := range credentials {
+		if entry.ID == secretID {
+			if entry.ID == LegacySecretID {
+				hash := entry.SecretHash
+				legacyHash = &hash
+			}
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	encoded, marshalErr := json.Marshal(kept)
+	if marshalErr != nil {
+		return fmt.Errorf("oidc store: marshal credentials: %w", marshalErr)
+	}
+
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(oidcClientsTable)
+	assignments := []string{ub.Assign("credentials", encoded)}
+	if len(kept) == 0 || legacyHash != nil {
+		assignments = append(assignments, ub.Assign("secret", nil))
+	}
+	ub.Set(assignments...)
+	ub.Where(ub.E("id", clientID.String()))
+
+	query, args := ub.Build()
+	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("oidc store: delete secret: %w", err)
+	}
+	return nil
+}
+
+// credentialsJSON reads the current credentials list.
+func (s *PostgresStore) credentialsJSON(ctx context.Context, clientID OIDCClientID) ([]ClientSecret, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("credentials")
+	sb.From(oidcClientsTable)
+	sb.Where(sb.E("id", clientID.String()))
+
+	query, args := sb.Build()
+	var credentials []byte
+	if err := s.exec.QueryRow(ctx, query, args...).Scan(&credentials); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("oidc store: read credentials: %w", err)
+	}
+
+	var credentialsList []ClientSecret
+	_ = json.Unmarshal(credentials, &credentialsList)
+	return credentialsList, nil
+}
+
 // scanner covers pgx.Rows and pgx.Row.
 type scanner interface {
 	Scan(dest ...any) error
 }
 
 // scanClient scans one row; keep in sync with clientColumns. The
-// id column stores the typeid string; the secret column carries
-// the SHA-256 hash.
+// id column stores the typeid string; secrets carry SHA-256 hashes
+// (legacy single-secret column + credentials JSONB list).
 func scanClient(row scanner) (*Client, error) {
 	var (
 		id          string
 		c           Client
 		name        *string
 		secret      *string
+		credentials []byte
 		callbacks   []byte
 		logoutCBs   []byte
 		launchURL   *string
@@ -928,7 +1134,7 @@ func scanClient(row scanner) (*Client, error) {
 		createdAt   pgtype.Timestamptz
 	)
 	if err := row.Scan(
-		&id, &name, &c.Description, &secret, &callbacks, &logoutCBs, &launchURL,
+		&id, &name, &c.Description, &secret, &credentials, &callbacks, &logoutCBs, &launchURL,
 		&c.IsPublic, &c.PKCEEnabled, &c.PKCESupported, &c.RequiresReauthentication, &c.SkipConsent, &c.IsGroupRestricted,
 		&c.AccessTokenDurationMinutes, &c.RefreshTokenDurationMinutes, &createdByID, &createdAt,
 	); err != nil {
@@ -945,6 +1151,16 @@ func scanClient(row scanner) (*Client, error) {
 	}
 	if secret != nil {
 		c.SecretHash = secret
+	}
+	_ = json.Unmarshal(credentials, &c.Secrets)
+	if c.Secrets == nil && secret != nil {
+		// Secrets migrated before the credentials list existed show
+		// up as one synthetic legacy entry.
+		c.Secrets = []ClientSecret{{
+			ID:         LegacySecretID,
+			SecretHash: *secret,
+			IsActive:   true,
+		}}
 	}
 	if launchURL != nil {
 		c.LaunchURL = *launchURL
