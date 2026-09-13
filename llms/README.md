@@ -7,6 +7,8 @@ References:
 
 - <https://pocket-id.org/docs/api>
 - <https://pocket-id.org/swagger.yaml>
+- [database-reference.sql](./database-reference.sql) — live schema dump of upstream Pocket ID
+  v2.14.0 (cut-off: migration `20260814120000_api_client_access`, dumped 2026-09-14).
 
 ## Phase Index
 
