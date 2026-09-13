@@ -1,194 +1,199 @@
 # Endpoint Reference (Pocket ID upstream)
 
 Source: <https://pocket-id.org/swagger.yaml> — grouped by spec tag. Use as the Yaak
-request checklist: one request per row, named `<METHOD> <path>`. The Gap Register in
-`README.md` tracks what is implemented per phase.
+request checklist: one request per row, named `<METHOD> <path>`. Status per the Gap
+Register in `README.md`: **done** (implemented + live-tested), **partial** (implemented
+with a noted deviation), **planned** (unimplemented — owning phase named).
+
+Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
+`POST /api/auth/sign-out`, `GET /api/auth/session`, `GET /api/account*`,
+`GET /api/healthz` (JSON variant), single-claim custom-claim CRUD,
+`GET /api/oidc/users/me/authorized-clients` aliases — all done.
 
 ## API Keys
 
-| Method | Endpoint                   | Summary        |
-| ------ | -------------------------- | -------------- |
-| GET    | `/api/api-keys`            | List API keys  |
-| POST   | `/api/api-keys`            | Create API key |
-| DELETE | `/api/api-keys/{id}`       | Revoke API key |
-| POST   | `/api/api-keys/{id}/renew` | Renew API key  |
+| Method | Endpoint                   | Summary / Yaak Title | Status            |
+| ------ | -------------------------- | -------------------- | ----------------- |
+| GET    | `/api/api-keys`            | List API keys        | planned (phase 6) |
+| POST   | `/api/api-keys`            | Create API key       | planned (phase 6) |
+| DELETE | `/api/api-keys/{id}`       | Revoke API key       | planned (phase 6) |
+| POST   | `/api/api-keys/{id}/renew` | Renew API key        | planned (phase 6) |
 
 ## APIs
 
-| Method | Endpoint                                     | Summary                                                 |
-| ------ | -------------------------------------------- | ------------------------------------------------------- |
-| GET    | `/api/api-access/{clientId}/apis`            | List APIs a client may access                           |
-| GET    | `/api/api-access/{clientId}/assignable-apis` | List APIs a client can still be granted access to       |
-| GET    | `/api/apis`                                  | List APIs                                               |
-| POST   | `/api/apis`                                  | Create API                                              |
-| DELETE | `/api/apis/{id}`                             | Delete API                                              |
-| GET    | `/api/apis/{id}`                             | Get API by ID                                           |
-| PUT    | `/api/apis/{id}`                             | Update API                                              |
-| GET    | `/api/apis/{id}/assignable-clients`          | List clients that can still be granted access to an API |
-| PUT    | `/api/apis/{id}/cimd-access`                 | Update metadata document client access                  |
-| GET    | `/api/apis/{id}/clients`                     | List clients with access to an API                      |
-| DELETE | `/api/apis/{id}/clients/{clientId}`          | Revoke a client's access to an API                      |
-| PUT    | `/api/apis/{id}/clients/{clientId}`          | Update a client's access to an API                      |
-| PUT    | `/api/apis/{id}/permissions`                 | Update API permissions                                  |
+| Method | Endpoint                                     | Summary / Yaak Title                                    | Status            |
+| ------ | -------------------------------------------- | ------------------------------------------------------- | ----------------- |
+| GET    | `/api/api-access/{clientId}/apis`            | List APIs a client may access                           | planned (phase 6) |
+| GET    | `/api/api-access/{clientId}/assignable-apis` | List APIs a client can still be granted access to       | planned (phase 6) |
+| GET    | `/api/apis`                                  | List APIs                                               | planned (phase 6) |
+| POST   | `/api/apis`                                  | Create API                                              | planned (phase 6) |
+| DELETE | `/api/apis/{id}`                             | Delete API                                              | planned (phase 6) |
+| GET    | `/api/apis/{id}`                             | Get API by ID                                           | planned (phase 6) |
+| PUT    | `/api/apis/{id}`                             | Update API                                              | planned (phase 6) |
+| GET    | `/api/apis/{id}/assignable-clients`          | List clients that can still be granted access to an API | planned (phase 6) |
+| PUT    | `/api/apis/{id}/cimd-access`                 | Update metadata document client access                  | planned (phase 6) |
+| GET    | `/api/apis/{id}/clients`                     | List clients with access to an API                      | planned (phase 6) |
+| DELETE | `/api/apis/{id}/clients/{clientId}`          | Revoke a client's access to an API                      | planned (phase 6) |
+| PUT    | `/api/apis/{id}/clients/{clientId}`          | Update a client's access to an API                      | planned (phase 6) |
+| PUT    | `/api/apis/{id}/permissions`                 | Update API permissions                                  | planned (phase 6) |
 
 ## Application Configuration
 
-| Method | Endpoint                                    | Summary                                |
-| ------ | ------------------------------------------- | -------------------------------------- |
-| GET    | `/api/application-configuration`            | List public application configurations |
-| PUT    | `/api/application-configuration`            | Update application configurations      |
-| GET    | `/api/application-configuration/all`        | List all application configurations    |
-| POST   | `/api/application-configuration/sync-ldap`  | Synchronize LDAP                       |
-| POST   | `/api/application-configuration/test-email` | Send test email                        |
+| Method | Endpoint                                    | Summary / Yaak Title                   | Status            |
+| ------ | ------------------------------------------- | -------------------------------------- | ----------------- |
+| GET    | `/api/application-configuration`            | List public application configurations | planned (phase 8) |
+| PUT    | `/api/application-configuration`            | Update application configurations      | planned (phase 8) |
+| GET    | `/api/application-configuration/all`        | List all application configurations    | planned (phase 8) |
+| POST   | `/api/application-configuration/sync-ldap`  | Synchronize LDAP                       | planned (phase 8) |
+| POST   | `/api/application-configuration/test-email` | Send test email                        | planned (phase 8) |
 
 ## Application Images
 
-| Method | Endpoint                                          | Summary                              |
-| ------ | ------------------------------------------------- | ------------------------------------ |
-| DELETE | `/api/application-images/background`              | Delete background image              |
-| GET    | `/api/application-images/background`              | Get background image                 |
-| PUT    | `/api/application-images/background`              | Update background image              |
-| DELETE | `/api/application-images/default-profile-picture` | Delete default profile picture image |
-| GET    | `/api/application-images/default-profile-picture` | Get default profile picture image    |
-| PUT    | `/api/application-images/default-profile-picture` | Update default profile picture image |
-| GET    | `/api/application-images/email`                   | Get email logo image                 |
-| PUT    | `/api/application-images/email`                   | Update email logo                    |
-| GET    | `/api/application-images/favicon`                 | Get favicon                          |
-| PUT    | `/api/application-images/favicon`                 | Update favicon                       |
-| DELETE | `/api/application-images/logo`                    | Delete logo image                    |
-| GET    | `/api/application-images/logo`                    | Get logo image                       |
-| PUT    | `/api/application-images/logo`                    | Update logo                          |
+| Method | Endpoint                                          | Summary / Yaak Title                 | Status            |
+| ------ | ------------------------------------------------- | ------------------------------------ | ----------------- |
+| DELETE | `/api/application-images/background`              | Delete background image              | planned (phase 8) |
+| GET    | `/api/application-images/background`              | Get background image                 | planned (phase 8) |
+| PUT    | `/api/application-images/background`              | Update background image              | planned (phase 8) |
+| DELETE | `/api/application-images/default-profile-picture` | Delete default profile picture image | planned (phase 8) |
+| GET    | `/api/application-images/default-profile-picture` | Get default profile picture image    | planned (phase 8) |
+| PUT    | `/api/application-images/default-profile-picture` | Update default profile picture image | planned (phase 8) |
+| GET    | `/api/application-images/email`                   | Get email logo image                 | planned (phase 8) |
+| PUT    | `/api/application-images/email`                   | Update email logo                    | planned (phase 8) |
+| GET    | `/api/application-images/favicon`                 | Get favicon                          | planned (phase 8) |
+| PUT    | `/api/application-images/favicon`                 | Update favicon                       | planned (phase 8) |
+| DELETE | `/api/application-images/logo`                    | Delete logo image                    | planned (phase 8) |
+| GET    | `/api/application-images/logo`                    | Get logo image                       | planned (phase 8) |
+| PUT    | `/api/application-images/logo`                    | Update logo                          | planned (phase 8) |
 
 ## Audit Logs
 
-| Method | Endpoint                               | Summary             |
-| ------ | -------------------------------------- | ------------------- |
-| GET    | `/api/audit-logs`                      | List audit logs     |
-| GET    | `/api/audit-logs/all`                  | List all audit logs |
-| GET    | `/api/audit-logs/filters/client-names` | List client names   |
-| GET    | `/api/audit-logs/filters/users`        | List users with IDs |
+| Method | Endpoint                               | Summary / Yaak Title | Status                             |
+| ------ | -------------------------------------- | -------------------- | ---------------------------------- |
+| GET    | `/api/audit-logs`                      | List audit logs      | done — self listing (session auth) |
+| GET    | `/api/audit-logs/all`                  | List all audit logs  | done — admin listing               |
+| GET    | `/api/audit-logs/filters/client-names` | List client names    | done — admin only                  |
+| GET    | `/api/audit-logs/filters/users`        | List users with IDs  | done — admin only                  |
 
 ## Custom Claims
 
-| Method | Endpoint                                      | Summary                               |
-| ------ | --------------------------------------------- | ------------------------------------- |
-| GET    | `/api/custom-claims/suggestions`              | Get custom claim suggestions          |
-| PUT    | `/api/custom-claims/user-group/{userGroupId}` | Update custom claims for a user group |
-| PUT    | `/api/custom-claims/user/{userId}`            | Update custom claims for a user       |
+| Method | Endpoint                                      | Summary / Yaak Title                  | Status |
+| ------ | --------------------------------------------- | ------------------------------------- | ------ |
+| GET    | `/api/custom-claims/suggestions`              | Get custom claim suggestions          | done   |
+| PUT    | `/api/custom-claims/user-group/{userGroupId}` | Update custom claims for a user group | done   |
+| PUT    | `/api/custom-claims/user/{userId}`            | Update custom claims for a user       | done   |
 
 ## Device Login
 
-| Method | Endpoint                                   | Summary                       |
-| ------ | ------------------------------------------ | ----------------------------- |
-| POST   | `/api/device-login/requests`               | Create device login request   |
-| POST   | `/api/device-login/requests/{id}/exchange` | Exchange device login request |
-| POST   | `/api/device-login/verification`           | Inspect device login request  |
-| POST   | `/api/device-login/verification/decision`  | Decide device login request   |
+| Method | Endpoint                                   | Summary / Yaak Title          | Status            |
+| ------ | ------------------------------------------ | ----------------------------- | ----------------- |
+| POST   | `/api/device-login/requests`               | Create device login request   | planned (phase 5) |
+| POST   | `/api/device-login/requests/{id}/exchange` | Exchange device login request | planned (phase 5) |
+| POST   | `/api/device-login/verification`           | Inspect device login request  | planned (phase 5) |
+| POST   | `/api/device-login/verification/decision`  | Decide device login request   | planned (phase 5) |
 
 ## Health
 
-| Method | Endpoint   | Summary                  |
-| ------ | ---------- | ------------------------ |
-| GET    | `/healthz` | Responds to healthchecks |
+| Method | Endpoint   | Summary / Yaak Title     | Status |
+| ------ | ---------- | ------------------------ | ------ |
+| GET    | `/healthz` | Responds to healthchecks | done   |
 
 ## OIDC
 
-| Method | Endpoint                                           | Summary                                       |
-| ------ | -------------------------------------------------- | --------------------------------------------- |
-| GET    | `/api/oidc/clients`                                | List OIDC clients                             |
-| POST   | `/api/oidc/clients`                                | Create OIDC client                            |
-| DELETE | `/api/oidc/clients/{id}`                           | Delete OIDC client                            |
-| GET    | `/api/oidc/clients/{id}`                           | Get OIDC client                               |
-| PUT    | `/api/oidc/clients/{id}`                           | Update OIDC client                            |
-| PUT    | `/api/oidc/clients/{id}/allowed-user-groups`       | Update allowed user groups                    |
-| DELETE | `/api/oidc/clients/{id}/logo`                      | Delete client logo                            |
-| GET    | `/api/oidc/clients/{id}/logo`                      | Get client logo                               |
-| POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            |
-| GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           |
-| GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             |
-| POST   | `/api/oidc/clients/{id}/refresh`                   | Refresh client metadata document              |
-| GET    | `/api/oidc/clients/{id}/scim-service-provider`     | Get SCIM service provider                     |
-| GET    | `/api/oidc/clients/{id}/secrets`                   | List client secrets                           |
-| POST   | `/api/oidc/clients/{id}/secrets`                   | Create client secret                          |
-| DELETE | `/api/oidc/clients/{id}/secrets/{secretId}`        | Delete client secret                          |
-| POST   | `/api/oidc/introspect`                             | Introspect OIDC tokens                        |
-| GET    | `/api/oidc/userinfo`                               | Get user information                          |
-| GET    | `/api/oidc/users/me/authorized-clients`            | List authorized clients for current user      |
-| DELETE | `/api/oidc/users/me/authorized-clients/{clientId}` | Revoke authorization for an OIDC client       |
-| GET    | `/api/oidc/users/me/clients`                       | List accessible OIDC clients for current user |
-| GET    | `/api/oidc/users/{id}/authorized-clients`          | List authorized clients for a user            |
-| PUT    | `/api/user-groups/{id}/allowed-oidc-clients`       | Update allowed OIDC clients                   |
+| Method | Endpoint                                           | Summary / Yaak Title                          | Status                                      |
+| ------ | -------------------------------------------------- | --------------------------------------------- | ------------------------------------------- |
+| GET    | `/api/oidc/clients`                                | List OIDC clients                             | done                                        |
+| POST   | `/api/oidc/clients`                                | Create OIDC client                            | done                                        |
+| DELETE | `/api/oidc/clients/{id}`                           | Delete OIDC client                            | done                                        |
+| GET    | `/api/oidc/clients/{id}`                           | Get OIDC client                               | done                                        |
+| PUT    | `/api/oidc/clients/{id}`                           | Update OIDC client                            | done                                        |
+| PUT    | `/api/oidc/clients/{id}/allowed-user-groups`       | Update allowed user groups                    | done                                        |
+| DELETE | `/api/oidc/clients/{id}/logo`                      | Delete client logo                            | planned (phase 8)                           |
+| GET    | `/api/oidc/clients/{id}/logo`                      | Get client logo                               | planned (phase 8)                           |
+| POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            | planned (phase 8)                           |
+| GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           | planned (phase 5)                           |
+| GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             | planned (phase 5)                           |
+| POST   | `/api/oidc/clients/{id}/refresh`                   | Refresh client metadata document              | planned (phase 8 — CIMD)                    |
+| GET    | `/api/oidc/clients/{id}/scim-service-provider`     | Get SCIM service provider                     | planned (phase 8)                           |
+| GET    | `/api/oidc/clients/{id}/secrets`                   | List client secrets                           | done — multi-secret, values shown once      |
+| POST   | `/api/oidc/clients/{id}/secrets`                   | Create client secret                          | done — multi-secret, values shown once      |
+| DELETE | `/api/oidc/clients/{id}/secrets/{secretId}`        | Delete client secret                          | done — multi-secret, values shown once      |
+| POST   | `/api/oidc/introspect`                             | Introspect OIDC tokens                        | done — client-scoped RFC 7662               |
+| GET    | `/api/oidc/userinfo`                               | Get user information                          | done                                        |
+| GET    | `/api/oidc/users/me/authorized-clients`            | List authorized clients for current user      | done — revocation cascades to active tokens |
+| DELETE | `/api/oidc/users/me/authorized-clients/{clientId}` | Revoke authorization for an OIDC client       | done — revocation cascades to active tokens |
+| GET    | `/api/oidc/users/me/clients`                       | List accessible OIDC clients for current user | done                                        |
+| GET    | `/api/oidc/users/{id}/authorized-clients`          | List authorized clients for a user            | done — revocation cascades to active tokens |
+| PUT    | `/api/user-groups/{id}/allowed-oidc-clients`       | Update allowed OIDC clients                   | planned (phase 5)                           |
 
 ## SCIM
 
-| Method | Endpoint                               | Summary                      |
-| ------ | -------------------------------------- | ---------------------------- |
-| POST   | `/api/scim/service-provider`           | Create SCIM service provider |
-| DELETE | `/api/scim/service-provider/{id}`      | Delete SCIM service provider |
-| PUT    | `/api/scim/service-provider/{id}`      | Update SCIM service provider |
-| POST   | `/api/scim/service-provider/{id}/sync` | Sync SCIM service provider   |
+| Method | Endpoint                               | Summary / Yaak Title         | Status            |
+| ------ | -------------------------------------- | ---------------------------- | ----------------- |
+| POST   | `/api/scim/service-provider`           | Create SCIM service provider | planned (phase 8) |
+| DELETE | `/api/scim/service-provider/{id}`      | Delete SCIM service provider | planned (phase 8) |
+| PUT    | `/api/scim/service-provider/{id}`      | Update SCIM service provider | planned (phase 8) |
+| POST   | `/api/scim/service-provider/{id}/sync` | Sync SCIM service provider   | planned (phase 8) |
 
 ## Storage
 
-| Method | Endpoint                      | Summary                                                |
-| ------ | ----------------------------- | ------------------------------------------------------ |
-| GET    | `/api/storage/sqlite-warning` | Get whether the SQLite storage warning should be shown |
-
-## Users
-
-| Method | Endpoint                                              | Summary                                       |
-| ------ | ----------------------------------------------------- | --------------------------------------------- |
-| POST   | `/api/one-time-access-email`                          | Request one-time access email                 |
-| POST   | `/api/one-time-access-token/{token}`                  | Exchange one-time access token                |
-| POST   | `/api/signup`                                         | Sign up                                       |
-| GET    | `/api/signup-tokens`                                  | List signup tokens                            |
-| POST   | `/api/signup-tokens`                                  | Create signup token                           |
-| DELETE | `/api/signup-tokens/{id}`                             | Delete signup token                           |
-| POST   | `/api/signup/setup`                                   | Sign up initial admin user                    |
-| GET    | `/api/users`                                          | List users                                    |
-| POST   | `/api/users`                                          | Create user                                   |
-| DELETE | `/api/users/{id}`                                     | Delete user                                   |
-| GET    | `/api/users/{id}`                                     | Get user by ID                                |
-| PUT    | `/api/users/{id}`                                     | Update user                                   |
-| GET    | `/api/users/{id}/groups`                              | Get user groups                               |
-| POST   | `/api/users/{id}/one-time-access-email`               | Request one-time access email (admin)         |
-| POST   | `/api/users/{id}/one-time-access-token`               | Create one-time access token for user (admin) |
-| DELETE | `/api/users/{id}/profile-picture`                     | Reset user profile picture                    |
-| PUT    | `/api/users/{id}/profile-picture`                     | Update user profile picture                   |
-| GET    | `/api/users/{id}/profile-picture.png`                 | Get user profile picture                      |
-| PUT    | `/api/users/{id}/user-groups`                         | Update user groups                            |
-| GET    | `/api/users/{id}/webauthn-credentials`                | List user passkeys                            |
-| DELETE | `/api/users/{id}/webauthn-credentials/{credentialId}` | Delete user passkey                           |
-| GET    | `/api/users/me`                                       | Get current user                              |
-| PUT    | `/api/users/me`                                       | Update current user                           |
-| DELETE | `/api/users/me/profile-picture`                       | Reset current user's profile picture          |
-| PUT    | `/api/users/me/profile-picture`                       | Update current user's profile picture         |
-| POST   | `/api/users/me/send-email-verification`               | Send email verification                       |
-| POST   | `/api/users/me/verify-email`                          | Verify email                                  |
+| Method | Endpoint                      | Summary / Yaak Title                                   | Status                                                     |
+| ------ | ----------------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| GET    | `/api/storage/sqlite-warning` | Get whether the SQLite storage warning should be shown | planned (phase 8 — upstream-specific; likely never ported) |
 
 ## User Groups
 
-| Method | Endpoint                      | Summary                 |
-| ------ | ----------------------------- | ----------------------- |
-| GET    | `/api/user-groups`            | List user groups        |
-| POST   | `/api/user-groups`            | Create user group       |
-| DELETE | `/api/user-groups/{id}`       | Delete user group       |
-| GET    | `/api/user-groups/{id}`       | Get user group by ID    |
-| PUT    | `/api/user-groups/{id}`       | Update user group       |
-| PUT    | `/api/user-groups/{id}/users` | Update users in a group |
-| GET    | `/api/user/{id}/groups`       | Get user groups         |
+| Method | Endpoint                      | Summary / Yaak Title    | Status |
+| ------ | ----------------------------- | ----------------------- | ------ |
+| GET    | `/api/user-groups`            | List user groups        | done   |
+| POST   | `/api/user-groups`            | Create user group       | done   |
+| DELETE | `/api/user-groups/{id}`       | Delete user group       | done   |
+| GET    | `/api/user-groups/{id}`       | Get user group by ID    | done   |
+| PUT    | `/api/user-groups/{id}`       | Update user group       | done   |
+| PUT    | `/api/user-groups/{id}/users` | Update users in a group | done   |
+
+## Users
+
+| Method | Endpoint                                              | Summary / Yaak Title                          | Status                                                 |
+| ------ | ----------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------ |
+| POST   | `/api/one-time-access-email`                          | Request one-time access email                 | planned (phase 5)                                      |
+| POST   | `/api/one-time-access-token/{token}`                  | Exchange one-time access token                | planned (phase 5)                                      |
+| POST   | `/api/signup`                                         | Sign up                                       | planned (phase 5)                                      |
+| GET    | `/api/signup-tokens`                                  | List signup tokens                            | planned (phase 5)                                      |
+| POST   | `/api/signup-tokens`                                  | Create signup token                           | planned (phase 5)                                      |
+| DELETE | `/api/signup-tokens/{id}`                             | Delete signup token                           | planned (phase 5)                                      |
+| POST   | `/api/signup/setup`                                   | Sign up initial admin user                    | planned (phase 5)                                      |
+| GET    | `/api/users`                                          | List users                                    | done                                                   |
+| POST   | `/api/users`                                          | Create user                                   | done                                                   |
+| GET    | `/api/users/me`                                       | Get current user                              | done                                                   |
+| PUT    | `/api/users/me`                                       | Update current user                           | partial — profile fields only; email stays admin-gated |
+| DELETE | `/api/users/me/profile-picture`                       | Reset current user's profile picture          | planned (phase 8)                                      |
+| PUT    | `/api/users/me/profile-picture`                       | Update current user's profile picture         | planned (phase 8)                                      |
+| POST   | `/api/users/me/send-email-verification`               | Send email verification                       | planned (phase 5)                                      |
+| POST   | `/api/users/me/verify-email`                          | Verify email                                  | planned (phase 5)                                      |
+| DELETE | `/api/users/{id}`                                     | Delete user                                   | done                                                   |
+| GET    | `/api/users/{id}`                                     | Get user by ID                                | done                                                   |
+| PUT    | `/api/users/{id}`                                     | Update user                                   | done                                                   |
+| GET    | `/api/users/{id}/groups`                              | Get user groups                               | done                                                   |
+| POST   | `/api/users/{id}/one-time-access-email`               | Request one-time access email (admin)         | planned (phase 5)                                      |
+| POST   | `/api/users/{id}/one-time-access-token`               | Create one-time access token for user (admin) | planned (phase 5)                                      |
+| DELETE | `/api/users/{id}/profile-picture`                     | Reset user profile picture                    | planned (phase 8)                                      |
+| PUT    | `/api/users/{id}/profile-picture`                     | Update user profile picture                   | planned (phase 8)                                      |
+| GET    | `/api/users/{id}/profile-picture.png`                 | Get user profile picture                      | planned (phase 8)                                      |
+| PUT    | `/api/users/{id}/user-groups`                         | Update user groups                            | planned (phase 5)                                      |
+| GET    | `/api/users/{id}/webauthn-credentials`                | List user passkeys                            | planned (phase 5)                                      |
+| DELETE | `/api/users/{id}/webauthn-credentials/{credentialId}` | Delete user passkey                           | planned (phase 5)                                      |
 
 ## Version
 
-| Method | Endpoint               | Summary                      |
-| ------ | ---------------------- | ---------------------------- |
-| GET    | `/api/version/current` | Get current deployed version |
-| GET    | `/api/version/latest`  | Get latest available version |
+| Method | Endpoint               | Summary / Yaak Title                      | Status                                                  |
+| ------ | ---------------------- | ----------------------------------------- | ------------------------------------------------------- |
+| GET    | `/api/version/current` | Get current deployed version of Pocket ID | done                                                    |
+| GET    | `/api/version/latest`  | Get latest available version of Pocket ID | partial — mirrors deployed until the phase-7 update job |
 
 ## Well Known
 
-| Method | Endpoint                                  | Summary                                     |
-| ------ | ----------------------------------------- | ------------------------------------------- |
-| GET    | `/.well-known/jwks.json`                  | Get JSON Web Key Set (JWKS)                 |
-| GET    | `/.well-known/oauth-authorization-server` | Get OAuth 2.0 authorization server metadata |
-| GET    | `/.well-known/openid-configuration`       | Get OpenID Connect discovery configuration  |
+| Method | Endpoint                                  | Summary / Yaak Title                        | Status |
+| ------ | ----------------------------------------- | ------------------------------------------- | ------ |
+| GET    | `/.well-known/jwks.json`                  | Get JSON Web Key Set (JWKS)                 | done   |
+| GET    | `/.well-known/oauth-authorization-server` | Get OAuth 2.0 authorization server metadata | done   |
+| GET    | `/.well-known/openid-configuration`       | Get OpenID Connect discovery configuration  | done   |
