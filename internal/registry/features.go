@@ -1,8 +1,10 @@
 package registry
 
 import (
+	"context"
 	"crypto/sha256"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/riipandi/tango/internal/transport/middleware"
@@ -40,8 +42,9 @@ func withLDAPSync(deps Deps) identity.Feature  { return ldapsync.New() }
 // RequireAdmin; the user core mounts its admin routes behind both.
 // Password verifies credentials headlessly; session owns the
 // sign-in/sign-out routes; account mounts self-service under the
-// same guard.
-func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler) {
+// same guard. Returns the sessions feature so the federation
+// surface can resolve session cookies (optional-auth /authorize).
+func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, auditAdapter(audit))
@@ -76,15 +79,42 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature
 		withAPIAccess(deps),
 		withLDAPSync(deps),
 	}
-	return core, features, adminAuth
+	return core, features, adminAuth, sessions
 }
 
-// Identity-provider feature selectors, one line each in
-// federation.New. Placeholders until implemented: no routes,
-// no storage. The federation module is optional: removing its
-// registration (and this file's federation imports) yields a
-// pure internal-identity binary.
-func withOIDC(deps Deps) federation.Feature     { return oidc.New() }
+// withOIDC builds the provider feature: claim readers from the
+// store, token signing via the Phase 3 key service, session-cookie
+// resolution via the identity session feature (optional-auth
+// /authorize), the audit adapter, and the admin guard for client
+// management.
+func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler) federation.Feature {
+	issuer := strings.TrimRight(deps.Config.Public.BaseURL, "/")
+	service := oidc.NewService(
+		oidc.NewPostgresStore(deps.DB),
+		jwtutils.NewCachedKeyProvider(keys, jwks.CacheTTL),
+		issuer,
+		session.CookieName,
+		oidc.WithAudit(federationAuditAdapter(audit)),
+		oidc.WithAuthenticator(sessions),
+	)
+	return oidc.New(service).WithAdminGuard(adminGuard)
+}
+
+// federationAuditAdapter adapts auditlog for federation events:
+// oidc events carry a plain action plus a payload map.
+func federationAuditAdapter(audit *auditlog.Module) func(context.Context, string, map[string]any) {
+	return func(ctx context.Context, event string, params map[string]any) {
+		entry := auditlog.Entry{
+			Event:   event,
+			Trigger: auditlog.TriggerUser,
+			Status:  auditlog.StatusSuccess,
+			Payload: params,
+		}
+		_ = audit.Record(ctx, &entry)
+	}
+}
+
+// withSCIMSync is a placeholder until its phase lands: no routes, no storage.
 func withSCIMSync(deps Deps) federation.Feature { return scimsync.New() }
 
 // newKeyService builds the JWKS key service (private halves

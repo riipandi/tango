@@ -38,7 +38,7 @@
         "react-email": "^6.9.5",
         "tsx": "^4.23.13",
         "typescript": "^7.0.2",
-        "vite": "^8.2.2",
+        "vite": "^8.3.0",
         "vitest": "^5.0.0"
     },
     "config": {
@@ -47,5 +47,5 @@
     "engines": {
         "node": ">=24.21.0"
     },
-    "packageManager": "pnpm@12.3.4"
+    "packageManager": "pnpm@12.4.1"
 }

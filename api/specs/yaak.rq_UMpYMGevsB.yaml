@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_UMpYMGevsB
+createdAt: 2026-09-13T07:28:46.403887
+updatedAt: 2026-09-13T07:28:46.403888
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_wq663t6sTL
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: "POST form: grant_type=authorization_code, code, redirect_uri, code_verifier — atau grant_type=refresh_token + refresh_token. Isi body di UI (Basic auth: client_id:client_secret)"
+headers: []
+method: POST
+name: POST /api/oidc/token
+sortPriority: 0.0
+url: http://localhost:3080/api/oidc/token
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_ec8TojUzzD
+createdAt: 2026-09-13T07:28:34.829631
+updatedAt: 2026-09-13T07:28:34.829632
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_GfrmzYcuVx
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: ""
+headers: []
+method: GET
+name: GET /api/oidc/authorized-clients
+sortPriority: 0.0
+url: http://localhost:3080/api/oidc/authorized-clients
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

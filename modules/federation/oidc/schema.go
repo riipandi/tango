@@ -4,17 +4,19 @@
 // split into subpackages only if a coherent boundary emerges.
 //
 // Files: schema.go (contracts), client.go (relying-party clients),
-// token.go (codes, tokens, JWKS), device.go (RFC 8628),
-// store_*.go (persistence).
+// authorize.go (authorize + interaction), token.go (codes, tokens,
+// refresh rotation), userinfo.go, store.go (persistence).
 //
 // Authentication happens in identity features (passkeys, sessions);
 // this package consumes identity contracts via consumer-side adapters.
 package oidc
 
 import (
-	"go.jetify.com/typeid"
+	"errors"
+	"net/http"
+	"time"
 
-	"github.com/riipandi/tango/modules/federation"
+	"go.jetify.com/typeid"
 )
 
 // Typed IDs for the OIDC/OAuth 2.0 tables: UUIDv7 suffix, snake_case
@@ -58,14 +60,86 @@ func (oauthSessionPrefix) Prefix() string       { return "oauth_session" }
 func (oauthJtiPrefix) Prefix() string           { return "oauth_jti" }
 func (interactionSessionPrefix) Prefix() string { return "interaction_session" }
 
-// Feature is the wireable oidc unit.
-type Feature struct{}
+// NewID mints a client ID; its string form is the clients.id TEXT
+// primary key and the JWT client_id claim.
+func NewID() OIDCClientID { return typeid.Must(typeid.New[OIDCClientID]()) }
 
-// New returns the placeholder feature. /authorize mounts at the
-// root router via the federation RootRoutableFeature capability.
-func New() Feature { return Feature{} }
+// NewInteractionID mints an interaction session ID.
+func NewInteractionID() InteractionSessionID {
+	return typeid.Must(typeid.New[InteractionSessionID]())
+}
+
+// InteractionIDFromString parses an interaction ID from its string
+// form.
+func InteractionIDFromString(raw string) (InteractionSessionID, error) {
+	return typeid.Parse[InteractionSessionID](raw)
+}
+
+// Endpoint paths, token lifetimes, and protocol constants.
+const (
+	AuthorizePath = "/authorize"
+	TokenPath     = "/api/oidc/token"
+	UserInfoPath  = "/api/oidc/userinfo"
+	// InteractionPath is the SPA page resolving an interaction
+	// session (sign-in / consent); the API lives under /api/oidc/interaction.
+	InteractionPath = "/interaction"
+
+	// ClientsAPIPath mounts the admin client CRUD under /api.
+	ClientsAPIPath = "/api/oidc/clients"
+
+	// AuthorizationCodeTTL bounds the one-time code lifetime.
+	AuthorizationCodeTTL = 2 * time.Minute
+	// AccessTokenTTL and RefreshTokenTTL are defaults; per-client
+	// durations override both.
+	AccessTokenTTL  = 60 * time.Minute
+	RefreshTokenTTL = 30 * 24 * time.Hour
+	// InteractionSessionTTL bounds the sign-in/consent bridge.
+	InteractionSessionTTL = 15 * time.Minute
+)
+
+// Scopes understood by this provider.
+const (
+	ScopeOpenID  = "openid"
+	ScopeEmail   = "email"
+	ScopeProfile = "profile"
+	ScopeGroups  = "groups"
+)
+
+// Feature is the wireable oidc unit backed by the provider service.
+// The admin guard (auth → RequireAdmin) applies to client
+// management at mount time (handler.go); without a guard those
+// routes fail closed in requireAdmin.
+type Feature struct {
+	service    *Service
+	adminGuard func(http.Handler) http.Handler
+}
+
+// New wires the feature to its service.
+func New(service *Service) Feature { return Feature{service: service} }
 
 // Name implements federation.Feature.
 func (Feature) Name() string { return "oidc" }
 
-var _ federation.Feature = Feature{}
+// WithAdminGuard registers the admin guard for client management.
+func (f Feature) WithAdminGuard(guard func(http.Handler) http.Handler) Feature {
+	f.adminGuard = guard
+	return f
+}
+
+// Errors surfaced to relying parties (RFC 6749 §5.2) and handlers.
+var (
+	ErrNotFound = errors.New("oidc: not found")
+	// ErrInvalidClient maps to the invalid_client token error.
+	ErrInvalidClient = errors.New("oidc: client authentication failed")
+	// ErrInvalidGrant maps to the invalid_grant token error: bad or
+	// expired code, wrong verifier, replayed refresh token.
+	ErrInvalidGrant = errors.New("oidc: grant is invalid")
+	// ErrInvalidRequest covers malformed authorize/token parameters.
+	ErrInvalidRequest = errors.New("oidc: request is invalid")
+	// ErrAccessDenied covers group-restricted clients whose user is
+	// not a member of any allowed group.
+	ErrAccessDenied = errors.New("oidc: access denied")
+	// ErrUnauthorizedClient rejects clients using grants they may
+	// not use.
+	ErrUnauthorizedClient = errors.New("oidc: client is not authorized for this grant")
+)

@@ -1,0 +1,40 @@
+type: http_request
+model: http_request
+id: rq_7MXS5UmwqW
+createdAt: 2026-09-13T07:28:40.996909
+updatedAt: 2026-09-13T07:28:40.996910
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_wq663t6sTL
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: ""
+headers:
+  - enabled: true
+    name: Authorization
+    value: Bearer <paste-access-token>
+    id: null
+method: GET
+name: GET /api/oidc/userinfo
+sortPriority: 0.0
+url: http://localhost:3080/api/oidc/userinfo
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

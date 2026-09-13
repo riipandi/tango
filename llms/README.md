@@ -10,7 +10,7 @@ tango foundation. Reference: <https://pocket-id.org/docs/api>
 | 1     | [phase-01-auth-core.md](./phase-01-auth-core.md)                 | Auth middleware, session, password, account       | done    | 2026-09-12 |
 | 2     | [phase-02-identity-admin.md](./phase-02-identity-admin.md)       | User groups, custom claims, audit API, admin CRUD | done    | 2026-09-12 |
 | 3     | [phase-03-jwks-wellknown.md](./phase-03-jwks-wellknown.md)       | JWKS provider, discovery endpoints                | done    | 2026-09-13 |
-| 4     | [phase-04-oidc-provider.md](./phase-04-oidc-provider.md)         | Authorize (PKCE), token, userinfo                 | planned | 2026-09-12 |
+| 4     | [phase-04-oidc-provider.md](./phase-04-oidc-provider.md)         | Authorize (PKCE), token, userinfo                 | done    | 2026-09-13 |
 | 5     | [phase-05-passkeys-signin.md](./phase-05-passkeys-signin.md)     | WebAuthn, device login, one-time access, signup   | planned | 2026-09-12 |
 | 6     | [phase-06-apikeys-ratelimit.md](./phase-06-apikeys-ratelimit.md) | API keys, resource APIs, rate limiter             | planned | 2026-09-12 |
 | 7     | [phase-07-jobs-webhooks.md](./phase-07-jobs-webhooks.md)         | Antree consumers, webhooks, scheduler             | planned | 2026-09-12 |
