@@ -9,8 +9,14 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"client_access":true,"client_permission_ids":[],"user_delegated_access":true,"user_delegated_permission_ids":[]}'
-bodyType: null
+  text: |-
+    {
+      "client_access": true,
+      "client_permission_ids": [],
+      "user_delegated_access": true,
+      "user_delegated_permission_ids": []
+    }
+bodyType: application/json
 description: Replace the permissions of this API a single OIDC client may request, leaving its grants on other APIs untouched
 headers: []
 method: PUT

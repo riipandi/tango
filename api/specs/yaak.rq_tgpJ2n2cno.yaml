@@ -9,7 +9,10 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"user_group_ids":[]}'
+  text: |-
+    {
+      "user_group_ids": []
+    }
 bodyType: application/json
 description: Update the groups a specific user belongs to
 headers: []

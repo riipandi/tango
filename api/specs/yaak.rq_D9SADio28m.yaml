@@ -2,16 +2,21 @@ type: http_request
 model: http_request
 id: rq_D9SADio28m
 createdAt: 2026-09-13T19:22:15.294354
-updatedAt: 2026-09-14T09:44:26.608233
+updatedAt: 2026-09-14T09:58:40.394176
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"name":"CI Deploy Key","description":"Created from Yaak","expires_at":"2027-01-01T00:00:00Z"}'
-bodyType: null
-description: Create a new API key for the current user
+  text: |-
+    {
+      "name": "CI Deploy Key",
+      "description": "Created from Yaak",
+      "expires_at": "2027-01-01T00:00:00Z"
+    }
+bodyType: application/json
+description: 'Create a new API key for the current user (tango: name + expires_at required, description optional)'
 headers: []
 method: POST
 name: Create API key

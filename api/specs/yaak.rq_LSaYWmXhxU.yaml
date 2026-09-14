@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_LSaYWmXhxU
 createdAt: 2026-09-14T09:53:10.408175
-updatedAt: 2026-09-14T09:53:10.408176
+updatedAt: 2026-09-14T09:58:46.149211
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_FRoYxGubpu
 authentication: {}
@@ -14,8 +14,20 @@ headers: []
 method: GET
 name: List webhooks
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/webhooks?page=1&limit=10
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/webhooks
+urlParameters:
+- enabled: true
+  name: page
+  value: '1'
+- enabled: true
+  name: limit
+  value: '25'
+- enabled: true
+  name: event
+  value: ''
+- enabled: true
+  name: enabled
+  value: ''
 settingSendCookies:
   enabled: false
   value: true

@@ -9,7 +9,7 @@ authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Get a preview of the OIDC data (ID token, access token, userinfo) that would be sent to the client for a specific user
+description: 'Get a preview of the OIDC data (ID token, access token, userinfo) that would be sent to the client for a specific user — gap register: missing-backend (phase 5); upstream query: scopes'
 headers: []
 method: GET
 name: Preview OIDC client data for user

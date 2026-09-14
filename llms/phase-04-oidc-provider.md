@@ -17,22 +17,22 @@ code, exchange it for tokens, and read userinfo.
 
 - `modules/federation/oidc` — real implementation (module split: `handler.go` owns every HTTP
   surface; logic in area files; all stores in `store.go`):
-    - `authorize.go` — `/authorize` (root router): client validation, redirect-pattern match
-      (exact or trailing-`*` wildcard), PKCE S256 only (plain rejected, 400 before the
-      redirect_uri is ever trusted), code issue (one-time, 2-minute TTL, SHA-256 at rest).
-    - `token.go` — `/api/oidc/token`: client auth (Basic/form, constant-time secret-hash
-      compare, public clients by ID), `authorization_code` + `refresh_token` grants, RS256
-      access + ID tokens via the Phase 3 KeyProvider (sub/aud/azp/nonce/sid/auth_time/groups/
-      custom claims).
-    - Refresh rotation — per-use rotation inside an `oauth2_sessions` family
-      (`request_id`); reuse of a rotated token deactivates the whole family
-      (`oauth2_jtis` replay registry).
-    - `userinfo.go` — Bearer introspection against the published JWKS; scope-filtered claims
-      (email/profile/groups/custom), RFC 6750 `WWW-Authenticate` errors.
-    - `client.go` — client CRUD with group allowlists (`oidc_clients_allowed_user_groups`),
-      hashed secrets (raw shown once at create), group-restricted clients.
-    - `interaction_sessions` — SPA bridge: `/authorize` parks unauthenticated or
-      consent-pending requests; `GET /api/oidc/interaction/{id}` + `POST …/approve` resume.
+  - `authorize.go` — `/authorize` (root router): client validation, redirect-pattern match
+    (exact or trailing-`*` wildcard), PKCE S256 only (plain rejected, 400 before the
+    redirect_uri is ever trusted), code issue (one-time, 2-minute TTL, SHA-256 at rest).
+  - `token.go` — `/api/oidc/token`: client auth (Basic/form, constant-time secret-hash
+    compare, public clients by ID), `authorization_code` + `refresh_token` grants, RS256
+    access + ID tokens via the Phase 3 KeyProvider (sub/aud/azp/nonce/sid/auth_time/groups/
+    custom claims).
+  - Refresh rotation — per-use rotation inside an `oauth2_sessions` family
+    (`request_id`); reuse of a rotated token deactivates the whole family
+    (`oauth2_jtis` replay registry).
+  - `userinfo.go` — Bearer introspection against the published JWKS; scope-filtered claims
+    (email/profile/groups/custom), RFC 6750 `WWW-Authenticate` errors.
+  - `client.go` — client CRUD with group allowlists (`oidc_clients_allowed_user_groups`),
+    hashed secrets (raw shown once at create), group-restricted clients.
+  - `interaction_sessions` — SPA bridge: `/authorize` parks unauthenticated or
+    consent-pending requests; `GET /api/oidc/interaction/{id}` + `POST …/approve` resume.
 - Registry: `oidc.Service` wired with the shared key provider, session authenticator, audit
   adapter; client management behind the admin guard (fail closed — routes skip mounting when
   the guard is absent).

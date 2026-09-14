@@ -1939,4 +1939,3 @@ ALTER TABLE ONLY public.webauthn_credentials
 --
 
 \unrestrict bbssT8JLdvbGp4WtA6DUmc8Nwbx0LFSNRchjlVwuNSZiCOj6DuccPYaa1lwAlwp
-

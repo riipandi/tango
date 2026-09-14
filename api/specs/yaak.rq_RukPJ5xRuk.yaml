@@ -2,16 +2,19 @@ type: http_request
 model: http_request
 id: rq_RukPJ5xRuk
 createdAt: 2026-09-13T19:22:36.805633
-updatedAt: 2026-09-14T09:44:33.011061
+updatedAt: 2026-09-14T09:58:53.974365
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"expires_at":"2027-06-01T00:00:00Z"}'
-bodyType: null
-description: Renew an existing API key by ID
+  text: |-
+    {
+      "expires_at": "2027-06-01T00:00:00Z"
+    }
+bodyType: application/json
+description: Renew an existing API key by ID (only for an expired key)
 headers: []
 method: POST
 name: Renew API key

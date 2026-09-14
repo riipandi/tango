@@ -2,20 +2,46 @@ type: http_request
 model: http_request
 id: rq_sKkys3qjj3
 createdAt: 2026-09-13T08:49:24.197394
-updatedAt: 2026-09-14T09:43:21.436795
+updatedAt: 2026-09-14T09:59:35.962880
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_7wm4R7MYfg
 authentication: {}
 authenticationType: null
-body: {}
+body:
+  bodyType: application/json
+  text: ''
 bodyType: null
-description: Get a paginated list of all audit logs (admin only)
+description: 'Get a paginated list of all audit logs (admin only; tango filters: event, user_id, from, to + page/limit)'
 headers: []
 method: GET
 name: List all audit logs
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/audit-logs/all
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: page
+  value: '1'
+  id: null
+- enabled: true
+  name: limit
+  value: '25'
+  id: null
+- enabled: true
+  name: event
+  value: ''
+  id: null
+- enabled: true
+  name: user_id
+  value: ''
+  id: null
+- enabled: true
+  name: from
+  value: ''
+  id: null
+- enabled: true
+  name: to
+  value: ''
+  id: null
 settingSendCookies:
   enabled: false
   value: true

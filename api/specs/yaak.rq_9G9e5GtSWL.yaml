@@ -9,7 +9,7 @@ authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Get OIDC client metadata for discovery and configuration
+description: 'Get OIDC client metadata for discovery and configuration — gap register: missing-backend (phase 5)'
 headers: []
 method: GET
 name: Get client metadata

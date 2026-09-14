@@ -9,7 +9,11 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"identity": "admin", "secret": "Admin123!"}'
+  text: |-
+    {
+      "identity": "admin",
+      "secret": "Admin123!"
+    }
 bodyType: application/json
 description: 'Tango extension: password sign-in that sets the tango_session cookie used by all self/admin endpoints'
 headers: []

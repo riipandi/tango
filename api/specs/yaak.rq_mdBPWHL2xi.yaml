@@ -9,7 +9,11 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"enabled":false,"permission_ids":[]}'
+  text: |-
+    {
+      "enabled": false,
+      "permission_ids": []
+    }
 bodyType: application/json
 description: Replace which permissions of an API every client registered through a Client ID Metadata Document may request
 headers: []

@@ -9,7 +9,11 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"code": "PXXXXXXX", "decision": "approve"}'
+  text: |-
+    {
+      "code": "PXXXXXXX",
+      "decision": "approve"
+    }
 bodyType: application/json
 description: Approve or deny a device login request; approval requires fresh passkey reauthentication
 headers: []

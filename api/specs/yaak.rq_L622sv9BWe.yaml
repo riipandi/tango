@@ -9,7 +9,10 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"email":"ops@example.com"}'
+  text: |-
+    {
+      "email": "ops@example.com"
+    }
 bodyType: application/json
 description: Send a test email to verify email configuration — body is the tango explicit-recipient extension
 headers: []

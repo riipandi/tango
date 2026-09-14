@@ -9,9 +9,13 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"email": "user@example.com"}'
+  text: |-
+    {
+      "email": "user@example.com",
+      "redirect_path": ""
+    }
 bodyType: application/json
-description: Request a one-time access email for unauthenticated users
+description: 'Request a one-time access email for unauthenticated users (tango: optional redirect_path; upstream: redirectPath)'
 headers: []
 method: POST
 name: Request one-time access email

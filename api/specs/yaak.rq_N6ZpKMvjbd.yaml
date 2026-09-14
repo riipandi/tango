@@ -9,7 +9,11 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"display_name":"Adi P","locale":"id-ID"}'
+  text: |-
+    {
+      "display_name": "Adi P",
+      "locale": "id-ID"
+    }
 bodyType: application/json
 description: Patch the current user's account profile — tango-only /api/account surface
 headers: []

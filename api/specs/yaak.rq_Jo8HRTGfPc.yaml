@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_Jo8HRTGfPc
 createdAt: 2026-09-14T09:53:36.742284
-updatedAt: 2026-09-14T09:53:36.742285
+updatedAt: 2026-09-14T09:58:46.153168
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_FRoYxGubpu
 authentication: {}
@@ -13,7 +13,7 @@ description: Queue a test delivery for a webhook — tango-only webhook surface
 headers: []
 method: POST
 name: Send test webhook
-sortPriority: 0.0
+sortPriority: 6000.0
 url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}/test
 urlParameters: []
 settingSendCookies:

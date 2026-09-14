@@ -9,7 +9,13 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"first_name":"Admin","last_name":"Sistem","display_name":"Admin","locale":"id-ID"}'
+  text: |-
+    {
+      "first_name": "Admin",
+      "last_name": "Sistem",
+      "display_name": "Admin",
+      "locale": "id-ID"
+    }
 bodyType: application/json
 description: 'Update the currently authenticated user''s information — tango deviation: profile fields only, email stays admin-gated'
 headers: []

@@ -2,16 +2,21 @@ type: http_request
 model: http_request
 id: rq_HHGDUQMDNG
 createdAt: 2026-09-14T09:48:05.961042
-updatedAt: 2026-09-14T09:48:05.961043
+updatedAt: 2026-09-14T09:59:21.615021
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tw8Gigobcd
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '[{"key":"app.name","value":"Tango"}]'
+  text: |-
+    {
+      "appName": "Tango",
+      "allowUserSignups": "false",
+      "sessionDuration": "14400"
+    }
 bodyType: application/json
-description: Update application configuration settings — deferred (appconfig module); body is a key/value list
+description: Update application configuration settings — upstream body is one object with config keys as string fields; deferred (appconfig module)
 headers: []
 method: PUT
 name: Update application configurations

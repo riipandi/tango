@@ -9,7 +9,10 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"name":"Billing API v2"}'
+  text: |-
+    {
+      "name": "Billing API v2"
+    }
 bodyType: application/json
 description: Update an existing API by ID
 headers: []

@@ -9,7 +9,11 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"current_password":"Admin123!","new_password":"Admin456!"}'
+  text: |-
+    {
+      "current_password": "Admin123!",
+      "new_password": "Admin456!"
+    }
 bodyType: application/json
 description: Change the current user's password — tango-only /api/account surface
 headers: []

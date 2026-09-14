@@ -9,7 +9,18 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"id":"REPLACE_CREDENTIAL_ID","rawId":"REPLACE","type":"public-key","response":{"clientDataJSON":"REPLACE","authenticatorData":"REPLACE","signature":"REPLACE","userHandle":"REPLACE"}}'
+  text: |-
+    {
+      "id": "REPLACE_CREDENTIAL_ID",
+      "rawId": "REPLACE",
+      "type": "public-key",
+      "response": {
+        "clientDataJSON": "REPLACE",
+        "authenticatorData": "REPLACE",
+        "signature": "REPLACE",
+        "userHandle": "REPLACE"
+      }
+    }
 bodyType: application/json
 description: Verify the passkey assertion and set the sign-in session cookie; session_id from login/begin
 headers: []

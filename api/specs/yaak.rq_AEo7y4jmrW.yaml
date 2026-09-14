@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_AEo7y4jmrW
 createdAt: 2026-09-14T09:47:31.055467
-updatedAt: 2026-09-14T09:47:31.055468
+updatedAt: 2026-09-14T09:59:07.556747
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -10,13 +10,25 @@ authenticationType: null
 body:
   text: ''
 bodyType: null
-description: Get a paginated list of APIs the OIDC client cannot already reach
+description: 'Get a paginated list of APIs the OIDC client cannot already reach (tango: search + page/limit)'
 headers: []
 method: GET
 name: List APIs a client can still be granted access to
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/api-access/{{ clientId }}/assignable-apis?page=1&limit=10
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/api-access/{{ clientId }}/assignable-apis
+urlParameters:
+- enabled: true
+  name: search
+  value: ''
+  id: null
+- enabled: true
+  name: page
+  value: '1'
+  id: null
+- enabled: true
+  name: limit
+  value: '25'
+  id: null
 settingSendCookies:
   enabled: false
   value: true

@@ -2,20 +2,32 @@ type: http_request
 model: http_request
 id: rq_ZSUZoBg7jw
 createdAt: 2026-09-14T09:47:45.905512
-updatedAt: 2026-09-14T09:47:45.905512
+updatedAt: 2026-09-14T09:59:12.729117
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Get a paginated list of OIDC clients that have no grant on the API yet
+description: 'Get a paginated list of OIDC clients that have no grant on the API yet (tango: search + page/limit)'
 headers: []
 method: GET
 name: List clients that can still be granted access to an API
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/assignable-clients?page=1&limit=10
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/assignable-clients
+urlParameters:
+- enabled: true
+  name: search
+  value: ''
+  id: null
+- enabled: true
+  name: page
+  value: '1'
+  id: null
+- enabled: true
+  name: limit
+  value: '25'
+  id: null
 settingSendCookies:
   enabled: false
   value: true

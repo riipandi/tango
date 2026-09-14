@@ -9,7 +9,10 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"code": "PXXXXXXX"}'
+  text: |-
+    {
+      "code": "PXXXXXXX"
+    }
 bodyType: application/json
 description: Retrieve the requesting device details for an authenticated user before approval or denial
 headers: []

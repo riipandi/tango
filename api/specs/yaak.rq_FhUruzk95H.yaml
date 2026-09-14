@@ -9,7 +9,16 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"id":"REPLACE_CREDENTIAL_ID","rawId":"REPLACE","type":"public-key","response":{"clientDataJSON":"REPLACE","attestationObject":"REPLACE"}}'
+  text: |-
+    {
+      "id": "REPLACE_CREDENTIAL_ID",
+      "rawId": "REPLACE",
+      "type": "public-key",
+      "response": {
+        "clientDataJSON": "REPLACE",
+        "attestationObject": "REPLACE"
+      }
+    }
 bodyType: application/json
 description: Finish the passkey registration ceremony; body is the WebAuthn attestation response, session_id from begin
 headers: []

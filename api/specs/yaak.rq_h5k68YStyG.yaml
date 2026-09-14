@@ -9,8 +9,12 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"name":"Billing API","resource":"https://api.example.com"}'
-bodyType: null
+  text: |-
+    {
+      "name": "Billing API",
+      "resource": "https://api.example.com"
+    }
+bodyType: application/json
 description: Create a new API resource server
 headers: []
 method: POST

@@ -2,20 +2,27 @@ type: http_request
 model: http_request
 id: rq_SR7oqhX2XY
 createdAt: 2026-09-14T09:53:14.458552
-updatedAt: 2026-09-14T09:53:14.458553
+updatedAt: 2026-09-14T09:58:46.150544
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_FRoYxGubpu
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"name":"http-lifecycle","endpoint":"https://example.test/hook","event_types":["user.created"]}'
+  text: |-
+    {
+      "name": "http-lifecycle",
+      "endpoint": "https://example.test/hook",
+      "event_types": [
+        "user.created"
+      ]
+    }
 bodyType: application/json
 description: Create an outbound webhook subscription — tango-only webhook surface
 headers: []
 method: POST
 name: Create webhook
-sortPriority: 0.0
+sortPriority: 2000.0
 url: ${[ apiBaseURL ]}/api/webhooks
 urlParameters: []
 settingSendCookies:

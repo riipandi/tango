@@ -9,7 +9,10 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"oidcClientIds":[]}'
+  text: |-
+    {
+      "oidc_client_ids": []
+    }
 bodyType: application/json
 description: Update the OIDC clients allowed for a specific user group — upstream body shape; gap register flags this row missing-backend in tango
 headers: []

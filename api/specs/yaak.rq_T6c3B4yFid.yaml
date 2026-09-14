@@ -9,7 +9,10 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"token": "REPLACE_RAW_TOKEN"}'
+  text: |-
+    {
+      "token": "REPLACE_RAW_TOKEN"
+    }
 bodyType: application/json
 description: Verify the currently authenticated user's email using a verification token
 headers: []

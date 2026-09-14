@@ -2,20 +2,24 @@ type: http_request
 model: http_request
 id: rq_8W5ivHoNbJ
 createdAt: 2026-09-14T09:53:22.480076
-updatedAt: 2026-09-14T09:53:22.480077
+updatedAt: 2026-09-14T09:58:46.151040
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_FRoYxGubpu
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"name":"http-lifecycle","enabled":true}'
+  text: |-
+    {
+      "name": "http-lifecycle",
+      "enabled": true
+    }
 bodyType: application/json
 description: Update a webhook by ID — tango-only webhook surface
 headers: []
 method: PUT
 name: Update webhook
-sortPriority: 0.0
+sortPriority: 3000.0
 url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}
 urlParameters: []
 settingSendCookies:

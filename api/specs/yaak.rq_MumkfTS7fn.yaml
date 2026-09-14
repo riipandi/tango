@@ -2,16 +2,26 @@ type: http_request
 model: http_request
 id: rq_MumkfTS7fn
 createdAt: 2026-09-14T09:49:59.972647
-updatedAt: 2026-09-14T09:49:59.972648
+updatedAt: 2026-09-14T10:00:02.324455
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"name":"RP updated","callback_urls":["https://rp.example/callback"]}'
+  text: |-
+    {
+      "name": "RP updated",
+      "description": "Demo relying party",
+      "callback_urls": ["https://rp.example/callback"],
+      "logout_callback_urls": ["https://rp.example/logout"],
+      "launch_url": "https://rp.example",
+      "is_public": false,
+      "pkce_enabled": true,
+      "skip_consent": true
+    }
 bodyType: application/json
-description: Update an existing OIDC client
+description: Update an existing OIDC client (tango snake_case fields; nil/omitted fields keep current values)
 headers: []
 method: PUT
 name: Update OIDC client

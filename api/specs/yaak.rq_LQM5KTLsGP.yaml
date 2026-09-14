@@ -9,7 +9,11 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"name":"engineering","display_name":"Engineering Ops"}'
+  text: |-
+    {
+      "name": "engineering",
+      "display_name": "Engineering Ops"
+    }
 bodyType: application/json
 description: Update an existing user group by ID
 headers: []

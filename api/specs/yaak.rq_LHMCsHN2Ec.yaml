@@ -9,7 +9,11 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"name":"engineering","display_name":"Engineering"}'
+  text: |-
+    {
+      "name": "engineering",
+      "display_name": "Engineering"
+    }
 bodyType: application/json
 description: Create a new user group
 headers: []

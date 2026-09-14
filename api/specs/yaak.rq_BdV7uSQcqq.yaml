@@ -9,7 +9,11 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"secret":"supplied-secret-123456"}'
+  text: |-
+    {
+      "secret": "supplied-secret-123456",
+      "expires_at": "2027-01-01T00:00:00Z"
+    }
 bodyType: application/json
 description: Add a new secret to an OIDC client, leaving the existing ones usable. The value is only returned by this endpoint and cannot be retrieved later.
 headers: []

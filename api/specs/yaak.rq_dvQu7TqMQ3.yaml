@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_dvQu7TqMQ3
 createdAt: 2026-09-14T09:53:27.269092
-updatedAt: 2026-09-14T09:53:27.269093
+updatedAt: 2026-09-14T09:58:46.151518
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_FRoYxGubpu
 authentication: {}
@@ -13,7 +13,7 @@ description: Delete a webhook by ID — tango-only webhook surface
 headers: []
 method: DELETE
 name: Delete webhook
-sortPriority: 0.0
+sortPriority: 4000.0
 url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}
 urlParameters: []
 settingSendCookies:

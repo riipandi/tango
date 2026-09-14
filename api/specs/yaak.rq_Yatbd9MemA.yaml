@@ -2,20 +2,32 @@ type: http_request
 model: http_request
 id: rq_Yatbd9MemA
 createdAt: 2026-09-13T19:23:31.940854
-updatedAt: 2026-09-14T09:44:40.259156
+updatedAt: 2026-09-14T09:59:02.542915
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Get a paginated list of APIs with optional search and sorting
+description: 'Get a paginated list of APIs with optional search and sorting (tango: search + page/limit)'
 headers: []
 method: GET
 name: List APIs
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/apis
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: search
+  value: ''
+  id: null
+- enabled: true
+  name: page
+  value: '1'
+  id: null
+- enabled: true
+  name: limit
+  value: '25'
+  id: null
 settingSendCookies:
   enabled: false
   value: true

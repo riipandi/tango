@@ -2,14 +2,28 @@ type: http_request
 model: http_request
 id: rq_UMpYMGevsB
 createdAt: 2026-09-13T07:28:46.403887
-updatedAt: 2026-09-14T09:45:49.253429
+updatedAt: 2026-09-14T09:59:45.364916
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_wq663t6sTL
 authentication: {}
 authenticationType: null
-body: {}
+body:
+  bodyType: application/x-www-form-urlencoded
+  form:
+  - enabled: true
+    name: grant_type
+    value: authorization_code
+  - enabled: true
+    name: code
+    value: REPLACE_AUTH_CODE
+  - enabled: true
+    name: redirect_uri
+    value: https://rp.example/callback
+  - enabled: true
+    name: client_id
+    value: REPLACE_CLIENT_ID
 bodyType: null
-description: Issues OAuth tokens (password / authorization-code exchange) — POST /api/oidc/token is not in the upstream swagger paths
+description: Issues OAuth tokens (authorization_code / client_credentials / refresh_token) — client auth via Basic or form credentials; not in the upstream swagger paths
 headers: []
 method: POST
 name: Issue OIDC token

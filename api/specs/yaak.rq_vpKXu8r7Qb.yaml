@@ -9,7 +9,10 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"name": "Renamed passkey"}'
+  text: |-
+    {
+      "name": "Renamed passkey"
+    }
 bodyType: application/json
 description: Rename a specific WebAuthn credential for a user
 headers: []

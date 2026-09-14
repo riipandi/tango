@@ -2,14 +2,25 @@ type: http_request
 model: http_request
 id: rq_tmHxezcWuY
 createdAt: 2026-09-13T08:47:56.195463
-updatedAt: 2026-09-14T09:45:58.055478
+updatedAt: 2026-09-14T09:59:51.215163
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
 authenticationType: null
-body: {}
+body:
+  bodyType: application/x-www-form-urlencoded
+  form:
+  - enabled: true
+    name: token
+    value: REPLACE_ACCESS_TOKEN
+  - enabled: true
+    name: client_id
+    value: REPLACE_CLIENT_ID
+  - enabled: true
+    name: client_secret
+    value: REPLACE_CLIENT_SECRET
 bodyType: null
-description: Pass a token to verify if it is considered valid.
+description: Pass a token to verify if it is considered valid — RFC 7662, form body; client auth via Basic or form credentials; tokens of other clients introspect as inactive
 headers: []
 method: POST
 name: Introspect OIDC tokens

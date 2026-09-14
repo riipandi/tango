@@ -9,7 +9,12 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"usage_limit": 5, "ttl": "24h"}'
+  text: |-
+    {
+      "usage_limit": 5,
+      "ttl": "24h",
+      "user_group_ids": []
+    }
 bodyType: application/json
 description: Create a new signup token that allows user registration
 headers: []

@@ -15,7 +15,10 @@ method: GET
 name: Get email logo image
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/application-images/email
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: skipCache
+  value: 'false'
 settingSendCookies:
   enabled: false
   value: true

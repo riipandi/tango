@@ -15,7 +15,10 @@ method: GET
 name: Get favicon
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/application-images/favicon
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: skipCache
+  value: 'false'
 settingSendCookies:
   enabled: false
   value: true

@@ -9,13 +9,22 @@ authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Get a paginated list of users with optional search and sorting — anonymous calls are rejected by the guard
+description: 'Get a paginated list of users with optional search and sorting — anonymous calls are rejected by the guard (tango: query + page/limit; upstream uses search + pagination[page])'
 headers: []
 method: GET
 name: List users (anonymous, guarded)
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: query
+  value: ''
+- enabled: true
+  name: page
+  value: '1'
+- enabled: true
+  name: limit
+  value: '25'
 settingSendCookies:
   enabled: false
   value: true

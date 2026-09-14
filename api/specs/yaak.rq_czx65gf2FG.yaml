@@ -9,7 +9,13 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"username": "admin", "email": "admin@example.com", "first_name": "Admin", "last_name": "Sistem"}'
+  text: |-
+    {
+      "username": "admin",
+      "email": "admin@example.com",
+      "first_name": "Admin",
+      "last_name": "Sistem"
+    }
 bodyType: application/json
 description: Sign up and generate setup access token for initial admin user
 headers: []

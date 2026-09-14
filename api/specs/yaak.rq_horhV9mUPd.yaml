@@ -9,7 +9,15 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"username":"jane","email":"jane@example.com","first_name":"Jane","last_name":"Doe","is_admin":false}'
+  text: |-
+    {
+      "username": "jane",
+      "email": "jane@example.com",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "display_name": "Jane D",
+      "is_admin": false
+    }
 bodyType: application/json
 description: Create a new user
 headers: []

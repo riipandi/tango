@@ -20,7 +20,10 @@ method: PUT
 name: Update logo
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/application-images/logo
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: light
+  value: 'true'
 settingSendCookies:
   enabled: false
   value: true

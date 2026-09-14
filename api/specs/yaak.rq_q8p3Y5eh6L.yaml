@@ -9,7 +9,10 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"value":"auditor"}'
+  text: |-
+    {
+      "value": "auditor"
+    }
 bodyType: application/json
 description: Update one custom claim for a user — tango-only single-claim CRUD extension
 headers: []

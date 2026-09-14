@@ -15,7 +15,10 @@ method: GET
 name: Get background image
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/application-images/background
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: skipCache
+  value: 'false'
 settingSendCookies:
   enabled: false
   value: true

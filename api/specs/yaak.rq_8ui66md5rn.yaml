@@ -9,7 +9,13 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"username": "newuser", "email": "newuser@example.com", "first_name": "New", "token": "REPLACE_RAW_TOKEN"}'
+  text: |-
+    {
+      "username": "newuser",
+      "email": "newuser@example.com",
+      "first_name": "New",
+      "token": "REPLACE_RAW_TOKEN"
+    }
 bodyType: application/json
 description: Create a new user account
 headers: []

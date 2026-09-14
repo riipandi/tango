@@ -9,7 +9,13 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '[{"key":"role","value":"admin"}]'
+  text: |-
+    [
+      {
+        "key": "role",
+        "value": "admin"
+      }
+    ]
 bodyType: application/json
 description: Update or create custom claims for a specific user group (full list replace)
 headers: []

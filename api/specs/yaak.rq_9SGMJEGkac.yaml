@@ -9,7 +9,12 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"endpoint":"https://scim.example.com/v2","token":"demo-token","oidc_client_id":"{{ clientId }}"}'
+  text: |-
+    {
+      "endpoint": "https://scim.example.com/v2",
+      "token": "demo-token",
+      "oidc_client_id": "{{ clientId }}"
+    }
 bodyType: application/json
 description: Update an existing SCIM service provider
 headers: []

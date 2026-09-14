@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_RJAWQoXfym
 createdAt: 2026-09-14T09:53:31.995704
-updatedAt: 2026-09-14T09:53:31.995704
+updatedAt: 2026-09-14T09:58:46.152786
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_FRoYxGubpu
 authentication: {}
@@ -13,7 +13,7 @@ description: Rotate the signing secret of a webhook — tango-only webhook surfa
 headers: []
 method: POST
 name: Rotate webhook secret
-sortPriority: 0.0
+sortPriority: 5000.0
 url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}/rotate-secret
 urlParameters: []
 settingSendCookies:

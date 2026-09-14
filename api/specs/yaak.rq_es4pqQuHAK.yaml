@@ -9,13 +9,22 @@ authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Get a paginated list of user groups with optional search and sorting
+description: 'Get a paginated list of user groups with optional search and sorting (tango: query + page/limit; upstream uses search + pagination[page])'
 headers: []
 method: GET
 name: List user groups
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/user-groups?page=1&limit=10
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/user-groups
+urlParameters:
+- enabled: true
+  name: query
+  value: ''
+- enabled: true
+  name: page
+  value: '1'
+- enabled: true
+  name: limit
+  value: '25'
 settingSendCookies:
   enabled: false
   value: true

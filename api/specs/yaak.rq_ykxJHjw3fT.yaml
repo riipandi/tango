@@ -10,7 +10,7 @@ authenticationType: null
 body:
   bodyType: application/json
   text: '{}'
-bodyType: application/json
+bodyType: null
 description: Create a short-lived request that can be approved from another authenticated device
 headers: []
 method: POST

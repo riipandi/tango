@@ -9,7 +9,7 @@ authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Request a one-time access email for a specific user (admin only)
+description: Request a one-time access email for a specific user (admin only; tango takes no body — upstream has an optional ttl field)
 headers: []
 method: POST
 name: Request one-time access email (admin)

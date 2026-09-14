@@ -9,8 +9,20 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"permissions":[{"key":"read","name":"Read"},{"key":"write","name":"Write"}]}'
-bodyType: null
+  text: |-
+    {
+      "permissions": [
+        {
+          "key": "read",
+          "name": "Read"
+        },
+        {
+          "key": "write",
+          "name": "Write"
+        }
+      ]
+    }
+bodyType: application/json
 description: Replace the full set of permissions for an API
 headers: []
 method: PUT

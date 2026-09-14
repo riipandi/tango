@@ -9,7 +9,13 @@ authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: '{"first_name":"Jane","last_name":"Doe","is_admin":false,"disabled":false}'
+  text: |-
+    {
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "is_admin": false,
+      "disabled": false
+    }
 bodyType: application/json
 description: Update an existing user by ID
 headers: []
