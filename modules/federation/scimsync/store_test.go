@@ -1,0 +1,114 @@
+package scimsync
+
+import (
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/pkg/crypto"
+	"github.com/riipandi/tango/pkg/testutils"
+)
+
+// newStore builds the provider store over the shared test container
+// with a real cipher (tokens must round-trip encrypted). The fixture
+// client id lands in clientFixtureID.
+func newStore(t *testing.T) *PostgresStore {
+	t.Helper()
+	ctx := t.Context()
+
+	pg := testutils.StartPostgres(ctx, t)
+	if _, err := database.MigrateUp(ctx, pg.DSN); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+	ds, err := datastore.New(ctx, datastore.Options{DSN: pg.DSN})
+	require.NoError(t, err)
+	t.Cleanup(func() { ds.Close() })
+
+	cipher, err := crypto.NewCipher(make([]byte, 32))
+	require.NoError(t, err)
+
+	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
+	clientFixtureID = "oidc_client_" + stamp[len(stamp)-8:]
+	if _, err := ds.Exec(ctx,
+		"INSERT INTO public.oidc_clients (id, name) VALUES ($1, $2)", clientFixtureID, "scim-test"); err != nil {
+		t.Fatalf("insert client fixture: %v", err)
+	}
+	return NewPostgresStore(ds, cipher)
+}
+
+var clientFixtureID string
+
+func TestProviderLifecycle(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+
+	params := UpsertParams{
+		Endpoint:     "https://scim.example.com/v2",
+		Token:        "secret-token-" + strconv.Itoa(int(time.Now().UnixNano())),
+		OIDCClientID: clientFixtureID,
+	}
+	created, err := store.Create(ctx, params)
+	require.NoError(t, err)
+	assert.False(t, created.ID.IsZero())
+	assert.Equal(t, params.Endpoint, created.Endpoint)
+
+	// Token round-trips decrypted.
+	got, err := store.GetByID(ctx, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, params.Token, got.Token)
+
+	// Duplicate for the same client is rejected.
+	_, err = store.Create(ctx, params)
+	assert.ErrorIs(t, err, ErrDuplicate)
+
+	// Unknown client is rejected.
+	_, err = store.Create(ctx, UpsertParams{Endpoint: params.Endpoint, Token: "x", OIDCClientID: "missing"})
+	assert.ErrorIs(t, err, ErrUnknownClient)
+
+	// Update replaces endpoint and token.
+	updated, err := store.Update(ctx, created.ID, UpsertParams{
+		Endpoint:     "https://scim2.example.com/v2",
+		Token:        "rotated",
+		OIDCClientID: params.OIDCClientID,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "https://scim2.example.com/v2", updated.Endpoint)
+
+	got, err = store.GetByID(ctx, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "rotated", got.Token)
+
+	// MarkSynced stamps the timestamp.
+	before := time.Now().UTC().Truncate(time.Microsecond)
+	require.NoError(t, store.MarkSynced(ctx, created.ID, before))
+	got, err = store.GetByID(ctx, created.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.LastSyncedAt)
+	assert.WithinDuration(t, before, *got.LastSyncedAt, time.Second)
+
+	// Delete removes the row.
+	require.NoError(t, store.Delete(ctx, created.ID))
+	_, err = store.GetByID(ctx, created.ID)
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestProviderGetByClient(t *testing.T) {
+	store := newStore(t)
+	ctx := t.Context()
+
+	_, err := store.GetByClient(ctx, clientFixtureID)
+	assert.ErrorIs(t, err, ErrNotFound)
+
+	params := UpsertParams{Endpoint: "https://s.example.com", Token: "t", OIDCClientID: clientFixtureID}
+	created, err := store.Create(ctx, params)
+	require.NoError(t, err)
+
+	got, err := store.GetByClient(ctx, clientFixtureID)
+	require.NoError(t, err)
+	assert.Equal(t, created.ID.String(), got.ID.String())
+}
