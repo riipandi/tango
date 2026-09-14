@@ -56,4 +56,5 @@ Go + React monolith template (tango): Kong CLI, Koanf config, chi router, Postgr
 - Committing without a JS file staged can fail lefthook `format-js`; retry or use `--no-verify` after confirming `format-go` is clean.
 - `env.example` and `internal/config` are kept in sync by a test — new config keys must be documented in `.env.example`.
 - Commits are local only; never push without being asked.
+- Never commit on your own — even when the work is done and the gate is green. Recommend a commit message and let the user run the commit (the only exception is an explicit "commit" instruction in that turn).
 - `compose.yaml` `pocketid` service runs upstream Pocket ID for parity testing; its DB holds real schema state — do not wipe it casually.
