@@ -137,7 +137,8 @@ func (s *Service) refreshClientMetadata(ctx context.Context, client Client) (Cli
 		IsPublic:           ptr(true),
 		MetadataGrantTypes: doc.GrantTypes,
 	}
-	if err := s.store.RefreshClientMetadata(ctx, client.ID, params); err != nil {		return Client{}, err
+	if err := s.store.RefreshClientMetadata(ctx, client.ID, params); err != nil {
+		return Client{}, err
 	}
 	s.record(ctx, "oidc_client_metadata_refreshed", map[string]any{"client_id": client.ID.String()})
 
