@@ -2,19 +2,20 @@ type: http_request
 model: http_request
 id: rq_dumogyHx8S
 createdAt: 2026-09-14T09:51:58.968209
-updatedAt: 2026-09-14T09:51:58.968209
+updatedAt: 2026-09-14T12:41:19.788446
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body:
+  bodyType: multipart/form-data
   form:
   - enabled: true
-    file: /Users/ariss/Developer/github.com/riipandi/tango/web/output/images/logo.svg
+    file: /Users/ariss/Developer/github.com/riipandi/tango/web/output/images/logoEmail.svg
     name: file
-    value: logo.svg
+    value: logoEmail.svg
 bodyType: multipart/form-data
-description: Update the currently authenticated user's profile picture — planned (phase 8)
+description: Update the currently authenticated user's profile picture — multipart file; stored as-is behind the MIME allowlist (upstream squares to PNG)
 headers: []
 method: PUT
 name: Update current user's profile picture

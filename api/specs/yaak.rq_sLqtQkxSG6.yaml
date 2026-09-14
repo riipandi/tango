@@ -2,14 +2,14 @@ type: http_request
 model: http_request
 id: rq_sLqtQkxSG6
 createdAt: 2026-09-14T09:52:02.876001
-updatedAt: 2026-09-14T09:52:02.876002
+updatedAt: 2026-09-14T12:41:26.177452
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Reset the currently authenticated user's profile picture to the default — planned (phase 8)
+description: Reset the currently authenticated user's profile picture to the default
 headers: []
 method: DELETE
 name: Reset current user's profile picture

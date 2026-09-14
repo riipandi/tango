@@ -58,6 +58,9 @@ Owner: `modules/appconfig` (also owns `test-email`). **Status: done (2026-09-14)
 
 Build on `internal/storage` + the `modules/appimage` upload pattern (5 MiB cap, MIME allowlist,
 `Cache-Control` + `skipCache`, delete tombstones). No upstream gorm/gin code.
+**Status: done (2026-09-14)** — migration `00030`, shared blob backend wired through the
+registry; live-tested via Yaak. Deviation: no transcoding (upstream squares to PNG) — uploads
+are stored as-is behind the allowlist; dark-variant client logos skipped.
 
 | Method | Path                                        | Notes                                  |
 | ------ | ------------------------------------------- | -------------------------------------- |
@@ -70,13 +73,12 @@ Build on `internal/storage` + the `modules/appimage` upload pattern (5 MiB cap, 
 | POST   | `/api/oidc/clients/{id}/logo`               | Admin upload                           |
 | DELETE | `/api/oidc/clients/{id}/logo`               | Admin delete                           |
 
-- [ ] Migration: nullable `profile_picture_path` on `users`, `logo_path` on `oidc_clients`
+- [x] Migration: nullable `profile_picture_path` on `users`, `logo_path` on `oidc_clients`
       (singleton columns — simpler than upstream's file-store rows; appimage keeps `file_stores`).
-- [ ] Serve `GET .../profile-picture.png` and client logo as **bare bytes** (jwks-style
+- [x] Serve `GET .../profile-picture.png` and client logo as **bare bytes** (jwks-style
       no-envelope deviation); errors still use the responder envelope.
-- [ ] Dark-variant client logo (`has_dark_logo`) only if the SPA needs it — otherwise skip and
-      record the deviation.
-- [ ] Audit events, tests (upload/replace/reset/404-default), Yaak requests, live test, status flips.
+- [x] Dark-variant client logo skipped (single logo; recorded as the documented deviation).
+- [x] Audit events, tests (upload/replace/reset/404-default), Yaak requests, live test, status flips.
 
 ## 9D — CIMD refresh + explicit non-goals
 

@@ -2,19 +2,20 @@ type: http_request
 model: http_request
 id: rq_CWSgBWzusF
 createdAt: 2026-09-14T09:50:40.731391
-updatedAt: 2026-09-14T09:50:40.731392
+updatedAt: 2026-09-14T12:41:46.316767
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
 authenticationType: null
 body:
+  bodyType: multipart/form-data
   form:
   - enabled: true
-    file: /Users/ariss/Developer/github.com/riipandi/tango/web/output/images/logo.svg
+    file: /Users/ariss/Developer/github.com/riipandi/tango/web/output/images/logoEmail.svg
     name: file
-    value: logo.svg
+    value: logoEmail.svg
 bodyType: multipart/form-data
-description: Upload or update the logo for an OIDC client — planned (phase 8)
+description: Update a client's logo — multipart file; stored as-is (png/jpg/svg/webp); sets has_logo in the meta view
 headers: []
 method: POST
 name: Update client logo
@@ -22,9 +23,9 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/logo
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
-  id: la9f1uf30m
+  name: :clientId
+  value: oidc_client_01m2fww2nvedt9phzwpxknwem2
+  id: null
 settingSendCookies:
   enabled: false
   value: true

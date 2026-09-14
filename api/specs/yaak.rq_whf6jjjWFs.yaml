@@ -2,14 +2,14 @@ type: http_request
 model: http_request
 id: rq_whf6jjjWFs
 createdAt: 2026-09-14T09:52:20.712459
-updatedAt: 2026-09-14T09:52:20.712460
+updatedAt: 2026-09-14T12:41:31.037267
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Reset a specific user's profile picture to the default — planned (phase 8)
+description: Reset a specific user's profile picture to the default
 headers: []
 method: DELETE
 name: Reset user profile picture
@@ -17,8 +17,8 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users/:userId/profile-picture
 urlParameters:
 - enabled: true
-  name: ':userId'
-  value: 'dummy'
+  name: :userId
+  value: dummy
   id: lzufecw6ne
 settingSendCookies:
   enabled: false

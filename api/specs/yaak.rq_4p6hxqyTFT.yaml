@@ -2,14 +2,14 @@ type: http_request
 model: http_request
 id: rq_4p6hxqyTFT
 createdAt: 2026-09-14T09:50:36.527223
-updatedAt: 2026-09-14T09:50:36.527224
+updatedAt: 2026-09-14T12:41:41.394447
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Get the logo image for an OIDC client — planned (phase 8)
+description: Get a client's logo — bare image bytes, public route, 404 when unset
 headers: []
 method: GET
 name: Get client logo
@@ -17,9 +17,9 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/logo
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
-  id: ofj30osc3l
+  name: :clientId
+  value: oidc_client_01m2fww2nvedt9phzwpxknwem2
+  id: null
 settingSendCookies:
   enabled: false
   value: true

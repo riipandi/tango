@@ -106,9 +106,9 @@ upstream handlers. Remaining gaps are planned in `llms/phase-09-parity-gap.md`.
 | GET    | `/api/oidc/clients/{id}`                           | Get OIDC client                               | done                                        |
 | PUT    | `/api/oidc/clients/{id}`                           | Update OIDC client                            | done                                        |
 | PUT    | `/api/oidc/clients/{id}/allowed-user-groups`       | Update allowed user groups                    | done                                        |
-| DELETE | `/api/oidc/clients/{id}/logo`                      | Delete client logo                            | planned (phase 9C — client logos)          |
-| GET    | `/api/oidc/clients/{id}/logo`                      | Get client logo                               | planned (phase 9C — client logos)          |
-| POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            | planned (phase 9C — client logos)          |
+| DELETE | `/api/oidc/clients/{id}/logo`                      | Delete client logo                            | done                                       |
+| GET    | `/api/oidc/clients/{id}/logo`                      | Get client logo                               | done                                       |
+| POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            | done                                       |
 | GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           | done                                       |
 | GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             | done — claim maps, no real JWTs            |
 | POST   | `/api/oidc/clients/{id}/refresh`                   | Refresh client metadata document              | planned (phase 9D — CIMD)                   |
@@ -165,8 +165,8 @@ upstream handlers. Remaining gaps are planned in `llms/phase-09-parity-gap.md`.
 | POST   | `/api/users`                                          | Create user                                   | done                                                   |
 | GET    | `/api/users/me`                                       | Get current user                              | done                                                   |
 | PUT    | `/api/users/me`                                       | Update current user                           | partial — profile fields only; email stays admin-gated |
-| DELETE | `/api/users/me/profile-picture`                       | Reset current user's profile picture          | planned (phase 9C)                                     |
-| PUT    | `/api/users/me/profile-picture`                       | Update current user's profile picture         | planned (phase 9C)                                     |
+| DELETE | `/api/users/me/profile-picture`                       | Reset current user's profile picture          | done                                       |
+| PUT    | `/api/users/me/profile-picture`                       | Update current user's profile picture         | done                                       |
 | POST   | `/api/users/me/send-email-verification`               | Send email verification                       | done                                                   |
 | POST   | `/api/users/me/verify-email`                          | Verify email                                  | done                                                   |
 | DELETE | `/api/users/{id}`                                     | Delete user                                   | done                                                   |
@@ -175,9 +175,9 @@ upstream handlers. Remaining gaps are planned in `llms/phase-09-parity-gap.md`.
 | GET    | `/api/users/{id}/groups`                              | Get user groups                               | done                                                   |
 | POST   | `/api/users/{id}/one-time-access-email`               | Request one-time access email (admin)         | done                                                   |
 | POST   | `/api/users/{id}/one-time-access-token`               | Create one-time access token for user (admin) | done                                                   |
-| DELETE | `/api/users/{id}/profile-picture`                     | Reset user profile picture                    | planned (phase 9C)                                     |
-| PUT    | `/api/users/{id}/profile-picture`                     | Update user profile picture                   | planned (phase 9C)                                     |
-| GET    | `/api/users/{id}/profile-picture.png`                 | Get user profile picture                      | planned (phase 9C)                                     |
+| DELETE | `/api/users/{id}/profile-picture`                     | Reset user profile picture                    | done                                       |
+| PUT    | `/api/users/{id}/profile-picture`                     | Update user profile picture                   | done                                       |
+| GET    | `/api/users/{id}/profile-picture.png`                 | Get user profile picture                      | done — bare bytes, default fallback        |
 | PUT    | `/api/users/{id}/user-groups`                         | Update user groups                            | done                                                   |
 | GET    | `/api/users/{id}/webauthn-credentials`                | List user passkeys                            | done                                                   |
 | PUT    | `/api/users/{id}/webauthn-credentials/{credentialId}` | Rename user passkey                           | done                                                   |

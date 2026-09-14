@@ -2,14 +2,14 @@ type: http_request
 model: http_request
 id: rq_DuWj6Us6Zh
 createdAt: 2026-09-14T09:52:24.668816
-updatedAt: 2026-09-14T09:52:24.668816
+updatedAt: 2026-09-14T12:41:36.503571
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Retrieve a specific user's profile picture — planned (phase 8)
+description: Retrieve a specific user's profile picture — bare image bytes with the bundled-default fallback (no envelope)
 headers: []
 method: GET
 name: Get user profile picture
@@ -17,9 +17,9 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users/:userId/profile-picture.png
 urlParameters:
 - enabled: true
-  name: ':userId'
-  value: 'dummy'
-  id: wh189mybtk
+  name: :userId
+  value: user_01m2fqda34fe585yz997htpkfk
+  id: null
 settingSendCookies:
   enabled: false
   value: true

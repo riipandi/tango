@@ -2,14 +2,14 @@ type: http_request
 model: http_request
 id: rq_pPdkMDLJAc
 createdAt: 2026-09-14T09:50:44.525368
-updatedAt: 2026-09-14T09:50:44.525369
+updatedAt: 2026-09-14T12:41:50.697094
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Delete the logo for an OIDC client — planned (phase 8)
+description: Delete a client's logo — clears the blob and the has_logo flag
 headers: []
 method: DELETE
 name: Delete client logo
@@ -17,9 +17,9 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/logo
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
-  id: or4tszfi95
+  name: :clientId
+  value: oidc_client_01m2fww2nvedt9phzwpxknwem2
+  id: null
 settingSendCookies:
   enabled: false
   value: true
