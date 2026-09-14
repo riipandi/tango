@@ -89,13 +89,23 @@ func (m *Module) APIRoutes(r chi.Router) {
 
 // listPublic serves GET /application-configuration: the settings the
 // unauthenticated SPA may see (env defaults folded with DB overrides).
-func (m *Module) listPublic(w http.ResponseWriter, r *http.Request) {
-	overrides, err := m.store.List(r.Context())
+func (m *Module) listPublic(w http.ResponseWriter, r *http.Request) {	overrides, err := m.store.List(r.Context())
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
 	responder.Success(w, r, http.StatusOK, publicView(mergedValues(overrides)))
+}
+
+// MergedValues folds env defaults with stored overrides — the
+// cross-module read path (the registry wires the CIMD allowlist from
+// it).
+func (m *Module) MergedValues(ctx context.Context) (map[string]string, error) {
+	overrides, err := m.store.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return mergedValues(overrides), nil
 }
 
 // listAll serves GET /application-configuration/all (admin): every

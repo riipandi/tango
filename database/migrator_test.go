@@ -27,7 +27,7 @@ func TestMigrationsLifecycle(t *testing.T) {
 
 	applied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, applied, 16)
+	require.Len(t, applied, 17)
 	assert.Equal(t, int64(1), applied[0].Version)
 	assert.Contains(t, applied[0].Path, "initialize_schema")
 	assert.Equal(t, int64(4), applied[3].Version)
@@ -47,6 +47,8 @@ func TestMigrationsLifecycle(t *testing.T) {
 	assert.Equal(t, int64(29), applied[14].Version)
 	assert.Equal(t, int64(30), applied[15].Version)
 	assert.Contains(t, applied[15].Path, "image_columns")
+	assert.Equal(t, int64(31), applied[16].Version)
+	assert.Contains(t, applied[16].Path, "client_metadata_url")
 
 	db, err := sql.Open("pgx", pg.DSN)
 	require.NoError(t, err)
@@ -110,7 +112,7 @@ func TestMigrationsLifecycle(t *testing.T) {
 	target, err := MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
-	assert.Equal(t, int64(30), target.Version)
+	assert.Equal(t, int64(31), target.Version)
 	assert.Equal(t, "applied", target.State)
 
 	// Roll back the most recent migration, verify the state
@@ -118,17 +120,17 @@ func TestMigrationsLifecycle(t *testing.T) {
 	outcome, err := MigrateDown(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, outcome)
-	assert.Equal(t, int64(30), outcome.Version)
+	assert.Equal(t, int64(31), outcome.Version)
 
 	target, err = MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
-	assert.Equal(t, int64(29), target.Version, "next down target follows the rollback")
+	assert.Equal(t, int64(30), target.Version, "next down target follows the rollback")
 
 	statuses, err := MigrateStatus(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, statuses, 16)
-	assert.Equal(t, "pending", statuses[15].State)
+	require.Len(t, statuses, 17)
+	assert.Equal(t, "pending", statuses[16].State)
 
 	reapplied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)

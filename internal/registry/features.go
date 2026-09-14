@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/appconfig"
 	"github.com/riipandi/tango/modules/appimage"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/federation"
@@ -283,7 +285,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 // resolution via the identity session feature (optional-auth
 // /authorize), the audit adapter, and the admin guard for client
 // management.
-func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore) federation.Feature {
+func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore, appconfigModule *appconfig.Module) federation.Feature {
 	issuer := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service := oidc.NewService(
 		oidc.NewPostgresStore(deps.DB),
@@ -294,11 +296,27 @@ func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *s
 		oidc.WithAuthenticator(sessions),
 		oidc.WithAPIAccess(apiAccess),
 		oidc.WithImages(images),
+		oidc.WithMetadataFetcher(deps.Fetcher),
+		oidc.WithCIMDAllowlist(cimdAllowlistGetter(appconfigModule)),
 		oidc.WithCookieSecure(deps.Config.App.Mode != "development"),
 	)
 	return oidc.New(service).
 		WithAdminGuard(adminGuard).
 		WithSelfAuth(sessions, session.CookieName)
+}
+
+// cimdAllowlistGetter reads the operator-managed CIMD URL allowlist
+// from the app config (JSON array; default deny when unset).
+func cimdAllowlistGetter(module *appconfig.Module) func() []string {
+	return func() []string {
+		values, err := module.MergedValues(context.Background())
+		if err != nil {
+			return nil
+		}
+		var allowlist []string
+		_ = json.Unmarshal([]byte(values["cimd_url_allowlist"]), &allowlist)
+		return allowlist
+	}
 }
 
 // federationAuditAdapter adapts auditlog for federation events:

@@ -88,6 +88,10 @@ type Store interface {
 	// Client logo (phase 9C): blob path + upstream-compat image_type
 	// column, cleared together.
 	SetClientLogoPath(ctx context.Context, id OIDCClientID, path *string) error
+
+	// RefreshClientMetadata rewrites the document-owned columns for a
+	// CIMD client (phase 9D refresh endpoint).
+	RefreshClientMetadata(ctx context.Context, id OIDCClientID, params ClientUpdateParams) error
 }
 
 // Client is a relying party. Secrets never round-trip: the store
@@ -105,6 +109,7 @@ type Client struct {
 	ImageType                   *string
 	DarkImageType               *string
 	LogoPath                    *string
+	MetadataURL                 *string
 	ClientType                  string
 	IsPublic                    bool
 	PKCEEnabled                 bool
@@ -117,6 +122,8 @@ type Client struct {
 	CreatedByID                 *string
 	CreatedAt                   time.Time
 	AllowedGroupIDs             []string
+	MetadataGrantTypes          []string
+	MetadataExpiresAt           *time.Time
 }
 
 // ClientSecret is one credentials row (metadata; the hash lives in
@@ -158,6 +165,10 @@ type ClientCreateParams struct {
 	RefreshTokenDurationMinutes int64
 	CreatedByID                 string
 	SecretHash                  string
+	MetadataURL                 string
+	ClientType                  string
+	MetadataGrantTypes          []string
+	MetadataExpiresAt           *time.Time
 }
 
 // ClientUpdateParams patches a client; nil fields keep values.
@@ -172,9 +183,11 @@ type ClientUpdateParams struct {
 	PKCESupported               *bool
 	SkipConsent                 *bool
 	IsGroupRestricted           *bool
+	RequiresReauthentication    *bool
 	AccessTokenDurationMinutes  *int64
 	RefreshTokenDurationMinutes *int64
 	SecretHash                  *string
+	MetadataGrantTypes          []string
 }
 
 // AuthorizationCode is a one-time code row; Code holds the SHA-256
@@ -263,7 +276,8 @@ var clientColumns = []string{
 	"c.launch_url", "c.is_public", "c.pkce_enabled", "c.pkce_supported",
 	"c.requires_reauthentication", "c.skip_consent", "c.is_group_restricted",
 	"c.access_token_duration_minutes", "c.refresh_token_duration_minutes",
-	"c.created_by_id", "c.created_at", "c.image_type", "c.dark_image_type", "c.client_type", "c.logo_path",
+	"c.created_by_id", "c.created_at", "c.image_type", "c.dark_image_type", "c.client_type", "c.logo_path", "c.metadata_url",
+	"c.metadata_grant_types", "c.metadata_expires_at",
 }
 
 func (s *PostgresStore) clientSelect(id string) *sqlbuilder.SelectBuilder {
@@ -287,11 +301,13 @@ func (s *PostgresStore) CreateClient(ctx context.Context, params ClientCreatePar
 		"id", "name", "description", "secret", "callback_urls", "logout_callback_urls", "launch_url",
 		"is_public", "pkce_enabled", "pkce_supported", "skip_consent", "is_group_restricted",
 		"access_token_duration_minutes", "refresh_token_duration_minutes", "created_by_id",
+		"client_type", "metadata_url",
 	)
 	ib.Values(
 		id.String(), params.Name, params.Description, nullIfEmpty(params.SecretHash), callbacks, logoutCallbacks, params.LaunchURL,
 		params.IsPublic, params.PKCEEnabled, params.PKCESupported, params.SkipConsent, params.IsGroupRestricted,
 		params.AccessTokenDurationMinutes, params.RefreshTokenDurationMinutes, nullIfEmpty(params.CreatedByID),
+		orDefault(params.ClientType, "standard"), nullIfEmpty(params.MetadataURL),
 	)
 
 	query, args := ib.Build()
@@ -368,17 +384,25 @@ func (s *PostgresStore) UpdateClient(ctx context.Context, id OIDCClientID, param
 	ub.Update(oidcClientsTable)
 
 	assignments := []string{}
-	if params.Name != nil {
+	// Metadata-owned columns (name + redirect URIs) are never written
+	// from an admin snapshot for CIMD clients — a refresh may have
+	// changed them after this request read its copy (upstream:
+	// CIMDDoesNotOverwriteConcurrentMetadataRefresh).
+	metadataOwned := false
+	if row, err := s.GetClient(ctx, id); err == nil && row.ClientType == "cimd" {
+		metadataOwned = true
+	}
+	if params.Name != nil && !metadataOwned {
 		assignments = append(assignments, ub.Assign("name", *params.Name))
 	}
 	if params.Description != nil {
 		assignments = append(assignments, ub.Assign("description", *params.Description))
 	}
-	if params.CallbackURLs != nil {
+	if params.CallbackURLs != nil && !metadataOwned {
 		callbacks, _ := json.Marshal(params.CallbackURLs)
 		assignments = append(assignments, ub.Assign("callback_urls", callbacks))
 	}
-	if params.LogoutCallbackURLs != nil {
+	if params.LogoutCallbackURLs != nil && !metadataOwned {
 		logoutCallbacks, _ := json.Marshal(params.LogoutCallbackURLs)
 		assignments = append(assignments, ub.Assign("logout_callback_urls", logoutCallbacks))
 	}
@@ -443,6 +467,71 @@ func userUUID(raw string) string {
 		return id.UUID()
 	}
 	return raw
+}
+
+// RefreshClientMetadata writes the document-owned columns for a CIMD
+// client after a re-fetch (the refresh endpoint; admin updates may
+// never touch these — see UpdateClient's guard).
+func (s *PostgresStore) RefreshClientMetadata(ctx context.Context, id OIDCClientID, params ClientUpdateParams) error {
+	callbacks, _ := json.Marshal(params.CallbackURLs)
+	logoutCallbacks, _ := json.Marshal(params.LogoutCallbackURLs)
+	grants, _ := json.Marshal(params.MetadataGrantTypes)
+
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(oidcClientsTable)
+	ub.Set(
+		ub.Assign("name", derefText(params.Name)),
+		ub.Assign("description", derefText(params.Description)),
+		ub.Assign("callback_urls", callbacks),
+		ub.Assign("logout_callback_urls", logoutCallbacks),
+		ub.Assign("launch_url", derefText(params.LaunchURL)),
+		ub.Assign("is_public", derefBool(params.IsPublic)),
+		ub.Assign("skip_consent", derefBool(params.SkipConsent)),
+		ub.Assign("requires_reauthentication", derefBool(params.RequiresReauthentication)),
+		ub.Assign("is_group_restricted", derefBool(params.IsGroupRestricted)),
+		ub.Assign("access_token_duration_minutes", derefInt(params.AccessTokenDurationMinutes)),
+		ub.Assign("refresh_token_duration_minutes", derefInt(params.RefreshTokenDurationMinutes)),
+		ub.Assign("metadata_grant_types", grants),
+		ub.Assign("metadata_expires_at", time.Now().UTC().Add(MetadataDocumentTTL)),
+	)
+	ub.Where(ub.E("id", id.String()))
+
+	query, args := ub.Build()
+	tag, err := s.exec.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("oidc store: refresh metadata: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ptr returns a pointer to v (store helpers).
+func ptr[T any](v T) *T { return &v }
+
+// derefBool flattens an optional bool (nil → false).
+func derefBool(b *bool) bool {
+	if b == nil {
+		return false
+	}
+	return *b
+}
+
+// derefInt flattens an optional int (nil → 0).
+func derefInt(n *int64) int64 {
+	if n == nil {
+		return 0
+	}
+	return *n
+}
+
+// derefText flattens an optional string (nil → "").
+func derefText(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // SetClientLogoPath stores or clears (nil) the logo blob path and
@@ -946,6 +1035,15 @@ func nullIfEmpty(value string) any {
 	return value
 }
 
+// orDefault substitutes a fallback for empty strings (NOT NULL
+// DEFAULT columns must not receive explicit NULLs).
+func orDefault(value, fallback string) any {
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
 // AccessibleClients lists the clients a user may reach: everything
 // unrestricted plus restricted clients where the user is in at
 // least one allowed group.
@@ -1169,12 +1267,15 @@ func scanClient(row scanner) (*Client, error) {
 		launchURL   *string
 		createdByID *string
 		createdAt   pgtype.Timestamptz
+
+		metadataGrants    []byte
+		metadataExpiresAt pgtype.Timestamptz
 	)
 	if err := row.Scan(
 		&id, &name, &c.Description, &secret, &credentials, &callbacks, &logoutCBs, &launchURL,
 		&c.IsPublic, &c.PKCEEnabled, &c.PKCESupported, &c.RequiresReauthentication, &c.SkipConsent, &c.IsGroupRestricted,
 		&c.AccessTokenDurationMinutes, &c.RefreshTokenDurationMinutes, &createdByID, &createdAt,
-		&c.ImageType, &c.DarkImageType, &c.ClientType, &c.LogoPath,
+		&c.ImageType, &c.DarkImageType, &c.ClientType, &c.LogoPath, &c.MetadataURL, &metadataGrants, &metadataExpiresAt,
 	); err != nil {
 		return nil, err
 	}
@@ -1216,6 +1317,10 @@ func scanClient(row scanner) (*Client, error) {
 	}
 	if c.ClientType == "" {
 		c.ClientType = "standard"
+	}
+	_ = json.Unmarshal(metadataGrants, &c.MetadataGrantTypes)
+	if metadataExpiresAt.Valid {
+		c.MetadataExpiresAt = &metadataExpiresAt.Time
 	}
 	c.CreatedAt = createdAt.Time
 	return &c, nil

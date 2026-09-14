@@ -7,9 +7,12 @@ package oidc
 // area files).
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-ozzo/ozzo-validation/v4"
@@ -55,6 +58,7 @@ func (f Feature) APIRoutes(r chi.Router) {
 				cr.Post("/{clientId}/logo", f.service.updateClientLogo)
 				cr.Delete("/{clientId}/logo", f.service.deleteClientLogo)
 			}
+			cr.Post("/{clientId}/refresh", f.service.handleRefreshClient)
 		})
 		clients.Get(authorizedClientsAPIPrefix, f.service.handleListAuthorizedClients)
 		clients.Get("/oidc/users/{id}/authorized-clients", f.service.handleListUserAuthorizedClients)
@@ -114,13 +118,33 @@ type clientRequest struct {
 	AccessTokenDurationMinutes  int64    `json:"access_token_duration_minutes"`
 	RefreshTokenDurationMinutes int64    `json:"refresh_token_duration_minutes"`
 	AllowedGroupIDs             []string `json:"allowed_user_group_ids"`
+	// MetadataURL opts the client into CIMD-lite (create only): the
+	// document at this URL materializes name + redirect URIs and the
+	// client becomes public.
+	MetadataURL string `json:"metadata_url,omitzero"`
 }
 
 func (r clientRequest) Validate() error {
+	return r.validateWith(r.MetadataURL != "")
+}
+
+// validateWith relaxes the document-owned fields when a CIMD
+// document owns them (create-with-url, or updates to a cimd client).
+func (r clientRequest) validateWith(metadataOwned bool) error {
+	if metadataOwned {
+		return nil
+	}
 	return validation.ValidateStruct(&r,
 		validation.Field(&r.Name, validation.Required),
 		validation.Field(&r.CallbackURLs, validation.Required, validation.Each(is.URL)),
 	)
+}
+
+// decodeClientBody decodes the JSON body WITHOUT running the
+// strict Validate() — CIMD updates relax the document-owned fields,
+// so validation runs after the client type is known.
+func decodeClientBody(r *http.Request, dst any) error {
+	return jsonv2.UnmarshalRead(r.Body, dst)
 }
 
 // handleListClients serves GET /api/oidc/clients.
@@ -166,6 +190,10 @@ func (s *Service) handleCreateClient(w http.ResponseWriter, r *http.Request) {
 
 	created, rawSecret, err := s.createClient(r.Context(), request)
 	if err != nil {
+		if errors.Is(err, errNotCIMD) || isMetadataError(err) {
+			responder.Fail(w, r, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
 		responder.Fail(w, r, http.StatusInternalServerError, "failed to create client")
 		return
 	}
@@ -173,6 +201,13 @@ func (s *Service) handleCreateClient(w http.ResponseWriter, r *http.Request) {
 	view := created.view()
 	view["client_secret"] = rawSecret
 	responder.Success(w, r, http.StatusCreated, view)
+}
+
+// isMetadataError reports whether the error came from the CIMD fetch/
+// validate/policy path (caller-facing message).
+func isMetadataError(err error) bool {
+	var me metadataError
+	return errors.As(err, &me)
 }
 
 // handleUpdateClient serves PUT /api/oidc/clients/{clientId}.
@@ -184,7 +219,20 @@ func (s *Service) handleUpdateClient(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request clientRequest
-	if verr := validate.Request(r.Body, &request); verr != nil {
+	if decodeErr := decodeClientBody(r, &request); decodeErr != nil {
+		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
+			responder.WithError(validate.FieldErrors(decodeErr)))
+		return
+	}
+
+	// Validation depends on the client type: a CIMD client's
+	// document-owned fields (name, redirect URIs) are optional.
+	existing, lookupErr := s.store.GetClient(r.Context(), id)
+	if lookupErr != nil {
+		responder.NotFoundJSON(w, r)
+		return
+	}
+	if verr := request.validateWith(existing.ClientType == "cimd"); verr != nil {
 		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
 			responder.WithError(validate.FieldErrors(verr)))
 		return
@@ -210,6 +258,34 @@ func (s *Service) handleDeleteClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleRefreshClient serves POST /api/oidc/clients/{clientId}/refresh:
+// re-fetch a CIMD client's metadata document, bypassing any cached
+// state, and answer with the refreshed view.
+func (s *Service) handleRefreshClient(w http.ResponseWriter, r *http.Request) {
+	id, err := OIDCParseClientID(chi.URLParam(r, "clientId"))
+	if err != nil {
+		responder.Fail(w, r, http.StatusBadRequest, "invalid client id")
+		return
+	}
+
+	client, err := s.store.GetClient(r.Context(), id)
+	if err != nil {
+		responder.NotFoundJSON(w, r)
+		return
+	}
+
+	refreshed, err := s.refreshClientMetadata(r.Context(), client)
+	if err != nil {
+		if errors.Is(err, errNotCIMD) || isMetadataError(err) {
+			responder.Fail(w, r, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		responder.Fail(w, r, http.StatusInternalServerError, "failed to refresh client metadata")
+		return
+	}
+	responder.Success(w, r, http.StatusOK, refreshed.view())
 }
 
 // handleListAuthorizedClients serves GET
@@ -344,7 +420,7 @@ func (s *Service) handleApproveInteraction(w http.ResponseWriter, r *http.Reques
 
 // view converts a client row to the API payload.
 func (c Client) view() map[string]any {
-	return map[string]any{
+	view := map[string]any{
 		"id":                             c.ID.String(),
 		"name":                           c.Name,
 		"description":                    c.Description,
@@ -360,5 +436,10 @@ func (c Client) view() map[string]any {
 		"access_token_duration_minutes":  c.AccessTokenDurationMinutes,
 		"refresh_token_duration_minutes": c.RefreshTokenDurationMinutes,
 		"allowed_user_group_ids":         c.AllowedGroupIDs,
+		"client_type":                    c.ClientType,
 	}
+	if c.MetadataURL != nil {
+		view["metadata_url"] = *c.MetadataURL
+	}
+	return view
 }

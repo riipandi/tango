@@ -25,6 +25,9 @@ type Service struct {
 	cookieSecure  bool
 	audit         AuditLogger
 	images        ClientImageStore
+
+	metadataFetcher DocumentFetcher
+	cimdAllowlist   func() []string
 }
 
 // AuditLogger receives audit events; the registry adapts auditlog.
@@ -59,6 +62,17 @@ func WithAuthenticator(auth middleware.Authenticator) Option {
 // WithImages wires the blob backend for the client-logo surface.
 func WithImages(images ClientImageStore) Option {
 	return func(s *Service) { s.images = images }
+}
+
+// WithMetadataFetcher wires the outbound document downloader.
+func WithMetadataFetcher(f DocumentFetcher) Option {
+	return func(s *Service) { s.metadataFetcher = f }
+}
+
+// WithCIMDAllowlist wires the operator allowlist getter (default
+// deny when nil).
+func WithCIMDAllowlist(get func() []string) Option {
+	return func(s *Service) { s.cimdAllowlist = get }
 }
 
 // WithCookieSecure marks the end-session cookie Secure (off in
