@@ -221,7 +221,7 @@ different path/shape), `ok` (implemented, parity).
 | `/authorize` (authorize code + PKCE), `/api/oidc/end-session`                                                                | ok              | completion pass: end-session clears the cookie + logout-callback redirect; family revocation lands phase 5              |
 | `/api/api-keys*`, `/api/apis*`, `/api/api-access/{clientId}/*`                                                               | ok              | phase 6 (live-tested; `X-API-KEY` machine guard on the users CRUD surface)                                              |
 | `/api/device-login/*` (requests, exchange, verification, decision)                                                           | ok              | phase 5 (own table `device_login_requests`; upstream uses the francis actor framework — noted deviation)                |
-| `/api/application-configuration*`, `/api/application-images/*`, `/api/scim/service-provider*`, `/api/storage/sqlite-warning` | missing-backend | phase 8 (sqlite-warning is upstream-specific — likely never ported; Postgres-only); `test-email` landed in phase 7 |
+| `/api/application-configuration*`, `/api/application-images/*`, `/api/scim/service-provider*`, `/api/storage/sqlite-warning` | missing-backend | phase 9C (images), phase 9D (sqlite-warning is upstream-specific — never ported; Postgres-only); settings CRUD + `test-email` live (phase 9B / 7) |
 
 Yaak folder coverage after phase 5: Users (webauthn-credentials, one-time access, email
 verification), User Groups, Custom Claims, Audit Logs, Well Known (incl.

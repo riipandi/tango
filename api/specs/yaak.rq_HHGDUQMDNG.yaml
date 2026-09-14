@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_HHGDUQMDNG
 createdAt: 2026-09-14T09:48:05.961042
-updatedAt: 2026-09-14T09:59:21.615021
+updatedAt: 2026-09-14T12:19:16.795509
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tw8Gigobcd
 authentication: {}
@@ -11,12 +11,12 @@ body:
   bodyType: application/json
   text: |-
     {
-      "appName": "Tango",
-      "allowUserSignups": "false",
-      "sessionDuration": "14400"
+      "app_name": "Tango",
+      "allow_user_signups": "open",
+      "session_duration": "43200"
     }
 bodyType: application/json
-description: Update application configuration settings — upstream body is one object with config keys as string fields; deferred (appconfig module)
+description: Update application configuration settings — partial body; snake_case keys (upstream camelCase); SMTP/LDAP stay env-only in tango
 headers: []
 method: PUT
 name: Update application configurations

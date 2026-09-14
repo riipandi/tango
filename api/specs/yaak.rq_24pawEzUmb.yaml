@@ -2,14 +2,14 @@ type: http_request
 model: http_request
 id: rq_24pawEzUmb
 createdAt: 2026-09-14T09:48:01.887234
-updatedAt: 2026-09-14T09:48:01.887235
+updatedAt: 2026-09-14T12:19:44.065767
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tw8Gigobcd
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Get all public application configurations — deferred (appconfig module); swagger description
+description: Get the settings the unauthenticated SPA may see — public keys only, env defaults folded with admin overrides
 headers: []
 method: GET
 name: List public application configurations

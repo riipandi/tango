@@ -54,7 +54,8 @@ variant), planned: profile-picture/client-logo bytes (phase 9C).
 - `POST /api/oidc/introspect` — client-scoped: tokens of other clients introspect as
   `active: false`; form body with client auth (Basic or form credentials).
 - End-session / refresh — refresh-token rotation per use; reuse kills the whole token family.
-- LDAP/SMTP/app config — env-backed until phase 9B; upstream keeps them in the appconfig table.
+- LDAP/SMTP/app config — env-backed defaults with DB overrides in `app_config` (phase 9B);
+  upstream stores SMTP credentials in the config table, tango keeps them env-only.
 - WebAuthn finish endpoints take `session_id` as a query param (upstream: not in swagger).
 
 ## Deliberate non-goals

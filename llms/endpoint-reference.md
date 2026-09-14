@@ -40,9 +40,9 @@ upstream handlers. Remaining gaps are planned in `llms/phase-09-parity-gap.md`.
 
 | Method | Endpoint                                    | Summary / Yaak Title                   | Status            |
 | ------ | ------------------------------------------- | -------------------------------------- | ----------------- |
-| GET    | `/api/application-configuration`            | List public application configurations | planned (phase 9B)  |
-| PUT    | `/api/application-configuration`            | Update application configurations      | planned (phase 9B)  |
-| GET    | `/api/application-configuration/all`        | List all application configurations    | planned (phase 9B)  |
+| GET    | `/api/application-configuration`            | List public application configurations | done                |
+| PUT    | `/api/application-configuration`            | Update application configurations      | done — partial PUT  |
+| GET    | `/api/application-configuration/all`        | List all application configurations    | done                |
 | POST   | `/api/application-configuration/sync-ldap`  | Synchronize LDAP                       | done — phase 8    |
 | POST   | `/api/application-configuration/test-email` | Send test email                        | done — phase 7 mail queue |
 

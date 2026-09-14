@@ -2,14 +2,14 @@ type: http_request
 model: http_request
 id: rq_zXUjUECXuh
 createdAt: 2026-09-14T09:48:09.233647
-updatedAt: 2026-09-14T09:48:09.233648
+updatedAt: 2026-09-14T12:19:49.073456
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tw8Gigobcd
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Get all application configurations including private ones — deferred (appconfig module)
+description: Get all application configurations including private ones — admin only; every key with its is_public flag
 headers: []
 method: GET
 name: List all application configurations

@@ -40,18 +40,19 @@ Three small endpoints, no new tables except the allowlist junction. Owners: `mod
 
 Endpoints: `GET /api/application-configuration` (public subset), `GET
 /api/application-configuration/all` (admin), `PUT /api/application-configuration` (admin).
-Owner: `modules/appconfig` (already owns `test-email`).
+Owner: `modules/appconfig` (also owns `test-email`). **Status: done (2026-09-14)** — migration
+`00029` (`app_config` key/value), key catalog in `config.go`, store + partial PUT live-tested.
 
-- [ ] Migration (goose, verbatim DDL): `app_config` table — `key TEXT PRIMARY KEY`, `value TEXT
+- [x] Migration (goose, verbatim DDL): `app_config` table — `key TEXT PRIMARY KEY`, `value TEXT
       NOT NULL`, `updated_at`. Key/value rows; no embedded schema, no auto-create.
-- [ ] Keys modeled as one typed Go struct (snake_case JSON fields, string-coerced values).
-      Port the upstream key list as reference, but trim to tango-relevant keys; SMTP stays
-      env-backed (deviation: tango mail config never lived in the DB).
-- [ ] Public vs admin split via a key allowlist (upstream semantics), envelope responses,
-      `PUT` upserts + audit event `application_configuration_updated`.
-- [ ] Migrate the phase-8 env-backed `LDAPSettings` to appconfig-backed with env fallback
-      (stretch — keep if the refactor balloons).
-- [ ] Tests + Yaak: fill bodies for the three existing draft requests, live test, flip statuses.
+- [x] Keys modeled as one explicit catalog (key, type, public flag, env-backed default) — no
+      reflect/tag magic. Key set trimmed to tango-relevant settings; SMTP and LDAP stay env-only
+      (documented deviation); no sensitive keys, so /all needs no redaction.
+- [x] Public vs admin split via the `Public` flag; partial PUT (omitted keys keep their value —
+      deviation from the upstream all-required binding); unknown keys ignored.
+- [ ] Stretch: migrate the phase-8 env-backed `LDAPSettings` to appconfig-backed with env
+      fallback (deferred — env fallback works and LDAP reconfig is rare).
+- [x] Tests (`TestConfigCRUD`, testcontainers) + Yaak bodies filled and live-tested.
 
 ## 9C — Profile pictures & client logos (8 endpoints)
 
