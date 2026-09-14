@@ -121,3 +121,61 @@ func TestConfigCRUD(t *testing.T) {
 		assert.Equal(t, http.StatusUnprocessableEntity, w.Code, body)
 	}
 }
+
+// TestEnvDefaultsAndSensitiveRedaction covers the LDAP/SMTP keys:
+// env-provided defaults fold under DB overrides and sensitive values
+// never leave the server, while MergedValues still serves the real
+// secret to wired consumers.
+func TestEnvDefaultsAndSensitiveRedaction(t *testing.T) {
+	_, module := newStoreStack(t)
+	module = module.WithEnvDefaults(map[string]string{
+		"smtp_host":     "relay.example",
+		"smtp_password": "env-secret",
+	})
+	router := mount(t, module)
+	ctx := t.Context()
+
+	readAll := func() map[string]string {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/application-configuration/all", nil))
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		var all struct {
+			Data []variable `json:"data"`
+		}
+		require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &all))
+		values := map[string]string{}
+		for _, v := range all.Data {
+			values[v.Key] = v.Value
+		}
+		return values
+	}
+
+	// Env layer sits above the catalog defaults; the env password is
+	// still redacted in the admin view.
+	values := readAll()
+	assert.Equal(t, "relay.example", values["smtp_host"])
+	assert.Equal(t, "", values["smtp_password"], "sensitive values redact even from env")
+
+	// Real values reach consumers through MergedValues.
+	merged, err := module.MergedValues(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "relay.example", merged["smtp_host"])
+	assert.Equal(t, "env-secret", merged["smtp_password"])
+
+	// DB overrides top the env layer; the stored secret stays hidden.
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/application-configuration",
+		strings.NewReader(`{"smtp_host":"db-relay.example","smtp_password":"db-secret"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	values = readAll()
+	assert.Equal(t, "db-relay.example", values["smtp_host"])
+	assert.Equal(t, "", values["smtp_password"])
+
+	merged, err = module.MergedValues(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "db-secret", merged["smtp_password"])
+	assert.Equal(t, "db-relay.example", merged["smtp_host"])
+}

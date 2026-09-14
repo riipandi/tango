@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/huandu/go-sqlbuilder"
@@ -49,14 +51,109 @@ import (
 
 // Identity feature selectors, one line each in the feature list.
 // Placeholders until implemented: no routes, no storage.
-func withLDAPSync(deps Deps, exec datastore.Executor) *ldapsync.APIFeature {
+func withLDAPSync(deps Deps, exec datastore.Executor, settingsSource *appconfigRef) *ldapsync.APIFeature {
 	service := ldapsync.NewService(exec, logger.Slog(deps.Logger))
 	settings := func(ctx context.Context) (ldapsync.LDAPSettings, error) {
-		return envLDAPSettings(deps.Config), nil
+		values, ok := settingsSource.values(ctx)
+		if !ok {
+			return envLDAPSettings(deps.Config), nil
+		}
+		return mapLDAPSettings(values), nil
 	}
 	feature := ldapsync.New(service, settings)
 	feature.WithGuard(nil) // guard wired by the caller below
 	return feature
+}
+
+// mapLDAPSettings reads the merged appconfig values (env defaults
+// already folded) into the sync settings. Bool parsing is lenient:
+// anything but "true" is off, mirroring the env behavior.
+func mapLDAPSettings(values map[string]string) ldapsync.LDAPSettings {
+	return ldapsync.LDAPSettings{
+		Enabled:           values["ldap_enabled"] == "true",
+		URL:               values["ldap_url"],
+		BindDN:            values["ldap_bind_dn"],
+		BindPassword:      values["ldap_bind_password"],
+		Base:              values["ldap_base"],
+		UserFilter:        values["ldap_user_search_filter"],
+		GroupFilter:       values["ldap_user_group_search_filter"],
+		SkipCertVerify:    values["ldap_skip_cert_verify"] == "true",
+		AttrUserUniqueID:  values["ldap_attribute_user_unique_identifier"],
+		AttrUserUsername:  values["ldap_attribute_user_username"],
+		AttrUserEmail:     values["ldap_attribute_user_email"],
+		AttrUserFirstName: values["ldap_attribute_user_first_name"],
+		AttrUserLastName:  values["ldap_attribute_user_last_name"],
+		AttrUserDisplay:   values["ldap_attribute_user_display_name"],
+		AttrGroupUniqueID: values["ldap_attribute_group_unique_identifier"],
+		AttrGroupName:     values["ldap_attribute_group_name"],
+		AttrGroupMember:   values["ldap_attribute_group_member"],
+		AdminGroupName:    values["ldap_admin_group_name"],
+		SoftDeleteUsers:   values["ldap_soft_delete_users"] == "true",
+	}
+}
+
+// MailerSettingsFromValues builds the relay config from merged
+// appconfig values, falling back to the env config per field. The
+// mailer settings source resolves through this per send.
+func MailerSettingsFromValues(values map[string]string, fallback config.MailerConfig) config.MailerConfig {
+	out := fallback
+	if v := values["smtp_from_email"]; v != "" {
+		out.FromEmail = v
+	}
+	if v := values["smtp_from_name"]; v != "" {
+		out.FromName = v
+	}
+	if v := values["smtp_host"]; v != "" {
+		out.SMTPHost = v
+	}
+	if v := values["smtp_port"]; v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			out.SMTPPort = port
+		}
+	}
+	if v, ok := values["smtp_username"]; ok {
+		out.SMTPUsername = v
+	}
+	if v, ok := values["smtp_password"]; ok {
+		out.SMTPPassword = v
+	}
+	if v := values["smtp_secure"]; v != "" {
+		out.SMTPSecure = v == "true"
+	}
+	return out
+}
+
+// appConfigEnvDefaults maps the koanf LDAP/Mailer sections onto the
+// appconfig keys as the env layer of the defaults fold.
+func appConfigEnvDefaults(cfg *config.Config) map[string]string {
+	return map[string]string{
+		"smtp_from_email":                        cfg.Mailer.FromEmail,
+		"smtp_from_name":                         cfg.Mailer.FromName,
+		"smtp_host":                              cfg.Mailer.SMTPHost,
+		"smtp_port":                              strconv.Itoa(cfg.Mailer.SMTPPort),
+		"smtp_username":                          cfg.Mailer.SMTPUsername,
+		"smtp_password":                          cfg.Mailer.SMTPPassword,
+		"smtp_secure":                            strconv.FormatBool(cfg.Mailer.SMTPSecure),
+		"ldap_enabled":                           strconv.FormatBool(cfg.LDAP.Enabled),
+		"ldap_url":                               cfg.LDAP.URL,
+		"ldap_bind_dn":                           cfg.LDAP.BindDN,
+		"ldap_bind_password":                     cfg.LDAP.BindPassword,
+		"ldap_base":                              cfg.LDAP.Base,
+		"ldap_user_search_filter":                cfg.LDAP.UserFilter,
+		"ldap_user_group_search_filter":          cfg.LDAP.GroupFilter,
+		"ldap_skip_cert_verify":                  strconv.FormatBool(cfg.LDAP.SkipCertVerify),
+		"ldap_attribute_user_unique_identifier":  cfg.LDAP.AttrUserUniqueID,
+		"ldap_attribute_user_username":           cfg.LDAP.AttrUserUsername,
+		"ldap_attribute_user_email":              cfg.LDAP.AttrUserEmail,
+		"ldap_attribute_user_first_name":         cfg.LDAP.AttrUserFirstName,
+		"ldap_attribute_user_last_name":          cfg.LDAP.AttrUserLastName,
+		"ldap_attribute_user_display_name":       cfg.LDAP.AttrUserDisplay,
+		"ldap_attribute_group_unique_identifier": cfg.LDAP.AttrGroupUniqueID,
+		"ldap_attribute_group_name":              cfg.LDAP.AttrGroupName,
+		"ldap_attribute_group_member":            cfg.LDAP.AttrGroupMember,
+		"ldap_admin_group_name":                  cfg.LDAP.AdminGroupName,
+		"ldap_soft_delete_users":                 strconv.FormatBool(cfg.LDAP.SoftDeleteUsers),
+	}
 }
 
 // envLDAPSettings maps env config onto the sync settings until
@@ -83,6 +180,36 @@ func envLDAPSettings(cfg *config.Config) ldapsync.LDAPSettings {
 		AdminGroupName:    cfg.LDAP.AdminGroupName,
 		SoftDeleteUsers:   cfg.LDAP.SoftDeleteUsers,
 	}
+}
+
+// withLDAPSync callsite in newIdentityFeatures receives the ref; the
+// appconfig module attaches itself after registration below.
+type appconfigRef struct {
+	mu     sync.RWMutex
+	module *appconfig.Module
+}
+
+// Attach wires the module once it exists.
+func (r *appconfigRef) Attach(module *appconfig.Module) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.module = module
+}
+
+// values reads the merged settings; ok is false until the module
+// attached (then callers fall back to the env-only settings).
+func (r *appconfigRef) values(ctx context.Context) (map[string]string, bool) {
+	r.mu.RLock()
+	module := r.module
+	r.mu.RUnlock()
+	if module == nil {
+		return nil, false
+	}
+	values, err := module.MergedValues(ctx)
+	if err != nil {
+		return nil, false
+	}
+	return values, true
 }
 
 // withAppImageStore builds the branding-image feature over the given
@@ -196,7 +323,7 @@ func registerRecurringJobs(deps Deps, feed *jobs.VersionFeed, webhooks *webhook.
 // sign-in/sign-out routes; account mounts self-service under the
 // same guard. Returns the sessions feature so the federation
 // surface can resolve session cookies (optional-auth /authorize).
-func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Recorder) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, *appimage.Service) {
+func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Recorder, ldapSettingsSource *appconfigRef) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, *appimage.Service) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	// One blob backend shared by app images, profile pictures, and
@@ -274,7 +401,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), recorder, apiaccess.WithAdminGuard(adminAuth)),
 		apiKeys,
-		withLDAPSync(deps, deps.DB),
+		withLDAPSync(deps, deps.DB, ldapSettingsSource),
 	}
 	images.WithGuard(adminAuth)
 	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), images

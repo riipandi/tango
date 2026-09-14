@@ -23,9 +23,10 @@ const ModuleName = "appconfig"
 
 // Module mounts the configuration endpoints.
 type Module struct {
-	store  Store
-	mailer MailSender
-	guard  func(http.Handler) http.Handler
+	store       Store
+	mailer      MailSender
+	guard       func(http.Handler) http.Handler
+	envDefaults map[string]string
 }
 
 var (
@@ -55,6 +56,14 @@ func (m *Module) WithStore(store Store) *Module {
 // admin-facing mounts.
 func (m *Module) WithAdminGuard(guard func(http.Handler) http.Handler) *Module {
 	m.guard = guard
+	return m
+}
+
+// WithEnvDefaults seeds the env-backed defaults (LDAP_*/MAILER_*
+// values from the koanf config). Catalog defaults stay the bottom
+// layer; DB overrides stay the top.
+func (m *Module) WithEnvDefaults(defaults map[string]string) *Module {
+	m.envDefaults = defaults
 	return m
 }
 
@@ -89,12 +98,18 @@ func (m *Module) APIRoutes(r chi.Router) {
 
 // listPublic serves GET /application-configuration: the settings the
 // unauthenticated SPA may see (env defaults folded with DB overrides).
-func (m *Module) listPublic(w http.ResponseWriter, r *http.Request) {	overrides, err := m.store.List(r.Context())
+func (m *Module) listPublic(w http.ResponseWriter, r *http.Request) {
+	overrides, err := m.store.List(r.Context())
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
-	responder.Success(w, r, http.StatusOK, publicView(mergedValues(overrides)))
+	responder.Success(w, r, http.StatusOK, publicView(m.merged(r.Context(), overrides)))
+}
+
+// merged folds the module's env defaults with the stored overrides.
+func (m *Module) merged(ctx context.Context, overrides map[string]string) map[string]string {
+	return mergedValues(m.envDefaults, overrides)
 }
 
 // MergedValues folds env defaults with stored overrides — the
@@ -105,7 +120,7 @@ func (m *Module) MergedValues(ctx context.Context) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return mergedValues(overrides), nil
+	return m.merged(ctx, overrides), nil
 }
 
 // listAll serves GET /application-configuration/all (admin): every
@@ -116,7 +131,7 @@ func (m *Module) listAll(w http.ResponseWriter, r *http.Request) {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
-	responder.Success(w, r, http.StatusOK, allView(mergedValues(overrides)))
+	responder.Success(w, r, http.StatusOK, allView(m.merged(r.Context(), overrides)))
 }
 
 // updateRequest is the PUT /application-configuration body:
@@ -165,7 +180,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
-	responder.Success(w, r, http.StatusOK, allView(mergedValues(overrides)))
+	responder.Success(w, r, http.StatusOK, allView(m.merged(r.Context(), overrides)))
 }
 
 // testEmailRequest is the POST /application-configuration/test-email

@@ -1,6 +1,7 @@
 package mailer
 
 import (
+	"context"
 	"errors"
 	"io"
 	"io/fs"
@@ -120,8 +121,9 @@ func (s *captureSession) Reset()        {}
 func (s *captureSession) Logout() error { return nil }
 
 // newTestMailer spins up an in-process SMTP relay and a mailer
-// pointed at it.
-func newTestMailer(t *testing.T) (Mailer, *captureBackend) {
+// pointed at it. The relay port returns too, for tests that play
+// with the settings source.
+func newTestMailer(t *testing.T) (Mailer, *captureBackend, int) {
 	t.Helper()
 
 	backend := &captureBackend{}
@@ -155,11 +157,11 @@ func newTestMailer(t *testing.T) (Mailer, *captureBackend) {
 		Templates: testFS(),
 		Logger:    logger.NewMock(),
 	})
-	return mailer, backend
+	return mailer, backend, cfg.SMTPPort
 }
 
 func TestSendDeliversMultipartMessage(t *testing.T) {
-	mailer, backend := newTestMailer(t)
+	mailer, backend, _ := newTestMailer(t)
 
 	err := mailer.Send(t.Context(), Message{
 		To:       "alice@example.test",
@@ -189,7 +191,7 @@ func TestSendDeliversMultipartMessage(t *testing.T) {
 }
 
 func TestSendRejectsInvalidInput(t *testing.T) {
-	mailer, backend := newTestMailer(t)
+	mailer, backend, _ := newTestMailer(t)
 
 	assert.ErrorContains(t, mailer.Send(t.Context(), Message{
 		Template: "welcome", Data: map[string]any{},
@@ -207,8 +209,44 @@ func TestSendRejectsInvalidInput(t *testing.T) {
 	assert.Empty(t, backend.messages)
 }
 
+// TestSettingsSourceOverridesPerSend verifies the late-bound source:
+// the from identity resolves from it on every send, a failing source
+// falls back to the static env config.
+func TestSettingsSourceOverridesPerSend(t *testing.T) {
+	mailer, backend, relayPort := newTestMailer(t)
+	setter, ok := mailer.(SettingsSourceSetter)
+	require.True(t, ok, "smtp mailer accepts a settings source")
+
+	msg := Message{
+		To: "alice@example.test", Subject: "relay switch", Template: "welcome",
+		Data: map[string]any{"UserFullName": "Alice", "Link": "https://app.test/x"},
+	}
+
+	calls := 0
+	setter.SetSettingsSource(func(ctx context.Context) (config.MailerConfig, error) {
+		calls++
+		return config.MailerConfig{
+			FromEmail: "switched@tango.test", FromName: "Switched",
+			SMTPHost: "127.0.0.1", SMTPPort: relayPort,
+		}, nil
+	})
+
+	require.NoError(t, mailer.Send(t.Context(), msg))
+	require.Len(t, backend.messages, 1)
+	assert.Contains(t, string(backend.messages[0].content), `From: "Switched" <switched@tango.test>`)
+	assert.Equal(t, 1, calls, "source resolves per send")
+
+	// A failing source falls back to the env config identity.
+	setter.SetSettingsSource(func(ctx context.Context) (config.MailerConfig, error) {
+		return config.MailerConfig{}, errors.New("appconfig down")
+	})
+	require.NoError(t, mailer.Send(t.Context(), msg))
+	require.Len(t, backend.messages, 2)
+	assert.Contains(t, string(backend.messages[1].content), `From: "Tango Test" <noreply@tango.test>`)
+}
+
 func TestSendUnknownTemplateFails(t *testing.T) {
-	mailer, backend := newTestMailer(t)
+	mailer, backend, _ := newTestMailer(t)
 
 	err := mailer.Send(t.Context(), Message{
 		To:       "alice@example.test",

@@ -21,6 +21,7 @@ import (
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport"
 	tmiddleware "github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/appconfig"
 	"github.com/riipandi/tango/web"
 )
 
@@ -125,6 +126,22 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	})
 
 	reg := registry.New(registry.Deps{Config: cfg, Logger: lg, Fetcher: fch, Mailer: ml, DB: db})
+
+	// SMTP relay settings become admin-editable: the mailer resolves
+	// them per send from the appconfig surface (env values stay the
+	// default layer). Late-bound — the module exists after New.
+	if module, ok := reg.Get(appconfig.ModuleName).(*appconfig.Module); ok {
+		if setter, ok := ml.(mailer.SettingsSourceSetter); ok {
+			fallback := cfg.Mailer
+			setter.SetSettingsSource(func(ctx context.Context) (config.MailerConfig, error) {
+				values, err := module.MergedValues(ctx)
+				if err != nil {
+					return fallback, err
+				}
+				return registry.MailerSettingsFromValues(values, fallback), nil
+			})
+		}
+	}
 	if err := reg.Start(context.Background()); err != nil {
 		return fmt.Errorf("start modules: %w", err)
 	}

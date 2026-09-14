@@ -114,7 +114,8 @@ func New(deps Deps) *kernel.Registry {
 	events := NewEventFanout(deps.Logger)
 
 	// Internal authn/authz: user core + selected auth features.
-	core, identityFeatures, adminGuard, sessions, apiAccess, images := newIdentityFeatures(deps, audit, events.Recorder(audit))
+	ldapSettingsSource := &appconfigRef{}
+	core, identityFeatures, adminGuard, sessions, apiAccess, images := newIdentityFeatures(deps, audit, events.Recorder(audit), ldapSettingsSource)
 	audit.MountAdminAPI(adminGuard)
 	audit.MountSelfAPI(sessions, session.CookieName)
 	reg.Register(identity.New(core, identityFeatures...))
@@ -131,8 +132,12 @@ func New(deps Deps) *kernel.Registry {
 	// test-email slice riding the phase 7 mail queue.
 	appconfigModule := appconfig.New(deps.Jobs).
 		WithStore(appconfig.NewPostgresStore(deps.DB)).
+		WithEnvDefaults(appConfigEnvDefaults(deps.Config)).
 		WithAdminGuard(adminGuard)
 	reg.Register(appconfigModule)
+	// LDAP sync reads its settings through the appconfig surface; the
+	// ref fills in now that the module exists (identity built first).
+	ldapSettingsSource.Attach(appconfigModule)
 
 	// Identity provider (OIDC, SCIM, discovery) — optional surface
 	// for other systems. Delete this line (and

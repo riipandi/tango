@@ -98,8 +98,9 @@ are stored as-is behind the allowlist; dark-variant client logos skipped.
       `endpoint-reference.md` as a non-goal so future audits stop flagging it.
 
 **Phase 9 final parity**: 112/113 upstream endpoints implemented; 1 non-goal
-(`sqlite-warning`). Remaining optional stretch: move `LDAPSettings`/SMTP env-backed values
-into `app_config` (deferred — env-only is fine for now).
+(`sqlite-warning`). Optional stretch landed: `smtp_*`/`ldap_*` settings moved into
+`app_config` with env-backed defaults (mailer resolves per send; LDAP sync reads the same
+surface).
 
 ## Gate (applies to every sub-phase)
 

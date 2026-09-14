@@ -23,6 +23,7 @@ import (
 // smtpMailer implements Mailer over an SMTP relay.
 type smtpMailer struct {
 	cfg         config.MailerConfig
+	source      SettingsSource
 	store       *templateStore
 	log         logger.Logger
 	sendTimeout time.Duration
@@ -45,6 +46,28 @@ func New(cfg config.MailerConfig, opts Options) Mailer {
 	}
 }
 
+// SetSettingsSource late-binds the per-send settings resolver
+// (SettingsSourceSetter). Safe to call before or while sending.
+func (m *smtpMailer) SetSettingsSource(source SettingsSource) {
+	m.source = source
+}
+
+// settings resolves the relay config for one send: the appconfig
+// source wins, static env config is the fallback on nil or error.
+func (m *smtpMailer) settings(ctx context.Context) config.MailerConfig {
+	if m.source == nil {
+		return m.cfg
+	}
+	resolved, err := m.source(ctx)
+	if err != nil || (resolved.SMTPHost == "" && resolved.SMTPPort == 0) {
+		if err != nil {
+			m.log.Warn("mailer: settings source failed, falling back to env config", loglayer.M{"error": err.Error()})
+		}
+		return m.cfg
+	}
+	return resolved
+}
+
 // Send renders the template and delivers over SMTP.
 func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 	if msg.To == "" {
@@ -53,6 +76,8 @@ func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 	if msg.Template == "" {
 		return errors.New("mailer: template is empty")
 	}
+
+	cfg := m.settings(ctx)
 
 	htmlBody, textBody, err := m.store.render(msg.Template, msg.To, msg.Data)
 	if err != nil {
@@ -64,7 +89,7 @@ func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 		return fmt.Errorf("mailer: invalid recipient: %w", err)
 	}
 
-	from := mail.Address{Name: m.cfg.FromName, Address: m.cfg.FromEmail}
+	from := mail.Address{Name: cfg.FromName, Address: cfg.FromEmail}
 	payload, err := m.compose(&from, to, msg.Subject, textBody, htmlBody)
 	if err != nil {
 		return err
@@ -74,7 +99,7 @@ func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 
 	m.log.WithMetadata(fields).Debug("sending email")
 
-	if err := m.deliver(ctx, &from, to.Address, payload); err != nil {
+	if err := m.deliver(ctx, cfg, &from, to.Address, payload); err != nil {
 		m.log.WithMetadata(fields).WithError(err).Error("email delivery failed")
 		return err
 	}
@@ -120,11 +145,12 @@ func (m *smtpMailer) compose(from, to *mail.Address, subject, textBody, htmlBody
 	return buf.Bytes(), nil
 }
 
-// deliver runs the SMTP transaction on the configured relay.
-func (m *smtpMailer) deliver(ctx context.Context, from *mail.Address, to string, payload []byte) error {
-	addr := fmt.Sprintf("%s:%d", m.cfg.SMTPHost, m.cfg.SMTPPort)
+// deliver runs the SMTP transaction on the configured relay (the
+// settings resolved once per Send, shared with compose).
+func (m *smtpMailer) deliver(ctx context.Context, cfg config.MailerConfig, from *mail.Address, to string, payload []byte) error {
+	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
 
-	client, err := m.dial(addr)
+	client, err := m.dial(addr, cfg)
 	if err != nil {
 		return err
 	}
@@ -133,8 +159,8 @@ func (m *smtpMailer) deliver(ctx context.Context, from *mail.Address, to string,
 	client.CommandTimeout = m.sendTimeout
 	client.SubmissionTimeout = m.sendTimeout
 
-	if m.cfg.SMTPUsername != "" || m.cfg.SMTPPassword != "" {
-		if err = client.Auth(sasl.NewPlainClient("", m.cfg.SMTPUsername, m.cfg.SMTPPassword)); err != nil {
+	if cfg.SMTPUsername != "" || cfg.SMTPPassword != "" {
+		if err = client.Auth(sasl.NewPlainClient("", cfg.SMTPUsername, cfg.SMTPPassword)); err != nil {
 			return fmt.Errorf("mailer: auth: %w", err)
 		}
 	}
@@ -166,10 +192,10 @@ func (m *smtpMailer) deliver(ctx context.Context, from *mail.Address, to string,
 
 // dial connects: implicit TLS when configured, else plaintext with
 // opportunistic STARTTLS before auth when supported.
-func (m *smtpMailer) dial(addr string) (*gosmtp.Client, error) {
-	tlsConfig := &tls.Config{ServerName: m.cfg.SMTPHost}
+func (m *smtpMailer) dial(addr string, cfg config.MailerConfig) (*gosmtp.Client, error) {
+	tlsConfig := &tls.Config{ServerName: cfg.SMTPHost}
 
-	if m.cfg.SMTPSecure {
+	if cfg.SMTPSecure {
 		client, err := gosmtp.DialTLS(addr, tlsConfig)
 		if err != nil {
 			return nil, fmt.Errorf("mailer: dial tls: %w", err)

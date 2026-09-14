@@ -54,8 +54,10 @@ variant), planned: profile-picture/client-logo bytes (phase 9C).
 - `POST /api/oidc/introspect` — client-scoped: tokens of other clients introspect as
   `active: false`; form body with client auth (Basic or form credentials).
 - End-session / refresh — refresh-token rotation per use; reuse kills the whole token family.
-- LDAP/SMTP/app config — env-backed defaults with DB overrides in `app_config` (phase 9B);
-  upstream stores SMTP credentials in the config table, tango keeps them env-only.
+- LDAP/SMTP/app config — admin-editable in `app_config` with env-backed defaults (stretch of
+  phase 9B): `smtp_*`/`ldap_*` keys fold env → catalog → DB overrides; `smtp_password` and
+  `ldap_bind_password` redact in the admin view. The mailer resolves relay settings per send;
+  LDAP sync reads its settings through the same surface. Upstream parity, different mechanics.
 - WebAuthn finish endpoints take `session_id` as a query param (upstream: not in swagger).
 - CIMD — **CIMD-lite** (phase 9D): admin-registered metadata-URL clients instead of upstream's
   dynamic URL-as-client-id flow. No `~base64url` client-id decode middleware, no

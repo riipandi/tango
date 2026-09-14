@@ -8,12 +8,25 @@ import (
 	"io/fs"
 	"time"
 
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/logger"
 )
 
 // Mailer renders and delivers transactional email.
 type Mailer interface {
 	Send(ctx context.Context, msg Message) error
+}
+
+// SettingsSource resolves the relay settings per send: the appconfig
+// surface owns the SMTP keys once wired (env values are its default
+// layer). Returning an error falls back to the static config.
+type SettingsSource func(ctx context.Context) (config.MailerConfig, error)
+
+// SettingsSourceSetter is implemented by mailers that accept a
+// late-bound settings source (the appconfig module exists after the
+// mailer is constructed).
+type SettingsSourceSetter interface {
+	SetSettingsSource(source SettingsSource)
 }
 
 // Message is a render-and-send request.

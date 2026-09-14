@@ -3,9 +3,9 @@ package appconfig
 // config.go catalogs the admin-editable settings: key, value type,
 // public visibility, and the env-backed default. Upstream reference:
 // internal/appconfig/model.go (tag-driven reflect walk) — tango uses
-// an explicit table so grep finds every key. Trimmed set: SMTP and
-// LDAP stay env-only (tango deviation); sensitive keys do not exist
-// here, so /all needs no redaction pass.
+// an explicit table so grep finds every key. LDAP and SMTP keys are
+// admin-editable with env-backed defaults (sensitive values redact in
+// the admin view); defaults fold env → catalog → DB overrides.
 
 import (
 	"fmt"
@@ -39,6 +39,9 @@ type configKey struct {
 	Default string
 	// OneOf restricts string values to a fixed set (empty = free).
 	OneOf []string
+	// Sensitive marks credentials: the admin view redacts the value
+	// (writes still round-trip, upstream parity with sensitive:"true").
+	Sensitive bool
 }
 
 // configKeys is the full catalog; keep Default in sync with
@@ -57,13 +60,44 @@ var configKeys = []configKey{
 	{Key: "signup_default_user_group_ids", Type: typeString},
 	{Key: "signup_default_custom_claims", Type: typeString},
 
-	// Email policy (SMTP credentials stay env-only)
+	// Email policy (SMTP relay settings live under the SMTP section)
 	{Key: "require_user_email", Type: typeBool, Public: true},
 	{Key: "email_login_notification_enabled", Type: typeBool, Default: "true"},
 	{Key: "email_one_time_access_as_unauthenticated_enabled", Type: typeBool, Public: true},
 	{Key: "email_one_time_access_as_admin_enabled", Type: typeBool, Public: true, Default: "true"},
 	{Key: "email_api_key_expiration_enabled", Type: typeBool, Default: "true"},
 	{Key: "email_verification_enabled", Type: typeBool, Public: true},
+
+	// SMTP relay (defaults fold from MAILER_* env; password redacted)
+	{Key: "smtp_from_email", Type: typeString, Default: "mailer@example.com"},
+	{Key: "smtp_from_name", Type: typeString, Default: "MyApplication"},
+	{Key: "smtp_host", Type: typeString, Default: "localhost"},
+	{Key: "smtp_port", Type: typeInt, Default: "1025"},
+	{Key: "smtp_username", Type: typeString},
+	{Key: "smtp_password", Type: typeString, Sensitive: true},
+	{Key: "smtp_secure", Type: typeBool},
+
+	// LDAP directory sync (defaults fold from LDAP_* env; password
+	// redacted; attribute keys fall back to the sync service defaults)
+	{Key: "ldap_enabled", Type: typeBool, Public: true},
+	{Key: "ldap_url", Type: typeString},
+	{Key: "ldap_bind_dn", Type: typeString},
+	{Key: "ldap_bind_password", Type: typeString, Sensitive: true},
+	{Key: "ldap_base", Type: typeString},
+	{Key: "ldap_user_search_filter", Type: typeString, Default: "(objectClass=person)"},
+	{Key: "ldap_user_group_search_filter", Type: typeString, Default: "(objectClass=groupOfNames)"},
+	{Key: "ldap_skip_cert_verify", Type: typeBool},
+	{Key: "ldap_attribute_user_unique_identifier", Type: typeString, Default: "uid"},
+	{Key: "ldap_attribute_user_username", Type: typeString, Default: "uid"},
+	{Key: "ldap_attribute_user_email", Type: typeString, Default: "mail"},
+	{Key: "ldap_attribute_user_first_name", Type: typeString, Default: "givenName"},
+	{Key: "ldap_attribute_user_last_name", Type: typeString, Default: "sn"},
+	{Key: "ldap_attribute_user_display_name", Type: typeString, Default: "displayName"},
+	{Key: "ldap_attribute_group_unique_identifier", Type: typeString, Default: "cn"},
+	{Key: "ldap_attribute_group_name", Type: typeString, Default: "cn"},
+	{Key: "ldap_attribute_group_member", Type: typeString, Default: "member"},
+	{Key: "ldap_admin_group_name", Type: typeString},
+	{Key: "ldap_soft_delete_users", Type: typeBool},
 
 	// WebAuthn ceremony tuning
 	{Key: "webauthn_user_verification", Type: typeString, Default: "preferred", OneOf: webauthnVerifications},
@@ -123,11 +157,17 @@ type variable struct {
 	IsPublic bool   `json:"is_public,omitzero"`
 }
 
-// mergedValues folds DB overrides over env/env-file defaults.
-func mergedValues(overrides map[string]string) map[string]string {
+// mergedValues folds DB overrides over env-provided defaults, which
+// in turn fold over the catalog defaults: catalog < env < DB.
+func mergedValues(envDefaults, overrides map[string]string) map[string]string {
 	out := make(map[string]string, len(configKeys))
 	for _, entry := range configKeys {
 		out[entry.Key] = entry.Default
+	}
+	for key, value := range envDefaults {
+		if _, known := lookup(key); known {
+			out[key] = value
+		}
 	}
 	for key, value := range overrides {
 		if _, known := lookup(key); known {
@@ -150,14 +190,20 @@ func publicView(values map[string]string) []variable {
 	return out
 }
 
-// allView lists every key with its visibility flag (admin).
+// allView lists every key with its visibility flag (admin). The
+// stored value of a sensitive key never leaves the server: the
+// response carries an empty string instead (upstream redacts too).
 func allView(values map[string]string) []variable {
 	out := make([]variable, 0, len(configKeys))
 	for _, entry := range configKeys {
+		value := values[entry.Key]
+		if entry.Sensitive {
+			value = ""
+		}
 		out = append(out, variable{
 			Key:      entry.Key,
 			Type:     string(entry.Type),
-			Value:    values[entry.Key],
+			Value:    value,
 			IsPublic: entry.Public,
 		})
 	}
