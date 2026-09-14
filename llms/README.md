@@ -219,7 +219,7 @@ different path/shape), `ok` (implemented, parity).
 | `/api/oidc/introspect`                                                                                                       | ok              | completion pass (RFC 7662; client-scoped)                                                                               |
 | `/api/oidc/users/me/clients`, `/api/oidc/users/me/authorized-clients*`, `/api/oidc/users/{id}/authorized-clients`            | ok              | completion pass (revocation cascades to active tokens)                                                                  |
 | `/authorize` (authorize code + PKCE), `/api/oidc/end-session`                                                                | ok              | completion pass: end-session clears the cookie + logout-callback redirect; family revocation lands phase 5              |
-| `/api/api-keys*`, `/api/apis*`, `/api/api-access/{clientId}/*`                                                               | missing-backend | phase 6                                                                                                                 |
+| `/api/api-keys*`, `/api/apis*`, `/api/api-access/{clientId}/*`                                                               | ok              | phase 6 (live-tested; `X-API-KEY` machine guard on the users CRUD surface)                                              |
 | `/api/device-login/*` (requests, exchange, verification, decision)                                                           | ok              | phase 5 (own table `device_login_requests`; upstream uses the francis actor framework — noted deviation)                |
 | `/api/application-configuration*`, `/api/application-images/*`, `/api/scim/service-provider*`, `/api/storage/sqlite-warning` | missing-backend | phase 8 (sqlite-warning is upstream-specific — likely never ported; Postgres-only); `test-email` landed in phase 7 |
 
@@ -228,3 +228,8 @@ verification), User Groups, Custom Claims, Audit Logs, Well Known (incl.
 oauth-authorization-server), OIDC (incl. introspect), OAuth, Version, Device Login, Signup,
 and Tango Extensions (auth) hold the implemented requests; missing _requests_ inside existing
 folders mirror the `missing-backend` rows above and get created as each phase lands.
+
+Remaining gaps (16 endpoints) are scheduled in `llms/phase-09-parity-gap.md` (9A OIDC client
+context → 9B appconfig → 9C pictures/logos → 9D CIMD/non-goals). Tango-only features and every
+structural deviation from upstream are catalogued in `llms/tango-deviations.md` — read it before
+porting upstream code so upstream shapes do not leak into handlers.

@@ -5,12 +5,9 @@ request checklist: one request per row, named `<METHOD> <path>`. Status per the 
 Register in `README.md`: **done** (implemented + live-tested), **partial** (implemented
 with a noted deviation), **planned** (unimplemented — owning phase named).
 
-Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
-`POST /api/auth/sign-out`, `GET /api/auth/session`, `GET /api/account*`,
-`GET /api/healthz` (JSON variant), single-claim custom-claim CRUD,
-`GET /api/oidc/users/me/authorized-clients` aliases, the webhook surface
-(`/api/webhooks*`, `/api/webhook-logs`), and the explicit-recipient body on
-`/api/application-configuration/test-email` — all done.
+Tango-only extensions (not in the upstream spec) and all structural deviations (envelope,
+pagination, snake_case) are documented in `llms/tango-deviations.md` — read it before porting
+upstream handlers. Remaining gaps are planned in `llms/phase-09-parity-gap.md`.
 
 ## API Keys
 
@@ -43,9 +40,9 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 
 | Method | Endpoint                                    | Summary / Yaak Title                   | Status            |
 | ------ | ------------------------------------------- | -------------------------------------- | ----------------- |
-| GET    | `/api/application-configuration`            | List public application configurations | deferred — appconfig module |
-| PUT    | `/api/application-configuration`            | Update application configurations      | deferred — appconfig module |
-| GET    | `/api/application-configuration/all`        | List all application configurations    | deferred — appconfig module |
+| GET    | `/api/application-configuration`            | List public application configurations | planned (phase 9B)  |
+| PUT    | `/api/application-configuration`            | Update application configurations      | planned (phase 9B)  |
+| GET    | `/api/application-configuration/all`        | List all application configurations    | planned (phase 9B)  |
 | POST   | `/api/application-configuration/sync-ldap`  | Synchronize LDAP                       | done — phase 8    |
 | POST   | `/api/application-configuration/test-email` | Send test email                        | done — phase 7 mail queue |
 
@@ -109,12 +106,12 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 | GET    | `/api/oidc/clients/{id}`                           | Get OIDC client                               | done                                        |
 | PUT    | `/api/oidc/clients/{id}`                           | Update OIDC client                            | done                                        |
 | PUT    | `/api/oidc/clients/{id}/allowed-user-groups`       | Update allowed user groups                    | done                                        |
-| DELETE | `/api/oidc/clients/{id}/logo`                      | Delete client logo                            | planned (phase 8 — client logos)            |
-| GET    | `/api/oidc/clients/{id}/logo`                      | Get client logo                               | planned (phase 8 — client logos)            |
-| POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            | planned (phase 8 — client logos)            |
-| GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           | done                                        |
-| GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             | done                                        |
-| POST   | `/api/oidc/clients/{id}/refresh`                   | Refresh client metadata document              | planned (phase 8 — CIMD)                    |
+| DELETE | `/api/oidc/clients/{id}/logo`                      | Delete client logo                            | planned (phase 9C — client logos)          |
+| GET    | `/api/oidc/clients/{id}/logo`                      | Get client logo                               | planned (phase 9C — client logos)          |
+| POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            | planned (phase 9C — client logos)          |
+| GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           | missing-backend (phase 9A)                 |
+| GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             | missing-backend (phase 9A)                 |
+| POST   | `/api/oidc/clients/{id}/refresh`                   | Refresh client metadata document              | planned (phase 9D — CIMD)                   |
 | GET    | `/api/oidc/clients/{id}/scim-service-provider`     | Get SCIM service provider                     | done — phase 8                              |
 | GET    | `/api/oidc/clients/{id}/secrets`                   | List client secrets                           | done — multi-secret, values shown once      |
 | POST   | `/api/oidc/clients/{id}/secrets`                   | Create client secret                          | done — multi-secret, values shown once      |
@@ -125,7 +122,7 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 | DELETE | `/api/oidc/users/me/authorized-clients/{clientId}` | Revoke authorization for an OIDC client       | done — revocation cascades to active tokens |
 | GET    | `/api/oidc/users/me/clients`                       | List accessible OIDC clients for current user | done                                        |
 | GET    | `/api/oidc/users/{id}/authorized-clients`          | List authorized clients for a user            | done — revocation cascades to active tokens |
-| PUT    | `/api/user-groups/{id}/allowed-oidc-clients`       | Update allowed OIDC clients                   | done                                        |
+| PUT    | `/api/user-groups/{id}/allowed-oidc-clients`       | Update allowed OIDC clients                   | missing-backend (phase 9A)                 |
 
 ## SCIM
 
@@ -140,7 +137,7 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 
 | Method | Endpoint                      | Summary / Yaak Title                                   | Status                                                     |
 | ------ | ----------------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
-| GET    | `/api/storage/sqlite-warning` | Get whether the SQLite storage warning should be shown | planned (phase 8 — upstream-specific; likely never ported) |
+| GET    | `/api/storage/sqlite-warning` | Get whether the SQLite storage warning should be shown | won't port — Postgres-only (upstream-specific)             |
 
 ## User Groups
 
@@ -168,8 +165,8 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 | POST   | `/api/users`                                          | Create user                                   | done                                                   |
 | GET    | `/api/users/me`                                       | Get current user                              | done                                                   |
 | PUT    | `/api/users/me`                                       | Update current user                           | partial — profile fields only; email stays admin-gated |
-| DELETE | `/api/users/me/profile-picture`                       | Reset current user's profile picture          | planned (phase 8)                                      |
-| PUT    | `/api/users/me/profile-picture`                       | Update current user's profile picture         | planned (phase 8)                                      |
+| DELETE | `/api/users/me/profile-picture`                       | Reset current user's profile picture          | planned (phase 9C)                                     |
+| PUT    | `/api/users/me/profile-picture`                       | Update current user's profile picture         | planned (phase 9C)                                     |
 | POST   | `/api/users/me/send-email-verification`               | Send email verification                       | done                                                   |
 | POST   | `/api/users/me/verify-email`                          | Verify email                                  | done                                                   |
 | DELETE | `/api/users/{id}`                                     | Delete user                                   | done                                                   |
@@ -178,9 +175,9 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 | GET    | `/api/users/{id}/groups`                              | Get user groups                               | done                                                   |
 | POST   | `/api/users/{id}/one-time-access-email`               | Request one-time access email (admin)         | done                                                   |
 | POST   | `/api/users/{id}/one-time-access-token`               | Create one-time access token for user (admin) | done                                                   |
-| DELETE | `/api/users/{id}/profile-picture`                     | Reset user profile picture                    | planned (phase 8)                                      |
-| PUT    | `/api/users/{id}/profile-picture`                     | Update user profile picture                   | planned (phase 8)                                      |
-| GET    | `/api/users/{id}/profile-picture.png`                 | Get user profile picture                      | planned (phase 8)                                      |
+| DELETE | `/api/users/{id}/profile-picture`                     | Reset user profile picture                    | planned (phase 9C)                                     |
+| PUT    | `/api/users/{id}/profile-picture`                     | Update user profile picture                   | planned (phase 9C)                                     |
+| GET    | `/api/users/{id}/profile-picture.png`                 | Get user profile picture                      | planned (phase 9C)                                     |
 | PUT    | `/api/users/{id}/user-groups`                         | Update user groups                            | done                                                   |
 | GET    | `/api/users/{id}/webauthn-credentials`                | List user passkeys                            | done                                                   |
 | PUT    | `/api/users/{id}/webauthn-credentials/{credentialId}` | Rename user passkey                           | done                                                   |
