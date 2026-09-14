@@ -134,11 +134,11 @@ func writeRateLimited(w http.ResponseWriter, r *http.Request, detail string) {
 // absent or unparseable.
 func retryAfter(detail string) int {
 	marker := "Retry after: "
-	idx := strings.Index(detail, marker)
-	if idx < 0 {
+	_, after, ok := strings.Cut(detail, marker)
+	if !ok {
 		return 0
 	}
-	rest := detail[idx+len(marker):]
+	rest := after
 	end := strings.IndexAny(rest, " ,")
 	if end < 0 {
 		end = len(rest)

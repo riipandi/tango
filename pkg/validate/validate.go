@@ -54,8 +54,7 @@ func FieldErrors(err error) []FieldError {
 		return nil
 	}
 
-	var errs validation.Errors
-	if errors.As(err, &errs) {
+	if errs, ok := errors.AsType[validation.Errors](err); ok {
 		out := make([]FieldError, 0, len(errs))
 		for field, fieldErr := range errs {
 			out = append(out, FieldError{Field: field, Message: fieldErr.Error()})
