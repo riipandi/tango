@@ -214,14 +214,15 @@ different path/shape), `ok` (implemented, parity).
 | `/api/oidc/clients` GET/POST, `/api/oidc/clients/{id}` GET/PUT/DELETE                                                        | ok              | phase 4 (fields may lag: logo, credentials list)                                                                        |
 | `/api/oidc/clients/{id}/allowed-user-groups` PUT                                                                             | ok              | completion pass (list-replace userGroupIds)                                                                             |
 | `/api/oidc/clients/{id}/secrets*` (list/create/delete multi-secret)                                                          | ok              | completion pass (credentials JSONB; legacy column mirrored)                                                             |
-| `/api/oidc/clients/{id}/logo*`, `/refresh` (CIMD)                                                                            | missing-backend | phase 9D (CIMD refresh); logos live (phase 9C)                                                                           |
+| `/api/oidc/clients/{id}/logo*`                                                                               | ok              | phase 9C (logo columns 00030, shared blob store)                                                                          |
+| `/api/oidc/clients/{id}/refresh` (CIMD)                                                                      | ok              | phase 9D (CIMD-lite: admin-registered metadata-URL clients, allowlist default-deny, no fosite resolver — see deviations)  |
 | `/api/oidc/token`, `/api/oidc/userinfo`                                                                                      | ok              | phase 4                                                                                                                 |
 | `/api/oidc/introspect`                                                                                                       | ok              | completion pass (RFC 7662; client-scoped)                                                                               |
 | `/api/oidc/users/me/clients`, `/api/oidc/users/me/authorized-clients*`, `/api/oidc/users/{id}/authorized-clients`            | ok              | completion pass (revocation cascades to active tokens)                                                                  |
 | `/authorize` (authorize code + PKCE), `/api/oidc/end-session`                                                                | ok              | completion pass: end-session clears the cookie + logout-callback redirect; family revocation lands phase 5              |
 | `/api/api-keys*`, `/api/apis*`, `/api/api-access/{clientId}/*`                                                               | ok              | phase 6 (live-tested; `X-API-KEY` machine guard on the users CRUD surface)                                              |
 | `/api/device-login/*` (requests, exchange, verification, decision)                                                           | ok              | phase 5 (own table `device_login_requests`; upstream uses the francis actor framework — noted deviation)                |
-| `/api/application-configuration*`, `/api/application-images/*`, `/api/scim/service-provider*`, `/api/storage/sqlite-warning` | missing-backend | phase 9C (images), phase 9D (sqlite-warning is upstream-specific — never ported; Postgres-only); settings CRUD + `test-email` live (phase 9B / 7) |
+| `/api/application-configuration*`, `/api/application-images/*`, `/api/scim/service-provider*`, `/api/storage/sqlite-warning` | partial         | phase 9C (images), phase 9D closing (settings CRUD + `test-email` live, phase 9B / 7); `sqlite-warning` **won't port** (Postgres-only, upstream-specific) |
 
 Yaak folder coverage after phase 5: Users (webauthn-credentials, one-time access, email
 verification), User Groups, Custom Claims, Audit Logs, Well Known (incl.
@@ -229,7 +230,9 @@ oauth-authorization-server), OIDC (incl. introspect), OAuth, Version, Device Log
 and Tango Extensions (auth) hold the implemented requests; missing _requests_ inside existing
 folders mirror the `missing-backend` rows above and get created as each phase lands.
 
-Remaining gaps (16 endpoints) are scheduled in `llms/phase-09-parity-gap.md` (9A OIDC client
-context → 9B appconfig → 9C pictures/logos → 9D CIMD/non-goals). Tango-only features and every
-structural deviation from upstream are catalogued in `llms/tango-deviations.md` — read it before
-porting upstream code so upstream shapes do not leak into handlers.
+All 16 upstream parity gaps are closed (phase 9: 9A OIDC client context → 9B appconfig →
+9C pictures/logos → 9D CIMD-lite refresh); final parity is 112/113 implemented + 1 recorded
+non-goal (`sqlite-warning`, Postgres-only) — see `llms/phase-09-parity-gap.md`. Tango-only
+features and every structural deviation from upstream are catalogued in
+`llms/tango-deviations.md` — read it before porting upstream code so upstream shapes do not
+leak into handlers.

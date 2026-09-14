@@ -57,6 +57,13 @@ variant), planned: profile-picture/client-logo bytes (phase 9C).
 - LDAP/SMTP/app config — env-backed defaults with DB overrides in `app_config` (phase 9B);
   upstream stores SMTP credentials in the config table, tango keeps them env-only.
 - WebAuthn finish endpoints take `session_id` as a query param (upstream: not in swagger).
+- CIMD — **CIMD-lite** (phase 9D): admin-registered metadata-URL clients instead of upstream's
+  dynamic URL-as-client-id flow. No `~base64url` client-id decode middleware, no
+  authorize-time materialization (fosite `CIMDResolver` stack not ported). A client created
+  with `metadata_url` materializes `client_name`/`redirect_uris`/`logout_callback_uris`/
+  `grant_types` from the document (https-only, 1 MiB cap, allowlist via `cimd_url_allowlist`
+  appconfig key, default deny); `POST /api/oidc/clients/{id}/refresh` re-fetches; admin
+  updates never write document-owned fields.
 
 ## Deliberate non-goals
 

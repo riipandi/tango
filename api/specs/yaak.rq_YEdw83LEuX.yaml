@@ -1,0 +1,40 @@
+type: http_request
+model: http_request
+id: rq_YEdw83LEuX
+createdAt: 2026-09-14T15:25:22.983970
+updatedAt: 2026-09-14T15:25:25.306572
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_GfrmzYcuVx
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: application/json
+description: Force a re-fetch of the OAuth Client ID Metadata Document for a CIMD client
+headers: []
+method: POST
+name: Refresh client metadata document
+sortPriority: 0.0
+url: '{{ base_url }}/api/oidc/clients/:id/refresh'
+urlParameters:
+- enabled: true
+  name: :id
+  value: dummy
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

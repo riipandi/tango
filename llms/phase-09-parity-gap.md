@@ -80,15 +80,26 @@ are stored as-is behind the allowlist; dark-variant client logos skipped.
 - [x] Dark-variant client logo skipped (single logo; recorded as the documented deviation).
 - [x] Audit events, tests (upload/replace/reset/404-default), Yaak requests, live test, status flips.
 
-## 9D — CIMD refresh + explicit non-goals
+## 9D — CIMD refresh + explicit non-goals (done)
 
-- [ ] `POST /api/oidc/clients/{id}/refresh` — re-fetch the metadata document for CIMD clients,
-      validate (URL allowlist, size cap), update the row without clobbering concurrent admin
-      edits (upstream regression test: `UpdateClient_CIMDDoesNotOverwriteConcurrentMetadataRefresh`
-      — port the behavior, not the test). Depends on the CIMD client-id decoding already present
-      (`middleware.NewClientIDParamMiddleware` equivalent in tango transport).
-- [ ] `GET /api/storage/sqlite-warning` — **won't port** (Postgres-only); keep recorded in
+- [x] `POST /api/oidc/clients/{id}/refresh` — re-fetch the metadata document for CIMD clients,
+      validate (URL allowlist default-deny, https-only, 1 MiB cap), update the row without
+      clobbering concurrent admin edits (upstream regression test:
+      `UpdateClient_CIMDDoesNotOverwriteConcurrentMetadataRefresh` — behavior ported, not the
+      test). **CIMD-lite scope decision**: the planned precondition "CIMD client-id decoding
+      already present" was wrong — tango never had `~base64url` client-id decoding or
+      authorize-time materialization. Instead of porting the full fosite CIMDResolver stack,
+      tango ships admin-registered metadata-URL clients: `POST /api/oidc/clients` accepts a
+      `metadata_url`; the document materializes `client_name`/`redirect_uris`/
+      `logout_callback_uris`/`grant_types` into the row (client_type `cimd`, public, PKCE),
+      and admin updates skip those document-owned fields. Deviation recorded in
+      `tango-deviations.md`.
+- [x] `GET /api/storage/sqlite-warning` — **won't port** (Postgres-only); keep recorded in
       `endpoint-reference.md` as a non-goal so future audits stop flagging it.
+
+**Phase 9 final parity**: 112/113 upstream endpoints implemented; 1 non-goal
+(`sqlite-warning`). Remaining optional stretch: move `LDAPSettings`/SMTP env-backed values
+into `app_config` (deferred — env-only is fine for now).
 
 ## Gate (applies to every sub-phase)
 

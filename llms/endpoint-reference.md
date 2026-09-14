@@ -111,7 +111,7 @@ upstream handlers. Remaining gaps are planned in `llms/phase-09-parity-gap.md`.
 | POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            | done                                       |
 | GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           | done                                       |
 | GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             | done — claim maps, no real JWTs            |
-| POST   | `/api/oidc/clients/{id}/refresh`                   | Refresh client metadata document              | planned (phase 9D — CIMD)                   |
+| POST   | `/api/oidc/clients/{id}/refresh`                   | Refresh client metadata document              | done — phase 9D, CIMD-lite                  |
 | GET    | `/api/oidc/clients/{id}/scim-service-provider`     | Get SCIM service provider                     | done — phase 8                              |
 | GET    | `/api/oidc/clients/{id}/secrets`                   | List client secrets                           | done — multi-secret, values shown once      |
 | POST   | `/api/oidc/clients/{id}/secrets`                   | Create client secret                          | done — multi-secret, values shown once      |
