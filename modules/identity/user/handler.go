@@ -80,6 +80,16 @@ func (s *Service) APIRoutes(r chi.Router) {
 		self := r.With(middleware.RequireAuth(s.selfAuth, s.cookie))
 		self.Get("/users/me", s.getCurrentUser)
 		self.Put("/users/me", s.updateCurrentUser)
+		if s.images != nil {
+			self.Put("/users/me/profile-picture", s.updateProfilePicture)
+			self.Delete("/users/me/profile-picture", s.resetProfilePicture)
+		}
+	}
+
+	// Public read: the .png route serves bare bytes with no guard
+	// (upstream parity).
+	if s.images != nil {
+		r.Get("/users/{id}/profile-picture.png", s.serveProfilePicture)
 	}
 
 	mount := func(ar chi.Router) {
@@ -88,6 +98,10 @@ func (s *Service) APIRoutes(r chi.Router) {
 		ar.Get("/users/{id}", s.getUser)
 		ar.Put("/users/{id}", s.updateUser)
 		ar.Delete("/users/{id}", s.deleteUser)
+		if s.images != nil {
+			ar.Put("/users/{id}/profile-picture", s.updateProfilePicture)
+			ar.Delete("/users/{id}/profile-picture", s.resetProfilePicture)
+		}
 	}
 
 	if s.guard == nil {

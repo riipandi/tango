@@ -51,9 +51,18 @@ func (f Feature) APIRoutes(r chi.Router) {
 			cr.Get("/{clientId}/secrets", f.service.handleListSecrets)
 			cr.Post("/{clientId}/secrets", f.service.handleCreateSecret)
 			cr.Delete("/{clientId}/secrets/{secretId}", f.service.handleDeleteSecret)
+			if f.service.images != nil {
+				cr.Post("/{clientId}/logo", f.service.updateClientLogo)
+				cr.Delete("/{clientId}/logo", f.service.deleteClientLogo)
+			}
 		})
 		clients.Get(authorizedClientsAPIPrefix, f.service.handleListAuthorizedClients)
 		clients.Get("/oidc/users/{id}/authorized-clients", f.service.handleListUserAuthorizedClients)
+	}
+
+	// Public logo read: bare bytes, no guard (upstream parity).
+	if f.service.images != nil {
+		r.Get("/oidc/clients/{clientId}/logo", f.service.serveClientLogo)
 	}
 
 	if f.selfAuth != nil {

@@ -24,6 +24,7 @@ type Service struct {
 	cookieName    string
 	cookieSecure  bool
 	audit         AuditLogger
+	images        ClientImageStore
 }
 
 // AuditLogger receives audit events; the registry adapts auditlog.
@@ -53,6 +54,11 @@ func WithAPIAccess(p APIAccessProvider) Option { return func(s *Service) { s.api
 // optional-auth /authorize flow.
 func WithAuthenticator(auth middleware.Authenticator) Option {
 	return func(s *Service) { s.authenticator = auth }
+}
+
+// WithImages wires the blob backend for the client-logo surface.
+func WithImages(images ClientImageStore) Option {
+	return func(s *Service) { s.images = images }
 }
 
 // WithCookieSecure marks the end-session cookie Secure (off in

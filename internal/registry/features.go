@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -82,18 +83,26 @@ func envLDAPSettings(cfg *config.Config) ldapsync.LDAPSettings {
 	}
 }
 
-// withAppImage builds the branding-image feature over the configured
+// withAppImageStore builds the branding-image feature over the given
 // blob backend and seeds bundled defaults at startup.
-func withAppImage(deps Deps) (*appimage.Service, error) {
-	store, err := storage.New(deps.Config.Storage)
-	if err != nil {
-		return nil, err
-	}
+func withAppImageStore(deps Deps, store storage.Store) (*appimage.Service, error) {
 	defaults, err := appimage.SeedDefaults(context.Background(), store, web.ImagesDir)
 	if err != nil {
 		return nil, err
 	}
 	return appimage.NewService(store, defaults), nil
+}
+
+// defaultPictureProvider adapts the appimage default to the user
+// module's fallback hook.
+func defaultPictureProvider(images *appimage.Service) user.DefaultPictureFunc {
+	return func(ctx context.Context) (io.ReadCloser, int64, string, bool) {
+		reader, size, mime, err := images.GetImage(ctx, appimage.ImageProfilePic)
+		if err != nil {
+			return nil, 0, "", false
+		}
+		return reader, size, mime, true
+	}
 }
 
 // withAPIKeys builds the machine-credential feature: self-scoped
@@ -188,6 +197,17 @@ func registerRecurringJobs(deps Deps, feed *jobs.VersionFeed, webhooks *webhook.
 func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Recorder) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, *appimage.Service) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
+	// One blob backend shared by app images, profile pictures, and
+	// client logos.
+	blobStore, err := storage.New(deps.Config.Storage)
+	if err != nil {
+		panic("registry: storage init: " + err.Error())
+	}
+	images, err := withAppImageStore(deps, blobStore)
+	if err != nil {
+		panic("registry: appimage init: " + err.Error())
+	}
+
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, recorder)
 	sessions := session.NewService(
 		session.NewPostgresStore(deps.DB),
@@ -211,6 +231,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 		user.WithAdminGuard(adminAuth),
 		user.WithAPIKeyGuard(middleware.RequireAPIKey(apiKeys.Verify)),
 		user.WithSelfAuth(sessions, session.CookieName),
+		user.WithImages(blobStore, defaultPictureProvider(images)),
 	)
 
 	features := []identity.Feature{
@@ -253,10 +274,6 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 		apiKeys,
 		withLDAPSync(deps, deps.DB),
 	}
-	images, err := withAppImage(deps)
-	if err != nil {
-		panic("registry: appimage init: " + err.Error())
-	}
 	images.WithGuard(adminAuth)
 	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), images
 }
@@ -266,7 +283,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 // resolution via the identity session feature (optional-auth
 // /authorize), the audit adapter, and the admin guard for client
 // management.
-func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler, apiAccess *apiaccess.PostgresStore) federation.Feature {
+func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore) federation.Feature {
 	issuer := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service := oidc.NewService(
 		oidc.NewPostgresStore(deps.DB),
@@ -276,6 +293,7 @@ func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *s
 		oidc.WithAudit(federationAuditAdapter(audit)),
 		oidc.WithAuthenticator(sessions),
 		oidc.WithAPIAccess(apiAccess),
+		oidc.WithImages(images),
 		oidc.WithCookieSecure(deps.Config.App.Mode != "development"),
 	)
 	return oidc.New(service).

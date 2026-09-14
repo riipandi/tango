@@ -6,6 +6,7 @@ package oidc
 
 import (
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,9 +16,34 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/usergroup"
 )
+
+// tinyPNG is a valid 1x1 PNG used by the logo lifecycle test.
+var tinyPNG = []byte{
+	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+	0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+	0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+	0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+	0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+}
+
+// uploadLogo builds a multipart logo upload body.
+func uploadLogo(t *testing.T, data []byte) (string, *strings.Reader) {
+	t.Helper()
+	var buf strings.Builder
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile("file", "logo.png")
+	require.NoError(t, err)
+	_, err = part.Write(data)
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+	return w.FormDataContentType(), strings.NewReader(buf.String())
+}
 
 // boolPtr returns a pointer to b.
 func boolPtr(b bool) *bool { return &b }
@@ -285,6 +311,74 @@ func TestClientMetaAndPreview(t *testing.T) {
 
 	// Unknown user → 404.
 	req = signInRequest(http.MethodGet, clientsAPIPrefix+"/"+client.ID.String()+"/preview/user_"+stamp())
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// TestClientLogoLifecycle covers the phase 9C logo surface: upload →
+// bare-bytes read (public) → meta has_logo flips → delete → 404.
+func TestClientLogoLifecycle(t *testing.T) {
+	service, store, ds := testStack(t)
+	ctx := t.Context()
+
+	blobs, err := storage.New(config.StorageConfig{DataDir: t.TempDir()})
+	require.NoError(t, err)
+	service.images = blobs
+
+	users := user.NewPostgresStore(ds)
+	createdUser := userFixture(ctx, t, users, stamp())
+	router := newRouter(t, service, &fakeAuthenticator{validToken: "session-token-1", principal: principalFixture(createdUser.String())})
+	client := clientFixture(ctx, t, store, "logo-"+stamp())
+
+	// No logo yet → 404 (public route, no cookie needed).
+	req := httptest.NewRequest(http.MethodGet, "/oidc/clients/"+client.ID.String()+"/logo", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusNotFound, rec.Code)
+
+	// Upload (admin) → 204; image_type syncs for the meta view.
+	contentType, body := uploadLogo(t, tinyPNG)
+	req = httptest.NewRequest(http.MethodPost, clientsAPIPrefix+"/"+client.ID.String()+"/logo", body)
+	req.Header.Set("Content-Type", contentType)
+	req.AddCookie(&http.Cookie{Name: "tango_session", Value: "session-token-1"})
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
+
+	updated, err := store.GetClient(ctx, client.ID)
+	require.NoError(t, err)
+	require.NotNil(t, updated.LogoPath)
+	require.NotNil(t, updated.ImageType)
+	assert.Equal(t, "png", *updated.ImageType)
+
+	// Public read serves the bytes bare.
+	req = httptest.NewRequest(http.MethodGet, "/oidc/clients/"+client.ID.String()+"/logo", nil)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "image/png", rec.Header().Get("Content-Type"))
+	assert.Equal(t, tinyPNG, rec.Body.Bytes())
+
+	// Meta view flips has_logo.
+	req = signInRequest(http.MethodGet, clientsAPIPrefix+"/"+client.ID.String()+"/meta")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"has_logo":true`)
+
+	// Delete (admin) → 204, read is 404 again, image_type cleared.
+	req = signInRequest(http.MethodDelete, clientsAPIPrefix+"/"+client.ID.String()+"/logo")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	cleared, err := store.GetClient(ctx, client.ID)
+	require.NoError(t, err)
+	assert.Nil(t, cleared.LogoPath)
+	assert.Nil(t, cleared.ImageType)
+
+	req = httptest.NewRequest(http.MethodGet, "/oidc/clients/"+client.ID.String()+"/logo", nil)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code)

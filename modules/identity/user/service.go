@@ -22,6 +22,9 @@ type Service struct {
 	apiGuard RouteGuard
 	selfAuth middleware.Authenticator
 	cookie   string
+
+	images         ImageStore
+	defaultPicture DefaultPictureFunc
 }
 
 var _ identity.APIFeature = (*Service)(nil)

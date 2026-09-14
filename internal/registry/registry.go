@@ -139,7 +139,7 @@ func New(deps Deps) *kernel.Registry {
 	// federation_features.go) to exclude the provider entirely.
 	keyService := newKeyService(deps)
 	reg.Register(federation.New(
-		withOIDC(deps, audit, keyService, sessions, adminGuard, apiAccess),
+		withOIDC(deps, audit, keyService, sessions, adminGuard, apiAccess, images.BlobStore()),
 		withSCIMSync(deps),
 		keyService,
 		withDiscovery(deps, keyService),

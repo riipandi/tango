@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/huandu/go-sqlbuilder"
@@ -82,6 +84,10 @@ type Store interface {
 	// Multi-secret management (credentials JSONB + legacy column).
 	AddClientSecret(ctx context.Context, clientID OIDCClientID, entry ClientSecret, rawHash string) error
 	DeleteClientSecret(ctx context.Context, clientID OIDCClientID, secretID string) error
+
+	// Client logo (phase 9C): blob path + upstream-compat image_type
+	// column, cleared together.
+	SetClientLogoPath(ctx context.Context, id OIDCClientID, path *string) error
 }
 
 // Client is a relying party. Secrets never round-trip: the store
@@ -98,6 +104,7 @@ type Client struct {
 	LaunchURL                   string
 	ImageType                   *string
 	DarkImageType               *string
+	LogoPath                    *string
 	ClientType                  string
 	IsPublic                    bool
 	PKCEEnabled                 bool
@@ -256,7 +263,7 @@ var clientColumns = []string{
 	"c.launch_url", "c.is_public", "c.pkce_enabled", "c.pkce_supported",
 	"c.requires_reauthentication", "c.skip_consent", "c.is_group_restricted",
 	"c.access_token_duration_minutes", "c.refresh_token_duration_minutes",
-	"c.created_by_id", "c.created_at", "c.image_type", "c.dark_image_type", "c.client_type",
+	"c.created_by_id", "c.created_at", "c.image_type", "c.dark_image_type", "c.client_type", "c.logo_path",
 }
 
 func (s *PostgresStore) clientSelect(id string) *sqlbuilder.SelectBuilder {
@@ -436,6 +443,33 @@ func userUUID(raw string) string {
 		return id.UUID()
 	}
 	return raw
+}
+
+// SetClientLogoPath stores or clears (nil) the logo blob path and
+// keeps the upstream-compat image_type column in sync (the meta
+// view's has_logo reads it).
+func (s *PostgresStore) SetClientLogoPath(ctx context.Context, id OIDCClientID, logoPath *string) error {
+	imageType := new(string)
+	if logoPath != nil {
+		*imageType = strings.TrimPrefix(path.Ext(*logoPath), ".")
+	} else {
+		imageType = nil
+	}
+
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(oidcClientsTable)
+	ub.Set(ub.Assign("logo_path", logoPath), ub.Assign("image_type", imageType))
+	ub.Where(ub.E("id", id.String()))
+
+	query, args := ub.Build()
+	tag, err := s.exec.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("oidc store: set logo: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // SetClientGroups replaces the group allowlist for restricted
@@ -1140,7 +1174,7 @@ func scanClient(row scanner) (*Client, error) {
 		&id, &name, &c.Description, &secret, &credentials, &callbacks, &logoutCBs, &launchURL,
 		&c.IsPublic, &c.PKCEEnabled, &c.PKCESupported, &c.RequiresReauthentication, &c.SkipConsent, &c.IsGroupRestricted,
 		&c.AccessTokenDurationMinutes, &c.RefreshTokenDurationMinutes, &createdByID, &createdAt,
-		&c.ImageType, &c.DarkImageType, &c.ClientType,
+		&c.ImageType, &c.DarkImageType, &c.ClientType, &c.LogoPath,
 	); err != nil {
 		return nil, err
 	}

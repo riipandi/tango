@@ -75,6 +75,10 @@ func NewService(store storage.Store, defaults map[string]string) *Service {
 	return s
 }
 
+// BlobStore exposes the underlying backend so sibling features
+// (profile pictures, client logos) share one storage instance.
+func (s *Service) BlobStore() storage.Store { return s.store }
+
 // GetImage opens the stored image for name; ErrNotFound when unset.
 func (s *Service) GetImage(ctx context.Context, name string) (io.ReadCloser, int64, string, error) {
 	ext, ok := s.extension(name)

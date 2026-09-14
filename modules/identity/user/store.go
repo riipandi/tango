@@ -36,6 +36,7 @@ var userColumns = []string{
 	"id", "username", "email", "first_name", "last_name",
 	"display_name", "avatar_url", "locale", "is_admin", "disabled",
 	"email_verified_at", "created_at", "updated_at", "last_login_at",
+	"profile_picture_path",
 }
 
 // List returns matching users newest first plus the total count.
@@ -267,6 +268,24 @@ func (s *PostgresStore) UpdateProfile(ctx context.Context, id UserID, params Upd
 	return user, nil
 }
 
+// SetProfilePicturePath stores or clears (nil) the picture blob path.
+func (s *PostgresStore) SetProfilePicturePath(ctx context.Context, id UserID, picturePath *string) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(usersTable)
+	ub.Set(ub.Assign("profile_picture_path", textOrNull(derefText(picturePath))))
+	ub.Where(ub.E("id", id.UUIDBytes()))
+
+	query, args := ub.Build()
+	tag, err := s.exec.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("set profile picture: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // MarkLogin records a successful sign-in timestamp.
 func (s *PostgresStore) MarkLogin(ctx context.Context, id UserID) error {
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
@@ -320,10 +339,11 @@ func scanUser(row scanner) (User, error) {
 		createdAt       pgtype.Timestamptz
 		updatedAt       pgtype.Timestamptz
 		lastLoginAt     pgtype.Timestamptz
+		picturePath     pgtype.Text
 	)
 	err := row.Scan(&id, &username, &email, &firstName, &lastName, &displayName,
 		&avatarURL, &locale, &isAdmin, &disabled,
-		&emailVerifiedAt, &createdAt, &updatedAt, &lastLoginAt)
+		&emailVerifiedAt, &createdAt, &updatedAt, &lastLoginAt, &picturePath)
 	if err != nil {
 		return User{}, mapStoreError(err)
 	}
@@ -343,6 +363,7 @@ func scanUser(row scanner) (User, error) {
 		CreatedAt:       createdAt.Time,
 		UpdatedAt:       timePtr(updatedAt),
 		LastLoginAt:     timePtr(lastLoginAt),
+		ProfilePicturePath: textPtr(picturePath),
 	}, nil
 }
 
@@ -359,6 +380,14 @@ func textOrNull(s string) any {
 		return nil
 	}
 	return s
+}
+
+// derefText flattens an optional string (nil → "" → NULL).
+func derefText(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func timePtr(t pgtype.Timestamptz) *time.Time {
