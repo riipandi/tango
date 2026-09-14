@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -60,10 +61,19 @@ func NewS3Storage(cfg S3Config) (Store, error) {
 func (s *s3Storage) Type() string { return TypeS3 }
 
 func (s *s3Storage) Save(ctx context.Context, p string, data io.Reader) error {
-	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(s.bucket),
-		Key:    aws.String(s.objectKey(p)),
-		Body:   data,
+	// The SDK must hash (and sometimes re-read) the payload, so the
+	// body has to be seekable. Callers pass streams (multipart file
+	// handles), which are not — buffer it. Uploads are bounded by the
+	// API's 5 MiB cap, so this stays small.
+	buffered, err := io.ReadAll(data)
+	if err != nil {
+		return fmt.Errorf("storage: s3 read %q: %w", p, err)
+	}
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(s.objectKey(p)),
+		Body:          bytes.NewReader(buffered),
+		ContentLength: aws.Int64(int64(len(buffered))),
 	})
 	if err != nil {
 		return fmt.Errorf("storage: s3 put %q: %w", p, err)

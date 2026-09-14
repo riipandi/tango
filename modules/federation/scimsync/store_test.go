@@ -2,6 +2,7 @@ package scimsync
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,8 +17,9 @@ import (
 
 // newStore builds the provider store over the shared test container
 // with a real cipher (tokens must round-trip encrypted). The fixture
-// client id lands in clientFixtureID.
-func newStore(t *testing.T) *PostgresStore {
+// client id lands in clientFixtureID; the raw datastore comes back
+// for tests that need extra fixtures.
+func newStore(t *testing.T) (*PostgresStore, *datastore.Postgres) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -34,17 +36,34 @@ func newStore(t *testing.T) *PostgresStore {
 
 	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
 	clientFixtureID = "oidc_client_" + stamp[len(stamp)-8:]
+	fixtureDS = ds
 	if _, err := ds.Exec(ctx,
 		"INSERT INTO public.oidc_clients (id, name) VALUES ($1, $2)", clientFixtureID, "scim-test"); err != nil {
 		t.Fatalf("insert client fixture: %v", err)
 	}
-	return NewPostgresStore(ds, cipher)
+	return NewPostgresStore(ds, cipher), ds
 }
 
 var clientFixtureID string
 
+// fixtureDS is the datastore of the most recent newStore call; helper
+// fixtures insert through it.
+var fixtureDS *datastore.Postgres
+
+// newClientFixture inserts another oidc_clients row and returns its
+// id (the store refuses a second provider for the same client).
+func newClientFixture(t *testing.T, ds *datastore.Postgres, name string) string {
+	t.Helper()
+	id := "oidc_client_" + strings.ToLower(name) + "_" + strconv.FormatInt(time.Now().UnixNano(), 10)[:8]
+	if _, err := ds.Exec(t.Context(),
+		"INSERT INTO public.oidc_clients (id, name) VALUES ($1, $2)", id, name); err != nil {
+		t.Fatalf("insert client fixture %s: %v", name, err)
+	}
+	return id
+}
+
 func TestProviderLifecycle(t *testing.T) {
-	store := newStore(t)
+	store, _ := newStore(t)
 	ctx := t.Context()
 
 	params := UpsertParams{
@@ -98,7 +117,7 @@ func TestProviderLifecycle(t *testing.T) {
 }
 
 func TestProviderGetByClient(t *testing.T) {
-	store := newStore(t)
+	store, _ := newStore(t)
 	ctx := t.Context()
 
 	_, err := store.GetByClient(ctx, clientFixtureID)

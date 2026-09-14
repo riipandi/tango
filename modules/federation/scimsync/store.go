@@ -140,7 +140,9 @@ func (s *PostgresStore) Create(ctx context.Context, params UpsertParams) (Servic
 		}
 		return ServiceProvider{}, fmt.Errorf("scimsync: create provider: %w", err)
 	}
-	return p, nil
+	// RETURNING hands back the ciphertext; callers get the plaintext
+	// view like on reads (the token is shown once, on write).
+	return s.decrypt(p), nil
 }
 
 // Update replaces endpoint/token for one provider.
@@ -173,7 +175,9 @@ func (s *PostgresStore) Update(ctx context.Context, id SCIMServiceProviderID, pa
 		}
 		return ServiceProvider{}, fmt.Errorf("scimsync: update provider: %w", err)
 	}
-	return p, nil
+	// RETURNING hands back the ciphertext; callers get the plaintext
+	// view like on reads (the token is shown once, on write).
+	return s.decrypt(p), nil
 }
 
 // queryProvider runs a RETURNING query and drains it fully: pgx
