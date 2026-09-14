@@ -194,9 +194,9 @@ func (c *Client) save(op *TaskAddOp) ([]string, error) {
 		return nil
 	}
 
-	if op.tx != nil {
+	if op.exec != nil {
 		// The caller owns the transaction and commits it, then notifies us.
-		err = insert(op.tx)
+		err = insert(op.exec)
 	} else {
 		// We own the transaction: roll back on failure, commit, notify.
 		var tx pgx.Tx

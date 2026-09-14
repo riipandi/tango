@@ -12,6 +12,7 @@ import (
 
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport/middleware"
@@ -37,6 +38,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/usergroup"
 	"github.com/riipandi/tango/modules/identity/webauthn"
+	"github.com/riipandi/tango/modules/webhook"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/web"
@@ -128,6 +130,54 @@ func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, 
 	return webauthn.New(service).WithAdminGuard(adminAuth).WithSelfAuth(sessions, session.CookieName)
 }
 
+// newWebhookModule builds the outbound webhook surface: endpoints,
+// signed deliveries through the shared fetcher, and the queue
+// processor that performs them. The signing secret is sealed under a
+// digest of auth.secret_key, the same derivation the JWKS halves use.
+func newWebhookModule(deps Deps, guard func(http.Handler) http.Handler) *webhook.Module {
+	service := webhook.NewService(
+		webhook.NewPostgresStore(deps.DB),
+		deps.DB,
+		deps.Queue,
+		secretCipher(deps),
+		deps.Logger,
+		webhook.WithSender(webhook.NewFetcherSender(deps.Fetcher)),
+	)
+	service.RegisterQueue(deps.Queue)
+	return webhook.New(service).WithAdminGuard(guard)
+}
+
+// secretCipher derives the AES-256 key sealing module secrets at rest
+// from auth.secret_key: SHA-256 always yields 32 bytes, so the
+// constructor cannot fail on otherwise valid configuration.
+func secretCipher(deps Deps) *crypto.Cipher {
+	key := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
+	sealer, err := crypto.NewCipher(key[:])
+	if err != nil {
+		panic("registry: cipher key derivation is always 32 bytes: " + err.Error())
+	}
+	return sealer
+}
+
+// newVersionFeed builds the cached latest-release lookup over the
+// shared outbound client.
+func newVersionFeed(deps Deps) *jobs.VersionFeed {
+	return jobs.NewVersionFeed(deps.Fetcher, deps.Config.Public.VersionCheckURL)
+}
+
+// registerRecurringJobs wires the maintenance cadence: expired tokens,
+// delivery history, and the release feed. Webhook log pruning runs
+// through the webhook store.
+func registerRecurringJobs(deps Deps, feed *jobs.VersionFeed, webhooks *webhook.Module) {
+	if deps.Jobs == nil {
+		return
+	}
+	deps.Jobs.AddJob(jobs.CleanupTokens(deps.DB, deps.Logger))
+	deps.Jobs.AddJob(jobs.CleanupWebhookLogs(webhooks.Store(), deps.Logger))
+	deps.Jobs.AddJob(jobs.RemindExpiringAPIKeys(deps.DB, deps.Jobs, deps.Logger))
+	deps.Jobs.AddJob(jobs.VersionJob(feed, deps.Logger))
+}
+
 // newIdentityFeatures builds the mandatory user core plus the
 // selected features. The guard chain: session cookie auth wraps
 // RequireAdmin; the user core mounts its admin routes behind both.
@@ -135,15 +185,15 @@ func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, 
 // sign-in/sign-out routes; account mounts self-service under the
 // same guard. Returns the sessions feature so the federation
 // surface can resolve session cookies (optional-auth /authorize).
-func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, *appimage.Service) {
+func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Recorder) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, *appimage.Service) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
-	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, auditAdapter(audit))
+	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, recorder)
 	sessions := session.NewService(
 		session.NewPostgresStore(deps.DB),
 		passwords,
 		user.NewPostgresStore(deps.DB),
-		auditAdapter(audit),
+		recorder,
 		session.WithLifetime(time.Duration(deps.Config.Auth.SessionLifetime)*time.Second),
 		session.WithCookieSecure(deps.Config.App.Mode != "development"),
 	)
@@ -157,47 +207,49 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature
 
 	core := user.NewService(
 		user.NewPostgresStore(deps.DB),
-		auditAdapter(audit),
+		recorder,
 		user.WithAdminGuard(adminAuth),
 		user.WithAPIKeyGuard(middleware.RequireAPIKey(apiKeys.Verify)),
 		user.WithSelfAuth(sessions, session.CookieName),
 	)
 
 	features := []identity.Feature{
-		account.NewService(user.NewPostgresStore(deps.DB), passwords, sessions, auditAdapter(audit)),
+		account.NewService(user.NewPostgresStore(deps.DB), passwords, sessions, recorder),
 		passwords,
 		sessions,
-		usergroup.NewService(usergroup.NewPostgresStore(deps.DB), auditAdapter(audit), usergroup.WithAdminGuard(adminAuth)),
-		customclaim.NewService(customclaim.NewPostgresStore(deps.DB), auditAdapter(audit), customclaim.WithAdminGuard(adminAuth)),
+		usergroup.NewService(usergroup.NewPostgresStore(deps.DB), recorder, usergroup.WithAdminGuard(adminAuth)),
+		customclaim.NewService(customclaim.NewPostgresStore(deps.DB), recorder, customclaim.WithAdminGuard(adminAuth)),
 		withWebAuthn(deps, audit, sessions, adminAuth),
 		devicelogin.New(devicelogin.NewService(
 			devicelogin.NewPostgresStore(deps.DB),
 			sessions,
 			user.NewPostgresStore(deps.DB),
-			auditAdapter(audit),
+			recorder,
 			devicelogin.WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		)).WithSelfAuth(sessions, session.CookieName, deps.Config.App.Mode != "development"),
 		onetimeaccess.New(onetimeaccess.NewService(
 			onetimeaccess.NewPostgresStore(deps.DB),
 			user.NewPostgresStore(deps.DB),
 			sessions,
-			auditAdapter(audit),
+			recorder,
+			onetimeaccess.WithMail(deps.Jobs, deps.Config.Public.BaseURL),
 		)).WithAdminGuard(adminAuth).
 			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		emailverification.New(emailverification.NewService(
 			emailverification.NewPostgresStore(deps.DB),
 			emailVerificationAdapter(user.NewPostgresStore(deps.DB)),
-			auditAdapter(audit),
+			recorder,
+			emailverification.WithMail(deps.Jobs, user.NewPostgresStore(deps.DB), deps.Config.Public.BaseURL),
 		)).WithSelfAuth(sessions, session.CookieName),
 		signup.New(signup.NewService(
 			signup.NewPostgresStore(deps.DB),
 			user.NewPostgresStore(deps.DB),
 			usergroup.NewPostgresStore(deps.DB),
 			sessions,
-			auditAdapter(audit),
+			recorder,
 		)).WithAdminGuard(adminAuth).
 			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
-		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), auditAdapter(audit), apiaccess.WithAdminGuard(adminAuth)),
+		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), recorder, apiaccess.WithAdminGuard(adminAuth)),
 		apiKeys,
 		withLDAPSync(deps, deps.DB),
 	}

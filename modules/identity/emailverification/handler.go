@@ -10,11 +10,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-ozzo/ozzo-validation/v4"
 
+	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -26,12 +28,35 @@ import (
 type Service struct {
 	store    Store
 	verifier Verifier
+	users    user.Store
 	recorder identity.Recorder
+
+	// sender queues the verification mail; nil leaves the feature
+	// without delivery (tests, isolated tooling).
+	sender identity.MailSender
+	appURL string
+}
+
+// ServiceOption configures the feature.
+type ServiceOption func(*Service)
+
+// WithMail wires the queued email sender and the base URL behind the
+// verification link.
+func WithMail(sender identity.MailSender, users user.Store, appURL string) ServiceOption {
+	return func(s *Service) {
+		s.sender = sender
+		s.users = users
+		s.appURL = strings.TrimRight(appURL, "/")
+	}
 }
 
 // NewService builds the feature.
-func NewService(store Store, verifier Verifier, recorder identity.Recorder) *Service {
-	return &Service{store: store, verifier: verifier, recorder: recorder}
+func NewService(store Store, verifier Verifier, recorder identity.Recorder, opts ...ServiceOption) *Service {
+	s := &Service{store: store, verifier: verifier, recorder: recorder}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Name implements identity.Feature.
@@ -68,8 +93,8 @@ func (f Feature) APIRoutes(r chi.Router) {
 }
 
 // handleSend serves POST /users/me/send-email-verification: mints a
-// token for the current user. Mail rides the antree queue (phase
-// 7); today the token is returned for local testing only.
+// token for the current user and queues the verification email.
+// Upstream parity: 204 with no body — the token travels by email only.
 func (s *Service) handleSend(w http.ResponseWriter, r *http.Request) {
 	principal, ok := middleware.PrincipalFromContext(r.Context())
 	if !ok {
@@ -87,9 +112,43 @@ func (s *Service) handleSend(w http.ResponseWriter, r *http.Request) {
 		responder.Fail(w, r, http.StatusInternalServerError, "failed to create verification token")
 		return
 	}
-	// Production: no body (mail goes out async). Development keeps
-	// the token visible for the Yaak ceremony check.
-	responder.Success(w, r, http.StatusOK, map[string]any{"token": raw})
+	if err := s.sendVerificationEmail(r.Context(), userID, raw); err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "failed to queue email")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// sendVerificationEmail queues the verification mail for the user. A
+// queued send means the SMTP transaction happens on a worker; a
+// failure here only reports that the task row was not written.
+func (s *Service) sendVerificationEmail(ctx context.Context, userID user.UserID, token string) error {
+	if s.sender == nil {
+		return nil
+	}
+
+	u, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	return s.sender.EnqueueEmail(ctx, mailer.Message{
+		To:       u.Email,
+		Subject:  "Verify your email address",
+		Template: "email-verification",
+		Data: map[string]any{
+			"UserFullName":     displayNameOf(u),
+			"VerificationLink": s.appURL + "/verify-email?token=" + token,
+		},
+	})
+}
+
+// displayNameOf prefers the account's display name for the greeting.
+func displayNameOf(u user.User) string {
+	if u.DisplayName != "" {
+		return u.DisplayName
+	}
+	return u.Username
 }
 
 // verifyRequest is the POST verify-email body.

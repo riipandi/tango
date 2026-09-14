@@ -19,8 +19,10 @@ type HTTPServer struct {
 }
 
 // NewHTTPServer wires middleware, core routes, then registry modules.
-// The /api group runs behind the rate limiter when one is provided.
-func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Logger, limiter func(http.Handler) http.Handler) *HTTPServer {
+// The /api group runs behind the rate limiter when one is provided;
+// latest is the cached newest-release source for /api/version/latest
+// (nil keeps the deployed version).
+func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Logger, limiter func(http.Handler) http.Handler, latest LatestVersionSource) *HTTPServer {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -42,7 +44,7 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 		r.Get("/", APIRootHandler)
 		r.Get("/healthz", HealthCheckHandler)
 		r.Get("/version/current", VersionCurrentHandler)
-		r.Get("/version/latest", VersionLatestHandler)
+		r.Get("/version/latest", VersionLatestHandler(latest))
 		registry.ApplyAPI(r)
 	})
 

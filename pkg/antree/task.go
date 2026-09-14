@@ -20,7 +20,7 @@ type (
 		ctx    context.Context
 		tasks  []Task
 		wait   *time.Time
-		tx     pgx.Tx
+		exec   Executor
 	}
 )
 
@@ -46,7 +46,15 @@ func (t *TaskAddOp) Wait(duration time.Duration) *TaskAddOp {
 // transaction and must commit it, then call Client.Notify — the dispatcher
 // cannot know when a transaction commits without polling.
 func (t *TaskAddOp) Tx(tx pgx.Tx) *TaskAddOp {
-	t.tx = tx
+	t.exec = tx
+	return t
+}
+
+// Executor adds the tasks through the given executor (typically an open
+// transaction from another package's data layer, e.g. datastore.Executor).
+// Same ownership rules as Tx: the caller commits, then calls Client.Notify.
+func (t *TaskAddOp) Executor(exec Executor) *TaskAddOp {
+	t.exec = exec
 	return t
 }
 

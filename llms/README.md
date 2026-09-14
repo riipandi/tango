@@ -22,7 +22,7 @@ References:
 | 4     | [phase-04-oidc-provider.md](./phase-04-oidc-provider.md)         | Authorize (PKCE), token, userinfo                 | done        | 2026-09-13 |
 | 5     | [phase-05-passkeys-signin.md](./phase-05-passkeys-signin.md)     | WebAuthn, device login, one-time access, signup   | done        | 2026-09-13 |
 | 6     | [phase-06-apikeys-ratelimit.md](./phase-06-apikeys-ratelimit.md) | API keys, resource APIs, rate limiter             | done        | 2026-09-14 |
-| 7     | [phase-07-jobs-webhooks.md](./phase-07-jobs-webhooks.md)         | Antree consumers, webhooks, scheduler             | planned     | 2026-09-12 |
+| 7     | [phase-07-jobs-webhooks.md](./phase-07-jobs-webhooks.md)         | Antree consumers, webhooks, scheduler             | done        | 2026-09-14 |
 | 8     | [phase-08-sync-storage.md](./phase-08-sync-storage.md)           | LDAP, SCIM, S3 storage, app images                | done    | 2026-09-14 |
 
 ## Status Protocol (mandatory)
@@ -116,6 +116,7 @@ Organization mirrors the upstream spec (<https://pocket-id.org/docs/api>, source
 | Version                    | 1 (done) | `/api/version/*`, `/healthz`                                                                       |
 | Storage                    | 8        | `/api/storage/*`                                                                                   |
 | Tango Extensions (auth)    | 1 (done) | Not in upstream spec: `POST /api/auth/sign-in`, `POST /api/auth/sign-out`, `GET /api/auth/session` |
+| Tango Extensions (webhooks)| 7 (done) | Not in upstream spec: `/api/webhooks*` CRUD + logs + test delivery, `/api/webhook-logs`            |
 
 Request naming: `<METHOD> <path>` (e.g. `GET /api/users/{id}`). Session cookies flow through
 Yaak's cookie jar; for anonymous-401 checks use curl (the jar re-sends cookies).
@@ -195,7 +196,7 @@ different path/shape), `ok` (implemented, parity).
 
 | Upstream path(s)                                                                                                             | Verdict         | Phase / note                                                                                                            |
 | ---------------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `/healthz`, `/api/version/current`, `/api/version/latest`                                                                    | ok              | `/healthz` serves 204 bare; version routes added in the completion pass (latest mirrors deployed until the phase-7 job) |
+| `/healthz`, `/api/version/current`, `/api/version/latest`                                                                    | ok              | `/healthz` serves 204 bare; the release check runs as a phase-7 recurring job and `/api/version/latest` serves the cached tag (deployed build as fallback) |
 | `/api/users` GET/POST, `/api/users/{id}` GET/PUT/DELETE, `/api/users/{id}/groups`                                            | ok              | phase 1–2                                                                                                               |
 | `/api/users/me` GET/PUT (+ profile-picture)                                                                                  | deviation       | implemented (session auth, profile fields only — email stays admin-gated); picture lands in phase 8                     |
 | `/api/users/{id}/user-groups` PUT                                                                                            | ok              | completion pass (usergroup store: ReplaceGroupsForUser)                                                                 |
@@ -220,7 +221,7 @@ different path/shape), `ok` (implemented, parity).
 | `/authorize` (authorize code + PKCE), `/api/oidc/end-session`                                                                | ok              | completion pass: end-session clears the cookie + logout-callback redirect; family revocation lands phase 5              |
 | `/api/api-keys*`, `/api/apis*`, `/api/api-access/{clientId}/*`                                                               | missing-backend | phase 6                                                                                                                 |
 | `/api/device-login/*` (requests, exchange, verification, decision)                                                           | ok              | phase 5 (own table `device_login_requests`; upstream uses the francis actor framework — noted deviation)                |
-| `/api/application-configuration*`, `/api/application-images/*`, `/api/scim/service-provider*`, `/api/storage/sqlite-warning` | missing-backend | phase 8 (sqlite-warning is upstream-specific — likely never ported; Postgres-only)                                      |
+| `/api/application-configuration*`, `/api/application-images/*`, `/api/scim/service-provider*`, `/api/storage/sqlite-warning` | missing-backend | phase 8 (sqlite-warning is upstream-specific — likely never ported; Postgres-only); `test-email` landed in phase 7 |
 
 Yaak folder coverage after phase 5: Users (webauthn-credentials, one-time access, email
 verification), User Groups, Custom Claims, Audit Logs, Well Known (incl.

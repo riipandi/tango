@@ -52,7 +52,7 @@ func testServer(t *testing.T, cfg *config.Config) *HTTPServer {
 	reg := kernel.NewRegistry()
 	reg.Register(auditlog.New(auditlog.NewPostgresStore(db)))
 	reg.Register(identity.New(user.NewService(user.NewPostgresStore(db), nil)))
-	return NewHTTPServer(reg, cfg, testLogger(), nil)
+	return NewHTTPServer(reg, cfg, testLogger(), nil, nil)
 }
 
 func TestNewHTTPServerRoutes(t *testing.T) {
@@ -130,7 +130,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 
 func TestHTTPServerShutdown(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger(), nil)
+	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger(), nil, nil)
 
 	// Server never listened: Shutdown must be a safe no-op.
 	assert.NoError(t, srv.Shutdown(contextWithTimeout()))

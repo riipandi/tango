@@ -44,16 +44,17 @@ func TestNewRegistersAllModules(t *testing.T) {
 	reg := New(testDeps(t))
 
 	modules := reg.Modules()
-	assert.Len(t, modules, 5)
+	assert.Len(t, modules, 8)
 
 	// Queue first: its Stop drains last on shutdown.
-	wantOrder := []string{"queue", "auditlog", "identity", "appimage", "federation"}
+	wantOrder := []string{"queue", "jobs", "auditlog", "identity", "appimage", "webhook", "appconfig", "federation"}
 	for i, want := range wantOrder {
 		assert.Equal(t, want, modules[i].Name())
 	}
 
 	assert.NotNil(t, reg.Get("identity"))
 	assert.NotNil(t, reg.Get("federation"))
+	assert.NotNil(t, reg.Get("webhook"))
 }
 
 func TestNewRequiresDatabase(t *testing.T) {

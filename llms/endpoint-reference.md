@@ -8,7 +8,9 @@ with a noted deviation), **planned** (unimplemented — owning phase named).
 Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 `POST /api/auth/sign-out`, `GET /api/auth/session`, `GET /api/account*`,
 `GET /api/healthz` (JSON variant), single-claim custom-claim CRUD,
-`GET /api/oidc/users/me/authorized-clients` aliases — all done.
+`GET /api/oidc/users/me/authorized-clients` aliases, the webhook surface
+(`/api/webhooks*`, `/api/webhook-logs`), and the explicit-recipient body on
+`/api/application-configuration/test-email` — all done.
 
 ## API Keys
 
@@ -45,7 +47,7 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 | PUT    | `/api/application-configuration`            | Update application configurations      | deferred — appconfig module |
 | GET    | `/api/application-configuration/all`        | List all application configurations    | deferred — appconfig module |
 | POST   | `/api/application-configuration/sync-ldap`  | Synchronize LDAP                       | done — phase 8    |
-| POST   | `/api/application-configuration/test-email` | Send test email                        | deferred — phase 7 mail queue |
+| POST   | `/api/application-configuration/test-email` | Send test email                        | done — phase 7 mail queue |
 
 ## Application Images
 
@@ -198,7 +200,7 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 | Method | Endpoint               | Summary / Yaak Title                      | Status                                                  |
 | ------ | ---------------------- | ----------------------------------------- | ------------------------------------------------------- |
 | GET    | `/api/version/current` | Get current deployed version of Pocket ID | done                                                    |
-| GET    | `/api/version/latest`  | Get latest available version of Pocket ID | partial — mirrors deployed until the phase-7 update job |
+| GET    | `/api/version/latest`  | Get latest available version of Pocket ID | done — phase 7 release-check job (falls back to the deployed build when the feed never answered) |
 
 ## Well Known
 

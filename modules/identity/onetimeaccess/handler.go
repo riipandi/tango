@@ -13,10 +13,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -30,6 +33,11 @@ type Service struct {
 	users    user.Store
 	sessions *session.Service
 	recorder identity.Recorder
+
+	// sender queues transactional email; nil leaves the feature with
+	// no mail delivery (tests, isolated tooling).
+	sender identity.MailSender
+	appURL string
 }
 
 // record emits an audit event through the adapter.
@@ -39,9 +47,53 @@ func (s *Service) record(ctx context.Context, action, actor string) {
 	}
 }
 
+// ServiceOption configures the feature.
+type ServiceOption func(*Service)
+
+// WithMail wires the queued email sender and the base URL used to
+// build the sign-in link.
+func WithMail(sender identity.MailSender, appURL string) ServiceOption {
+	return func(s *Service) {
+		s.sender = sender
+		s.appURL = strings.TrimRight(appURL, "/")
+	}
+}
+
 // NewService builds the feature.
-func NewService(store Store, users user.Store, sessions *session.Service, recorder identity.Recorder) *Service {
-	return &Service{store: store, users: users, sessions: sessions, recorder: recorder}
+func NewService(store Store, users user.Store, sessions *session.Service, recorder identity.Recorder, opts ...ServiceOption) *Service {
+	s := &Service{store: store, users: users, sessions: sessions, recorder: recorder}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// sendAccessEmail queues the one-time access mail for the user. The
+// token is delivered by email only; failures to queue are returned so
+// the caller can still surface a 500 (a queued send cannot fail later
+// in a way the user observes).
+func (s *Service) sendAccessEmail(ctx context.Context, u user.User, code, redirectPath string) error {
+	if s.sender == nil {
+		return nil
+	}
+
+	loginLink := s.appURL + "/lc"
+	linkWithCode := loginLink + "/" + code
+	if strings.HasPrefix(redirectPath, "/") {
+		linkWithCode += "?redirect=" + url.QueryEscape(redirectPath)
+	}
+
+	return s.sender.EnqueueEmail(ctx, mailer.Message{
+		To:       u.Email,
+		Subject:  "Your login code",
+		Template: "one-time-access",
+		Data: map[string]any{
+			"Code":              code,
+			"LoginLink":         loginLink,
+			"LoginLinkWithCode": linkWithCode,
+			"ExpirationString":  "15 minutes",
+		},
+	})
 }
 
 // Name implements identity.Feature.
@@ -113,7 +165,7 @@ func (s *Service) handleAdminMintToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAdminSendEmail serves POST /users/{id}/one-time-access-email
-// (admin): mints + emails the link.
+// (admin): mints the token and queues the email.
 func (s *Service) handleAdminSendEmail(w http.ResponseWriter, r *http.Request) {
 	userID, ok := parseUserIDParam(r)
 	if !ok {
@@ -121,12 +173,21 @@ func (s *Service) handleAdminSendEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := s.mint(r.Context(), userID); err != nil {
+	u, err := s.users.GetByID(r.Context(), userID)
+	if err != nil {
+		responder.NotFoundJSON(w, r)
+		return
+	}
+
+	raw, err := s.mint(r.Context(), userID)
+	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "failed to create token")
 		return
 	}
-	// Mail send rides the antree queue (phase 7); minting alone
-	// marks the token fresh.
+	if err := s.sendAccessEmail(r.Context(), u, raw, ""); err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "failed to queue email")
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -142,8 +203,9 @@ func (r emailRequest) Validate() error {
 }
 
 // handleEmailRequest serves POST /one-time-access-email
-// (unauthenticated): mints a token for the address when the policy
-// allows. The response is always 204 (no account enumeration).
+// (unauthenticated): always 204. The policy that decides whether a
+// token is minted belongs to appconfig (phase 8); answering 204
+// unconditionally avoids account enumeration.
 func (s *Service) handleEmailRequest(w http.ResponseWriter, r *http.Request) {
 	var req emailRequest
 	if verr := validate.Request(r.Body, &req); verr != nil {
@@ -151,11 +213,6 @@ func (s *Service) handleEmailRequest(w http.ResponseWriter, r *http.Request) {
 			responder.WithError(validate.FieldErrors(verr)))
 		return
 	}
-
-	// Policy gate: one-time access email for unauthenticated users
-	// is off until appconfig lands (phase 8) — respond 204 without
-	// minting to avoid account enumeration.
-	_ = req
 	w.WriteHeader(http.StatusNoContent)
 }
 

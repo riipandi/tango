@@ -10,6 +10,7 @@ import (
 	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/mailer"
 )
 
 // NewID generates a UUIDv7-backed typed ID. Panics only on an invalid
@@ -26,6 +27,12 @@ func ParseID[T typeid.Subtype, PT typeid.SubtypePtr[T]](s string) (T, error) {
 // Recorder receives audit events; the composition root adapts the sink
 // so features never import auditlog directly.
 type Recorder func(ctx context.Context, event AuditEvent)
+
+// MailSender queues transactional email. Implemented by internal/jobs;
+// declared here so identity features stay free of the job package.
+type MailSender interface {
+	EnqueueEmail(ctx context.Context, msg mailer.Message) error
+}
 
 type AuditEvent struct {
 	Action string

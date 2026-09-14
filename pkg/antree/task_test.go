@@ -42,7 +42,18 @@ func TestTaskAddOpTx(t *testing.T) {
 
 	op := &TaskAddOp{}
 	op.Tx(tx)
-	assert.Equal(t, tx, op.tx)
+	assert.Equal(t, tx, op.exec)
+}
+
+func TestTaskAddOpExecutor(t *testing.T) {
+	c := mustNewClient(t)
+	tx, err := c.db.Begin(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+
+	op := &TaskAddOp{}
+	op.Executor(tx)
+	assert.Equal(t, tx, op.exec)
 }
 
 func TestTaskAddOpSaveSingle(t *testing.T) {

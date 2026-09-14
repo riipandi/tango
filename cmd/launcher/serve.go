@@ -15,6 +15,7 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/registry"
@@ -53,6 +54,16 @@ func flagOverrides(host, port string) (map[string]any, error) {
 // contract; a nil return degrades to an unthrottled server (tests).
 func rateLimiter(db *datastore.Postgres) func(http.Handler) http.Handler {
 	return tmiddleware.RateLimit(db, tmiddleware.RateClassDefault)
+}
+
+// latestVersion exposes the cached release feed from the jobs module
+// for /api/version/latest; a nil source keeps the deployed version.
+func latestVersion(reg *kernel.Registry) transport.LatestVersionSource {
+	source, ok := reg.Get("jobs").(transport.LatestVersionSource)
+	if !ok {
+		return nil
+	}
+	return source
 }
 
 func (s *ServeCmd) Run(cli *CLI) error {
@@ -118,7 +129,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		return fmt.Errorf("start modules: %w", err)
 	}
 
-	srv := transport.NewHTTPServer(reg, cfg, lg, rateLimiter(db))
+	srv := transport.NewHTTPServer(reg, cfg, lg, rateLimiter(db), latestVersion(reg))
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	serveErr := make(chan error, 1)
 	go func() {

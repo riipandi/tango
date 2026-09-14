@@ -55,11 +55,27 @@ func TestRootHealthzAndVersionEndpoints(t *testing.T) {
 	assert.Equal(t, config.AppVersion, current["version"])
 
 	w = httptest.NewRecorder()
-	VersionLatestHandler(w, httptest.NewRequest(http.MethodGet, "/api/version/latest", nil))
+	VersionLatestHandler(nil)(w, httptest.NewRequest(http.MethodGet, "/api/version/latest", nil))
 	require.Equal(t, http.StatusOK, w.Code)
 	var latest map[string]string
 	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &latest))
 	assert.Equal(t, config.AppVersion, latest["version"])
+}
+
+// stubLatestVersionSource pins the cached release for the handler
+// contract test.
+type stubLatestVersionSource struct{ version string }
+
+func (s stubLatestVersionSource) Latest() string { return s.version }
+
+func TestVersionLatestUsesFeed(t *testing.T) {
+	w := httptest.NewRecorder()
+	VersionLatestHandler(stubLatestVersionSource{version: "9.9.9"})(w, httptest.NewRequest(http.MethodGet, "/api/version/latest", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var latest map[string]string
+	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &latest))
+	assert.Equal(t, "9.9.9", latest["version"])
 }
 
 func TestAPIRootHandler(t *testing.T) {
@@ -90,7 +106,7 @@ func TestAPIRootHandler(t *testing.T) {
 
 func TestStaticAssetsHandler(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger(), nil)
+	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger(), nil, nil)
 
 	// Missing file → JSON 404 (not the SPA fallback).
 	w := httptest.NewRecorder()

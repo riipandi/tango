@@ -59,13 +59,25 @@ func VersionCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// VersionLatestHandler serves GET /api/version/latest. The lookup
-// of newer releases is an outbound job (phase 7); for now the
-// deployed version is the freshest known.
-func VersionLatestHandler(w http.ResponseWriter, r *http.Request) {
-	responder.WriteJSON(w, http.StatusOK, map[string]string{
-		"version": config.AppVersion,
-	})
+// VersionLatestHandler serves GET /api/version/latest. The newest
+// release is refreshed by a recurring job into a cache; the handler
+// reads the cache so a GitHub outage never blocks the endpoint. The
+// feed falls back to the deployed version until the first success.
+func VersionLatestHandler(feed LatestVersionSource) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		version := config.AppVersion
+		if feed != nil {
+			version = feed.Latest()
+		}
+		responder.WriteJSON(w, http.StatusOK, map[string]string{"version": version})
+	}
+}
+
+// LatestVersionSource exposes the cached newest release. The jobs
+// package implements it; declared here so transport does not import
+// the job package.
+type LatestVersionSource interface {
+	Latest() string
 }
 
 // staticRoot is where the Vite build lands (public/ files copied

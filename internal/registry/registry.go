@@ -10,6 +10,7 @@ package registry
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.jetify.com/typeid"
@@ -17,16 +18,20 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
+	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/modules/appconfig"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/modules/webhook"
 	"github.com/riipandi/tango/pkg/antree"
+	"github.com/riipandi/tango/pkg/crypto"
 )
 
 // Deps are shared dependencies for modules. No globals;
@@ -52,6 +57,22 @@ type Deps struct {
 	// DB.Pool(). Features register their queues on it at build time;
 	// the queue module runs the dispatcher. Not set by callers.
 	Queue *antree.Client
+
+	// Cipher seals secrets at rest (webhook signing secrets). Built
+	// by New from auth.secret_key; not set by callers.
+	Cipher *crypto.Cipher
+
+	// Jobs owns the queue registrations and recurring jobs. Built by
+	// New; not set by callers.
+	Jobs *jobs.Registry
+
+	// Webhooks emits application events to registered endpoints.
+	// Built by New; not set by callers.
+	Webhooks *webhook.Module
+
+	// VersionFeed caches the newest published release for
+	// /api/version/latest. Built by New; not set by callers.
+	VersionFeed *jobs.VersionFeed
 }
 
 // New builds the registry in registration order. Every store is
@@ -79,15 +100,37 @@ func New(deps Deps) *kernel.Registry {
 	deps.Queue = queueClient
 	reg.Register(queue.New(queueClient))
 
+	// Queue consumers: transactional email plus the recurring
+	// maintenance jobs. Registered right after the dispatcher adapter
+	// so their types exist before any producer enqueues.
+	deps.Jobs = jobs.NewRegistry(queueClient, deps.Mailer, deps.Logger)
+	reg.Register(deps.Jobs)
+
 	audit := auditlog.New(auditlog.NewPostgresStore(deps.DB))
 	reg.Register(audit)
 
+	// Domain events fan out to webhooks on top of the audit row: the
+	// recorder is the single funnel identity features already use.
+	events := NewEventFanout(deps.Logger)
+
 	// Internal authn/authz: user core + selected auth features.
-	core, identityFeatures, adminGuard, sessions, apiAccess, images := newIdentityFeatures(deps, audit)
+	core, identityFeatures, adminGuard, sessions, apiAccess, images := newIdentityFeatures(deps, audit, events.Recorder(audit))
 	audit.MountAdminAPI(adminGuard)
 	audit.MountSelfAPI(sessions, session.CookieName)
 	reg.Register(identity.New(core, identityFeatures...))
 	reg.Register(images)
+
+	// Outbound webhooks: an admin-managed surface, dispatched by the
+	// queue. Not upstream — a tango extension.
+	webhooks := newWebhookModule(deps, adminGuard)
+	deps.Webhooks = webhooks
+	reg.Register(webhooks)
+	events.Attach(webhooks)
+
+	// Application configuration: the test-email slice rides the phase 7
+	// mail queue; the settings CRUD stays with a later pass.
+	appconfigModule := appconfig.New(deps.Jobs).WithAdminGuard(adminGuard)
+	reg.Register(appconfigModule)
 
 	// Identity provider (OIDC, SCIM, discovery) — optional surface
 	// for other systems. Delete this line (and
@@ -99,6 +142,13 @@ func New(deps Deps) *kernel.Registry {
 		keyService,
 		withDiscovery(deps, keyService),
 	))
+
+	// Latest-release feed: a recurring job fills the cache that
+	// /api/version/latest reads.
+	feed := newVersionFeed(deps)
+	deps.VersionFeed = feed
+	deps.Jobs.SetVersionFeed(feed)
+	registerRecurringJobs(deps, feed, webhooks)
 
 	return reg
 }
@@ -130,5 +180,52 @@ func auditAdapter(audit *auditlog.Module) identity.Recorder {
 		}
 
 		_ = audit.Record(ctx, &entry)
+	}
+}
+
+// eventFanout forwards application events to registered webhooks. The
+// sink is attached after the webhook module is built (identity
+// features need the recorder first, and the module needs the admin
+// guard those features produce), so the indirection breaks the cycle
+// without a global.
+type eventFanout struct {
+	mu   sync.RWMutex
+	sink *webhook.Module
+	log  logger.Logger
+}
+
+// Attach wires the sink; the recorder starts fanning out afterwards.
+func (f *eventFanout) Attach(module *webhook.Module) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sink = module
+}
+
+// NewEventFanout builds the fan-out holder with the shared logger.
+func NewEventFanout(log logger.Logger) *eventFanout {
+	return &eventFanout{log: log}
+}
+
+// Recorder is the identity audit recorder that additionally fans the
+// event out to subscribed webhooks. Delivery never blocks or fails the
+// request: the outbox write happens on its own transaction and a
+// fan-out error is logged, not surfaced.
+func (f *eventFanout) Recorder(audit *auditlog.Module) identity.Recorder {
+	return func(ctx context.Context, e identity.AuditEvent) {
+		auditAdapter(audit)(ctx, e)
+
+		f.mu.RLock()
+		sink := f.sink
+		f.mu.RUnlock()
+		if sink == nil {
+			return
+		}
+		if err := sink.Emit(ctx, e.Action, map[string]any{
+			"event":  e.Action,
+			"actor":  e.Actor,
+			"target": e.Target,
+		}); err != nil {
+			f.log.WithError(err).Error("webhook fan-out failed for event " + e.Action)
+		}
 	}
 }

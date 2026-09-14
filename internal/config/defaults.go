@@ -39,6 +39,7 @@ var defaultConfig = Config{
 	Public: PublicConfig{
 		BaseURL:                "http://localhost:3000",
 		S3AssetsURL:            "http://localhost:9180",
+		VersionCheckURL:        "https://api.github.com/repos/riipandi/tango/releases/latest",
 		JwtAccessTokenExpiry:   900,
 		JwtRefreshTokenExpiry:  7200,
 		RateLimitDefaultMax:    100,
