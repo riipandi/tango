@@ -39,6 +39,7 @@
         "**/*.yml",
         "**/*.yaml",
         "**/*.toml",
+        "**/*.tmpl",
         "/public/**",
         "/temp/**",
         "/index.html"
