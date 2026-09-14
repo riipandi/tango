@@ -235,20 +235,34 @@ func TestDefaultsAreComplete(t *testing.T) {
 	// defaultConfig — the struct literal is the single source of
 	// truth, this locks it.
 	intentionallyEmpty := map[string]bool{
-		"app.secret_key":               true,
-		"auth.private_key":             true,
-		"auth.public_key":              true,
-		"auth.secret_key":              true,
-		"auth.github_client_id":        true,
-		"auth.github_client_secret":    true,
-		"auth.google_client_id":        true,
-		"auth.google_client_secret":    true,
-		"mailer.smtp_username":         true,
-		"mailer.smtp_password":         true,
-		"public.trusted_origins":       true, // nil = no extra origins
-		"storage.s3_access_key_id":     true, // credentials stay out of code
-		"storage.s3_secret_access_key": true,
-		"storage.s3_path_prefix":       true, // nil = no prefix
+		"app.secret_key":                         true,
+		"auth.private_key":                       true,
+		"auth.public_key":                        true,
+		"auth.secret_key":                        true,
+		"auth.github_client_id":                  true,
+		"auth.github_client_secret":              true,
+		"auth.google_client_id":                  true,
+		"auth.google_client_secret":              true,
+		"mailer.smtp_username":                   true,
+		"mailer.smtp_password":                   true,
+		"public.trusted_origins":                 true, // nil = no extra origins
+		"storage.s3_access_key_id":               true, // credentials stay out of code
+		"storage.s3_secret_access_key":           true,
+		"storage.s3_path_prefix":                 true, // nil = no prefix
+		"ldap.url":                               true, // unset = LDAP disabled
+		"ldap.bind_dn":                           true,
+		"ldap.bind_password":                     true,
+		"ldap.base":                              true,
+		"ldap.attribute_user_unique_identifier":  true,
+		"ldap.attribute_user_username":           true,
+		"ldap.attribute_user_email":              true,
+		"ldap.attribute_user_first_name":         true,
+		"ldap.attribute_user_last_name":          true,
+		"ldap.attribute_user_display_name":       true,
+		"ldap.attribute_group_unique_identifier": true,
+		"ldap.attribute_group_name":              true,
+		"ldap.attribute_group_member":            true,
+		"ldap.admin_group_name":                  true,
 	}
 
 	var walk func(value reflect.Value, prefix string)

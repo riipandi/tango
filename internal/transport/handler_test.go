@@ -3,6 +3,7 @@ package transport
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	jsonv2 "encoding/json/v2"
@@ -91,12 +92,16 @@ func TestStaticAssetsHandler(t *testing.T) {
 	cfg := testConfig()
 	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger(), nil)
 
+	// Missing file → JSON 404 (not the SPA fallback).
 	w := httptest.NewRecorder()
-	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/static/app.js", nil))
+	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/static/missing.js", nil))
+	require.Equal(t, http.StatusNotFound, w.Code)
 
-	require.Equal(t, http.StatusOK, w.Code)
-
-	var body map[string]any
-	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
-	assert.Equal(t, "app.js", body["path"])
+	// A real file from the Vite output is served with its MIME type.
+	if _, err := os.Stat("web/output/images/logoEmail.svg"); err == nil {
+		w = httptest.NewRecorder()
+		srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/static/images/logoEmail.svg", nil))
+		require.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "image/svg+xml", w.Header().Get("Content-Type"))
+	}
 }

@@ -69,8 +69,8 @@ func TestNewHTTPServerRoutes(t *testing.T) {
 		{"/api/users", http.StatusOK, true},   // identity list
 		{"/api/nope", http.StatusNotFound, true},
 		{"/.well-known/version", http.StatusOK, true},
-		{"/static/app.js", http.StatusOK, true},
-		{"/some-page", spaFallbackStatus, false}, // dev: 404, release: SPA shell
+		{"/static/missing.js", http.StatusNotFound, true}, // static 404 is JSON
+		{"/some-page", spaFallbackStatus, false},          // dev: 404, release: SPA shell
 	}
 
 	for _, tc := range cases {

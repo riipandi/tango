@@ -41,29 +41,29 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 
 | Method | Endpoint                                    | Summary / Yaak Title                   | Status            |
 | ------ | ------------------------------------------- | -------------------------------------- | ----------------- |
-| GET    | `/api/application-configuration`            | List public application configurations | planned (phase 8) |
-| PUT    | `/api/application-configuration`            | Update application configurations      | planned (phase 8) |
-| GET    | `/api/application-configuration/all`        | List all application configurations    | planned (phase 8) |
-| POST   | `/api/application-configuration/sync-ldap`  | Synchronize LDAP                       | planned (phase 8) |
-| POST   | `/api/application-configuration/test-email` | Send test email                        | planned (phase 8) |
+| GET    | `/api/application-configuration`            | List public application configurations | deferred — appconfig module |
+| PUT    | `/api/application-configuration`            | Update application configurations      | deferred — appconfig module |
+| GET    | `/api/application-configuration/all`        | List all application configurations    | deferred — appconfig module |
+| POST   | `/api/application-configuration/sync-ldap`  | Synchronize LDAP                       | done — phase 8    |
+| POST   | `/api/application-configuration/test-email` | Send test email                        | deferred — phase 7 mail queue |
 
 ## Application Images
 
 | Method | Endpoint                                          | Summary / Yaak Title                 | Status            |
 | ------ | ------------------------------------------------- | ------------------------------------ | ----------------- |
-| DELETE | `/api/application-images/background`              | Delete background image              | planned (phase 8) |
-| GET    | `/api/application-images/background`              | Get background image                 | planned (phase 8) |
-| PUT    | `/api/application-images/background`              | Update background image              | planned (phase 8) |
-| DELETE | `/api/application-images/default-profile-picture` | Delete default profile picture image | planned (phase 8) |
-| GET    | `/api/application-images/default-profile-picture` | Get default profile picture image    | planned (phase 8) |
-| PUT    | `/api/application-images/default-profile-picture` | Update default profile picture image | planned (phase 8) |
-| GET    | `/api/application-images/email`                   | Get email logo image                 | planned (phase 8) |
-| PUT    | `/api/application-images/email`                   | Update email logo                    | planned (phase 8) |
-| GET    | `/api/application-images/favicon`                 | Get favicon                          | planned (phase 8) |
-| PUT    | `/api/application-images/favicon`                 | Update favicon                       | planned (phase 8) |
-| DELETE | `/api/application-images/logo`                    | Delete logo image                    | planned (phase 8) |
-| GET    | `/api/application-images/logo`                    | Get logo image                       | planned (phase 8) |
-| PUT    | `/api/application-images/logo`                    | Update logo                          | planned (phase 8) |
+| DELETE | `/api/application-images/background`              | Delete background image              | done    |
+| GET    | `/api/application-images/background`              | Get background image                 | done    |
+| PUT    | `/api/application-images/background`              | Update background image              | done    |
+| DELETE | `/api/application-images/default-profile-picture` | Delete default profile picture image | done    |
+| GET    | `/api/application-images/default-profile-picture` | Get default profile picture image    | done    |
+| PUT    | `/api/application-images/default-profile-picture` | Update default profile picture image | done    |
+| GET    | `/api/application-images/email`                   | Get email logo image                 | done    |
+| PUT    | `/api/application-images/email`                   | Update email logo                    | done    |
+| GET    | `/api/application-images/favicon`                 | Get favicon                          | done    |
+| PUT    | `/api/application-images/favicon`                 | Update favicon                       | done    |
+| DELETE | `/api/application-images/logo`                    | Delete logo image                    | done    |
+| GET    | `/api/application-images/logo`                    | Get logo image                       | done    |
+| PUT    | `/api/application-images/logo`                    | Update logo                          | done    |
 
 ## Audit Logs
 
@@ -107,13 +107,13 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 | GET    | `/api/oidc/clients/{id}`                           | Get OIDC client                               | done                                        |
 | PUT    | `/api/oidc/clients/{id}`                           | Update OIDC client                            | done                                        |
 | PUT    | `/api/oidc/clients/{id}/allowed-user-groups`       | Update allowed user groups                    | done                                        |
-| DELETE | `/api/oidc/clients/{id}/logo`                      | Delete client logo                            | planned (phase 8)                           |
-| GET    | `/api/oidc/clients/{id}/logo`                      | Get client logo                               | planned (phase 8)                           |
-| POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            | planned (phase 8)                           |
+| DELETE | `/api/oidc/clients/{id}/logo`                      | Delete client logo                            | planned (phase 8 — client logos)            |
+| GET    | `/api/oidc/clients/{id}/logo`                      | Get client logo                               | planned (phase 8 — client logos)            |
+| POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            | planned (phase 8 — client logos)            |
 | GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           | done                                        |
 | GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             | done                                        |
 | POST   | `/api/oidc/clients/{id}/refresh`                   | Refresh client metadata document              | planned (phase 8 — CIMD)                    |
-| GET    | `/api/oidc/clients/{id}/scim-service-provider`     | Get SCIM service provider                     | planned (phase 8)                           |
+| GET    | `/api/oidc/clients/{id}/scim-service-provider`     | Get SCIM service provider                     | done — phase 8                              |
 | GET    | `/api/oidc/clients/{id}/secrets`                   | List client secrets                           | done — multi-secret, values shown once      |
 | POST   | `/api/oidc/clients/{id}/secrets`                   | Create client secret                          | done — multi-secret, values shown once      |
 | DELETE | `/api/oidc/clients/{id}/secrets/{secretId}`        | Delete client secret                          | done — multi-secret, values shown once      |
@@ -129,10 +129,10 @@ Tango-only extensions (not in the upstream spec): `POST /api/auth/sign-in`,
 
 | Method | Endpoint                               | Summary / Yaak Title         | Status            |
 | ------ | -------------------------------------- | ---------------------------- | ----------------- |
-| POST   | `/api/scim/service-provider`           | Create SCIM service provider | planned (phase 8) |
-| DELETE | `/api/scim/service-provider/{id}`      | Delete SCIM service provider | planned (phase 8) |
-| PUT    | `/api/scim/service-provider/{id}`      | Update SCIM service provider | planned (phase 8) |
-| POST   | `/api/scim/service-provider/{id}/sync` | Sync SCIM service provider   | planned (phase 8) |
+| POST   | `/api/scim/service-provider`           | Create SCIM service provider | done — phase 8    |
+| DELETE | `/api/scim/service-provider/{id}`      | Delete SCIM service provider | done — phase 8    |
+| PUT    | `/api/scim/service-provider/{id}`      | Update SCIM service provider | done — phase 8    |
+| POST   | `/api/scim/service-provider/{id}/sync` | Sync SCIM service provider   | done — phase 8    |
 
 ## Storage
 

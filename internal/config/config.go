@@ -22,8 +22,7 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// validKeys is every dotted key from Config's koanf tags; adding a
-// field adds its key automatically.
+// validKeys is every dotted key from Config's koanf tags; adding a field adds its key automatically.
 var validKeys = buildKeySet(reflect.TypeFor[Config](), "")
 
 // buildKeySet collects dotted keys of koanf-tagged leaves,
@@ -130,6 +129,7 @@ var envSections = []struct{ prefix, section string }{
 	{"APP_", "app"},
 	{"AUTH_", "auth"},
 	{"DATABASE_", "database"},
+	{"LDAP_", "ldap"},
 	{"MAILER_", "mailer"},
 	{"PUBLIC_", "public"},
 	{"QUEUE_", "queue"},

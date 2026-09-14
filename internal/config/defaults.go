@@ -24,6 +24,11 @@ var defaultConfig = Config{
 		URL: "postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable",
 	},
 
+	LDAP: LDAPConfig{
+		UserFilter:  "(objectClass=person)",
+		GroupFilter: "(objectClass=groupOfNames)",
+	},
+
 	Mailer: MailerConfig{
 		FromEmail: "mailer@example.com",
 		FromName:  "MyApplication",
@@ -47,6 +52,7 @@ var defaultConfig = Config{
 	},
 
 	Storage: StorageConfig{
+		DataDir:            "storage/files",
 		MaxUploadSize:      5242880,
 		S3BucketDefault:    "devbucket",
 		S3EndpointURL:      "http://localhost:9100",

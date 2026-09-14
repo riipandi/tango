@@ -3,11 +3,19 @@ package registry
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/huandu/go-sqlbuilder"
+
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/appimage"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/federation/discovery"
@@ -31,11 +39,60 @@ import (
 	"github.com/riipandi/tango/modules/identity/webauthn"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
+	"github.com/riipandi/tango/web"
 )
 
 // Identity feature selectors, one line each in the feature list.
 // Placeholders until implemented: no routes, no storage.
-func withLDAPSync(deps Deps) identity.Feature { return ldapsync.New() }
+func withLDAPSync(deps Deps, exec datastore.Executor) *ldapsync.APIFeature {
+	service := ldapsync.NewService(exec, logger.Slog(deps.Logger))
+	settings := func(ctx context.Context) (ldapsync.LDAPSettings, error) {
+		return envLDAPSettings(deps.Config), nil
+	}
+	feature := ldapsync.New(service, settings)
+	feature.WithGuard(nil) // guard wired by the caller below
+	return feature
+}
+
+// envLDAPSettings maps env config onto the sync settings until
+// appconfig lands; admin-editable keys take over in a later pass.
+func envLDAPSettings(cfg *config.Config) ldapsync.LDAPSettings {
+	return ldapsync.LDAPSettings{
+		Enabled:           cfg.LDAP.Enabled,
+		URL:               cfg.LDAP.URL,
+		BindDN:            cfg.LDAP.BindDN,
+		BindPassword:      cfg.LDAP.BindPassword,
+		Base:              cfg.LDAP.Base,
+		UserFilter:        cfg.LDAP.UserFilter,
+		GroupFilter:       cfg.LDAP.GroupFilter,
+		SkipCertVerify:    cfg.LDAP.SkipCertVerify,
+		AttrUserUniqueID:  cfg.LDAP.AttrUserUniqueID,
+		AttrUserUsername:  cfg.LDAP.AttrUserUsername,
+		AttrUserEmail:     cfg.LDAP.AttrUserEmail,
+		AttrUserFirstName: cfg.LDAP.AttrUserFirstName,
+		AttrUserLastName:  cfg.LDAP.AttrUserLastName,
+		AttrUserDisplay:   cfg.LDAP.AttrUserDisplay,
+		AttrGroupUniqueID: cfg.LDAP.AttrGroupUniqueID,
+		AttrGroupName:     cfg.LDAP.AttrGroupName,
+		AttrGroupMember:   cfg.LDAP.AttrGroupMember,
+		AdminGroupName:    cfg.LDAP.AdminGroupName,
+		SoftDeleteUsers:   cfg.LDAP.SoftDeleteUsers,
+	}
+}
+
+// withAppImage builds the branding-image feature over the configured
+// blob backend and seeds bundled defaults at startup.
+func withAppImage(deps Deps) (*appimage.Service, error) {
+	store, err := storage.New(deps.Config.Storage)
+	if err != nil {
+		return nil, err
+	}
+	defaults, err := appimage.SeedDefaults(context.Background(), store, web.ImagesDir)
+	if err != nil {
+		return nil, err
+	}
+	return appimage.NewService(store, defaults), nil
+}
 
 // withAPIKeys builds the machine-credential feature: self-scoped
 // key CRUD plus the X-API-KEY verifier for the transport middleware.
@@ -78,7 +135,7 @@ func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, 
 // sign-in/sign-out routes; account mounts self-service under the
 // same guard. Returns the sessions feature so the federation
 // surface can resolve session cookies (optional-auth /authorize).
-func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore) {
+func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, *appimage.Service) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, auditAdapter(audit))
@@ -142,9 +199,14 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module) (identity.APIFeature
 			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), auditAdapter(audit), apiaccess.WithAdminGuard(adminAuth)),
 		apiKeys,
-		withLDAPSync(deps),
+		withLDAPSync(deps, deps.DB),
 	}
-	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB)
+	images, err := withAppImage(deps)
+	if err != nil {
+		panic("registry: appimage init: " + err.Error())
+	}
+	images.WithGuard(adminAuth)
+	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), images
 }
 
 // withOIDC builds the provider feature: claim readers from the
@@ -202,8 +264,124 @@ func emailVerificationAdapter(users user.Store) emailverification.Verifier {
 	return emailVerificationVerifier{users: users}
 }
 
-// withSCIMSync is a placeholder until its phase lands: no routes, no storage.
-func withSCIMSync(deps Deps) federation.Feature { return scimsync.New() }
+// withSCIMSync builds the outbound SCIM provisioning feature: tokens
+// encrypted under the same cipher derivation as the JWKS halves.
+func withSCIMSync(deps Deps) federation.Feature {
+	cipherKey := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
+	cipher, err := crypto.NewCipher(cipherKey[:])
+	if err != nil {
+		panic("registry: cipher key derivation is always 32 bytes: " + err.Error())
+	}
+	store := scimsync.NewPostgresStore(deps.DB, cipher)
+	source := scimSnapshotSource{db: deps.DB}
+	service := scimsync.NewService(store, source, logger.Slog(deps.Logger))
+	return scimsync.New(service)
+}
+
+// scimSnapshotSource adapts the identity stores to the SCIM snapshot
+// contract, scoped by the client's group allowlist.
+type scimSnapshotSource struct {
+	db datastore.Store
+}
+
+func (s scimSnapshotSource) UsersForClient(ctx context.Context, clientID string) ([]scimsync.ScimUserRow, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("DISTINCT u.id", "u.username", "u.display_name", "u.first_name", "u.last_name", "u.email", "u.disabled")
+	sb.From("public.users AS u")
+	sb.Join("public.user_groups_users AS ugu", "ugu.user_id = u.id")
+	sb.Join("public.oidc_clients_allowed_user_groups AS ag", "ag.user_group_id = ugu.user_group_id")
+	sb.Where(sb.E("ag.oidc_client_id", clientID))
+	return scimUserRows(ctx, s.db, sb)
+}
+
+func (s scimSnapshotSource) GroupsForClient(ctx context.Context, clientID string) ([]scimsync.ScimGroupRow, error) {
+	// Groups the client may see, with their member user IDs.
+	groups := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	groups.Select("g.id", "g.name")
+	groups.From("public.user_groups AS g")
+	groups.Join("public.oidc_clients_allowed_user_groups AS ag", "ag.user_group_id = g.id")
+	groups.Where(groups.E("ag.oidc_client_id", clientID))
+	gQuery, gArgs := groups.Build()
+
+	rows, err := s.db.Query(ctx, gQuery, gArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("scimsync: snapshot groups: %w", err)
+	}
+	defer rows.Close()
+
+	var out []scimsync.ScimGroupRow
+	ids := make([]string, 0, 8)
+	for rows.Next() {
+		var row scimsync.ScimGroupRow
+		var idText string
+		if scanErr := rows.Scan(&idText, &row.Name); scanErr != nil {
+			return nil, fmt.Errorf("scimsync: scan group: %w", scanErr)
+		}
+		row.ID = idText
+		ids = append(ids, idText)
+		out = append(out, row)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, rowsErr
+	}
+	if len(out) == 0 {
+		return out, nil
+	}
+
+	// Members of those groups.
+	members := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	members.Select("user_group_id", "user_id")
+	members.From("public.user_groups_users")
+	members.Where(members.In("user_group_id", toAny(ids)...))
+	mQuery, mArgs := members.Build()
+	mRows, err := s.db.Query(ctx, mQuery, mArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("scimsync: snapshot members: %w", err)
+	}
+	defer mRows.Close()
+
+	byGroup := map[string][]string{}
+	for mRows.Next() {
+		var groupID, userID string
+		if scanErr := mRows.Scan(&groupID, &userID); scanErr != nil {
+			return nil, fmt.Errorf("scimsync: scan member: %w", scanErr)
+		}
+		byGroup[groupID] = append(byGroup[groupID], userID)
+	}
+	for i := range out {
+		out[i].Members = byGroup[out[i].ID]
+	}
+	return out, mRows.Err()
+}
+
+func scimUserRows(ctx context.Context, db datastore.Executor, sb *sqlbuilder.SelectBuilder) ([]scimsync.ScimUserRow, error) {
+	query, args := sb.Build()
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("scimsync: snapshot users: %w", err)
+	}
+	defer rows.Close()
+
+	var out []scimsync.ScimUserRow
+	for rows.Next() {
+		var row scimsync.ScimUserRow
+		var disabled bool
+		if err := rows.Scan(&row.ID, &row.Username, &row.DisplayName, &row.FirstName, &row.LastName, &row.Email, &disabled); err != nil {
+			return nil, fmt.Errorf("scimsync: scan user: %w", err)
+		}
+		row.Active = !disabled
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+func toAny[T any](in []T) []any {
+	out := make([]any, len(in))
+	for i, v := range in {
+		out[i] = v
+	}
+	return out
+}
 
 // newKeyService builds the JWKS key service (private halves
 // encrypted at rest under a digest of auth.secret_key). It is a

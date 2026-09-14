@@ -96,8 +96,7 @@ func (reg *Registry) Apply(r chi.Router) {
 	}
 }
 
-// ApplyAPI mounts APIRoutable modules in the /api group,
-// registration order.
+// ApplyAPI mounts APIRoutable modules in the /api group, registration order.
 func (reg *Registry) ApplyAPI(api chi.Router) {
 	api.NotFound(responder.NotFoundJSON)
 	api.MethodNotAllowed(responder.MethodNotAllowedJSON)
@@ -109,8 +108,7 @@ func (reg *Registry) ApplyAPI(api chi.Router) {
 	}
 }
 
-// Start starts Startable modules in order; stops at first error
-// (caller Stops the rest).
+// Start starts Startable modules in order; stops at first error (caller Stops the rest).
 func (reg *Registry) Start(ctx context.Context) error {
 	for _, m := range reg.modules {
 		s, ok := m.(Startable)

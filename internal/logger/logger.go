@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"os"
@@ -107,6 +108,48 @@ func slogTransport(h slog.Handler, coreLevel loglayer.LogLevel) loglayer.Transpo
 		ID:     "slog", Level: coreLevel,
 	})
 }
+
+// Slog adapts the shared loglayer logger to a std slog.Logger so
+// modules can use the slog API without taking a loglayer dependency.
+func Slog(log Logger) *slog.Logger {
+	return slog.New(&loglayerHandler{log: log})
+}
+
+// loglayerHandler forwards slog records into loglayer.
+type loglayerHandler struct {
+	log   Logger
+	attrs []slog.Attr
+}
+
+func (h *loglayerHandler) Enabled(_ context.Context, _ slog.Level) bool { return true }
+
+func (h *loglayerHandler) Handle(_ context.Context, r slog.Record) error {
+	fields := loglayer.Fields{}
+	for _, a := range h.attrs {
+		fields[a.Key] = a.Value.Any()
+	}
+	r.Attrs(func(a slog.Attr) bool {
+		fields[a.Key] = a.Value.Any()
+		return true
+	})
+	switch r.Level {
+	case slog.LevelError:
+		h.log.Error(r.Message, fields)
+	case slog.LevelWarn:
+		h.log.Warn(r.Message, fields)
+	case slog.LevelDebug:
+		h.log.Debug(r.Message, fields)
+	default:
+		h.log.Info(r.Message, fields)
+	}
+	return nil
+}
+
+func (h *loglayerHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &loglayerHandler{log: h.log, attrs: append(append([]slog.Attr{}, h.attrs...), attrs...)}
+}
+
+func (h *loglayerHandler) WithGroup(string) slog.Handler { return h }
 
 // isTTY reports whether f is a terminal.
 func isTTY(f *os.File) bool {

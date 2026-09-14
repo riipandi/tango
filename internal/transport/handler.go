@@ -2,6 +2,8 @@ package transport
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
 
@@ -66,9 +68,23 @@ func VersionLatestHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// staticRoot is where the Vite build lands (public/ files copied
+// under web/output). Served by the /static/* route in dev and when
+// the SPA is not embedded.
+const staticRoot = "web/output"
+
+// StaticAssetsHandler serves files from the Vite output directory
+// under /static/* (e.g. /static/images/logo.png). Falls back to the
+// JSON 404 when the file does not exist.
 func StaticAssetsHandler(w http.ResponseWriter, r *http.Request) {
-	path := chi.URLParam(r, "*")
-	responder.WriteJSON(w, http.StatusOK, map[string]string{
-		"path": path,
-	})
+	name := chi.URLParam(r, "*")
+	clean := filepath.Clean("/" + name) // forces relative, no ".."
+	full := filepath.Join(staticRoot, clean)
+
+	info, err := os.Stat(full)
+	if err != nil || info.IsDir() {
+		responder.NotFoundJSON(w, r)
+		return
+	}
+	http.ServeFile(w, r, full)
 }

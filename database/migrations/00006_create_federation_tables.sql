@@ -265,6 +265,9 @@ CREATE TABLE IF NOT EXISTS public.scim_service_providers (
     FOREIGN KEY (oidc_client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE
 ) USING heap;
 
+-- One provider per client: the provider IS the client's outbound provisioning target; a second row for the same client is a defect.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scim_providers_client ON public.scim_service_providers (oidc_client_id);
+
 -- +goose StatementEnd
 
 -- +goose Down
@@ -274,6 +277,7 @@ CREATE TABLE IF NOT EXISTS public.scim_service_providers (
 DROP TRIGGER IF EXISTS trg_jwks_updated_at ON public.jwks;
 
 -- Drop indexes in reverse order of creation
+DROP INDEX IF EXISTS idx_scim_providers_client;
 DROP INDEX IF EXISTS idx_interaction_sessions_client_id;
 DROP INDEX IF EXISTS idx_interaction_sessions_user_id;
 DROP INDEX IF EXISTS idx_oauth2_jtis_expires_at;

@@ -34,7 +34,8 @@ func testDeps(t *testing.T) Deps {
 	return Deps{
 		DB: store,
 		Config: &config.Config{
-			Queue: config.QueueConfig{Workers: 2, ReleaseAfter: 30, CleanupInterval: 3600},
+			Queue:   config.QueueConfig{Workers: 2, ReleaseAfter: 30, CleanupInterval: 3600},
+			Storage: config.StorageConfig{DataDir: t.TempDir()},
 		},
 	}
 }
@@ -43,10 +44,10 @@ func TestNewRegistersAllModules(t *testing.T) {
 	reg := New(testDeps(t))
 
 	modules := reg.Modules()
-	assert.Len(t, modules, 4)
+	assert.Len(t, modules, 5)
 
 	// Queue first: its Stop drains last on shutdown.
-	wantOrder := []string{"queue", "auditlog", "identity", "federation"}
+	wantOrder := []string{"queue", "auditlog", "identity", "appimage", "federation"}
 	for i, want := range wantOrder {
 		assert.Equal(t, want, modules[i].Name())
 	}

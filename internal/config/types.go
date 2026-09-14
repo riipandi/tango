@@ -9,10 +9,38 @@ type Config struct {
 	App      AppConfig      `koanf:"app"`
 	Auth     AuthConfig     `koanf:"auth"`
 	Database DatabaseConfig `koanf:"database"`
+	LDAP     LDAPConfig     `koanf:"ldap"`
 	Mailer   MailerConfig   `koanf:"mailer"`
 	Public   PublicConfig   `koanf:"public"`
 	Queue    QueueConfig    `koanf:"queue"`
 	Storage  StorageConfig  `koanf:"storage"`
+}
+
+// LDAPConfig holds the directory sync settings (env LDAP_* until
+// appconfig takes over as the admin-editable source).
+type LDAPConfig struct {
+	Enabled        bool   `koanf:"enabled"`
+	URL            string `koanf:"url"`
+	BindDN         string `koanf:"bind_dn"`
+	BindPassword   string `koanf:"bind_password"`
+	Base           string `koanf:"base"`
+	UserFilter     string `koanf:"user_search_filter"`
+	GroupFilter    string `koanf:"user_group_search_filter"`
+	SkipCertVerify bool   `koanf:"skip_cert_verify"`
+
+	AttrUserUniqueID  string `koanf:"attribute_user_unique_identifier"`
+	AttrUserUsername  string `koanf:"attribute_user_username"`
+	AttrUserEmail     string `koanf:"attribute_user_email"`
+	AttrUserFirstName string `koanf:"attribute_user_first_name"`
+	AttrUserLastName  string `koanf:"attribute_user_last_name"`
+	AttrUserDisplay   string `koanf:"attribute_user_display_name"`
+
+	AttrGroupUniqueID string `koanf:"attribute_group_unique_identifier"`
+	AttrGroupName     string `koanf:"attribute_group_name"`
+	AttrGroupMember   string `koanf:"attribute_group_member"`
+
+	AdminGroupName  string `koanf:"admin_group_name"`
+	SoftDeleteUsers bool   `koanf:"soft_delete_users"`
 }
 
 type AppConfig struct {
@@ -68,6 +96,7 @@ type QueueConfig struct {
 }
 
 type StorageConfig struct {
+	DataDir            string  `koanf:"data_dir"`
 	MaxUploadSize      int64   `koanf:"max_upload_size"`
 	S3AccessKeyID      string  `koanf:"s3_access_key_id"`
 	S3BucketDefault    string  `koanf:"s3_bucket_default"`
