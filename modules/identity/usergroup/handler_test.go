@@ -26,7 +26,7 @@ import (
 
 // newTestRouter mounts the group routes behind the real session
 // guard (RequireAuth + RequireAdmin), like production.
-func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *PostgresStore, *password.Service) {
+func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *PostgresStore, *password.Service, datastore.Store) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -55,7 +55,7 @@ func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *PostgresStor
 		sessions.APIRoutes(r)
 		svc.APIRoutes(r)
 	})
-	return r, users, NewPostgresStore(ds), passwords
+	return r, users, NewPostgresStore(ds), passwords, ds
 }
 
 // newAdminUser provisions an admin with credentials.
@@ -87,7 +87,7 @@ func signInToken(t *testing.T, r chi.Router, u user.User) string {
 }
 
 func TestGroupEndpointsAdminGated(t *testing.T) {
-	r, users, _, passwords := newTestRouter(t)
+	r, users, _, passwords, _ := newTestRouter(t)
 	admin := newAdminUser(t, users, passwords, "gadm")
 	token := signInToken(t, r, admin)
 
@@ -153,4 +153,80 @@ func TestGroupEndpointsAdminGated(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: token})
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestSetAllowedClients covers PUT /user-groups/{id}/allowed-oidc-clients:
+// list-replace with unknown-id refusal and echo-back of the stored list.
+func TestSetAllowedClients(t *testing.T) {
+	r, users, _, passwords, ds := newTestRouter(t)
+	ctx := t.Context()
+
+	admin := newAdminUser(t, users, passwords, "goidc")
+	token := signInToken(t, r, admin)
+	cookie := func(req *http.Request) {
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: session.CookieName, Value: token})
+	}
+
+	// Create a group.
+	req := httptest.NewRequest(http.MethodPost, "/api/user-groups",
+		strings.NewReader(`{"name":"clients","display_name":"Clients"}`))
+	cookie(req)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var created struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &created))
+	groupID := created.Data.ID
+
+	// Two relying-party client rows as FK targets (id is a typeid
+	// string in a TEXT column).
+	clientID := "oidc_client_" + strings.ToLower(strconv.FormatInt(time.Now().UnixNano(), 10)) + "abcdef"
+	_, err := ds.Exec(ctx, `INSERT INTO public.oidc_clients (id, name) VALUES ($1, 'RP')`, clientID)
+	require.NoError(t, err)
+
+	// Replace with one known client → echo.
+	req = httptest.NewRequest(http.MethodPut, "/api/user-groups/"+groupID+"/allowed-oidc-clients",
+		strings.NewReader(`{"oidc_client_ids":["`+clientID+`"]}`))
+	cookie(req)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var listed struct {
+		Data struct {
+			OidcClientIDs []string `json:"oidc_client_ids"`
+		} `json:"data"`
+	}
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &listed))
+	assert.Equal(t, []string{clientID}, listed.Data.OidcClientIDs)
+
+	// Unknown client → 422.
+	req = httptest.NewRequest(http.MethodPut, "/api/user-groups/"+groupID+"/allowed-oidc-clients",
+		strings.NewReader(`{"oidc_client_ids":["oidc_client_01j00000000000000000000000"]}`))
+	cookie(req)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+
+	// Empty list clears the allowlist.
+	req = httptest.NewRequest(http.MethodPut, "/api/user-groups/"+groupID+"/allowed-oidc-clients",
+		strings.NewReader(`{"oidc_client_ids":[]}`))
+	cookie(req)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var cleared struct {
+		Data struct {
+			OidcClientIDs []string `json:"oidc_client_ids"`
+		} `json:"data"`
+	}
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &cleared))
+	assert.Empty(t, cleared.Data.OidcClientIDs)
 }

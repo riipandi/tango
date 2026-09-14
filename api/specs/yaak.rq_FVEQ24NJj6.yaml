@@ -2,14 +2,14 @@ type: http_request
 model: http_request
 id: rq_FVEQ24NJj6
 createdAt: 2026-09-14T09:50:28.169990
-updatedAt: 2026-09-14T09:50:28.169991
+updatedAt: 2026-09-14T12:06:25.968624
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: 'Get a preview of the OIDC data (ID token, access token, userinfo) that would be sent to the client for a specific user — gap register: missing-backend (phase 5); upstream query: scopes'
+description: 'Get a preview of the OIDC data (ID token, access token, userinfo) that would be sent to the client for a specific user — maps only, no real JWTs; query param: scopes (space-delimited)'
 headers: []
 method: GET
 name: Preview OIDC client data for user
@@ -17,13 +17,17 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/preview/:userId
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
-  id: n99wofasgw
+  name: :clientId
+  value: oidc_client_01m2fww2nvedt9phzwpxknwem2
+  id: null
 - enabled: true
-  name: ':userId'
-  value: 'dummy'
-  id: eegvqy5026
+  name: :userId
+  value: 01a09f76-a864-7b8a-82fb-e949e3ab4df3
+  id: null
+- enabled: true
+  name: scopes
+  value: openid profile email groups
+  id: null
 settingSendCookies:
   enabled: false
   value: true

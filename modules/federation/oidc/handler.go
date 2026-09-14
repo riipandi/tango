@@ -46,6 +46,8 @@ func (f Feature) APIRoutes(r chi.Router) {
 			cr.Put("/{clientId}", f.service.handleUpdateClient)
 			cr.Delete("/{clientId}", f.service.handleDeleteClient)
 			cr.Put("/{clientId}/allowed-user-groups", f.service.handleUpdateAllowedGroups)
+			cr.Get("/{clientId}/meta", f.service.handleClientMeta)
+			cr.Get("/{clientId}/preview/{userId}", f.service.handleClientPreview)
 			cr.Get("/{clientId}/secrets", f.service.handleListSecrets)
 			cr.Post("/{clientId}/secrets", f.service.handleCreateSecret)
 			cr.Delete("/{clientId}/secrets/{secretId}", f.service.handleDeleteSecret)
@@ -259,27 +261,7 @@ func (s *Service) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profile := map[string]any{"sub": claims.Subject}
-	if scopeHas(scope, ScopeEmail) && claims.Email != "" {
-		profile["email"] = claims.Email
-		profile["email_verified"] = claims.EmailVerified
-	}
-	if scopeHas(scope, ScopeProfile) {
-		if claims.Name != "" {
-			profile["name"] = claims.Name
-		}
-		if claims.PreferredUsername != "" {
-			profile["preferred_username"] = claims.PreferredUsername
-		}
-	}
-	if scopeHas(scope, ScopeGroups) && len(claims.Groups) > 0 {
-		profile["groups"] = claims.Groups
-	}
-	for key, value := range claims.Custom {
-		profile[key] = value
-	}
-
-	responder.WriteJSON(w, http.StatusOK, profile)
+	responder.WriteJSON(w, http.StatusOK, profileClaimsMap(scope, claims))
 }
 
 // ----------------------------------------------------------------------------

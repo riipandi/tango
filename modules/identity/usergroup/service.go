@@ -104,3 +104,19 @@ func (s *Service) MemberIDs(ctx context.Context, id UserGroupID) ([]user.UserID,
 func (s *Service) GroupsForUser(ctx context.Context, id user.UserID) ([]UserGroup, error) {
 	return s.store.GroupIDsForUser(ctx, id)
 }
+
+// ReplaceAllowedClients swaps the group's OIDC client allowlist.
+func (s *Service) ReplaceAllowedClients(ctx context.Context, id UserGroupID, clientIDs []string) error {
+	if err := s.store.ReplaceAllowedClients(ctx, id, clientIDs); err != nil {
+		return err
+	}
+	if s.recorder != nil {
+		s.recorder(ctx, identity.AuditEvent{Action: "user_group.allowed_clients_updated", Actor: id.String(), Target: id.String()})
+	}
+	return nil
+}
+
+// AllowedClientIDs lists the group's allowlisted OIDC client ids.
+func (s *Service) AllowedClientIDs(ctx context.Context, id UserGroupID) ([]string, error) {
+	return s.store.AllowedClientIDs(ctx, id)
+}

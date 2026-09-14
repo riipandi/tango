@@ -223,3 +223,69 @@ func TestUpdateAllowedGroups(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 	assert.Contains(t, rec.Body.String(), group.ID.UUID())
 }
+
+// TestClientMetaAndPreview covers GET /clients/{id}/meta and
+// GET /clients/{id}/preview/{userId}: the trimmed metadata view and
+// the three claim maps a real authorization would mint.
+func TestClientMetaAndPreview(t *testing.T) {
+	service, store, ds := testStack(t)
+	ctx := t.Context()
+
+	users := user.NewPostgresStore(ds)
+	createdUser := userFixture(ctx, t, users, stamp())
+	router := newRouter(t, service, &fakeAuthenticator{validToken: "session-token-1", principal: principalFixture(createdUser.String())})
+	client := clientFixture(ctx, t, store, "meta-"+stamp())
+
+	// Meta: trimmed view with snake_case keys.
+	req := signInRequest(http.MethodGet, clientsAPIPrefix+"/"+client.ID.String()+"/meta")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var meta struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &meta))
+	assert.Equal(t, client.ID.String(), meta.Data["id"])
+	assert.Equal(t, "standard", meta.Data["client_type"])
+	assert.Equal(t, false, meta.Data["has_logo"])
+
+	// Invalid client id → 400; unknown → 404.
+	req = signInRequest(http.MethodGet, clientsAPIPrefix+"/garbage/meta")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	req = signInRequest(http.MethodGet, clientsAPIPrefix+"/"+NewID().String()+"/meta")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	// Preview: id_token / access_token / user_info claim maps.
+	target := clientsAPIPrefix + "/" + client.ID.String() + "/preview/" + createdUser.String() +
+		"?scopes=" + url.QueryEscape("openid profile email groups")
+	req = signInRequest(http.MethodGet, target)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var preview struct {
+		Data struct {
+			IDToken     map[string]any `json:"id_token"`
+			AccessToken map[string]any `json:"access_token"`
+			UserInfo    map[string]any `json:"user_info"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &preview))
+	assert.Equal(t, "https://sso.test", preview.Data.IDToken["iss"])
+	assert.Contains(t, preview.Data.IDToken["aud"], client.ID.String())
+	assert.Equal(t, client.ID.String(), preview.Data.AccessToken["client_id"])
+	assert.Equal(t, "openid profile email groups", preview.Data.AccessToken["scope"])
+	assert.Contains(t, preview.Data.UserInfo["email"], "@example.com")
+
+	// Unknown user → 404.
+	req = signInRequest(http.MethodGet, clientsAPIPrefix+"/"+client.ID.String()+"/preview/user_"+stamp())
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}

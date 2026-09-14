@@ -14,8 +14,9 @@ Sub-phases are independent; 9A is trivial and lands first, 9C needs 9B's appconf
 
 ## 9A — OIDC client context surface (phase-5 leftovers)
 
-Three small endpoints, no new tables, no new infra. Owners: `modules/federation/oidc`,
-`modules/identity/usergroup`.
+Three small endpoints, no new tables except the allowlist junction. Owners: `modules/federation/oidc`,
+`modules/identity/usergroup`. **Status: done (2026-09-14)** — migration `00028`, meta + preview in
+`modules/federation/oidc/handler_meta.go`, allowlist in the usergroup store; live-tested via Yaak.
 
 | Method | Path                                       | Notes                                                     |
 | ------ | ------------------------------------------ | --------------------------------------------------------- |
@@ -23,16 +24,16 @@ Three small endpoints, no new tables, no new infra. Owners: `modules/federation/
 | GET    | `/api/oidc/clients/{id}/preview/{userId}`  | Claims/redirect preview for one user + scopes             |
 | PUT    | `/api/user-groups/{id}/allowed-oidc-clients` | List-replace a group's client allowlist                 |
 
-- [ ] `meta` — serve the metadata document derived from the stored client row (response shape
+- [x] `meta` — serve the metadata document derived from the stored client row (response shape
       mirrors the discovery/client-registration document: snake_case, envelope-wrapped). CIMD
       re-fetch wiring stays out until 9D.
-- [ ] `preview` — reuse the ID-token claim pipeline (custom claims for user + groups, scope
+- [x] `preview` — reuse the ID-token claim pipeline (custom claims for user + groups, scope
       filtering) in a new `preview.go`; upstream reference `internal/oidc/preview.go`
       (ClientPreviewBuilder) is logic-only guidance. Query param: `scopes` (comma-separated).
-- [ ] `allowed-oidc-clients` — usergroup module: body `{"oidc_client_ids": []}` (snake_case;
+- [x] `allowed-oidc-clients` — usergroup module: body `{"oidc_client_ids": []}` (snake_case;
       upstream camelCase `oidcClientIds` stays a documented deviation), validate TypeIDs, mutate
-      through the existing allowlist store, audit event `user_group_clients_updated`.
-- [ ] Tests per endpoint (`pkg/testutils.StartPostgres`); Yaak requests already exist — send
+      through the existing allowlist store, audit event `user_group.allowed_clients_updated`.
+- [x] Tests per endpoint (`pkg/testutils.StartPostgres`); Yaak requests already exist — send
       against the running server, then flip the three rows in `endpoint-reference.md`.
 
 ## 9B — Application configuration module

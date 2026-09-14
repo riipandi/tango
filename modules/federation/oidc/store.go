@@ -96,6 +96,9 @@ type Client struct {
 	CallbackURLs                []string
 	LogoutCallbackURLs          []string
 	LaunchURL                   string
+	ImageType                   *string
+	DarkImageType               *string
+	ClientType                  string
 	IsPublic                    bool
 	PKCEEnabled                 bool
 	PKCESupported               bool
@@ -253,7 +256,7 @@ var clientColumns = []string{
 	"c.launch_url", "c.is_public", "c.pkce_enabled", "c.pkce_supported",
 	"c.requires_reauthentication", "c.skip_consent", "c.is_group_restricted",
 	"c.access_token_duration_minutes", "c.refresh_token_duration_minutes",
-	"c.created_by_id", "c.created_at",
+	"c.created_by_id", "c.created_at", "c.image_type", "c.dark_image_type", "c.client_type",
 }
 
 func (s *PostgresStore) clientSelect(id string) *sqlbuilder.SelectBuilder {
@@ -1137,6 +1140,7 @@ func scanClient(row scanner) (*Client, error) {
 		&id, &name, &c.Description, &secret, &credentials, &callbacks, &logoutCBs, &launchURL,
 		&c.IsPublic, &c.PKCEEnabled, &c.PKCESupported, &c.RequiresReauthentication, &c.SkipConsent, &c.IsGroupRestricted,
 		&c.AccessTokenDurationMinutes, &c.RefreshTokenDurationMinutes, &createdByID, &createdAt,
+		&c.ImageType, &c.DarkImageType, &c.ClientType,
 	); err != nil {
 		return nil, err
 	}
@@ -1175,6 +1179,9 @@ func scanClient(row scanner) (*Client, error) {
 	}
 	if c.LogoutCallbackURLs == nil {
 		c.LogoutCallbackURLs = []string{}
+	}
+	if c.ClientType == "" {
+		c.ClientType = "standard"
 	}
 	c.CreatedAt = createdAt.Time
 	return &c, nil

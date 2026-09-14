@@ -59,6 +59,17 @@ func (r setUserGroupsRequest) Validate() error {
 	return nil
 }
 
+// setAllowedClientsRequest is the PUT /user-groups/{id}/allowed-oidc-clients
+// payload: the complete client allowlist for one group (upstream
+// oidcClientIds; snake_case is a documented deviation).
+type setAllowedClientsRequest struct {
+	ClientIDs []string `json:"oidc_client_ids"`
+}
+
+func (r setAllowedClientsRequest) Validate() error {
+	return nil
+}
+
 // groupsResponse carries the group plus its member user IDs.
 type groupsResponse struct {
 	UserGroup
@@ -76,6 +87,7 @@ func (s *Service) APIRoutes(r chi.Router) {
 		ar.Delete("/user-groups/{id}", s.deleteGroup)
 		ar.Get("/user-groups/{id}/users", s.memberIDs)
 		ar.Put("/user-groups/{id}/users", s.setMembers)
+		ar.Put("/user-groups/{id}/allowed-oidc-clients", s.setAllowedClients)
 		ar.Get("/users/{id}/groups", s.groupsForUser)
 		ar.Put("/users/{id}/user-groups", s.replaceUserGroups)
 	}
@@ -229,6 +241,47 @@ func (s *Service) setMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"member_ids": req.UserIDs})
+}
+
+// setAllowedClients replaces the group's OIDC client allowlist
+// (upstream PUT /user-groups/{id}/allowed-oidc-clients) and echoes
+// the stored list back.
+func (s *Service) setAllowedClients(w http.ResponseWriter, r *http.Request) {
+	id, err := identity.ParseID[UserGroupID](chi.URLParam(r, "id"))
+	if err != nil {
+		responder.NotFoundJSON(w, r)
+		return
+	}
+
+	var req setAllowedClientsRequest
+	if verr := validate.Request(r.Body, &req); verr != nil {
+		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
+			responder.WithError(validate.FieldErrors(verr)))
+		return
+	}
+
+	for _, client := range req.ClientIDs {
+		if client == "" {
+			responder.Fail(w, r, http.StatusUnprocessableEntity, ErrInvalidIDs.Error())
+			return
+		}
+	}
+
+	if replaceErr := s.ReplaceAllowedClients(r.Context(), id, req.ClientIDs); replaceErr != nil {
+		if errors.Is(replaceErr, ErrInvalidIDs) || errors.Is(replaceErr, ErrNotFound) {
+			responder.Fail(w, r, http.StatusUnprocessableEntity, ErrInvalidIDs.Error())
+			return
+		}
+		writeError(w, r, replaceErr)
+		return
+	}
+
+	clients, err := s.AllowedClientIDs(r.Context(), id)
+	if err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+	responder.Success(w, r, http.StatusOK, map[string]any{"oidc_client_ids": clients})
 }
 
 // groupsForUser lists the groups a user belongs to (upstream

@@ -109,8 +109,8 @@ upstream handlers. Remaining gaps are planned in `llms/phase-09-parity-gap.md`.
 | DELETE | `/api/oidc/clients/{id}/logo`                      | Delete client logo                            | planned (phase 9C — client logos)          |
 | GET    | `/api/oidc/clients/{id}/logo`                      | Get client logo                               | planned (phase 9C — client logos)          |
 | POST   | `/api/oidc/clients/{id}/logo`                      | Update client logo                            | planned (phase 9C — client logos)          |
-| GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           | missing-backend (phase 9A)                 |
-| GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             | missing-backend (phase 9A)                 |
+| GET    | `/api/oidc/clients/{id}/meta`                      | Get client metadata                           | done                                       |
+| GET    | `/api/oidc/clients/{id}/preview/{userId}`          | Preview OIDC client data for user             | done — claim maps, no real JWTs            |
 | POST   | `/api/oidc/clients/{id}/refresh`                   | Refresh client metadata document              | planned (phase 9D — CIMD)                   |
 | GET    | `/api/oidc/clients/{id}/scim-service-provider`     | Get SCIM service provider                     | done — phase 8                              |
 | GET    | `/api/oidc/clients/{id}/secrets`                   | List client secrets                           | done — multi-secret, values shown once      |
@@ -122,7 +122,7 @@ upstream handlers. Remaining gaps are planned in `llms/phase-09-parity-gap.md`.
 | DELETE | `/api/oidc/users/me/authorized-clients/{clientId}` | Revoke authorization for an OIDC client       | done — revocation cascades to active tokens |
 | GET    | `/api/oidc/users/me/clients`                       | List accessible OIDC clients for current user | done                                        |
 | GET    | `/api/oidc/users/{id}/authorized-clients`          | List authorized clients for a user            | done — revocation cascades to active tokens |
-| PUT    | `/api/user-groups/{id}/allowed-oidc-clients`       | Update allowed OIDC clients                   | missing-backend (phase 9A)                 |
+| PUT    | `/api/user-groups/{id}/allowed-oidc-clients`       | Update allowed OIDC clients                   | done — snake_case oidc_client_ids          |
 
 ## SCIM
 

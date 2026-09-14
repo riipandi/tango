@@ -16,10 +16,12 @@ import (
 	"github.com/riipandi/tango/modules/identity/user"
 )
 
-// Table constants: groups plus the membership junction.
+// Table constants: groups plus the membership junctions (users and
+// the group-side OIDC client allowlist).
 const (
-	userGroupsTable      = "public.user_groups"
-	userGroupsUsersTable = "public.user_groups_users"
+	userGroupsTable               = "public.user_groups"
+	userGroupsUsersTable          = "public.user_groups_users"
+	userGroupsAllowedClientsTable = "public.user_groups_allowed_oidc_clients"
 )
 
 // PostgresStore persists groups in public.user_groups. Membership
@@ -213,6 +215,84 @@ func (s *PostgresStore) SetMembers(ctx context.Context, id UserGroupID, memberID
 		}
 		return nil
 	})
+}
+
+// ReplaceAllowedClients atomically replaces the group's OIDC client
+// allowlist. Every client ID must reference an existing
+// oidc_clients row (the id column is a typeid string).
+func (s *PostgresStore) ReplaceAllowedClients(ctx context.Context, id UserGroupID, clientIDs []string) error {
+	return s.store.WithTx(ctx, func(tx datastore.Executor) error {
+		db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+		db.DeleteFrom(userGroupsAllowedClientsTable)
+		db.Where(db.E("user_group_id", id.UUIDBytes()))
+
+		delQuery, delArgs := db.Build()
+		if _, err := tx.Exec(ctx, delQuery, delArgs...); err != nil {
+			return fmt.Errorf("usergroup store: clear allowed clients: %w", err)
+		}
+		if len(clientIDs) == 0 {
+			return nil
+		}
+
+		// FK violations would surface as a 500 downstream; verify the
+		// whole batch exists for a deterministic domain error.
+		sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+		sb.Select("count(DISTINCT id)")
+		sb.From("public.oidc_clients")
+		ids := make([]any, 0, len(clientIDs))
+		for _, client := range clientIDs {
+			ids = append(ids, client)
+		}
+		sb.Where(sb.In("id", ids...))
+
+		query, args := sb.Build()
+		var known int
+		if err := tx.QueryRow(ctx, query, args...).Scan(&known); err != nil {
+			return fmt.Errorf("usergroup store: check allowed clients: %w", err)
+		}
+		if known != len(clientIDs) {
+			return ErrInvalidIDs
+		}
+
+		ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+		ib.InsertInto(userGroupsAllowedClientsTable)
+		ib.Cols("user_group_id", "oidc_client_id")
+		for _, client := range clientIDs {
+			ib.Values(id.UUIDBytes(), client)
+		}
+
+		query, args = ib.Build()
+		if _, err := tx.Exec(ctx, query, args...); err != nil {
+			return fmt.Errorf("usergroup store: add allowed clients: %w", err)
+		}
+		return nil
+	})
+}
+
+// AllowedClientIDs lists the OIDC client ids allowlisted for one group.
+func (s *PostgresStore) AllowedClientIDs(ctx context.Context, id UserGroupID) ([]string, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("oidc_client_id")
+	sb.From(userGroupsAllowedClientsTable)
+	sb.Where(sb.E("user_group_id", id.UUIDBytes()))
+	sb.OrderBy("oidc_client_id")
+
+	query, args := sb.Build()
+	rows, err := s.exec.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("usergroup store: allowed clients: %w", err)
+	}
+	defer rows.Close()
+
+	out := []string{}
+	for rows.Next() {
+		var client string
+		if err := rows.Scan(&client); err != nil {
+			return nil, fmt.Errorf("usergroup store: allowed clients: %w", err)
+		}
+		out = append(out, client)
+	}
+	return out, rows.Err()
 }
 
 // ReplaceGroupsForUser atomically replaces the groups one user

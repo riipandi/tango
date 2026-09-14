@@ -69,6 +69,13 @@ type Store interface {
 	MemberIDs(ctx context.Context, id UserGroupID) ([]user.UserID, error)
 	GroupIDsForUser(ctx context.Context, id user.UserID) ([]UserGroup, error)
 	ReplaceGroupsForUser(ctx context.Context, id user.UserID, groupIDs []UserGroupID) error
+	// ReplaceAllowedClients swaps the group-side OIDC client
+	// allowlist (upstream PUT /user-groups/{id}/allowed-oidc-clients).
+	// Client IDs are opaque typeid strings here — identity never
+	// imports federation; the store's existence check + FK enforce
+	// validity.
+	ReplaceAllowedClients(ctx context.Context, id UserGroupID, clientIDs []string) error
+	AllowedClientIDs(ctx context.Context, id UserGroupID) ([]string, error)
 }
 
 // ListParams narrows and pages the admin listing.
