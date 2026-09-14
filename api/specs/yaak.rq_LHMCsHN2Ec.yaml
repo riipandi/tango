@@ -2,17 +2,19 @@ type: http_request
 model: http_request
 id: rq_LHMCsHN2Ec
 createdAt: 2026-09-13T05:46:29.228891
-updatedAt: 2026-09-13T05:46:29.228892
+updatedAt: 2026-09-14T09:43:28.191746
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_hQjdk2nbAg
 authentication: {}
 authenticationType: null
-body: {}
-bodyType: null
-description: Create a user group (admin) — expect 201; duplicate name → 409. Body set separately.
+body:
+  bodyType: application/json
+  text: '{"name":"engineering","display_name":"Engineering"}'
+bodyType: application/json
+description: Create a new user group
 headers: []
 method: POST
-name: POST /api/user-groups
+name: Create user group
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/user-groups
 urlParameters: []

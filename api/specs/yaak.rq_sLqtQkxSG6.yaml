@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_sLqtQkxSG6
+createdAt: 2026-09-14T09:52:02.876001
+updatedAt: 2026-09-14T09:52:02.876002
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_vxX8pv5Ccb
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Reset the currently authenticated user's profile picture to the default — planned (phase 8)
+headers: []
+method: DELETE
+name: Reset current user's profile picture
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/users/me/profile-picture
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -1,0 +1,34 @@
+type: folder
+model: folder
+id: fl_hQjdk2nbAg
+createdAt: 2026-09-14T09:40:50.920292
+updatedAt: 2026-09-14T09:40:50.920297
+workspaceId: wk_kBiMYTkhPP
+folderId: null
+authentication: {}
+authenticationType: null
+description: 'Upstream tag: User Groups — group CRUD, members, per-user group assignment'
+headers: []
+name: User Groups
+sortPriority: 1200.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

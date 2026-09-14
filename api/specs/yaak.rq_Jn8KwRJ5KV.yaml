@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_Jn8KwRJ5KV
 createdAt: 2026-09-13T06:23:09.469126
-updatedAt: 2026-09-13T06:23:09.469127
+updatedAt: 2026-09-14T09:47:15.987176
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_YNuU3gaJNQ
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Returns the JSON Web Key Set used for token verification
 headers: []
 method: GET
-name: GET /.well-known/jwks.json
+name: Get JSON Web Key Set (JWKS)
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/.well-known/jwks.json
 urlParameters: []

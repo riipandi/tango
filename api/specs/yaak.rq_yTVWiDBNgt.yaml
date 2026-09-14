@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_yTVWiDBNgt
 createdAt: 2026-09-13T05:47:32.108867
-updatedAt: 2026-09-13T05:47:32.108868
+updatedAt: 2026-09-14T09:45:23.371178
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_7wm4R7MYfg
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Distinct users appearing in audit logs (filter dropdown values)
+description: Get a list of all usernames with their IDs for audit log filtering
 headers: []
 method: GET
-name: GET /api/audit-logs/filters/users
+name: List users with IDs
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/audit-logs/filters/users
 urlParameters: []

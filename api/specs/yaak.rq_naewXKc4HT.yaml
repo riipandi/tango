@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_naewXKc4HT
 createdAt: 2026-09-14T00:54:32.626632
-updatedAt: 2026-09-14T00:54:32.626633
+updatedAt: 2026-09-14T09:45:03.529687
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tw8Gigobcd
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ''
+description: Manually trigger LDAP synchronization
 headers: []
 method: POST
-name: Sync LDAP
+name: Synchronize LDAP
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/application-configuration/sync-ldap
 urlParameters: []

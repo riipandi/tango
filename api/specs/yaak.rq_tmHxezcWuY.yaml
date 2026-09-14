@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_tmHxezcWuY
 createdAt: 2026-09-13T08:47:56.195463
-updatedAt: 2026-09-13T08:47:56.195464
+updatedAt: 2026-09-14T09:45:58.055478
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Pass a token to verify if it is considered valid.
 headers: []
 method: POST
-name: POST /api/oidc/introspect
+name: Introspect OIDC tokens
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/oidc/introspect
 urlParameters: []

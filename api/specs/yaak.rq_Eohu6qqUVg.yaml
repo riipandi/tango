@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_Eohu6qqUVg
+createdAt: 2026-09-14T09:47:34.471970
+updatedAt: 2026-09-14T09:47:34.471971
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_LY5TXMhFfG
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Retrieve a single API including its permissions
+headers: []
+method: GET
+name: Get API by ID
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

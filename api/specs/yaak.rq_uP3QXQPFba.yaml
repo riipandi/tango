@@ -2,19 +2,19 @@ type: http_request
 model: http_request
 id: rq_uP3QXQPFba
 createdAt: 2026-09-13T16:11:30.502500
-updatedAt: 2026-09-13T16:11:30.502500
+updatedAt: 2026-09-14T09:43:59.289027
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_sxJ7kPDHpG
+folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
   text: '{"usage_limit": 5, "ttl": "24h"}'
 bodyType: application/json
-description: "Admin: create a signup token (raw token returned once). usage_limit caps redemptions."
+description: Create a new signup token that allows user registration
 headers: []
 method: POST
-name: POST /signup-tokens
+name: Create signup token
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/signup-tokens
 urlParameters: []

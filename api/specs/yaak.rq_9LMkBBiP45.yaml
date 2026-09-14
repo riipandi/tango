@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_9LMkBBiP45
+createdAt: 2026-09-14T09:49:51.617821
+updatedAt: 2026-09-14T09:49:51.617822
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_GfrmzYcuVx
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '{"name":"RP","callback_urls":["https://rp.example/callback"],"is_public":false}'
+bodyType: application/json
+description: Create a new OIDC client
+headers: []
+method: POST
+name: Create OIDC client
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/oidc/clients
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_6n9EEpfm3D
 createdAt: 2026-09-13T07:28:16.095713
-updatedAt: 2026-09-13T07:28:16.095714
+updatedAt: 2026-09-14T09:45:53.891706
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Get a paginated list of OIDC clients with optional search and sorting
 headers: []
 method: GET
-name: GET /api/oidc/clients
+name: List OIDC clients
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/oidc/clients
 urlParameters: []

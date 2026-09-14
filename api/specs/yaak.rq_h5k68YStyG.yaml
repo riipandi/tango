@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_h5k68YStyG
 createdAt: 2026-09-13T19:23:14.189288
-updatedAt: 2026-09-13T19:23:14.189289
+updatedAt: 2026-09-14T09:44:44.190165
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -11,7 +11,7 @@ body:
   bodyType: application/json
   text: '{"name":"Billing API","resource":"https://api.example.com"}'
 bodyType: null
-description: ""
+description: Create a new API resource server
 headers: []
 method: POST
 name: Create API

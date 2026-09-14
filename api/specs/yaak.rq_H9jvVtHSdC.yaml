@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_H9jvVtHSdC
 createdAt: 2026-09-13T05:47:26.823969
-updatedAt: 2026-09-13T05:47:26.823969
+updatedAt: 2026-09-14T09:45:19.239266
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_7wm4R7MYfg
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Audit log listing (admin) with pagination + event filter
+description: Get a paginated list of audit logs for the current user
 headers: []
 method: GET
-name: GET /api/audit-logs
+name: List audit logs
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/audit-logs?page=1&limit=5
 urlParameters: []

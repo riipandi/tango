@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_5kV3otZpj5
 createdAt: 2026-09-13T16:09:15.285877
-updatedAt: 2026-09-13T16:09:15.285878
+updatedAt: 2026-09-14T09:47:02.801376
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: "Admin: delete a passkey credential. 204 on success."
+description: Delete a specific WebAuthn credential for a user
 headers: []
 method: DELETE
-name: DELETE /users/{id}/webauthn-credentials/{credId}
+name: Delete user passkey
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users/user_01m2dd47arf4e9g6qd0r85b5rz/webauthn-credentials/cred_01m00000000000000000000000
 urlParameters: []

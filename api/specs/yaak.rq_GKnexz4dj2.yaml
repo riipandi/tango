@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_GKnexz4dj2
+createdAt: 2026-09-14T09:51:04.704205
+updatedAt: 2026-09-14T09:51:04.704206
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_GfrmzYcuVx
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '{"oidcClientIds":[]}'
+bodyType: application/json
+description: Update the OIDC clients allowed for a specific user group — upstream body shape; gap register flags this row missing-backend in tango
+headers: []
+method: PUT
+name: Update allowed OIDC clients
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/user-groups/{{ userGroupId }}/allowed-oidc-clients
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_9Xhi3gAhTt
 createdAt: 2026-09-12T06:54:52.147940
-updatedAt: 2026-09-13T06:14:35.472035
+updatedAt: 2026-09-14T09:46:31.389212
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Revoke the current session and clear the cookie
+description: 'Tango extension: ends the current session and clears the tango_session cookie'
 headers: []
 method: POST
-name: Sign Out
+name: Sign out
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/auth/sign-out
 urlParameters: []

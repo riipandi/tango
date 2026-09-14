@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_AusuLWFcuA
 createdAt: 2026-09-13T19:22:49.469085
-updatedAt: 2026-09-13T19:22:49.469085
+updatedAt: 2026-09-14T09:44:29.970312
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Revoke (delete) an existing API key by ID
 headers: []
 method: DELETE
-name: Revoke API Key
+name: Revoke API key
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/api-keys/{{ apiKeyId }}
 urlParameters: []

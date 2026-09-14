@@ -1,0 +1,34 @@
+type: folder
+model: folder
+id: fl_owstPiB2PV
+createdAt: 2026-09-14T09:40:54.965689
+updatedAt: 2026-09-14T09:40:54.965690
+workspaceId: wk_kBiMYTkhPP
+folderId: null
+authentication: {}
+authenticationType: null
+description: 'Upstream tag: WebAuthn — passkey registration and discoverable login ceremonies'
+headers: []
+name: WebAuthn
+sortPriority: 1400.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

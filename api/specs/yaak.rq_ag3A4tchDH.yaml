@@ -1,21 +1,20 @@
 type: http_request
 model: http_request
-id: rq_8bhwyqijeA
-createdAt: 2026-09-12T06:54:01.871712
-updatedAt: 2026-09-13T13:38:41.011448
+id: rq_ag3A4tchDH
+createdAt: 2026-09-14T09:52:49.673252
+updatedAt: 2026-09-14T09:52:49.673253
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_JV2sKQfU6r
 authentication: {}
 authenticationType: null
-body:
-  text: '{"identity":"admin","secret":"Admin123!"}'
-bodyType: application/json
-description: Sign in as seeded admin; sets the tango_session cookie
+body: {}
+bodyType: null
+description: Retrieve the current user's account profile — tango-only /api/account surface
 headers: []
-method: POST
-name: Sign In
+method: GET
+name: Get account
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/auth/sign-in
+url: ${[ apiBaseURL ]}/api/account
 urlParameters: []
 settingSendCookies:
   enabled: false

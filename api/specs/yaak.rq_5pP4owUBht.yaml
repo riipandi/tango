@@ -1,0 +1,41 @@
+type: http_request
+model: http_request
+id: rq_5pP4owUBht
+createdAt: 2026-09-14T09:52:16.418069
+updatedAt: 2026-09-14T09:52:16.418069
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_vxX8pv5Ccb
+authentication: {}
+authenticationType: null
+body:
+  form:
+  - enabled: true
+    file: /Users/ariss/Developer/github.com/riipandi/tango/web/output/images/logo.svg
+    name: file
+    value: logo.svg
+bodyType: multipart/form-data
+description: Update a specific user's profile picture — planned (phase 8)
+headers: []
+method: PUT
+name: Update user profile picture
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/users/{{ userId }}/profile-picture
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

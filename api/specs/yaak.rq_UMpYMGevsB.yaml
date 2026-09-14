@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_UMpYMGevsB
 createdAt: 2026-09-13T07:28:46.403887
-updatedAt: 2026-09-13T07:28:46.403888
+updatedAt: 2026-09-14T09:45:49.253429
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_wq663t6sTL
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: "POST form: grant_type=authorization_code, code, redirect_uri, code_verifier — atau grant_type=refresh_token + refresh_token. Isi body di UI (Basic auth: client_id:client_secret)"
+description: Issues OAuth tokens (password / authorization-code exchange) — POST /api/oidc/token is not in the upstream swagger paths
 headers: []
 method: POST
-name: POST /api/oidc/token
+name: Issue OIDC token
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/oidc/token
 urlParameters: []

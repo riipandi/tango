@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_2CWv5MApih
 createdAt: 2026-09-12T06:54:07.608088
-updatedAt: 2026-09-12T07:01:05.371800
+updatedAt: 2026-09-14T09:47:06.172468
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Anonymous access to admin route — expect 401 envelope
+description: Get a paginated list of users with optional search and sorting — anonymous calls are rejected by the guard
 headers: []
 method: GET
-name: Users (guarded, anonymous)
+name: List users (anonymous, guarded)
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users
 urlParameters: []

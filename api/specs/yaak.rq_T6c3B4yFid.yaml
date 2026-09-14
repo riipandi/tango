@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_T6c3B4yFid
 createdAt: 2026-09-13T16:10:31.063932
-updatedAt: 2026-09-13T16:10:31.063932
+updatedAt: 2026-09-14T09:46:47.980912
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -11,10 +11,10 @@ body:
   bodyType: application/json
   text: '{"token": "REPLACE_RAW_TOKEN"}'
 bodyType: application/json
-description: "Self-auth: verify the current user's email with the token from send-email-verification. 204 on success."
+description: Verify the currently authenticated user's email using a verification token
 headers: []
 method: POST
-name: POST /users/me/verify-email
+name: Verify email
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users/me/verify-email
 urlParameters: []

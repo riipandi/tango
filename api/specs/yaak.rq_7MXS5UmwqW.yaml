@@ -2,21 +2,21 @@ type: http_request
 model: http_request
 id: rq_7MXS5UmwqW
 createdAt: 2026-09-13T07:28:40.996909
-updatedAt: 2026-09-13T08:09:21.109496
+updatedAt: 2026-09-14T09:43:38.409238
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_wq663t6sTL
+folderId: fl_GfrmzYcuVx
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Get user information based on the access token
 headers:
-  - enabled: true
-    name: Authorization
-    value: Bearer ${[ accessToken ]}
-    id: 7Y7KfjiQ9x
+- enabled: true
+  name: Authorization
+  value: Bearer ${[ accessToken ]}
+  id: 7Y7KfjiQ9x
 method: GET
-name: GET /api/oidc/userinfo
+name: Get user information
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/oidc/userinfo
 urlParameters: []

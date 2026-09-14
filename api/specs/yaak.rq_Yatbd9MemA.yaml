@@ -2,14 +2,14 @@ type: http_request
 model: http_request
 id: rq_Yatbd9MemA
 createdAt: 2026-09-13T19:23:31.940854
-updatedAt: 2026-09-13T19:23:31.940855
+updatedAt: 2026-09-14T09:44:40.259156
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Get a paginated list of APIs with optional search and sorting
 headers: []
 method: GET
 name: List APIs

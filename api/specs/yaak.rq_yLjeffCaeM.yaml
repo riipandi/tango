@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_yLjeffCaeM
 createdAt: 2026-09-13T19:24:07.584944
-updatedAt: 2026-09-13T19:24:07.584944
+updatedAt: 2026-09-14T09:44:59.409491
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Get every API the OIDC client may request tokens for, with its access and permissions split into user-delegated and client (machine-to-machine) access
 headers: []
 method: GET
-name: Client APIs
+name: List APIs a client may access
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/api-access/{{ clientId }}/apis
 urlParameters: []

@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_dgsHWiHpYz
 createdAt: 2026-09-13T16:11:43.748820
-updatedAt: 2026-09-13T16:11:43.748821
+updatedAt: 2026-09-14T09:43:56.188129
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_sxJ7kPDHpG
+folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: "Admin: list signup tokens with usage counts."
+description: Get a paginated list of signup tokens
 headers: []
 method: GET
-name: GET /signup-tokens
+name: List signup tokens
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/signup-tokens
 urlParameters: []

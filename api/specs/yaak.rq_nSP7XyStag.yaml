@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_nSP7XyStag
 createdAt: 2026-09-13T08:48:44.907010
-updatedAt: 2026-09-13T08:48:44.907010
+updatedAt: 2026-09-14T09:43:31.347203
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: "Upstream-parity alias of /api/account (phase 1-4 completion). PUT body: display_name/first_name/last_name/locale."
+description: Retrieve information about the currently authenticated user
 headers: []
 method: GET
-name: GET /api/users/me
+name: Get current user
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users/me
 urlParameters: []

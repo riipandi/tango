@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_hEKsVYjGe8
 createdAt: 2026-09-13T19:22:23.343632
-updatedAt: 2026-09-13T19:22:23.343632
+updatedAt: 2026-09-14T09:44:23.171296
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Get a paginated list of API keys belonging to the current user
 headers: []
 method: GET
-name: List API Keys
+name: List API keys
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/api-keys
 urlParameters: []

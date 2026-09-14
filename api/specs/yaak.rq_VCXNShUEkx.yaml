@@ -2,21 +2,21 @@ type: http_request
 model: http_request
 id: rq_VCXNShUEkx
 createdAt: 2026-09-13T19:22:58.293516
-updatedAt: 2026-09-13T19:22:58.293517
+updatedAt: 2026-09-14T09:44:36.226942
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Machine call with X-API-KEY header
+description: List users using machine auth via X-API-KEY header — tango demo for the API key flow
 headers:
-  - enabled: true
-    name: X-API-KEY
-    value: f_Bw36Lqd9tV6lLA1BU2k00X7wXzlcIcFKeZvNi_6uw
-    id: null
+- enabled: true
+  name: X-API-KEY
+  value: f_Bw36Lqd9tV6lLA1BU2k00X7wXzlcIcFKeZvNi_6uw
+  id: null
 method: GET
-name: Users via X-API-KEY
+name: List users via X-API-KEY
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users
 urlParameters: []

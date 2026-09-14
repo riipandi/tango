@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_RJAWQoXfym
+createdAt: 2026-09-14T09:53:31.995704
+updatedAt: 2026-09-14T09:53:31.995704
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_FRoYxGubpu
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Rotate the signing secret of a webhook — tango-only webhook surface
+headers: []
+method: POST
+name: Rotate webhook secret
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}/rotate-secret
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

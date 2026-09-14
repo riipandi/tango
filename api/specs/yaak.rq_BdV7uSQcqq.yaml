@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_BdV7uSQcqq
+createdAt: 2026-09-14T09:50:16.286313
+updatedAt: 2026-09-14T09:50:16.286314
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_GfrmzYcuVx
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '{"secret":"supplied-secret-123456"}'
+bodyType: application/json
+description: Add a new secret to an OIDC client, leaving the existing ones usable. The value is only returned by this endpoint and cannot be retrieved later.
+headers: []
+method: POST
+name: Create client secret
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}/secrets
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

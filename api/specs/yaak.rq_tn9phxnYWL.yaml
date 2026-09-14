@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_tn9phxnYWL
 createdAt: 2026-09-13T16:08:25.491751
-updatedAt: 2026-09-13T16:08:25.491752
+updatedAt: 2026-09-14T09:45:44.999559
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_R5pypBKj8u
 authentication: {}
@@ -11,10 +11,10 @@ body:
   bodyType: application/json
   text: '{"code": "PXXXXXXX", "decision": "approve"}'
 bodyType: application/json
-description: "Self-auth: approve or deny a device login request (decision: approve|deny). 204 on success."
+description: Approve or deny a device login request; approval requires fresh passkey reauthentication
 headers: []
 method: POST
-name: POST /device-login/verification/decision
+name: Decide device login request
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/device-login/verification/decision
 urlParameters: []

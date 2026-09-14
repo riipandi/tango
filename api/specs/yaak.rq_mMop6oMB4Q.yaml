@@ -1,0 +1,41 @@
+type: http_request
+model: http_request
+id: rq_mMop6oMB4Q
+createdAt: 2026-09-14T09:48:20.543740
+updatedAt: 2026-09-14T09:48:20.543741
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_3VCPmqfLP6
+authentication: {}
+authenticationType: null
+body:
+  form:
+  - enabled: true
+    file: /Users/ariss/Developer/github.com/riipandi/tango/web/output/images/logo.svg
+    name: file
+    value: logo.svg
+bodyType: multipart/form-data
+description: Update the application background image
+headers: []
+method: PUT
+name: Update background image
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/application-images/background
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

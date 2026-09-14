@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_57UnPSbSk7
 createdAt: 2026-09-13T19:23:55.616302
-updatedAt: 2026-09-13T19:23:55.616303
+updatedAt: 2026-09-14T09:44:55.227527
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -11,10 +11,10 @@ body:
   bodyType: application/json
   text: '{"client_access":true,"client_permission_ids":[],"user_delegated_access":true,"user_delegated_permission_ids":[]}'
 bodyType: null
-description: ""
+description: Replace the permissions of this API a single OIDC client may request, leaving its grants on other APIs untouched
 headers: []
 method: PUT
-name: Update Client Grant
+name: Update a client's access to an API
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/clients/{{ clientId }}
 urlParameters: []

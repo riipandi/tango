@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_LjYxRE2gkZ
 createdAt: 2026-09-14T00:57:22.300953
-updatedAt: 2026-09-14T00:57:22.300953
+updatedAt: 2026-09-14T09:46:23.442550
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_7fUC8jidvU
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Upstream-specific SQLite warning endpoint — likely never ported (Postgres-only)
+description: Reports whether Pocket ID found its SQLite database on a networked filesystem, which is unsupported and can lead to database corruption
 headers: []
 method: GET
-name: Get SQLite Warning
+name: Get whether the SQLite storage warning should be shown
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/storage/sqlite-warning
 urlParameters: []

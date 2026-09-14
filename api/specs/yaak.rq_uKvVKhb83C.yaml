@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_uKvVKhb83C
 createdAt: 2026-09-13T06:23:05.989227
-updatedAt: 2026-09-13T06:23:05.989227
+updatedAt: 2026-09-14T09:47:22.905108
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_YNuU3gaJNQ
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Returns the OpenID Connect discovery document with endpoints and capabilities
 headers: []
 method: GET
-name: GET /.well-known/openid-configuration
+name: Get OpenID Connect discovery configuration
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/.well-known/openid-configuration
 urlParameters: []

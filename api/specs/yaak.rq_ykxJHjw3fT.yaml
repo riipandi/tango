@@ -2,19 +2,19 @@ type: http_request
 model: http_request
 id: rq_ykxJHjw3fT
 createdAt: 2026-09-13T16:07:52.475216
-updatedAt: 2026-09-13T16:07:52.475216
+updatedAt: 2026-09-14T09:45:31.793451
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_R5pypBKj8u
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
-  text: "{}"
+  text: '{}'
 bodyType: application/json
-description: "Anonymous: create a device login request. Response carries user_code + verification_uri; the device_token cookie is required for the exchange step."
+description: Create a short-lived request that can be approved from another authenticated device
 headers: []
 method: POST
-name: POST /device-login/requests
+name: Create device login request
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/device-login/requests
 urlParameters: []

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_fT7ZdZyw3z
 createdAt: 2026-09-13T16:12:16.669155
-updatedAt: 2026-09-13T16:12:16.669156
+updatedAt: 2026-09-14T09:46:28.008029
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
@@ -11,10 +11,10 @@ body:
   bodyType: application/json
   text: '{"identity": "admin", "secret": "Admin123!"}'
 bodyType: application/json
-description: "Anonymous: password sign-in; sets the tango_session cookie used by all self/admin endpoints."
+description: 'Tango extension: password sign-in that sets the tango_session cookie used by all self/admin endpoints'
 headers: []
 method: POST
-name: POST /auth/sign-in
+name: Sign in with password
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/auth/sign-in
 urlParameters: []

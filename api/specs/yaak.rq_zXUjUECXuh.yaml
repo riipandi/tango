@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_zXUjUECXuh
+createdAt: 2026-09-14T09:48:09.233647
+updatedAt: 2026-09-14T09:48:09.233648
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_tw8Gigobcd
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Get all application configurations including private ones — deferred (appconfig module)
+headers: []
+method: GET
+name: List all application configurations
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/application-configuration/all
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

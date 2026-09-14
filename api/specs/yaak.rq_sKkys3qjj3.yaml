@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_sKkys3qjj3
 createdAt: 2026-09-13T08:49:24.197394
-updatedAt: 2026-09-13T08:49:24.197394
+updatedAt: 2026-09-14T09:43:21.436795
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_7wm4R7MYfg
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Get a paginated list of all audit logs (admin only)
 headers: []
 method: GET
-name: GET /api/audit-logs/all
+name: List all audit logs
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/audit-logs/all
 urlParameters: []

@@ -2,15 +2,15 @@ type: folder
 model: folder
 id: fl_wq663t6sTL
 createdAt: 2026-09-13T07:28:10.606624
-updatedAt: 2026-09-13T07:28:10.606624
+updatedAt: 2026-09-14T09:41:37.450866
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
-description: OAuth 2.0 token + userinfo endpoints (phase 4)
+description: OAuth token issuance (POST /api/oidc/token) — not in the upstream swagger tag tables of the endpoint reference
 headers: []
 name: OAuth
-sortPriority: 0.0
+sortPriority: 950.0
 settingSendCookies:
   enabled: false
   value: true

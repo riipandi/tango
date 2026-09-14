@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_f5tKpWWR9L
 createdAt: 2026-09-12T06:54:37.488500
-updatedAt: 2026-09-12T06:54:37.488501
+updatedAt: 2026-09-14T09:46:34.606451
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Echo live session + user via cookie
+description: 'Tango extension: returns the current session principal'
 headers: []
 method: GET
-name: Current Session
+name: Get current session
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/auth/session
 urlParameters: []

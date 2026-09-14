@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_D9SADio28m
 createdAt: 2026-09-13T19:22:15.294354
-updatedAt: 2026-09-13T19:22:15.294355
+updatedAt: 2026-09-14T09:44:26.608233
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
@@ -11,10 +11,10 @@ body:
   bodyType: application/json
   text: '{"name":"CI Deploy Key","description":"Created from Yaak","expires_at":"2027-01-01T00:00:00Z"}'
 bodyType: null
-description: ""
+description: Create a new API key for the current user
 headers: []
 method: POST
-name: Create API Key
+name: Create API key
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/api-keys
 urlParameters: []

@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_t3sGoeSaUF
 createdAt: 2026-09-12T06:53:47.707531
-updatedAt: 2026-09-12T07:00:44.319703
+updatedAt: 2026-09-14T09:41:05.802158
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: Endpoints not in the upstream Pocket ID spec (session sign-in/out live under /api/auth/*)
 headers: []
 name: Tango Extensions (auth)
-sortPriority: 0.0
+sortPriority: 50.0
 settingSendCookies:
   enabled: false
   value: true

@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_es4pqQuHAK
 createdAt: 2026-09-13T05:47:03.867624
-updatedAt: 2026-09-13T05:47:03.867625
+updatedAt: 2026-09-14T09:43:25.173233
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_t3sGoeSaUF
+folderId: fl_hQjdk2nbAg
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: List user groups (paginated) — expect 200 + metadata. Bodyless GET.
+description: Get a paginated list of user groups with optional search and sorting
 headers: []
 method: GET
-name: GET /api/user-groups
+name: List user groups
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/user-groups?page=1&limit=10
 urlParameters: []

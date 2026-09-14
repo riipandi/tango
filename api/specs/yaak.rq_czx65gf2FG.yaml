@@ -2,19 +2,19 @@ type: http_request
 model: http_request
 id: rq_czx65gf2FG
 createdAt: 2026-09-13T16:11:15.021099
-updatedAt: 2026-09-13T16:11:15.021100
+updatedAt: 2026-09-14T09:43:52.703790
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_sxJ7kPDHpG
+folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
   text: '{"username": "admin", "email": "admin@example.com", "first_name": "Admin", "last_name": "Sistem"}'
 bodyType: application/json
-description: "Anonymous: first-run setup — creates the initial admin when no admin exists yet."
+description: Sign up and generate setup access token for initial admin user
 headers: []
 method: POST
-name: POST /signup/setup
+name: Sign up initial admin user
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/signup/setup
 urlParameters: []

@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_HHGDUQMDNG
+createdAt: 2026-09-14T09:48:05.961042
+updatedAt: 2026-09-14T09:48:05.961043
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_tw8Gigobcd
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '[{"key":"app.name","value":"Tango"}]'
+bodyType: application/json
+description: Update application configuration settings — deferred (appconfig module); body is a key/value list
+headers: []
+method: PUT
+name: Update application configurations
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/application-configuration
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

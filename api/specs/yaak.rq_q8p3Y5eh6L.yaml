@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_q8p3Y5eh6L
+createdAt: 2026-09-14T09:49:22.076235
+updatedAt: 2026-09-14T09:49:22.076235
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_sc8ridEHPT
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '{"value":"auditor"}'
+bodyType: application/json
+description: Update one custom claim for a user — tango-only single-claim CRUD extension
+headers: []
+method: PUT
+name: Update a single custom claim for a user
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/custom-claims/user/{{ userId }}/{{ claimId }}
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

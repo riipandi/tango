@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_4v7ngujKFK
 createdAt: 2026-09-14T00:56:33.669410
-updatedAt: 2026-09-14T01:06:00.751206
+updatedAt: 2026-09-14T09:46:19.409762
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GcYUAQ7Dkf
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: Trigger the outbound SCIM sync for one provider (needs a reachable provider endpoint)
+description: Trigger synchronization for a SCIM service provider
 headers: []
 method: POST
-name: Sync SCIM Provider
+name: Sync SCIM service provider
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/scim/service-provider/scim_service_provider_01m2epy76gewwv9trmbhwddr95/sync
 urlParameters: []

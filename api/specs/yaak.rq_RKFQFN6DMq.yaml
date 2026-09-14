@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_RKFQFN6DMq
+createdAt: 2026-09-14T09:49:05.587171
+updatedAt: 2026-09-14T09:49:05.587171
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_sc8ridEHPT
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '[{"key":"role","value":"admin"}]'
+bodyType: application/json
+description: Update or create custom claims for a specific user (full list replace)
+headers: []
+method: PUT
+name: Update custom claims for a user
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/custom-claims/user/{{ userId }}
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -2,31 +2,31 @@ type: http_request
 model: http_request
 id: rq_dJMJNXwrHd
 createdAt: 2026-09-13T19:24:17.683962
-updatedAt: 2026-09-13T19:24:17.683963
+updatedAt: 2026-09-14T09:43:34.148107
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_LY5TXMhFfG
+folderId: fl_wq663t6sTL
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/x-www-form-urlencoded
   form:
-    - enabled: true
-      name: grant_type
-      value: client_credentials
-    - enabled: true
-      name: client_id
-      value: oidc_client_01m2e2qcw2e9n9556z8bnpmnc4
-    - enabled: true
-      name: client_secret
-      value: REPLACE
-    - enabled: true
-      name: resource
-      value: https://api.example.com
+  - enabled: true
+    name: grant_type
+    value: client_credentials
+  - enabled: true
+    name: client_id
+    value: oidc_client_01m2e2qcw2e9n9556z8bnpmnc4
+  - enabled: true
+    name: client_secret
+    value: REPLACE
+  - enabled: true
+    name: resource
+    value: https://api.example.com
 bodyType: null
-description: RFC 8707 resource token request
+description: OAuth token request with an RFC 8707 resource indicator — tango extension, not in the upstream swagger paths
 headers: []
 method: POST
-name: Token with Resource
+name: Issue token with resource
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/oidc/token
 urlParameters: []

@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_hiY9LMJzKe
+createdAt: 2026-09-14T09:51:29.346085
+updatedAt: 2026-09-14T09:51:29.346086
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_hQjdk2nbAg
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '{"user_ids":[]}'
+bodyType: application/json
+description: Update the list of users belonging to a specific user group
+headers: []
+method: PUT
+name: Update users in a group
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/user-groups/{{ userGroupId }}/users
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

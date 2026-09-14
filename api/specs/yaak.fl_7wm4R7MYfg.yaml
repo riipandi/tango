@@ -2,15 +2,15 @@ type: folder
 model: folder
 id: fl_7wm4R7MYfg
 createdAt: 2026-09-13T05:45:28.916526
-updatedAt: 2026-09-13T05:45:28.916526
+updatedAt: 2026-09-14T09:41:21.459108
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
-description: "Upstream tag: Audit Logs — /api/audit-logs listing + filters (admin only)"
+description: 'Upstream tag: Audit Logs — /api/audit-logs listing + filters (admin only)'
 headers: []
 name: Audit Logs
-sortPriority: 0.0
+sortPriority: 500.0
 settingSendCookies:
   enabled: false
   value: true

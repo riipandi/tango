@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_HZUGpajEUj
 createdAt: 2026-09-14T00:55:50.402877
-updatedAt: 2026-09-14T01:01:18.775384
+updatedAt: 2026-09-14T09:46:08.390412
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GcYUAQ7Dkf
 authentication: {}
@@ -15,10 +15,10 @@ body:
       "oidc_client_id": "oidc_client_01m2epws35e6m9w82rrnsf4pqq"
     }
 bodyType: application/json
-description: ''
+description: Create a new SCIM service provider
 headers: []
 method: POST
-name: Create SCIM Service Provider
+name: Create SCIM service provider
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/scim/service-provider
 urlParameters: []

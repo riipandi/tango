@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_SR9Hay5sx2
 createdAt: 2026-09-13T16:11:52.758749
-updatedAt: 2026-09-13T16:11:52.758749
+updatedAt: 2026-09-14T09:44:02.503896
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_sxJ7kPDHpG
+folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: "Admin: delete a signup token. 204 on success."
+description: Delete a signup token by ID
 headers: []
 method: DELETE
-name: DELETE /signup-tokens/{id}
+name: Delete signup token
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/signup-tokens/signup_token_01m0000000000000000000000
 urlParameters: []

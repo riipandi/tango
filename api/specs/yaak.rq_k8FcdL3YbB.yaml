@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_k8FcdL3YbB
 createdAt: 2026-09-14T00:55:04.775777
-updatedAt: 2026-09-14T00:55:17.445498
+updatedAt: 2026-09-14T09:45:15.213444
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_3VCPmqfLP6
 authentication: {}
@@ -14,10 +14,10 @@ body:
     name: file
     value: favicon.ico
 bodyType: multipart/form-data
-description: ''
+description: Update the application favicon
 headers: []
 method: PUT
-name: Update Favicon
+name: Update favicon
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/application-images/favicon
 urlParameters: []

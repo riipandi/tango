@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_rXo5WJp9J6
 createdAt: 2026-09-13T19:23:45.436032
-updatedAt: 2026-09-13T19:25:58.138553
+updatedAt: 2026-09-14T09:44:51.041086
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -11,10 +11,10 @@ body:
   bodyType: application/json
   text: '{"permissions":[{"key":"read","name":"Read"},{"key":"write","name":"Write"}]}'
 bodyType: null
-description: ""
+description: Replace the full set of permissions for an API
 headers: []
 method: PUT
-name: Update API Permissions
+name: Update API permissions
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/permissions
 urlParameters: []

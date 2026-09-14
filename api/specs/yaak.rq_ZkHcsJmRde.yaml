@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_ZkHcsJmRde
+createdAt: 2026-09-14T09:50:52.281478
+updatedAt: 2026-09-14T09:50:52.281479
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_GfrmzYcuVx
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Revoke the authorization for a specific OIDC client for the current user
+headers: []
+method: DELETE
+name: Revoke authorization for an OIDC client
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/oidc/users/me/authorized-clients/{{ clientId }}
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

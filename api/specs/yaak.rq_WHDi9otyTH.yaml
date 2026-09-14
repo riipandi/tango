@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_WHDi9otyTH
 createdAt: 2026-09-13T16:09:34.699095
-updatedAt: 2026-09-13T16:09:34.699095
+updatedAt: 2026-09-14T09:46:51.358685
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: "Admin: mint a one-time access token for a user; the raw token is returned once (201)."
+description: Generate a one-time access token for a specific user (admin only)
 headers: []
 method: POST
-name: POST /users/{id}/one-time-access-token
+name: Create one-time access token for user (admin)
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users/user_01m2dd47arf4e9g6qd0r85b5rz/one-time-access-token
 urlParameters: []

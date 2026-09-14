@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_7fUC8jidvU
 createdAt: 2026-09-14T00:54:14.784900
-updatedAt: 2026-09-14T00:54:14.784901
+updatedAt: 2026-09-14T09:43:08.887311
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: Storage endpoints (phase 8) — sqlite-warning is upstream-specific, likely never ported
 headers: []
 name: Storage
-sortPriority: 0.0
+sortPriority: 1100.0
 settingSendCookies:
   enabled: false
   value: true

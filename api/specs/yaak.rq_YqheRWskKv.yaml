@@ -2,17 +2,17 @@ type: http_request
 model: http_request
 id: rq_YqheRWskKv
 createdAt: 2026-09-12T06:27:47.763631
-updatedAt: 2026-09-13T06:13:52.045701
+updatedAt: 2026-09-14T09:43:44.347423
 workspaceId: wk_kBiMYTkhPP
-folderId: null
+folderId: fl_RCex2QKoSF
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ""
+description: Responds with a successful status code to healthcheck requests
 headers: []
 method: GET
-name: System Health Check
+name: Responds to healthchecks
 sortPriority: -1789194467762.0
 url: ${[ apiBaseURL ]}/api/healthz
 urlParameters: []
