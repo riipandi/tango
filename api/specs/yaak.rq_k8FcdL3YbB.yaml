@@ -1,0 +1,41 @@
+type: http_request
+model: http_request
+id: rq_k8FcdL3YbB
+createdAt: 2026-09-14T00:55:04.775777
+updatedAt: 2026-09-14T00:55:17.445498
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_3VCPmqfLP6
+authentication: {}
+authenticationType: null
+body:
+  form:
+  - enabled: true
+    file: /Users/ariss/Developer/github.com/riipandi/tango/web/output/images/favicon.ico
+    name: file
+    value: favicon.ico
+bodyType: multipart/form-data
+description: ''
+headers: []
+method: PUT
+name: Update Favicon
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/application-images/favicon
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

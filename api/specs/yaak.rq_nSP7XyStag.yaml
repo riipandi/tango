@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /api/users/me
 sortPriority: 0.0
-url: http://localhost:3080/api/users/me
+url: ${[ apiBaseURL ]}/api/users/me
 urlParameters: []
 settingSendCookies:
   enabled: false

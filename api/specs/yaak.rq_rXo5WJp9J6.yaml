@@ -16,7 +16,7 @@ headers: []
 method: PUT
 name: Update API Permissions
 sortPriority: 0.0
-url: http://localhost:3080/api/apis/{{ apiId }}/permissions
+url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/permissions
 urlParameters: []
 settingSendCookies:
   enabled: false

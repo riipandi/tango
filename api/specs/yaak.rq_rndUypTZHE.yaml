@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /.well-known/oauth-authorization-server
 sortPriority: 0.0
-url: http://localhost:3080/.well-known/oauth-authorization-server
+url: ${[ apiBaseURL ]}/.well-known/oauth-authorization-server
 urlParameters: []
 settingSendCookies:
   enabled: false

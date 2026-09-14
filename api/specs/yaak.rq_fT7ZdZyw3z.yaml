@@ -16,7 +16,7 @@ headers: []
 method: POST
 name: POST /auth/sign-in
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/auth/sign-in
+url: ${[ apiBaseURL ]}/api/auth/sign-in
 urlParameters: []
 settingSendCookies:
   enabled: false

@@ -14,7 +14,7 @@ headers: []
 method: DELETE
 name: Revoke API Key
 sortPriority: 0.0
-url: http://localhost:3080/api/api-keys/{{ apiKeyId }}
+url: ${[ apiBaseURL ]}/api/api-keys/{{ apiKeyId }}
 urlParameters: []
 settingSendCookies:
   enabled: false

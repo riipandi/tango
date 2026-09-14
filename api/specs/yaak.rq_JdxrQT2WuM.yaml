@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /users/{id}/webauthn-credentials
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/users/user_01m2dd47arf4e9g6qd0r85b5rz/webauthn-credentials
+url: ${[ apiBaseURL ]}/api/users/user_01m2dd47arf4e9g6qd0r85b5rz/webauthn-credentials
 urlParameters: []
 settingSendCookies:
   enabled: false

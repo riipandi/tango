@@ -16,7 +16,7 @@ headers: []
 method: POST
 name: POST /device-login/verification/decision
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/device-login/verification/decision
+url: ${[ apiBaseURL ]}/api/device-login/verification/decision
 urlParameters: []
 settingSendCookies:
   enabled: false

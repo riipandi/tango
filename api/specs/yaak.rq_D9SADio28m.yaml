@@ -16,7 +16,7 @@ headers: []
 method: POST
 name: Create API Key
 sortPriority: 0.0
-url: http://localhost:3080/api/api-keys
+url: ${[ apiBaseURL ]}/api/api-keys
 urlParameters: []
 settingSendCookies:
   enabled: false

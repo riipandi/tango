@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: List APIs
 sortPriority: 0.0
-url: http://localhost:3080/api/apis
+url: ${[ apiBaseURL ]}/api/apis
 urlParameters: []
 settingSendCookies:
   enabled: false

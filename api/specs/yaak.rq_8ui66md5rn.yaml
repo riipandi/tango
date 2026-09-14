@@ -16,7 +16,7 @@ headers: []
 method: POST
 name: POST /signup
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/signup
+url: ${[ apiBaseURL ]}/api/signup
 urlParameters: []
 settingSendCookies:
   enabled: false

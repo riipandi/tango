@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /api/version/latest
 sortPriority: 0.0
-url: http://localhost:3080/api/version/latest
+url: ${[ apiBaseURL ]}/api/version/latest
 urlParameters: []
 settingSendCookies:
   enabled: false

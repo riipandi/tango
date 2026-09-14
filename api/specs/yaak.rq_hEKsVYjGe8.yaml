@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: List API Keys
 sortPriority: 0.0
-url: http://localhost:3080/api/api-keys
+url: ${[ apiBaseURL ]}/api/api-keys
 urlParameters: []
 settingSendCookies:
   enabled: false

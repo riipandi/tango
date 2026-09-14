@@ -40,7 +40,6 @@ services:
     ports: ["5432:5432"]
     volumes:
       - ".storage/pgsql_data:/var/lib/postgresql/18/docker:rw"
-      # glauth LDAP seed (run by the post_start hook below)
       - "./deploy/glauth/seed.sql:/seed/glauth-seed.sql:ro"
     environment:
       POSTGRES_DB: postgres
@@ -54,14 +53,9 @@ services:
     mem_limit: 512m # set memory limit
     cpus: 1.0 # set CPUs limit
     post_start:
-      # Config [[users]]/[[groups]] are ignored by the glauth postgres
-      # plugin backend — seed the directory via SQL instead (idempotent).
-      # Runs here because the glauth distroless image has no psql. The
-      # hook can fire before the socket accepts connections, so retry.
-      - command: >-
-          sh -c "for i in 1 2 3 4 5 6 7 8 9 10; do
-          PGPASSWORD=securedb psql -U postgres -d glauth
-          -f /seed/glauth-seed.sql && break || sleep 1; done"
+      # Config [[users]]/[[groups]] are ignored by the glauth postgres plugin backend — seed the directory via SQL instead (idempotent).
+      # Runs here because the glauth distroless image has no psql. The hook can fire before the socket accepts connections, so retry.
+      - command: sh -c "for i in 1 2 3 4 5 6 7 8 9 10; do PGPASSWORD=securedb psql -U postgres -d glauth -f /seed/glauth-seed.sql && break || sleep 1; done"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 3s
@@ -174,7 +168,6 @@ services:
 
   glauth:
     <<: *common
-    # plugins image bundles postgres.so / mysql.so / sqlite.so backends
     image: glauth/glauth-plugins:${GLAUTH_VERSION:-v2.5.2}
     hostname: ldap
     ports: ["3893:3893", "5555:5555"]
@@ -185,8 +178,6 @@ services:
     mem_limit: 128m # set memory limit
     cpus: 0.5 # set CPUs limit
     healthcheck:
-      # distroless image: no nc/curl — use the shell glob trick to test
-      # the config is readable and the binary runs its config check
       test: ["CMD", "/app/glauth", "--check-config", "-c", "/app/config/config.cfg"]
       interval: 30s
       timeout: 5s

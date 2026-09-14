@@ -14,7 +14,7 @@ headers: []
 method: DELETE
 name: DELETE /signup-tokens/{id}
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/signup-tokens/signup_token_01m0000000000000000000000
+url: ${[ apiBaseURL ]}/api/signup-tokens/signup_token_01m0000000000000000000000
 urlParameters: []
 settingSendCookies:
   enabled: false

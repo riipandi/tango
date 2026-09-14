@@ -16,7 +16,7 @@ headers: []
 method: PUT
 name: Update Client Grant
 sortPriority: 0.0
-url: http://localhost:3080/api/apis/{{ apiId }}/clients/{{ clientId }}
+url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/clients/{{ clientId }}
 urlParameters: []
 settingSendCookies:
   enabled: false

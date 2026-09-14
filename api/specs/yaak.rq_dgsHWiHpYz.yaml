@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /signup-tokens
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/signup-tokens
+url: ${[ apiBaseURL ]}/api/signup-tokens
 urlParameters: []
 settingSendCookies:
   enabled: false

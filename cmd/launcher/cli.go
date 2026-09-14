@@ -45,6 +45,7 @@ type CLI struct {
 	Serve   ServeCmd   `cmd:"" help:"Start the application server"`
 	DB      DBCmd      `cmd:"" help:"Database backup, restore, and migration commands"`
 	Secrets SecretsCmd `cmd:"" help:"Generate application secrets"`
+	Setup   SetupCmd   `cmd:"" help:"Bootstrap the first admin account (fresh database only)"`
 	Health  HealthCmd  `cmd:"" help:"Check application health" aliases:"hc"`
 }
 

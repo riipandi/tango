@@ -1,0 +1,34 @@
+type: folder
+model: folder
+id: fl_tw8Gigobcd
+createdAt: 2026-09-14T00:53:28.690067
+updatedAt: 2026-09-14T00:53:28.690067
+workspaceId: wk_kBiMYTkhPP
+folderId: null
+authentication: {}
+authenticationType: null
+description: 'Application configuration endpoints (phase 8): public/all config, sync-ldap, test-email'
+headers: []
+name: Application Configuration
+sortPriority: 0.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /api/audit-logs/all
 sortPriority: 0.0
-url: http://localhost:3080/api/audit-logs/all
+url: ${[ apiBaseURL ]}/api/audit-logs/all
 urlParameters: []
 settingSendCookies:
   enabled: false

@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_xVZftuCJKL
+createdAt: 2026-09-14T00:57:10.460483
+updatedAt: 2026-09-14T01:06:28.681585
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_GcYUAQ7Dkf
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Delete a SCIM service provider
+headers: []
+method: DELETE
+name: Delete SCIM Provider
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/scim/service-provider/scim_service_provider_01m2epy76gewwv9trmbhwddr95
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

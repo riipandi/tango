@@ -18,7 +18,7 @@ headers:
 method: GET
 name: Users via X-API-KEY
 sortPriority: 0.0
-url: http://localhost:3080/api/users
+url: ${[ apiBaseURL ]}/api/users
 urlParameters: []
 settingSendCookies:
   enabled: false

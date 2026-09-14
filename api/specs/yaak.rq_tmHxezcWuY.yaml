@@ -14,7 +14,7 @@ headers: []
 method: POST
 name: POST /api/oidc/introspect
 sortPriority: 0.0
-url: http://localhost:3080/api/oidc/introspect
+url: ${[ apiBaseURL ]}/api/oidc/introspect
 urlParameters: []
 settingSendCookies:
   enabled: false

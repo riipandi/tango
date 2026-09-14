@@ -16,7 +16,7 @@ headers: []
 method: POST
 name: POST /one-time-access-email
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/one-time-access-email
+url: ${[ apiBaseURL ]}/api/one-time-access-email
 urlParameters: []
 settingSendCookies:
   enabled: false

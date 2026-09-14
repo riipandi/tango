@@ -39,6 +39,7 @@ webhooks with signed payloads; recurring jobs have a home.
 
 ## Validation
 
+- Use <https://webhooktest.net> via MCP, bucket ID for test: `01a09d0c-2abc-70ca-979b-fff00307bd4f`
 - Webhook receiver test asserts signature validity and retry schedule.
 - Three standard suites + lint + gofmt clean.
 

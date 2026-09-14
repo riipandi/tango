@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /.well-known/openid-configuration
 sortPriority: 0.0
-url: http://localhost:3080/.well-known/openid-configuration
+url: ${[ apiBaseURL ]}/.well-known/openid-configuration
 urlParameters: []
 settingSendCookies:
   enabled: false

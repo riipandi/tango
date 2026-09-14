@@ -18,7 +18,7 @@ headers:
 method: GET
 name: GET /api/oidc/userinfo
 sortPriority: 0.0
-url: http://localhost:3080/api/oidc/userinfo
+url: ${[ apiBaseURL ]}/api/oidc/userinfo
 urlParameters: []
 settingSendCookies:
   enabled: false

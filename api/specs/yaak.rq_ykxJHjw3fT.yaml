@@ -16,7 +16,7 @@ headers: []
 method: POST
 name: POST /device-login/requests
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/device-login/requests
+url: ${[ apiBaseURL ]}/api/device-login/requests
 urlParameters: []
 settingSendCookies:
   enabled: false

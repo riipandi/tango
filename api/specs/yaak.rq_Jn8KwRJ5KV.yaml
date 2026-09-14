@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /.well-known/jwks.json
 sortPriority: 0.0
-url: http://localhost:3080/.well-known/jwks.json
+url: ${[ apiBaseURL ]}/.well-known/jwks.json
 urlParameters: []
 settingSendCookies:
   enabled: false

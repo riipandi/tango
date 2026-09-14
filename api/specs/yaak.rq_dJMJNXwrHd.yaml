@@ -28,7 +28,7 @@ headers: []
 method: POST
 name: Token with Resource
 sortPriority: 0.0
-url: http://localhost:3080/api/oidc/token
+url: ${[ apiBaseURL ]}/api/oidc/token
 urlParameters: []
 settingSendCookies:
   enabled: false

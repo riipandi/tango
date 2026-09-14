@@ -17,8 +17,7 @@ import (
 const (
 	JWKSPath   = "/.well-known/jwks.json"
 	ConfigPath = "/.well-known/openid-configuration"
-	// OAuthServerPath is the RFC 8414 authorization-server metadata
-	// mirror of the OIDC discovery document.
+	// OAuthServerPath is the RFC 8414 authorization-server metadata mirror of the OIDC discovery document.
 	OAuthServerPath = "/.well-known/oauth-authorization-server"
 
 	jwksCacheControl = "public, max-age=300, must-revalidate"

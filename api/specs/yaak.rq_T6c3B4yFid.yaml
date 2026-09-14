@@ -16,7 +16,7 @@ headers: []
 method: POST
 name: POST /users/me/verify-email
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/users/me/verify-email
+url: ${[ apiBaseURL ]}/api/users/me/verify-email
 urlParameters: []
 settingSendCookies:
   enabled: false

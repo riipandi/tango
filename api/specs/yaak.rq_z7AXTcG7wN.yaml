@@ -14,7 +14,7 @@ headers: []
 method: POST
 name: POST /device-login/requests/{id}/exchange
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/device-login/requests/01a00000-0000-0000-0000-000000000000/exchange
+url: ${[ apiBaseURL ]}/api/device-login/requests/01a00000-0000-0000-0000-000000000000/exchange
 urlParameters: []
 settingSendCookies:
   enabled: false

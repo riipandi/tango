@@ -14,7 +14,7 @@ headers: []
 method: POST
 name: POST /one-time-access-token/{token}
 sortPriority: 0.0
-url: http://127.0.0.1:3080/api/one-time-access-token/REPLACE_RAW_TOKEN
+url: ${[ apiBaseURL ]}/api/one-time-access-token/REPLACE_RAW_TOKEN
 urlParameters: []
 settingSendCookies:
   enabled: false

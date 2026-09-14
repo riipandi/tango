@@ -14,7 +14,7 @@ headers: []
 method: GET
 name: GET /api/oidc/clients
 sortPriority: 0.0
-url: http://localhost:3080/api/oidc/clients
+url: ${[ apiBaseURL ]}/api/oidc/clients
 urlParameters: []
 settingSendCookies:
   enabled: false
