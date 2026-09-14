@@ -127,9 +127,11 @@ func New(deps Deps) *kernel.Registry {
 	reg.Register(webhooks)
 	events.Attach(webhooks)
 
-	// Application configuration: the test-email slice rides the phase 7
-	// mail queue; the settings CRUD stays with a later pass.
-	appconfigModule := appconfig.New(deps.Jobs).WithAdminGuard(adminGuard)
+	// Application configuration: settings CRUD (phase 9B) plus the
+	// test-email slice riding the phase 7 mail queue.
+	appconfigModule := appconfig.New(deps.Jobs).
+		WithStore(appconfig.NewPostgresStore(deps.DB)).
+		WithAdminGuard(adminGuard)
 	reg.Register(appconfigModule)
 
 	// Identity provider (OIDC, SCIM, discovery) — optional surface
