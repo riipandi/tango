@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: Get user profile picture
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/users/{{ userId }}/profile-picture.png
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/users/:userId/profile-picture.png
+urlParameters:
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: wh189mybtk
 settingSendCookies:
   enabled: false
   value: true

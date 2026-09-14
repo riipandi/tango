@@ -19,8 +19,16 @@ headers: []
 method: PUT
 name: Update a single custom claim for a user
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/custom-claims/user/{{ userId }}/{{ claimId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/custom-claims/user/:userId/:claimId
+urlParameters:
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: qslxcexhph
+- enabled: true
+  name: ':claimId'
+  value: 'dummy'
+  id: vjsfw7ou76
 settingSendCookies:
   enabled: false
   value: true

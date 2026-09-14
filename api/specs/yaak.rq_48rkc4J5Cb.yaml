@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: List authorized clients for a user
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/users/{{ userId }}/authorized-clients
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/users/:userId/authorized-clients
+urlParameters:
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: sgodkbzjo6
 settingSendCookies:
   enabled: false
   value: true

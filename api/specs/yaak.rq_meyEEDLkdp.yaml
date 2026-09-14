@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_meyEEDLkdp
 createdAt: 2026-09-14T09:51:38.869768
-updatedAt: 2026-09-14T09:51:38.869769
+updatedAt: 2026-09-14T10:13:39.998167
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: Get user by ID
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/users/{{ userId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/users/:userId
+urlParameters:
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: NY7Aaakavz
 settingSendCookies:
   enabled: false
   value: true

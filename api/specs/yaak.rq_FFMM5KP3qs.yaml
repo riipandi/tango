@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: Get OIDC client
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: re4ci80iyx
 settingSendCookies:
   enabled: false
   value: true

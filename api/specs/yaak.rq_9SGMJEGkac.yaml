@@ -13,7 +13,7 @@ body:
     {
       "endpoint": "https://scim.example.com/v2",
       "token": "demo-token",
-      "oidc_client_id": "{{ clientId }}"
+      "oidc_client_id": "REPLACE_CLIENT_ID"
     }
 bodyType: application/json
 description: Update an existing SCIM service provider
@@ -21,8 +21,12 @@ headers: []
 method: PUT
 name: Update SCIM service provider
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/scim/service-provider/{{ scimProviderId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/scim/service-provider/:scimProviderId
+urlParameters:
+- enabled: true
+  name: ':scimProviderId'
+  value: 'dummy'
+  id: p152pi5odg
 settingSendCookies:
   enabled: false
   value: true

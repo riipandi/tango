@@ -19,8 +19,12 @@ headers: []
 method: PUT
 name: Update user profile picture
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/users/{{ userId }}/profile-picture
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/users/:userId/profile-picture
+urlParameters:
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: ny2srztxor
 settingSendCookies:
   enabled: false
   value: true

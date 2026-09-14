@@ -18,8 +18,12 @@ headers:
 method: POST
 name: Exchange device login request
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/device-login/requests/01a00000-0000-0000-0000-000000000000/exchange
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/device-login/requests/:id/exchange
+urlParameters:
+- enabled: true
+  name: ':id'
+  value: 'dummy'
+  id: l83g0a99dx
 settingSendCookies:
   enabled: false
   value: true

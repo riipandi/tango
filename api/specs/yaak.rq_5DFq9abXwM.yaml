@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: List users in a group
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/user-groups/{{ userGroupId }}/users
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/user-groups/:userGroupId/users
+urlParameters:
+- enabled: true
+  name: ':userGroupId'
+  value: 'dummy'
+  id: pjlb07b4be
 settingSendCookies:
   enabled: false
   value: true

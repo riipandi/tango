@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: List user passkeys
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/users/user_01m2dd47arf4e9g6qd0r85b5rz/webauthn-credentials
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/users/:id/webauthn-credentials
+urlParameters:
+- enabled: true
+  name: ':id'
+  value: 'dummy'
+  id: calsrirvcl
 settingSendCookies:
   enabled: false
   value: true

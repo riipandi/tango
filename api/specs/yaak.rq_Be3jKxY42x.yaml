@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: List webhook logs for a webhook
 sortPriority: 7000.0
-url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}/logs
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/webhooks/:webhookId/logs
+urlParameters:
+- enabled: true
+  name: ':webhookId'
+  value: 'dummy'
+  id: uh1yyn99vi
 settingSendCookies:
   enabled: false
   value: true

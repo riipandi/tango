@@ -14,8 +14,12 @@ headers: []
 method: POST
 name: Send test webhook
 sortPriority: 6000.0
-url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}/test
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/webhooks/:webhookId/test
+urlParameters:
+- enabled: true
+  name: ':webhookId'
+  value: 'dummy'
+  id: ryxzy503h7
 settingSendCookies:
   enabled: false
   value: true

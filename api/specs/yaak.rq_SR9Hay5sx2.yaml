@@ -14,8 +14,12 @@ headers: []
 method: DELETE
 name: Delete signup token
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/signup-tokens/signup_token_01m0000000000000000000000
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/signup-tokens/:id
+urlParameters:
+- enabled: true
+  name: ':id'
+  value: 'dummy'
+  id: i8l00evp6n
 settingSendCookies:
   enabled: false
   value: true

@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: Get webhook
 sortPriority: 1000.0
-url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/webhooks/:webhookId
+urlParameters:
+- enabled: true
+  name: ':webhookId'
+  value: 'dummy'
+  id: f7kd58npn5
 settingSendCookies:
   enabled: false
   value: true

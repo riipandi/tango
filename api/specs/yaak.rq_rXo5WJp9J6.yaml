@@ -28,8 +28,12 @@ headers: []
 method: PUT
 name: Update API permissions
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/permissions
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/apis/:apiId/permissions
+urlParameters:
+- enabled: true
+  name: ':apiId'
+  value: 'dummy'
+  id: y8augwnzfg
 settingSendCookies:
   enabled: false
   value: true

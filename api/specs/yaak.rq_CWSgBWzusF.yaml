@@ -19,8 +19,12 @@ headers: []
 method: POST
 name: Update client logo
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}/logo
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/logo
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: la9f1uf30m
 settingSendCookies:
   enabled: false
   value: true

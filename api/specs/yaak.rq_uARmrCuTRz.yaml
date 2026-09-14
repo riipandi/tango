@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: List clients with access to an API
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/clients
+url: ${[ apiBaseURL ]}/api/apis/:apiId/clients
 urlParameters:
+- enabled: true
+  name: ':apiId'
+  value: 'dummy'
+  id: 5kt0dnso2q
 - enabled: true
   name: search
   value: ''

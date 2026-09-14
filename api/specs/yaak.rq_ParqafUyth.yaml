@@ -14,8 +14,12 @@ headers: []
 method: DELETE
 name: Revoke account session
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/account/sessions/{{ sessionId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/account/sessions/:sessionId
+urlParameters:
+- enabled: true
+  name: ':sessionId'
+  value: 'dummy'
+  id: tq8pasty6k
 settingSendCookies:
   enabled: false
   value: true

@@ -14,8 +14,16 @@ headers: []
 method: DELETE
 name: Revoke a client's access to an API
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/clients/{{ clientId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/apis/:apiId/clients/:clientId
+urlParameters:
+- enabled: true
+  name: ':apiId'
+  value: 'dummy'
+  id: jz7gm997it
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: jk4896zdxi
 settingSendCookies:
   enabled: false
   value: true

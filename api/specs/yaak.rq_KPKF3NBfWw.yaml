@@ -22,8 +22,12 @@ headers: []
 method: PUT
 name: Update user
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/users/{{ userId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/users/:userId
+urlParameters:
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: 6ths18d63v
 settingSendCookies:
   enabled: false
   value: true

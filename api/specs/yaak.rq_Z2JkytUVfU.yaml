@@ -14,8 +14,16 @@ headers: []
 method: DELETE
 name: Delete a custom claim for a user group
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/custom-claims/user-group/{{ userGroupId }}/{{ claimId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/custom-claims/user-group/:userGroupId/:claimId
+urlParameters:
+- enabled: true
+  name: ':userGroupId'
+  value: 'dummy'
+  id: 2plmpgj9py
+- enabled: true
+  name: ':claimId'
+  value: 'dummy'
+  id: 18mucihyl1
 settingSendCookies:
   enabled: false
   value: true

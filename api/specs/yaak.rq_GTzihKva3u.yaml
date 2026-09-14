@@ -14,8 +14,16 @@ headers: []
 method: DELETE
 name: Delete client secret
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}/secrets/{{ secretId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/secrets/:secretId
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: ucd55ji1au
+- enabled: true
+  name: ':secretId'
+  value: 'dummy'
+  id: hggiafpg7t
 settingSendCookies:
   enabled: false
   value: true

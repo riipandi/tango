@@ -20,8 +20,12 @@ headers: []
 method: PUT
 name: Update metadata document client access
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/cimd-access
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/apis/:apiId/cimd-access
+urlParameters:
+- enabled: true
+  name: ':apiId'
+  value: 'dummy'
+  id: hroj865ko2
 settingSendCookies:
   enabled: false
   value: true

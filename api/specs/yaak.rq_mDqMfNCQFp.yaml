@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: Get SCIM service provider
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/oidc_client_01m2epws35e6m9w82rrnsf4pqq/scim-service-provider
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:id/scim-service-provider
+urlParameters:
+- enabled: true
+  name: ':id'
+  value: 'dummy'
+  id: tkfy1g7qcg
 settingSendCookies:
   enabled: false
   value: true

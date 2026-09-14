@@ -20,8 +20,12 @@ headers: []
 method: POST
 name: Create client secret
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}/secrets
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/secrets
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: cz4a2n4m44
 settingSendCookies:
   enabled: false
   value: true

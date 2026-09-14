@@ -14,8 +14,12 @@ headers: []
 method: POST
 name: Refresh client metadata document
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}/refresh
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/refresh
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: kqq80klah9
 settingSendCookies:
   enabled: false
   value: true

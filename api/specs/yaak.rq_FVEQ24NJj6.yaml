@@ -14,8 +14,16 @@ headers: []
 method: GET
 name: Preview OIDC client data for user
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}/preview/{{ userId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/preview/:userId
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: n99wofasgw
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: eegvqy5026
 settingSendCookies:
   enabled: false
   value: true

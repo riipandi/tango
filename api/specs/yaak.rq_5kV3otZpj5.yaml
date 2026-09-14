@@ -14,8 +14,16 @@ headers: []
 method: DELETE
 name: Delete user passkey
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/users/user_01m2dd47arf4e9g6qd0r85b5rz/webauthn-credentials/cred_01m00000000000000000000000
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/users/:id/webauthn-credentials/:credentialId
+urlParameters:
+- enabled: true
+  name: ':id'
+  value: 'dummy'
+  id: 5tkobqk9ty
+- enabled: true
+  name: ':credentialId'
+  value: 'dummy'
+  id: y59gfyj7xv
 settingSendCookies:
   enabled: false
   value: true

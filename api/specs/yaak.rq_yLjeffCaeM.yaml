@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: List APIs a client may access
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/api-access/{{ clientId }}/apis
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/api-access/:clientId/apis
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: ine7e0uz26
 settingSendCookies:
   enabled: false
   value: true

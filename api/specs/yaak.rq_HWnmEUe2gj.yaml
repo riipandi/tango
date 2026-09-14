@@ -14,8 +14,12 @@ headers: []
 method: DELETE
 name: Delete user
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/users/{{ userId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/users/:userId
+urlParameters:
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: nqeicxaogn
 settingSendCookies:
   enabled: false
   value: true

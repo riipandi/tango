@@ -14,8 +14,12 @@ headers: []
 method: DELETE
 name: Delete OIDC client
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: v81hlbpg9z
 settingSendCookies:
   enabled: false
   value: true

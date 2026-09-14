@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: List custom claims for a user
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/custom-claims/user/{{ userId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/custom-claims/user/:userId
+urlParameters:
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: iztfczbueq
 settingSendCookies:
   enabled: false
   value: true

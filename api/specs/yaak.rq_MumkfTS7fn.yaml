@@ -26,8 +26,12 @@ headers: []
 method: PUT
 name: Update OIDC client
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: vvmptumznj
 settingSendCookies:
   enabled: false
   value: true

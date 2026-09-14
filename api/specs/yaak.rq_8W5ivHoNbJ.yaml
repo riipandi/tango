@@ -20,8 +20,12 @@ headers: []
 method: PUT
 name: Update webhook
 sortPriority: 3000.0
-url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/webhooks/:webhookId
+urlParameters:
+- enabled: true
+  name: ':webhookId'
+  value: 'dummy'
+  id: ewtaddya67
 settingSendCookies:
   enabled: false
   value: true

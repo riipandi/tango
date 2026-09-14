@@ -14,8 +14,12 @@ headers: []
 method: POST
 name: Request one-time access email (admin)
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/users/{{ userId }}/one-time-access-email
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/users/:userId/one-time-access-email
+urlParameters:
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: yge97bqdfe
 settingSendCookies:
   enabled: false
   value: true

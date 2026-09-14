@@ -19,8 +19,12 @@ headers: []
 method: PUT
 name: Update allowed OIDC clients
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/user-groups/{{ userGroupId }}/allowed-oidc-clients
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/user-groups/:userGroupId/allowed-oidc-clients
+urlParameters:
+- enabled: true
+  name: ':userGroupId'
+  value: 'dummy'
+  id: 6ql61mefr5
 settingSendCookies:
   enabled: false
   value: true

@@ -19,8 +19,12 @@ headers: []
 method: PUT
 name: Update users in a group
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/user-groups/{{ userGroupId }}/users
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/user-groups/:userGroupId/users
+urlParameters:
+- enabled: true
+  name: ':userGroupId'
+  value: 'dummy'
+  id: 1suk0w20pc
 settingSendCookies:
   enabled: false
   value: true

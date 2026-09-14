@@ -14,8 +14,12 @@ headers: []
 method: DELETE
 name: Delete user group
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/user-groups/{{ userGroupId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/user-groups/:userGroupId
+urlParameters:
+- enabled: true
+  name: ':userGroupId'
+  value: 'dummy'
+  id: s3940yie61
 settingSendCookies:
   enabled: false
   value: true

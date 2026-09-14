@@ -19,8 +19,12 @@ headers: []
 method: PUT
 name: Update API
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/apis/:apiId
+urlParameters:
+- enabled: true
+  name: ':apiId'
+  value: 'dummy'
+  id: t3geznasn7
 settingSendCookies:
   enabled: false
   value: true

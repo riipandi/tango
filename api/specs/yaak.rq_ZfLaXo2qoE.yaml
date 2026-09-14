@@ -20,8 +20,12 @@ headers: []
 method: POST
 name: Create custom claim for a user
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/custom-claims/user/{{ userId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/custom-claims/user/:userId
+urlParameters:
+- enabled: true
+  name: ':userId'
+  value: 'dummy'
+  id: 1dbp0tglbt
 settingSendCookies:
   enabled: false
   value: true

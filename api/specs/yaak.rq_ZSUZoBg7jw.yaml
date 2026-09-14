@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: List clients that can still be granted access to an API
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/assignable-clients
+url: ${[ apiBaseURL ]}/api/apis/:apiId/assignable-clients
 urlParameters:
+- enabled: true
+  name: ':apiId'
+  value: 'dummy'
+  id: y3aiwcqw9w
 - enabled: true
   name: search
   value: ''

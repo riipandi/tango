@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: Get client metadata
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}/meta
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/meta
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: 8dzphskqqg
 settingSendCookies:
   enabled: false
   value: true

@@ -14,8 +14,12 @@ headers: []
 method: DELETE
 name: Delete API
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/apis/:apiId
+urlParameters:
+- enabled: true
+  name: ':apiId'
+  value: 'dummy'
+  id: 641o02j9k5
 settingSendCookies:
   enabled: false
   value: true

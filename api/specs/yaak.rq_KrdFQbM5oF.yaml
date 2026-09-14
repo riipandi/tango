@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: Get user group by ID
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/user-groups/{{ userGroupId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/user-groups/:userGroupId
+urlParameters:
+- enabled: true
+  name: ':userGroupId'
+  value: 'dummy'
+  id: tnzwkb2qll
 settingSendCookies:
   enabled: false
   value: true

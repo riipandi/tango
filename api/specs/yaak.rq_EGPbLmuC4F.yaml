@@ -14,8 +14,12 @@ headers: []
 method: GET
 name: List client secrets
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/{{ clientId }}/secrets
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/secrets
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: l932k4koe7
 settingSendCookies:
   enabled: false
   value: true

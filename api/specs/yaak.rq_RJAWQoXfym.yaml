@@ -14,8 +14,12 @@ headers: []
 method: POST
 name: Rotate webhook secret
 sortPriority: 5000.0
-url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}/rotate-secret
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/webhooks/:webhookId/rotate-secret
+urlParameters:
+- enabled: true
+  name: ':webhookId'
+  value: 'dummy'
+  id: h26oo4nh5h
 settingSendCookies:
   enabled: false
   value: true

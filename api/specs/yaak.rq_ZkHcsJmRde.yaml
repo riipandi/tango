@@ -14,8 +14,12 @@ headers: []
 method: DELETE
 name: Revoke authorization for an OIDC client
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/users/me/authorized-clients/{{ clientId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/users/me/authorized-clients/:clientId
+urlParameters:
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: m46zrtw680
 settingSendCookies:
   enabled: false
   value: true

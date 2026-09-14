@@ -22,8 +22,16 @@ headers: []
 method: PUT
 name: Update a client's access to an API
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/apis/{{ apiId }}/clients/{{ clientId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/apis/:apiId/clients/:clientId
+urlParameters:
+- enabled: true
+  name: ':apiId'
+  value: 'dummy'
+  id: 3va7z3nfbk
+- enabled: true
+  name: ':clientId'
+  value: 'dummy'
+  id: frru06x808
 settingSendCookies:
   enabled: false
   value: true

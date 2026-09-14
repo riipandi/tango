@@ -14,8 +14,12 @@ headers: []
 method: DELETE
 name: Delete webhook
 sortPriority: 4000.0
-url: ${[ apiBaseURL ]}/api/webhooks/{{ webhookId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/webhooks/:webhookId
+urlParameters:
+- enabled: true
+  name: ':webhookId'
+  value: 'dummy'
+  id: 6vaxtbh79y
 settingSendCookies:
   enabled: false
   value: true

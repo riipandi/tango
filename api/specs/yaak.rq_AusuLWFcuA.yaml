@@ -14,8 +14,12 @@ headers: []
 method: DELETE
 name: Revoke API key
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/api-keys/{{ apiKeyId }}
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/api-keys/:apiKeyId
+urlParameters:
+- enabled: true
+  name: ':apiKeyId'
+  value: 'dummy'
+  id: 4y9z65mb4x
 settingSendCookies:
   enabled: false
   value: true
