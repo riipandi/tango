@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_FhUruzk95H
 createdAt: 2026-09-14T09:52:37.424703
-updatedAt: 2026-09-14T09:52:37.424704
+updatedAt: 2026-09-14T10:24:31.703982
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_owstPiB2PV
 authentication: {}
@@ -25,8 +25,12 @@ headers: []
 method: POST
 name: Finish passkey registration
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/webauthn/register/finish?session_id=REPLACE_SESSION_ID
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/webauthn/register/finish
+urlParameters:
+- enabled: true
+  name: session_id
+  value: dummy
+  id: null
 settingSendCookies:
   enabled: false
   value: true

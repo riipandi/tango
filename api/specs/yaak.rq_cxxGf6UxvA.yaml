@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_cxxGf6UxvA
 createdAt: 2026-09-14T09:52:45.895053
-updatedAt: 2026-09-14T09:52:45.895054
+updatedAt: 2026-09-14T10:24:36.659194
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_owstPiB2PV
 authentication: {}
@@ -27,8 +27,12 @@ headers: []
 method: POST
 name: Finish discoverable passkey login
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/webauthn/login/finish?session_id=REPLACE_SESSION_ID
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/webauthn/login/finish
+urlParameters:
+- enabled: true
+  name: session_id
+  value: dummy
+  id: null
 settingSendCookies:
   enabled: false
   value: true
