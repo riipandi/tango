@@ -11,7 +11,7 @@ body:
   bodyType: application/json
   text: |-
     {
-      "current_password": "Admin123!",
+      "current_password": "@dmin123",
       "new_password": "Admin456!"
     }
 bodyType: application/json

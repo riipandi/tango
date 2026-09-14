@@ -55,7 +55,7 @@ func TestSetupAdminFresh(t *testing.T) {
 	params := AdminParams{
 		Username: "admin" + stamp[len(stamp)-6:],
 		Email:    "admin+" + stamp + "@example.com",
-		Password: "Admin123!",
+		Password: "@dmin123",
 	}
 	id, err := SetupAdmin(ctx, db, params)
 	require.NoError(t, err)

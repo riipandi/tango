@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_2CWv5MApih
 createdAt: 2026-09-12T06:54:07.608088
-updatedAt: 2026-09-14T09:47:06.172468
+updatedAt: 2026-09-14T10:32:24.953541
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -10,7 +10,11 @@ authenticationType: null
 body: {}
 bodyType: null
 description: 'Get a paginated list of users with optional search and sorting — anonymous calls are rejected by the guard (tango: query + page/limit; upstream uses search + pagination[page])'
-headers: []
+headers:
+- enabled: false
+  name: X-API-KEY
+  value: 'dummy'
+  id: null
 method: GET
 name: List users (anonymous, guarded)
 sortPriority: 0.0
@@ -19,12 +23,15 @@ urlParameters:
 - enabled: true
   name: query
   value: ''
+  id: null
 - enabled: true
   name: page
   value: '1'
+  id: null
 - enabled: true
   name: limit
   value: '25'
+  id: null
 settingSendCookies:
   enabled: false
   value: true
