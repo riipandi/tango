@@ -1,7 +1,6 @@
 package customclaim
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -132,7 +131,7 @@ func (s *Service) createForUser(w http.ResponseWriter, r *http.Request) {
 
 	claim, err := s.CreateForUser(r.Context(), userID, UpsertParams{Key: req.Key, Value: req.Value})
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusCreated, claim)
@@ -153,7 +152,7 @@ func (s *Service) updateForUser(w http.ResponseWriter, r *http.Request) {
 
 	claim, err := s.UpdateValue(r.Context(), claimID, req.Value)
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, claim)
@@ -166,7 +165,7 @@ func (s *Service) deleteForUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.Delete(r.Context(), claimID); err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
@@ -204,7 +203,7 @@ func (s *Service) replaceForUser(w http.ResponseWriter, r *http.Request) {
 
 	claims, err := s.ReplaceForUser(r.Context(), userID, req.params())
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, claims)
@@ -226,7 +225,7 @@ func (s *Service) replaceForGroup(w http.ResponseWriter, r *http.Request) {
 
 	claims, err := s.ReplaceForGroup(r.Context(), groupID, req.params())
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, claims)
@@ -247,7 +246,7 @@ func (s *Service) createForGroup(w http.ResponseWriter, r *http.Request) {
 
 	claim, err := s.CreateForGroup(r.Context(), groupID, UpsertParams{Key: req.Key, Value: req.Value})
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusCreated, claim)
@@ -268,7 +267,7 @@ func (s *Service) updateForGroup(w http.ResponseWriter, r *http.Request) {
 
 	claim, err := s.UpdateValue(r.Context(), claimID, req.Value)
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, claim)
@@ -281,7 +280,7 @@ func (s *Service) deleteForGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.Delete(r.Context(), claimID); err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
@@ -290,16 +289,4 @@ func (s *Service) deleteForGroup(w http.ResponseWriter, r *http.Request) {
 func writeValidation(w http.ResponseWriter, r *http.Request, err error) {
 	responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
 		responder.WithError(validate.FieldErrors(err)))
-}
-
-// writeError maps module errors to the response envelope.
-func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	switch {
-	case errors.Is(err, ErrNotFound):
-		responder.NotFoundJSON(w, r)
-	case errors.Is(err, ErrDuplicate):
-		responder.Fail(w, r, http.StatusConflict, err.Error())
-	default:
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-	}
 }

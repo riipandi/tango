@@ -1,7 +1,6 @@
 package user
 
 import (
-	"errors"
 	"net/http"
 
 	jsonv2 "encoding/json/v2"
@@ -138,7 +137,7 @@ func (s *Service) getCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.GetByID(r.Context(), id)
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, u)
@@ -168,7 +167,7 @@ func (s *Service) updateCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.store.UpdateProfile(r.Context(), id, UpdateProfileParams(req))
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, u)
@@ -183,7 +182,7 @@ func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.Create(r.Context(), CreateParams(req))
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 
@@ -199,7 +198,7 @@ func (s *Service) getUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.GetByID(r.Context(), id)
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 
@@ -243,7 +242,7 @@ func (s *Service) updateUser(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.Update(r.Context(), id, AdminUpdateParams(req))
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, u)
@@ -258,23 +257,8 @@ func (s *Service) deleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Delete(r.Context(), id); err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
-}
-
-// writeError maps store/service errors to the response envelope:
-// validation 400, duplicates 409, missing 404, everything else 500.
-func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	switch {
-	case errors.Is(err, ErrInvalidUsername), errors.Is(err, ErrInvalidEmail):
-		responder.BadRequestJSON(w, r, err.Error())
-	case errors.Is(err, ErrDuplicate):
-		responder.Fail(w, r, http.StatusConflict, err.Error())
-	case errors.Is(err, ErrNotFound):
-		responder.NotFoundJSON(w, r)
-	default:
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-	}
 }

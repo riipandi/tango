@@ -15,6 +15,7 @@ import (
 
 	"go.jetify.com/typeid"
 
+	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
@@ -30,7 +31,6 @@ import (
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/webhook"
-	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/pkg/crypto"
 )
 

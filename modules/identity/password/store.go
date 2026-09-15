@@ -4,20 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/pkg/responder"
 )
 
 // ErrWeakPassword rejects new passwords shorter than the minimum.
-var ErrWeakPassword = errors.New("password: at least 8 characters required")
+var ErrWeakPassword = responder.NewError(http.StatusUnprocessableEntity, "password: at least 8 characters required")
 
 // ErrInvalidCredentials is returned for unknown identities and wrong
 // secrets alike, so responses never reveal which one failed.
-var ErrInvalidCredentials = errors.New("password: invalid credentials")
+var ErrInvalidCredentials = responder.NewError(http.StatusBadRequest, "password: invalid credentials")
 
 // ErrNoPassword is returned when the account has no credential row
 // (e.g. passkey-only accounts).

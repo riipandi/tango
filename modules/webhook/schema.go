@@ -11,6 +11,7 @@ package webhook
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
@@ -64,16 +65,16 @@ const (
 	maxPayloadBytes = 1 << 20
 )
 
-// Errors surfaced to handlers.
+// Errors surfaced to handlers; statuses live on the sentinels.
 var (
 	// ErrNotFound covers unknown endpoints and delivery logs.
-	ErrNotFound = errors.New("webhook: not found")
+	ErrNotFound = responder.NewError(http.StatusNotFound, "webhook: not found")
 	// ErrDuplicateName is a unique-constraint violation on name.
-	ErrDuplicateName = errors.New("webhook: name already exists")
+	ErrDuplicateName = responder.NewError(http.StatusConflict, "webhook: name already exists")
 	// ErrDisabled reports a delivery against a disabled endpoint.
-	ErrDisabled = errors.New("webhook: endpoint is disabled")
+	ErrDisabled = responder.NewError(http.StatusConflict, "webhook: endpoint is disabled")
 	// ErrTooLarge rejects an oversized event payload.
-	ErrTooLarge = errors.New("webhook: payload exceeds the size limit")
+	ErrTooLarge = responder.NewError(http.StatusRequestEntityTooLarge, "webhook: payload exceeds the size limit")
 )
 
 // Webhook is one registered endpoint.

@@ -14,11 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
-	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/testutils"
 )

@@ -1,7 +1,6 @@
 package apikey
 
 import (
-	"errors"
 	"net/http"
 	"time"
 
@@ -111,7 +110,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:   expiresAt,
 	})
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusCreated, keyResponse{APIKey: k, Token: token})
@@ -131,7 +130,7 @@ func (s *Service) revoke(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Revoke(r.Context(), userID, id); err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
@@ -165,7 +164,7 @@ func (s *Service) renew(w http.ResponseWriter, r *http.Request) {
 
 	k, token, err := s.Renew(r.Context(), userID, id, RenewParams{ExpiresAt: expiresAt})
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, keyResponse{APIKey: k, Token: token})
@@ -174,18 +173,4 @@ func (s *Service) renew(w http.ResponseWriter, r *http.Request) {
 // parseTime parses an RFC 3339 timestamp.
 func parseTime(raw string) (time.Time, error) {
 	return time.Parse(time.RFC3339, raw)
-}
-
-// writeError maps module errors to the response envelope.
-func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	switch {
-	case errors.Is(err, ErrNotFound):
-		responder.NotFoundJSON(w, r)
-	case errors.Is(err, ErrDuplicate):
-		responder.Fail(w, r, http.StatusConflict, err.Error())
-	case errors.Is(err, ErrNotExpired):
-		responder.Fail(w, r, http.StatusConflict, err.Error())
-	default:
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-	}
 }

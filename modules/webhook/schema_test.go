@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/riipandi/tango/pkg/responder"
 )
 
 func TestValidHeadersAcceptsOrdinaryHeaders(t *testing.T) {
@@ -143,7 +145,7 @@ func TestWriteErrorMapsDomainErrors(t *testing.T) {
 			w := newRecorder()
 			req := newRequest()
 
-			writeError(w, req, tc.err)
+			responder.WriteError(w, req, tc.err)
 			assert.Equal(t, tc.status, w.Code)
 		})
 	}
@@ -155,6 +157,6 @@ func TestWriteErrorMapsValidationErrors(t *testing.T) {
 	require.Error(t, err)
 
 	w := newRecorder()
-	writeError(w, newRequest(), err)
+	responder.WriteError(w, newRequest(), err)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 }

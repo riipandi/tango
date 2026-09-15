@@ -189,18 +189,12 @@ func (s *Service) revokeSession(w http.ResponseWriter, r *http.Request) {
 	responder.Success(w, r, http.StatusOK, map[string]any{"revoked": true})
 }
 
-// writeError maps module errors to the response envelope.
+// writeError keeps the account-specific wording for a wrong current
+// password; everything else goes through the shared mapping.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	switch {
-	case errors.Is(err, session.ErrNotFound):
-		responder.NotFoundJSON(w, r)
-	case errors.Is(err, password.ErrInvalidCredentials):
+	if errors.Is(err, password.ErrInvalidCredentials) {
 		responder.Fail(w, r, http.StatusBadRequest, "current password is incorrect")
-	case errors.Is(err, password.ErrWeakPassword):
-		responder.Fail(w, r, http.StatusUnprocessableEntity, err.Error())
-	case errors.Is(err, user.ErrNotFound):
-		responder.NotFoundJSON(w, r)
-	default:
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
 	}
+	responder.WriteError(w, r, err)
 }

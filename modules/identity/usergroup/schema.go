@@ -5,6 +5,7 @@ package usergroup
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -84,9 +85,9 @@ type ListParams struct {
 	responder.PaginationParams
 }
 
-// Errors surfaced by the store.
+// Errors surfaced by the store; statuses live on the sentinels.
 var (
-	ErrNotFound   = errors.New("user group not found")
-	ErrDuplicate  = errors.New("user group name already exists")
+	ErrNotFound   = responder.NewError(http.StatusNotFound, "user group not found")
+	ErrDuplicate  = responder.NewError(http.StatusConflict, "user group name already exists")
 	ErrInvalidIDs = errors.New("user group: unknown member ids")
 )

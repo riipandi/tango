@@ -5,7 +5,7 @@ package customclaim
 
 import (
 	"context"
-	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -14,6 +14,7 @@ import (
 
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/usergroup"
+	"github.com/riipandi/tango/pkg/responder"
 )
 
 // Typed IDs for the custom claim tables: UUIDv7 suffix, snake_case
@@ -60,10 +61,10 @@ func (p *UpsertParams) Validate() error {
 	)
 }
 
-// Errors surfaced by the store.
+// Errors surfaced by the store; statuses live on the sentinels.
 var (
-	ErrNotFound  = errors.New("custom claim not found")
-	ErrDuplicate = errors.New("custom claim already exists for this owner")
+	ErrNotFound  = responder.NewError(http.StatusNotFound, "custom claim not found")
+	ErrDuplicate = responder.NewError(http.StatusConflict, "custom claim already exists for this owner")
 )
 
 // Store persists custom claims scoped to users or groups.

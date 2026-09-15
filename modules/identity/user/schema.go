@@ -6,8 +6,8 @@ package user
 
 import (
 	"context"
-	"errors"
 	"io"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -120,16 +120,17 @@ type UpdateProfileParams struct {
 	Locale      *string
 }
 
-// Errors surfaced by stores and mapped to HTTP statuses by handlers.
+// Errors surfaced by stores and mapped to HTTP statuses by handlers;
+// statuses live on the sentinels (responder.WriteError reads them).
 var (
 	// ErrNotFound is returned when no user matches the ID.
-	ErrNotFound = errors.New("user not found")
+	ErrNotFound = responder.NewError(http.StatusNotFound, "user not found")
 	// ErrDuplicate is returned when username or email already exists.
-	ErrDuplicate = errors.New("username or email already exists")
+	ErrDuplicate = responder.NewError(http.StatusConflict, "username or email already exists")
 	// ErrInvalidUsername rejects usernames outside ^[a-zA-Z0-9_]{3,32}$.
-	ErrInvalidUsername = errors.New("username must be 3-32 characters: letters, digits, underscores")
+	ErrInvalidUsername = responder.NewError(http.StatusBadRequest, "username must be 3-32 characters: letters, digits, underscores")
 	// ErrInvalidEmail rejects emails missing a local part, domain, or TLD.
-	ErrInvalidEmail = errors.New("email is not a valid address")
+	ErrInvalidEmail = responder.NewError(http.StatusBadRequest, "email is not a valid address")
 )
 
 // UsernamePattern mirrors the database CHECK constraint; admin DTOs

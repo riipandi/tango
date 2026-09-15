@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -117,7 +116,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 
 	hook, err := m.service.Create(r.Context(), req)
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusCreated, hook)
@@ -132,7 +131,7 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 
 	hook, err := m.service.Get(r.Context(), id)
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, hook)
@@ -154,7 +153,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 
 	hook, err := m.service.Update(r.Context(), id, req)
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, hook)
@@ -168,7 +167,7 @@ func (m *Module) remove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := m.service.Delete(r.Context(), id); err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
@@ -183,7 +182,7 @@ func (m *Module) rotateSecret(w http.ResponseWriter, r *http.Request) {
 
 	secret, err := m.service.RotateSecret(r.Context(), id)
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]string{
@@ -227,7 +226,7 @@ func (m *Module) test(w http.ResponseWriter, r *http.Request) {
 		"source": "tango",
 	})
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusAccepted, map[string]any{
@@ -258,7 +257,7 @@ func (m *Module) writeLogs(w http.ResponseWriter, r *http.Request, id *WebhookID
 
 	logs, total, err := m.service.ListLogs(r.Context(), id, PageParams(params))
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, logs, responder.WithPaginationFrom(params, total))
@@ -282,23 +281,4 @@ func decodeOptionalBody(r *http.Request, dst any) error {
 		return nil
 	}
 	return validate.Request(r.Body, dst)
-}
-
-// writeError maps module errors onto the response envelope.
-func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	switch {
-	case errors.Is(err, ErrNotFound):
-		responder.NotFoundJSON(w, r)
-	case errors.Is(err, ErrDuplicateName):
-		responder.Fail(w, r, http.StatusConflict, err.Error())
-	case errors.Is(err, ErrDisabled):
-		responder.Fail(w, r, http.StatusConflict, err.Error())
-	case errors.Is(err, ErrTooLarge):
-		responder.Fail(w, r, http.StatusRequestEntityTooLarge, err.Error())
-	case validate.IsValidationError(err):
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(err)))
-	default:
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-	}
 }

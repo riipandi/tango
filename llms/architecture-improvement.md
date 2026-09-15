@@ -22,7 +22,7 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
 | Phase | File                                                        | Scope                                                                  | Status  | Updated    |
 | ----- | ----------------------------------------------------------- | ---------------------------------------------------------------------- | ------- | ---------- |
 | 1     | [arch-phase-01-mechanical-dedup.md](./arch-phase-01-mechanical-dedup.md) | Shared pgx helpers, ErrNoRows mapping, constant fixes, antree relocation | done    | 2026-09-15 |
-| 2     | [arch-phase-02-error-mapping.md](./arch-phase-02-error-mapping.md)       | Central error→HTTP mapping, remove per-handler `writeError` copies      | planned | 2026-09-15 |
+| 2     | [arch-phase-02-error-mapping.md](./arch-phase-02-error-mapping.md)       | Central error→HTTP mapping, remove per-handler `writeError` copies      | done    | 2026-09-15 |
 | 3     | [arch-phase-03-kernel-guards.md](./arch-phase-03-kernel-guards.md)       | `kernel.Guard` + `kernel.Authenticator`, remove guard option duplicates | planned | 2026-09-15 |
 | 4     | [arch-phase-04-module-layout.md](./arch-phase-04-module-layout.md)       | Standard module layout, settings mapping back into modules, slim registry | planned | 2026-09-15 |
 | 5     | [arch-phase-05-token-store.md](./arch-phase-05-token-store.md)           | Consolidate duplicated `auth_tokens` stores into one token package      | planned | 2026-09-15 |
@@ -43,3 +43,7 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
   relocated to `internal/`. Go gates green (default 572 pass, debug 35 pass, release 0 fail,
   golangci-lint 0 issues); JS-side `test:ui`/oxlint failures are pre-existing environment gaps
   (no api-client test files; `oxlint-tsgolint` undeclared).
+- 2026-09-15 Phase 2 done: `responder.StatusedError` + `WriteError`; 7 `writeError` copies
+  removed; 21 sentinels across 8 modules now carry their HTTP status. Live curl checks pass.
+  New finding for phase 3: the machine-auth mount on `/api/users` shadows the admin mount
+  (pre-existing, identical on baseline).

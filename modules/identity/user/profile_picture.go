@@ -66,7 +66,7 @@ func (s *Service) serveProfilePicture(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.store.GetByID(r.Context(), id)
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 
@@ -143,7 +143,7 @@ func (s *Service) updateProfilePicture(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.store.SetProfilePicturePath(r.Context(), target, &picturePath); err != nil {
 		_ = s.images.Delete(r.Context(), picturePath)
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -159,12 +159,12 @@ func (s *Service) resetProfilePicture(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.store.GetByID(r.Context(), target)
 	if err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 
 	if err := s.store.SetProfilePicturePath(r.Context(), target, nil); err != nil {
-		writeError(w, r, err)
+		responder.WriteError(w, r, err)
 		return
 	}
 	if u.ProfilePicturePath != nil {

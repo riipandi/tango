@@ -7,6 +7,7 @@ package apiaccess
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -121,12 +122,12 @@ type ListParams struct {
 	responder.PaginationParams
 }
 
-// Errors surfaced by the store.
+// Errors surfaced by the store; statuses live on the sentinels.
 var (
-	ErrNotFound       = errors.New("apiaccess: api not found")
-	ErrDuplicate      = errors.New("apiaccess: api resource already exists")
-	ErrUnknownClient  = errors.New("apiaccess: unknown oidc client")
-	ErrUnknownPerms   = errors.New("apiaccess: unknown permission ids")
+	ErrNotFound       = responder.NewError(http.StatusNotFound, "apiaccess: api not found")
+	ErrDuplicate      = responder.NewError(http.StatusConflict, "apiaccess: api resource already exists")
+	ErrUnknownClient  = responder.NewError(http.StatusUnprocessableEntity, "apiaccess: unknown oidc client")
+	ErrUnknownPerms   = responder.NewError(http.StatusUnprocessableEntity, "apiaccess: unknown permission ids")
 	ErrInvalidSubject = errors.New("apiaccess: invalid grant subject")
 )
 

@@ -6,6 +6,7 @@ package apikey
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -72,11 +73,12 @@ type ListParams struct {
 	responder.PaginationParams
 }
 
-// Errors surfaced by the store and service.
+// Errors surfaced by the store and service; statuses live on the
+// sentinels.
 var (
-	ErrNotFound     = errors.New("apikey: key not found")
-	ErrDuplicate    = errors.New("apikey: key name already exists")
-	ErrNotExpired   = errors.New("apikey: key is not expired yet")
+	ErrNotFound     = responder.NewError(http.StatusNotFound, "apikey: key not found")
+	ErrDuplicate    = responder.NewError(http.StatusConflict, "apikey: key name already exists")
+	ErrNotExpired   = responder.NewError(http.StatusConflict, "apikey: key is not expired yet")
 	ErrInvalidCreds = errors.New("apikey: key is invalid or expired")
 )
 

@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
-	"github.com/riipandi/tango/internal/antree"
 )
 
 // Mailer is the delivery contract the email queue needs; internal/mailer
