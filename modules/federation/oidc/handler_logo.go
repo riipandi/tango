@@ -15,7 +15,7 @@ import (
 )
 
 // maxLogoUpload bounds one client-logo upload.
-const maxLogoUpload = 5 << 20 // 5 MiB, matches the appimage cap
+const maxLogoUpload = 5 << 20 // 5 MiB, matches the profile-picture cap
 
 // logoMime maps allowed logo extensions to MIME types.
 var logoMime = map[string]string{
@@ -34,7 +34,7 @@ type ClientImageStore interface {
 	Delete(ctx context.Context, path string) error
 }
 
-// setLogoCache mirrors the appimage cache policy.
+// setLogoCache mirrors the image cache policy.
 func setLogoCache(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "public, max-age=900, stale-while-revalidate=86400")
 }

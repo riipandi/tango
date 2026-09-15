@@ -23,11 +23,6 @@ var defaultConfig = Config{
 		URL: "postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable",
 	},
 
-	LDAP: LDAPConfig{
-		UserFilter:  "(objectClass=person)",
-		GroupFilter: "(objectClass=groupOfNames)",
-	},
-
 	Mailer: MailerConfig{
 		FromEmail: "mailer@example.com",
 		FromName:  "MyApplication",

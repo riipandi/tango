@@ -56,7 +56,7 @@ func (m *Module) UseGuard(guard kernel.Guard) {
 	m.guard = guard
 }
 
-// WithEnvDefaults seeds the env-backed defaults (LDAP_*/MAILER_*
+// WithEnvDefaults seeds the env-backed defaults (MAILER_*
 // values from the koanf config). Catalog defaults stay the bottom
 // layer; DB overrides stay the top.
 func (m *Module) WithEnvDefaults(defaults map[string]string) *Module {

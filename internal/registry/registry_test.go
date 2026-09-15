@@ -2,10 +2,13 @@ package registry
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
@@ -42,10 +45,10 @@ func TestNewRegistersAllModules(t *testing.T) {
 	reg := New(testDeps(t))
 
 	modules := reg.Modules()
-	assert.Len(t, modules, 8)
+	assert.Len(t, modules, 7)
 
-	// Register the queue first so it stops last.
-	wantOrder := []string{"queue", "jobs", "auditlog", "identity", "appimage", "webhook", "appconfig", "federation"}
+	// Modules register in a fixed order.
+	wantOrder := []string{"queue", "jobs", "auditlog", "identity", "webhook", "appconfig", "federation"}
 	for i, want := range wantOrder {
 		assert.Equal(t, want, modules[i].Name())
 	}
@@ -57,6 +60,18 @@ func TestNewRegistersAllModules(t *testing.T) {
 
 func TestNewRequiresDatabase(t *testing.T) {
 	require.Panics(t, func() { New(Deps{}) })
+}
+
+// The LDAP sync endpoint is an excluded upstream feature; the route
+// must stay unmounted even though application configuration is served.
+func TestLDAPSyncEndpointNotMounted(t *testing.T) {
+	reg := New(testDeps(t))
+	api := chi.NewRouter()
+	reg.ApplyAPI(api)
+
+	w := httptest.NewRecorder()
+	api.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/application-configuration/sync-ldap", nil))
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestUserCorePersistsInPostgres(t *testing.T) {

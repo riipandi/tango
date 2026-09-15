@@ -43,26 +43,26 @@ upstream handlers. Remaining gaps are planned in `llms/phase-09-parity-gap.md`.
 | GET    | `/api/application-configuration`            | List public application configurations | done                |
 | PUT    | `/api/application-configuration`            | Update application configurations      | done — partial PUT  |
 | GET    | `/api/application-configuration/all`        | List all application configurations    | done                |
-| POST   | `/api/application-configuration/sync-ldap`  | Synchronize LDAP                       | done — phase 8    |
+| POST   | `/api/application-configuration/sync-ldap`  | Synchronize LDAP                       | excluded           |
 | POST   | `/api/application-configuration/test-email` | Send test email                        | done — phase 7 mail queue |
 
 ## Application Images
 
 | Method | Endpoint                                          | Summary / Yaak Title                 | Status            |
 | ------ | ------------------------------------------------- | ------------------------------------ | ----------------- |
-| DELETE | `/api/application-images/background`              | Delete background image              | done    |
-| GET    | `/api/application-images/background`              | Get background image                 | done    |
-| PUT    | `/api/application-images/background`              | Update background image              | done    |
-| DELETE | `/api/application-images/default-profile-picture` | Delete default profile picture image | done    |
-| GET    | `/api/application-images/default-profile-picture` | Get default profile picture image    | done    |
-| PUT    | `/api/application-images/default-profile-picture` | Update default profile picture image | done    |
-| GET    | `/api/application-images/email`                   | Get email logo image                 | done    |
-| PUT    | `/api/application-images/email`                   | Update email logo                    | done    |
-| GET    | `/api/application-images/favicon`                 | Get favicon                          | done    |
-| PUT    | `/api/application-images/favicon`                 | Update favicon                       | done    |
-| DELETE | `/api/application-images/logo`                    | Delete logo image                    | done    |
-| GET    | `/api/application-images/logo`                    | Get logo image                       | done    |
-| PUT    | `/api/application-images/logo`                    | Update logo                          | done    |
+| DELETE | `/api/application-images/background`              | Delete background image              | excluded          |
+| GET    | `/api/application-images/background`              | Get background image                 | excluded          |
+| PUT    | `/api/application-images/background`              | Update background image              | excluded          |
+| DELETE | `/api/application-images/default-profile-picture` | Delete default profile picture image | excluded          |
+| GET    | `/api/application-images/default-profile-picture` | Get default profile picture image    | excluded          |
+| PUT    | `/api/application-images/default-profile-picture` | Update default profile picture image | excluded          |
+| GET    | `/api/application-images/email`                   | Get email logo image                 | excluded          |
+| PUT    | `/api/application-images/email`                   | Update email logo                    | excluded          |
+| GET    | `/api/application-images/favicon`                 | Get favicon                          | excluded          |
+| PUT    | `/api/application-images/favicon`                 | Update favicon                       | excluded          |
+| DELETE | `/api/application-images/logo`                    | Delete logo image                    | excluded          |
+| GET    | `/api/application-images/logo`                    | Get logo image                       | excluded          |
+| PUT    | `/api/application-images/logo`                    | Update logo                          | excluded          |
 
 ## Audit Logs
 

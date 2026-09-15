@@ -6,16 +6,13 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/appconfig"
-	"github.com/riipandi/tango/modules/appimage"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/federation/discovery"
@@ -29,7 +26,6 @@ import (
 	"github.com/riipandi/tango/modules/identity/customclaim"
 	"github.com/riipandi/tango/modules/identity/devicelogin"
 	"github.com/riipandi/tango/modules/identity/emailverification"
-	"github.com/riipandi/tango/modules/identity/ldapsync"
 	"github.com/riipandi/tango/modules/identity/onetimeaccess"
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/session"
@@ -44,64 +40,10 @@ import (
 	"github.com/riipandi/tango/web"
 )
 
-// Identity feature constructors used by the registry.
-func withLDAPSync(deps Deps, exec datastore.Executor, settingsSource *appconfigRef) *ldapsync.APIFeature {
-	service := ldapsync.NewService(exec, logger.Slog(deps.Logger))
-	settings := func(ctx context.Context) (ldapsync.LDAPSettings, error) {
-		values, ok := settingsSource.values(ctx)
-		if !ok {
-			return ldapsync.SettingsFromEnv(deps.Config), nil
-		}
-		return ldapsync.FromMergedValues(values), nil
-	}
-	return ldapsync.New(service, settings)
-}
-
-// appconfigRef lets identity features read settings after registration.
-type appconfigRef struct {
-	mu     sync.RWMutex
-	module *appconfig.Module
-}
-
-// Attach sets the appconfig module.
-func (r *appconfigRef) Attach(module *appconfig.Module) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.module = module
-}
-
-// values returns merged settings when appconfig is attached.
-func (r *appconfigRef) values(ctx context.Context) (map[string]string, bool) {
-	r.mu.RLock()
-	module := r.module
-	r.mu.RUnlock()
-	if module == nil {
-		return nil, false
-	}
-	values, err := module.MergedValues(ctx)
-	if err != nil {
-		return nil, false
-	}
-	return values, true
-}
-
-// withAppImageStore builds the image service and seeds bundled defaults.
-func withAppImageStore(deps Deps, store storage.Store) (*appimage.Service, error) {
-	defaults, err := appimage.SeedDefaults(context.Background(), store, web.ImagesDir)
-	if err != nil {
-		return nil, err
-	}
-	return appimage.NewService(store, defaults), nil
-}
-
-// defaultPictureProvider adapts appimage defaults to the user service.
-func defaultPictureProvider(images *appimage.Service) user.DefaultPictureFunc {
+// defaultPictureProvider adapts bundled defaults to the user service.
+func defaultPictureProvider(images *storage.BundledImages) user.DefaultPictureFunc {
 	return func(ctx context.Context) (io.ReadCloser, int64, string, bool) {
-		reader, size, mime, err := images.GetImage(ctx, appimage.ImageProfilePic)
-		if err != nil {
-			return nil, 0, "", false
-		}
-		return reader, size, mime, true
+		return images.Open(ctx, storage.DefaultProfilePicture)
 	}
 }
 
@@ -177,7 +119,7 @@ func registerRecurringJobs(deps Deps, feed *jobs.VersionFeed, webhooks *webhook.
 }
 
 // newIdentityFeatures builds the user service and identity features.
-func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Recorder, ldapSettingsSource *appconfigRef) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, *appimage.Service) {
+func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Recorder) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, storage.Store) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	// Share one blob backend across images and client logos.
@@ -185,9 +127,9 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 	if err != nil {
 		panic("registry: storage init: " + err.Error())
 	}
-	images, err := withAppImageStore(deps, blobStore)
+	bundled, err := storage.SeedBundledImages(context.Background(), blobStore, web.ImagesDir)
 	if err != nil {
-		panic("registry: appimage init: " + err.Error())
+		panic("registry: bundled images init: " + err.Error())
 	}
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, recorder)
@@ -213,7 +155,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 		user.WithAdminGuard(adminAuth),
 		user.WithAPIKeyGuard(middleware.RequireAPIKey(apiKeys.Verify)),
 		user.WithSelfAuth(sessions, session.CookieName),
-		user.WithImages(blobStore, defaultPictureProvider(images)),
+		user.WithImages(blobStore, defaultPictureProvider(bundled)),
 	)
 
 	features := []identity.Feature{
@@ -256,12 +198,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 		apiKeys,
 	}
 
-	ldapSync := withLDAPSync(deps, deps.DB, ldapSettingsSource)
-	ldapSync.UseGuard(adminAuth)
-	features = append(features, ldapSync)
-
-	images.UseGuard(adminAuth)
-	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), images
+	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), blobStore
 }
 
 // withOIDC builds the OIDC provider feature.

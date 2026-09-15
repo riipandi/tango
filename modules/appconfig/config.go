@@ -71,28 +71,7 @@ var configKeys = []configKey{
 	{Key: "smtp_password", Type: typeString, Sensitive: true},
 	{Key: "smtp_secure", Type: typeBool},
 
-	// LDAP directory sync (defaults fold from LDAP_* env; password
-	// redacted; attribute keys fall back to the sync service defaults)
-	{Key: "ldap_enabled", Type: typeBool, Public: true},
-	{Key: "ldap_url", Type: typeString},
-	{Key: "ldap_bind_dn", Type: typeString},
-	{Key: "ldap_bind_password", Type: typeString, Sensitive: true},
-	{Key: "ldap_base", Type: typeString},
-	{Key: "ldap_user_search_filter", Type: typeString, Default: "(objectClass=person)"},
-	{Key: "ldap_user_group_search_filter", Type: typeString, Default: "(objectClass=groupOfNames)"},
-	{Key: "ldap_skip_cert_verify", Type: typeBool},
-	{Key: "ldap_attribute_user_unique_identifier", Type: typeString, Default: "uid"},
-	{Key: "ldap_attribute_user_username", Type: typeString, Default: "uid"},
-	{Key: "ldap_attribute_user_email", Type: typeString, Default: "mail"},
-	{Key: "ldap_attribute_user_first_name", Type: typeString, Default: "givenName"},
-	{Key: "ldap_attribute_user_last_name", Type: typeString, Default: "sn"},
-	{Key: "ldap_attribute_user_display_name", Type: typeString, Default: "displayName"},
-	{Key: "ldap_attribute_group_unique_identifier", Type: typeString, Default: "cn"},
-	{Key: "ldap_attribute_group_name", Type: typeString, Default: "cn"},
-	{Key: "ldap_attribute_group_member", Type: typeString, Default: "member"},
-	{Key: "ldap_admin_group_name", Type: typeString},
-	{Key: "ldap_soft_delete_users", Type: typeBool},
-
+	// SMTP relay (defaults fold from MAILER_* env; password redacted)
 	{Key: "webauthn_user_verification", Type: typeString, Default: "preferred", OneOf: webauthnVerifications},
 	{Key: "webauthn_allow_synced_passkeys", Type: typeBool, Default: "true"},
 	{Key: "webauthn_authenticator_attachment", Type: typeString, Default: "any", OneOf: webauthnAttachments},

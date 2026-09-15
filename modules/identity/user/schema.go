@@ -93,8 +93,8 @@ type ImageStore interface {
 	Delete(ctx context.Context, path string) error
 }
 
-// DefaultPictureFunc serves the bundled default profile picture
-// (wired from the appimage module); ok=false when none is set.
+// DefaultPictureFunc serves the bundled default profile picture;
+// ok=false when none is set.
 type DefaultPictureFunc func(ctx context.Context) (reader io.ReadCloser, size int64, mime string, ok bool)
 
 // AdminUpdateParams patches administrative fields. Nil pointers keep

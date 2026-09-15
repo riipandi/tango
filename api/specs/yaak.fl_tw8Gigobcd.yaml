@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
-description: 'Application configuration endpoints (phase 8): public/all config, sync-ldap, test-email'
+description: 'Application configuration endpoints: public/all config, test-email'
 headers: []
 name: Application Configuration
 sortPriority: 6000.0

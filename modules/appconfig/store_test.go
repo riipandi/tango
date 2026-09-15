@@ -126,7 +126,7 @@ func TestConfigCRUD(t *testing.T) {
 	}
 }
 
-// TestEnvDefaultsAndSensitiveRedaction covers the LDAP/SMTP keys:
+// TestEnvDefaultsAndSensitiveRedaction covers the SMTP keys:
 // env-provided defaults fold under DB overrides and sensitive values
 // never leave the server, while MergedValues still serves the real
 // secret to wired consumers.

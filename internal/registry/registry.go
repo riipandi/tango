@@ -93,12 +93,10 @@ func New(deps Deps) *kernel.Registry {
 	events := NewEventFanout(deps.Logger)
 
 	// Register identity features.
-	ldapSettingsSource := &appconfigRef{}
-	core, identityFeatures, adminGuard, sessions, apiAccess, images := newIdentityFeatures(deps, audit, events.Recorder(audit), ldapSettingsSource)
+	core, identityFeatures, adminGuard, sessions, apiAccess, blobStore := newIdentityFeatures(deps, audit, events.Recorder(audit))
 	audit.MountAdminAPI(adminGuard)
 	audit.MountSelfAPI(sessions, session.CookieName)
 	reg.Register(identity.New(core, identityFeatures...))
-	reg.Register(images)
 
 	// Register outbound webhooks.
 	webhooks := newWebhookModule(deps, adminGuard)
@@ -112,13 +110,11 @@ func New(deps Deps) *kernel.Registry {
 		WithEnvDefaults(appconfig.EnvDefaults(deps.Config))
 	appconfigModule.UseGuard(adminGuard)
 	reg.Register(appconfigModule)
-	// Attach appconfig so LDAP sync can read merged settings.
-	ldapSettingsSource.Attach(appconfigModule)
 
 	// Register the identity provider surface.
 	keyService := newKeyService(deps)
 	reg.Register(federation.New(
-		withOIDC(deps, audit, keyService, sessions, adminGuard, apiAccess, images.BlobStore(), appconfigModule),
+		withOIDC(deps, audit, keyService, sessions, adminGuard, apiAccess, blobStore, appconfigModule),
 		withSCIMSync(deps),
 		keyService,
 		withDiscovery(deps, keyService),

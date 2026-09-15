@@ -2,8 +2,8 @@ package user
 
 // profile_picture.go serves self/admin upload and reset, plus the
 // public .png read. Uploaded files are stored as-is behind a MIME
-// allowlist. Missing
-// custom pictures fall back to the appimage-bundled default.
+// allowlist. Missing custom pictures fall back to the bundled
+// default.
 
 import (
 	"errors"
@@ -20,7 +20,7 @@ import (
 )
 
 // maxPictureUpload bounds one profile picture upload.
-const maxPictureUpload = 5 << 20 // 5 MiB, matches the appimage cap
+const maxPictureUpload = 5 << 20 // 5 MiB
 
 // pictureMime maps allowed extensions to MIME types; anything else
 // is rejected with 422.
@@ -31,8 +31,8 @@ var pictureMime = map[string]string{
 	".webp": "image/webp",
 }
 
-// WithImages wires the blob backend and the bundled-default provider
-// (appimage). Without both, the picture surface mounts read-only or
+// WithImages wires the blob backend and the bundled-default provider.
+// Without both, the picture surface mounts read-only or
 // not at all (see APIRoutes).
 func WithImages(images ImageStore, defaults DefaultPictureFunc) ServiceOption {
 	return func(s *Service) { s.images, s.defaultPicture = images, defaults }
@@ -47,8 +47,8 @@ func pictureExt(filename string) string {
 	return ext
 }
 
-// setPictureCache mirrors the appimage cache policy (15 min fresh,
-// 1 day stale-while-revalidate).
+// setPictureCache mirrors the bundled-image cache policy (15 min
+// fresh, 1 day stale-while-revalidate).
 func setPictureCache(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "public, max-age=900, stale-while-revalidate=86400")
 }

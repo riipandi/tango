@@ -127,7 +127,6 @@ var envSections = []struct{ prefix, section string }{
 	{"APP_", "app"},
 	{"AUTH_", "auth"},
 	{"DATABASE_", "database"},
-	{"LDAP_", "ldap"},
 	{"MAILER_", "mailer"},
 	{"PUBLIC_", "public"},
 	{"QUEUE_", "queue"},
