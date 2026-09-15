@@ -1,7 +1,9 @@
-package onetimeaccess
+package token
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"time"
@@ -12,54 +14,52 @@ import (
 	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/modules/identity/user"
 )
 
-// PostgresStore persists tokens in public.auth_tokens.
+// PostgresStore persists tokens in public.auth_tokens, scoped to one
+// purpose per instance.
 type PostgresStore struct {
-	exec datastore.Executor
+	exec    datastore.Executor
+	purpose Purpose
 }
 
 var _ Store = (*PostgresStore)(nil)
 
-// NewPostgresStore builds the production store.
-func NewPostgresStore(store datastore.Store) *PostgresStore {
-	return &PostgresStore{exec: store}
+// NewStore builds the production store for one purpose.
+func NewStore(exec datastore.Executor, purpose Purpose) *PostgresStore {
+	return &PostgresStore{exec: exec, purpose: purpose}
 }
 
 // tokenColumns is the SELECT list; keep in sync with scanToken.
 var tokenColumns = []string{"id", "user_id", "token_hash", "created_at", "expires_at", "last_sent_at"}
 
-// Upsert writes (or replaces) the single token per user+purpose.
-// Throttled: false when an existing token was sent too recently.
-func (s *PostgresStore) Upsert(ctx context.Context, token *Token) (bool, error) {
+// Upsert writes (or replaces) the single token per user+purpose and
+// stamps last_sent_at.
+func (s *PostgresStore) Upsert(ctx context.Context, token *Token) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(authTokensTable)
 	ib.Cols("user_id", "token_hash", "purpose", "expires_at", "last_sent_at")
-	ib.Values(datastore.UserUUID(token.UserID), token.TokenHash, purpose, token.ExpiresAt, time.Now().UTC())
+	ib.Values(datastore.UserUUID(token.UserID), token.TokenHash, string(s.purpose), token.ExpiresAt, time.Now().UTC())
 	ib.SQL("ON CONFLICT (user_id, purpose) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at, last_sent_at = EXCLUDED.last_sent_at")
 	ib.Returning(tokenColumns...)
 
 	query, args := ib.Build()
 	row, err := scanToken(s.exec.QueryRow(ctx, query, args...))
 	if err != nil {
-		return false, fmt.Errorf("onetimeaccess store: upsert: %w", err)
+		return fmt.Errorf("token store: upsert: %w", err)
 	}
 	*token = *row
-
-	// Throttle check happens after the write — the single-row
-	// upsert keeps the state machine trivial; the caller decides to
-	// honor the throttle BEFORE calling (service-level read).
-	return true, nil
+	return nil
 }
 
-// Consume deletes + returns the token for the hash.
+// Consume deletes + returns the token for the hash; only an
+// unexpired token resolves.
 func (s *PostgresStore) Consume(ctx context.Context, tokenHash string) (*Token, error) {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(authTokensTable)
 	db.Where(db.And(
 		db.E("token_hash", tokenHash),
-		db.E("purpose", purpose),
+		db.E("purpose", string(s.purpose)),
 		db.GT("expires_at", time.Now().UTC()),
 	))
 	db.Returning(tokenColumns...)
@@ -70,7 +70,7 @@ func (s *PostgresStore) Consume(ctx context.Context, tokenHash string) (*Token, 
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("onetimeaccess store: consume: %w", err)
+		return nil, fmt.Errorf("token store: consume: %w", err)
 	}
 	return row, nil
 }
@@ -89,12 +89,12 @@ func scanToken(row scanner) (*Token, error) {
 		return nil, err
 	}
 
-	parsed, err := typeid.FromUUID[authTokenID](id)
+	parsed, err := typeid.FromUUID[tokenID](id)
 	if err != nil {
-		return nil, fmt.Errorf("onetimeaccess store: token id %q is not a UUID: %w", id, err)
+		return nil, fmt.Errorf("token store: token id %q is not a UUID: %w", id, err)
 	}
 	t.ID = parsed.String()
-	t.UserID = user.MustID(userID).String()
+	t.UserID = userID
 	t.CreatedAt = created.Time
 	t.ExpiresAt = expires.Time
 	if lastSent.Valid {
@@ -103,13 +103,18 @@ func scanToken(row scanner) (*Token, error) {
 	return &t, nil
 }
 
-// authTokenID is a local typeid alias — the auth_tokens row ID is
-// not URL-facing, so this stays unexported and prefix-less in use.
-type authTokenID = typeid.TypeID[authTokenPrefix]
+// hashToken hashes a raw token for at-rest storage.
+func hashToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
 
-type authTokenPrefix struct{}
+// tokenID is a local typeid alias (row ID not URL-facing).
+type tokenID = typeid.TypeID[tokenPrefix]
 
-func (authTokenPrefix) Prefix() string { return "auth_token" }
+type tokenPrefix struct{}
+
+func (tokenPrefix) Prefix() string { return "auth_token" }
 
 // scanner covers pgx.Rows and pgx.Row.
 type scanner interface {

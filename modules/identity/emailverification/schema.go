@@ -13,32 +13,11 @@ import (
 // TokenTTL bounds verification tokens.
 const TokenTTL = 24 * time.Hour
 
-// purpose on auth_tokens for this module.
-const purpose = "email_verification"
-
 // Errors surfaced to handlers.
 var (
 	// ErrNotFound covers unknown/expired tokens without leaking.
 	ErrNotFound = errors.New("emailverification: token is invalid or expired")
 )
-
-// Token is one auth_tokens row (purpose email_verification).
-type Token struct {
-	ID        string
-	UserID    string
-	TokenHash string
-	CreatedAt time.Time
-	ExpiresAt time.Time
-}
-
-// Store persists verification tokens.
-type Store interface {
-	// Upsert writes (or replaces) the single token per user+purpose.
-	Upsert(ctx context.Context, token *Token) error
-	// Consume deletes + returns the token for the hash; only an
-	// unexpired token resolves.
-	Consume(ctx context.Context, tokenHash string) (*Token, error)
-}
 
 // Verifier marks the user's email verified — implemented by the
 // user store via the registry.

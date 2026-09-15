@@ -6,7 +6,6 @@ package emailverification
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"net/http"
@@ -20,6 +19,7 @@ import (
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/token"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
@@ -27,7 +27,7 @@ import (
 
 // Service orchestrates the verification flow.
 type Service struct {
-	store    Store
+	store    token.Store
 	verifier Verifier
 	users    user.Store
 	recorder identity.Recorder
@@ -52,7 +52,7 @@ func WithMail(sender identity.MailSender, users user.Store, appURL string) Servi
 }
 
 // NewService builds the feature.
-func NewService(store Store, verifier Verifier, recorder identity.Recorder, opts ...ServiceOption) *Service {
+func NewService(store token.Store, verifier Verifier, recorder identity.Recorder, opts ...ServiceOption) *Service {
 	s := &Service{store: store, verifier: verifier, recorder: recorder}
 	for _, opt := range opts {
 		opt(s)
@@ -210,19 +210,17 @@ func (s *Service) handleVerify(w http.ResponseWriter, r *http.Request) {
 
 // mint creates a fresh verification token; returns the raw value.
 func (s *Service) mint(ctx context.Context, userID user.UserID) (string, error) {
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
+	raw, err := token.NewRaw()
+	if err != nil {
 		return "", err
 	}
-	raw := base64.RawURLEncoding.EncodeToString(buf)
 
-	sum := sha256.Sum256([]byte(raw))
-	token := Token{
-		UserID:    userID.String(),
-		TokenHash: base64.RawURLEncoding.EncodeToString(sum[:]),
+	tok := token.Token{
+		UserID:    userID.UUID(),
+		TokenHash: token.Hash(raw),
 		ExpiresAt: time.Now().UTC().Add(TokenTTL),
 	}
-	if err := s.store.Upsert(ctx, &token); err != nil {
+	if err := s.store.Upsert(ctx, &tok); err != nil {
 		return "", err
 	}
 	return raw, nil

@@ -8,9 +8,6 @@ package onetimeaccess
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"net/http"
 	"net/url"
@@ -23,6 +20,7 @@ import (
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
+	"github.com/riipandi/tango/modules/identity/token"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
@@ -30,7 +28,7 @@ import (
 
 // Service orchestrates one-time access tokens.
 type Service struct {
-	store    Store
+	store    token.Store
 	users    user.Store
 	sessions *session.Service
 	recorder identity.Recorder
@@ -61,7 +59,7 @@ func WithMail(sender identity.MailSender, appURL string) ServiceOption {
 }
 
 // NewService builds the feature.
-func NewService(store Store, users user.Store, sessions *session.Service, recorder identity.Recorder, opts ...ServiceOption) *Service {
+func NewService(store token.Store, users user.Store, sessions *session.Service, recorder identity.Recorder, opts ...ServiceOption) *Service {
 	s := &Service{store: store, users: users, sessions: sessions, recorder: recorder}
 	for _, opt := range opts {
 		opt(s)
@@ -243,18 +241,18 @@ func (s *Service) handleExchange(w http.ResponseWriter, r *http.Request, cookieN
 // mint creates a fresh single-use token for the user and returns
 // the raw value.
 func (s *Service) mint(ctx context.Context, userID user.UserID) (string, error) {
-	raw, err := randomToken()
+	raw, err := token.NewRaw()
 	if err != nil {
 		return "", err
 	}
 
 	now := time.Now().UTC()
-	token := Token{
-		UserID:    userID.String(),
-		TokenHash: hashToken(raw),
+	tok := token.Token{
+		UserID:    userID.UUID(),
+		TokenHash: token.Hash(raw),
 		ExpiresAt: now.Add(TokenTTL),
 	}
-	if _, err := s.store.Upsert(ctx, &token); err != nil {
+	if err := s.store.Upsert(ctx, &tok); err != nil {
 		return "", err
 	}
 	return raw, nil
@@ -263,15 +261,13 @@ func (s *Service) mint(ctx context.Context, userID user.UserID) (string, error) 
 // consumeAndIssue validates + burns the token, then issues the
 // session; returns the user and the raw session token.
 func (s *Service) consumeAndIssue(ctx context.Context, raw string) (user.User, string, error) {
-	consumed, err := s.store.Consume(ctx, hashToken(raw))
+	consumed, err := s.store.Consume(ctx, token.Hash(raw))
 	if err != nil {
 		return user.User{}, "", err
 	}
 
-	userID, parseErr := identity.ParseID[user.UserID](consumed.UserID)
-	if parseErr != nil {
-		return user.User{}, "", ErrNotFound
-	}
+	// consumed.UserID is the bare UUID column form.
+	userID := user.MustID(consumed.UserID)
 	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return user.User{}, "", ErrNotFound
@@ -286,21 +282,6 @@ func (s *Service) consumeAndIssue(ctx context.Context, raw string) (user.User, s
 	}
 	s.record(ctx, "user.signed_in", userID.String())
 	return u, token, nil
-}
-
-// randomToken returns a 256-bit URL-safe token.
-func randomToken() (string, error) {
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(buf), nil
-}
-
-// hashToken hashes a token for at-rest storage.
-func hashToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
 // setSessionCookie mirrors the session module cookie flags.

@@ -34,6 +34,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/signup"
+	"github.com/riipandi/tango/modules/identity/token"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/usergroup"
 	"github.com/riipandi/tango/modules/identity/webauthn"
@@ -255,7 +256,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 			devicelogin.WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		)).WithSelfAuth(sessions, session.CookieName, deps.Config.App.Mode != "development"),
 		onetimeaccess.New(onetimeaccess.NewService(
-			onetimeaccess.NewPostgresStore(deps.DB),
+			token.NewStore(deps.DB, token.PurposeOneTimeAccess),
 			user.NewPostgresStore(deps.DB),
 			sessions,
 			recorder,
@@ -263,7 +264,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 		)).WithAdminGuard(adminAuth).
 			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		emailverification.New(emailverification.NewService(
-			emailverification.NewPostgresStore(deps.DB),
+			token.NewStore(deps.DB, token.PurposeEmailVerification),
 			emailVerificationAdapter(user.NewPostgresStore(deps.DB)),
 			recorder,
 			emailverification.WithMail(deps.Jobs, user.NewPostgresStore(deps.DB), deps.Config.Public.BaseURL),

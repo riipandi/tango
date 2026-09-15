@@ -1,5 +1,5 @@
 ---
-status: planned
+status: done
 updated: 2026-09-15
 ---
 
@@ -20,21 +20,33 @@ on consume. The domain is one (one-shot token per user + purpose); the code is d
 
 ## Tasks
 
-- [ ] Create `modules/identity/token`: model `Token{UserID, Purpose, TokenHash, ExpiresAt}`,
-      purpose enum values for email-verification and one-time-access, one `store.go`, one
-      `service.go` (mint/verify/consume helpers with the expiry + single-use policy).
-- [ ] Rewire `emailverification` and `onetimeaccess` services to the shared store; delete their
-      duplicated token stores. Handlers and endpoints do not change.
-- [ ] Keep the `purpose` values exactly as stored today (existing rows must stay verifiable).
-- [ ] Re-run the existing token tests plus a live check: request a one-time-access email and an
-      email verification against the running server, exchange the token — old rows in the DB
-      must still verify.
+- [x] Create `modules/identity/token`: `Purpose` enum (`email_verification`,
+      `one_time_access`, plus `reauthentication` matching the DB CHECK), model
+      `Token{UserID, TokenHash, ExpiresAt, LastSentAt}`, one `store.go`
+      (`NewStore(exec, purpose)` → upsert by `(user_id, purpose)` + single-use `Consume` with the
+      expiry check), `service.go` (`NewRaw` 256-bit token + `Hash` SHA-256/base64url), one
+      shared `ErrNotFound` sentinel consumers map onto their own messages.
+- [x] Rewire `emailverification` and `onetimeaccess` services to the shared store; delete their
+      duplicated token stores (both `store.go` files gone). Handlers and endpoints do not change.
+      `onetimeaccess` now stores `Token.UserID` in the bare-UUID column form (the shared store's
+      canonical form) and resolves it with `user.MustID` on consume.
+- [x] `purpose` values are exactly as stored today (`email_verification`, `one_time_access`) —
+      old rows verify (live-verified with a hand-inserted old-format row, see below).
+- [x] Live checks: admin mint → 201 + row written (purpose/last_sent_at/expiry correct);
+      anonymous exchange → 200 + session issued + row consumed (single-use); old-format row
+      exchange → 200; `send-email-verification` → 204 with Mailpit delivery; `verify-email` with
+      the emailed token → 204, row consumed, `email_verified_at` set.
 
 ## Validation
 
-`task test` (all suites), `task lint`, `task check`, live token exchange recorded in the
-progress log.
+- `task test:go`: 533 pass, 1 skipped, 0 fail. `task test:go:debug`: 35 pass.
+  `go test -tags release ./...`: all ok (41 packages). golangci-lint: 0 issues. vet + gofmt clean.
+- Live checks recorded above (scratch DB + debug binary + Mailpit; artifacts cleaned up).
 
 ## Progress Log
 
 - 2026-09-15 Phase planned.
+- 2026-09-15 Implemented. Live-check note: the mint 404s observed mid-session were
+  self-inflicted (hand-built hex "TypeID" instead of the base32 TypeID form — `parseUserIDParam`
+  correctly rejects it per the AGENTS.md gotcha). With real TypeIDs from the API everything
+  passes on both HEAD and the working tree.

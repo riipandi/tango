@@ -25,7 +25,7 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
 | 2     | [arch-phase-02-error-mapping.md](./arch-phase-02-error-mapping.md)       | Central error→HTTP mapping, remove per-handler `writeError` copies      | done    | 2026-09-15 |
 | 3     | [arch-phase-03-kernel-guards.md](./arch-phase-03-kernel-guards.md)       | `kernel.Guard` + `kernel.Authenticator`, remove guard option duplicates | done    | 2026-09-15 |
 | 4     | [arch-phase-04-module-layout.md](./arch-phase-04-module-layout.md)       | Standard module layout, settings mapping back into modules, slim registry | done    | 2026-09-15 |
-| 5     | [arch-phase-05-token-store.md](./arch-phase-05-token-store.md)           | Consolidate duplicated `auth_tokens` stores into one token package      | planned | 2026-09-15 |
+| 5     | [arch-phase-05-token-store.md](./arch-phase-05-token-store.md)           | Consolidate duplicated `auth_tokens` stores into one token package      | done    | 2026-09-15 |
 | 6     | [arch-phase-06-oidc-split.md](./arch-phase-06-oidc-split.md)             | Decompose the 4k-LOC `federation/oidc` package per bounded context      | planned | 2026-09-15 |
 
 ## Expected Outcome
@@ -54,3 +54,7 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
 - 2026-09-15 Phase 4 done: registry settings mapping + SCIM snapshot SQL moved into owning
   packages (ldapsync/mailer/appconfig/scimsync); `Feature` strays out of schema.go; registry
   features.go 624 → 393 lines (pure assembly); AGENTS.md config-key convention synced.
+- 2026-09-15 Phase 5 done: `modules/identity/token` owns `auth_tokens` (purpose-scoped store,
+  single-use consume, `NewRaw`/`Hash`); the two duplicated per-module token stores are deleted.
+  Live: mint/exchange + email verification round-trips pass, single-use enforced, old-format
+  rows still verify.

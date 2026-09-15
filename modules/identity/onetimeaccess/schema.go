@@ -1,11 +1,11 @@
 // Package onetimeaccess issues single-use sign-in tokens delivered
 // by email: admins mint them per user; unauthenticated users may
 // request one for their own address when the app policy allows.
-// Storage: auth_tokens (purpose = one_time_access, hash at rest).
+// Storage: auth_tokens (purpose = one_time_access, hash at rest)
+// via the shared token store.
 package onetimeaccess
 
 import (
-	"context"
 	"errors"
 	"time"
 )
@@ -25,27 +25,3 @@ var (
 	// ErrThrottled rejects re-requests inside the resend window.
 	ErrThrottled = errors.New("onetimeaccess: request throttled")
 )
-
-// purpose on auth_tokens for this module.
-const purpose = "one_time_access"
-
-// Token is one auth_tokens row (purpose one_time_access).
-type Token struct {
-	ID         string
-	UserID     string
-	TokenHash  string
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	LastSentAt *time.Time
-}
-
-// Store persists one-time access tokens.
-type Store interface {
-	// Upsert writes (or replaces) the single token per user+purpose
-	// (unique index user_id+purpose) and reports whether the resend
-	// throttle blocked it.
-	Upsert(ctx context.Context, token *Token) (bool, error)
-	// Consume deletes + returns the token row for the hash; only an
-	// unexpired token resolves.
-	Consume(ctx context.Context, tokenHash string) (*Token, error)
-}
