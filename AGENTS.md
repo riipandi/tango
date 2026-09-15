@@ -39,7 +39,11 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 - SQL via `github.com/huandu/go-sqlbuilder` (PostgreSQL dialect). Gotchas: raw conditions (`IS NOT NULL`) pass as plain strings; pgx surfaces statement errors through `rows.Err()` after iteration, not the `Query` return.
 - Responses use the envelope `{status, message?, data, error?, metadata, links}` in snake_case, except declared bare-document endpoints (jwks, images, `.well-known/*`).
 - Tests use `pkg/testutils.StartPostgres` (throwaway containers; isolate data with unique names, never absolute-count assertions).
-- Comments: concise, explain why, never restate the code. No section separators.
+- Comments: write only concise context that the code cannot show. Explain a non-obvious invariant, security rule, protocol requirement, compatibility constraint, or side effect; do not narrate control flow or restate names and expressions.
+- Exported declarations need a short Go doc comment when their contract is not obvious; begin it with the declaration name. Add comments to unexported functions only when their behavior or constraint needs explanation.
+- Do not add history, porting progress, phase/task/plan markers, TODO-style notes, personal context, or upstream-reference commentary. Preserve a reference only when it explains a live protocol or compatibility requirement, and describe the behavior rather than its origin.
+- Keep test comments limited to setup, invariants, security properties, or non-obvious fixtures. Remove comments that merely label the next assertion or restate the test name.
+- Do not use section-separator comments. When existing comments violate these rules, delete or rewrite them while preserving behavior.
 
 ## Common Tasks
 
