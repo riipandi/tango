@@ -89,9 +89,7 @@ func newWebhookModule(deps Deps, queueClient *queue.Client, guard func(http.Hand
 		webhook.WithSender(webhook.NewFetcherSender(deps.Fetcher)),
 	)
 	service.RegisterQueue(queueClient)
-	m := webhook.New(service)
-	m.UseGuard(guard)
-	return m
+	return webhook.New(service, webhook.WithGuard(guard))
 }
 
 // secretCipher derives the AES-256 key used to seal module secrets.
@@ -117,19 +115,21 @@ func registerRecurringJobs(deps Deps, reg *jobs.Registry, feed *jobs.VersionFeed
 	reg.AddJob(jobs.VersionJob(feed, deps.Logger))
 }
 
-// newIdentityFeatures builds the identity module and the session
-// service plus API-access store shared with the federation surface.
-func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, audit *auditlog.Module, recorder identity.Recorder) (*identity.Module, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, storage.Store, error) {
+// newIdentityFeatures builds the identity module: sessions first, the
+// audit module second (its guards need sessions), then the guarded
+// features. It also returns the session service and API-access store
+// shared with the federation surface.
+func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Recorder) (*identity.Module, func(http.Handler) http.Handler, *session.Service, *auditlog.Module, *apiaccess.PostgresStore, storage.Store, error) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	// Share one blob backend across images and client logos.
 	blobStore, err := storage.New(deps.Config.Storage)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
 	}
 	bundled, err := storage.SeedBundledImages(context.Background(), blobStore, web.ImagesDir)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
 	}
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, recorder)
@@ -146,6 +146,12 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, audit *auditlog.Modu
 	adminAuth := func(next http.Handler) http.Handler {
 		return auth(middleware.RequireAdmin(next))
 	}
+
+	audit := auditlog.New(
+		auditlog.NewPostgresStore(deps.DB),
+		auditlog.WithAdminGuard(adminAuth),
+		auditlog.WithSelfAuth(sessions, session.CookieName),
+	)
 
 	apiKeys := withAPIKeys(deps, sessions, audit)
 
@@ -198,7 +204,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, audit *auditlog.Modu
 		apiKeys,
 	)
 
-	return module, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), blobStore, nil
+	return module, adminAuth, sessions, audit, apiaccess.NewPostgresStore(deps.DB), blobStore, nil
 }
 
 // withOIDC builds the OIDC provider feature.

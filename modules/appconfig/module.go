@@ -39,8 +39,12 @@ type MailSender interface {
 
 // New builds the module. A nil mailer leaves the test-email route
 // unmounted (fail closed); the config CRUD needs WithStore.
-func New(mailer MailSender) *Module {
-	return &Module{mailer: mailer}
+func New(mailer MailSender, opts ...Option) *Module {
+	m := &Module{mailer: mailer}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
 // WithStore wires the settings persistence; without it only
@@ -50,10 +54,13 @@ func (m *Module) WithStore(store Store) *Module {
 	return m
 }
 
-// UseGuard protects the admin routes; without one nothing
+// Option configures the appconfig module at construction.
+type Option func(*Module)
+
+// WithGuard protects the admin routes; without one nothing
 // admin-facing mounts.
-func (m *Module) UseGuard(guard kernel.Guard) {
-	m.guard = guard
+func WithGuard(guard kernel.Guard) Option {
+	return func(m *Module) { m.guard = guard }
 }
 
 // WithEnvDefaults seeds the env-backed defaults (MAILER_*

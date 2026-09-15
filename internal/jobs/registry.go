@@ -48,11 +48,13 @@ type Registry struct {
 }
 
 // NewRegistry registers the email and recurring maintenance queues.
-func NewRegistry(client *queue.Client, mail Mailer, log logger.Logger) *Registry {
+// The version feed supplies /api/version/latest.
+func NewRegistry(client *queue.Client, mail Mailer, log logger.Logger, feed *VersionFeed) *Registry {
 	r := &Registry{
 		queue: client,
 		mail:  mail,
 		log:   log,
+		feed:  feed,
 		jobs:  make(map[string]Job),
 	}
 
@@ -103,13 +105,6 @@ func (r *Registry) Start(ctx context.Context) error {
 		}
 	})
 	return nil
-}
-
-// SetVersionFeed attaches the cached release lookup.
-func (r *Registry) SetVersionFeed(feed *VersionFeed) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.feed = feed
 }
 
 // Latest returns the cached newest release or the deployed build.

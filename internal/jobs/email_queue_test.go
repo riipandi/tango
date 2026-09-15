@@ -30,7 +30,7 @@ func TestEmailTaskSurvivesQueueRoundTripAndRenders(t *testing.T) {
 
 	db := testDB(t)
 	queue := testQueue(t, db)
-	registry := NewRegistry(queue, testMailer(t, mp), logger.NewMock())
+	registry := NewRegistry(queue, testMailer(t, mp), logger.NewMock(), nil)
 
 	// Unique recipient per run: the search below can only match it.
 	recipient := fmt.Sprintf("jobs-%d@tango.test", time.Now().UnixNano())

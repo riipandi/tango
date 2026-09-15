@@ -30,18 +30,26 @@ var (
 	_ kernel.APIRoutable = (*Module)(nil)
 )
 
-// New builds the module on top of the service.
-func New(service *Service) *Module {
+// Option configures the webhook module at construction.
+type Option func(*Module)
+
+// New builds the module on top of the service. Options wire the
+// admin guard; without one nothing mounts (fail closed).
+func New(service *Service, opts ...Option) *Module {
 	if service == nil {
 		panic("webhook: nil service")
 	}
-	return &Module{service: service}
+	m := &Module{service: service}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
-// UseGuard protects every route. Session auth wrapped in
+// WithGuard protects every route. Session auth wrapped in
 // RequireAdmin is the production wiring.
-func (m *Module) UseGuard(guard kernel.Guard) {
-	m.adminGuard = guard
+func WithGuard(guard kernel.Guard) Option {
+	return func(m *Module) { m.adminGuard = guard }
 }
 
 // Store exposes the persistence layer for the recurring log-pruning

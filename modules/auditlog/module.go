@@ -22,26 +22,31 @@ type Module struct {
 	cookie   string
 }
 
+// Option configures the audit log module at construction.
+type Option func(*Module)
+
+// WithAdminGuard protects the admin listing and filters; without one
+// those routes stay unmounted (fail closed).
+func WithAdminGuard(guard func(http.Handler) http.Handler) Option {
+	return func(m *Module) { m.adminGuard = guard }
+}
+
+// WithSelfAuth wires the session resolver for the per-user listing;
+// without one that route stays unmounted.
+func WithSelfAuth(auth kernel.Authenticator, cookieName string) Option {
+	return func(m *Module) { m.selfAuth, m.cookie = auth, cookieName }
+}
+
 // New builds the module on top of store; nil store panics.
-func New(store Store) *Module {
+func New(store Store, opts ...Option) *Module {
 	if store == nil {
 		panic("auditlog: nil store")
 	}
-	return &Module{store: store}
-}
-
-// MountAdminAPI wires the admin guard for the /all + filter routes.
-// It must be called before the registry applies routes (the guard
-// depends on the session feature built after this module).
-func (m *Module) MountAdminAPI(guard func(http.Handler) http.Handler) {
-	m.adminGuard = guard
-}
-
-// MountSelfAPI wires the session authenticator for the per-user
-// listing.
-func (m *Module) MountSelfAPI(auth kernel.Authenticator, cookieName string) {
-	m.selfAuth = auth
-	m.cookie = cookieName
+	m := &Module{store: store}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
 func (m *Module) Name() string { return ModuleName }

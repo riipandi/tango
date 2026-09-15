@@ -116,8 +116,9 @@ var fixedPrincipal = middleware.Principal{
 // auth + admin header guard).
 func mountWithGuards(t *testing.T, mod *Module) chi.Router {
 	t.Helper()
-	mod.MountSelfAPI(&fakeAuthenticator{principal: fixedPrincipal}, "tango_session")
-	mod.MountAdminAPI(func(next http.Handler) http.Handler {
+	mod.selfAuth = &fakeAuthenticator{principal: fixedPrincipal}
+	mod.cookie = "tango_session"
+	mod.adminGuard = func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("X-Admin") == "" {
 				w.WriteHeader(http.StatusForbidden)
@@ -125,7 +126,7 @@ func mountWithGuards(t *testing.T, mod *Module) chi.Router {
 			}
 			next.ServeHTTP(w, r)
 		})
-	})
+	}
 
 	r := chi.NewRouter()
 	r.Route("/api", func(api chi.Router) {
@@ -216,7 +217,8 @@ func TestSelfListingScopesToCurrentUser(t *testing.T) {
 	require.NoError(t, mod.Record(ctx, &Entry{Event: "user.signed_in", UserID: ptr(u.ID.UUID())}))
 	require.NoError(t, mod.Record(ctx, &Entry{Event: "user.signed_out"}))
 
-	mod.MountSelfAPI(&fakeAuthenticator{principal: principal}, "tango_session")
+	mod.selfAuth = &fakeAuthenticator{principal: principal}
+	mod.cookie = "tango_session"
 	r := chi.NewRouter()
 	r.Route("/api", mod.APIRoutes)
 

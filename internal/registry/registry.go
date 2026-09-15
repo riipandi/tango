@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"go.jetify.com/typeid"
@@ -23,7 +22,6 @@ import (
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/identity"
-	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/webhook"
 	"github.com/riipandi/tango/pkg/responder"
@@ -81,32 +79,34 @@ func New(deps Deps) (*Runtime, error) {
 	}
 	rt.Queue = queue.New(queueClient)
 
-	// Register email and maintenance consumers.
-	rt.Jobs = jobs.NewRegistry(queueClient, deps.Mailer, deps.Logger)
+	// Register email and maintenance consumers; the version feed
+	// supplies /api/version/latest.
+	feed := newVersionFeed(deps)
+	rt.Jobs = jobs.NewRegistry(queueClient, deps.Mailer, deps.Logger, feed)
 
-	rt.AuditLog = auditlog.New(auditlog.NewPostgresStore(deps.DB))
-
-	// Domain events are recorded and forwarded to webhooks.
+	// Domain events fan out to audit and webhooks; both sinks are
+	// wired below, before the server can serve a request.
 	events := NewEventFanout(deps.Logger)
+	recorder := events.Recorder()
 
-	// Register identity features.
-	idModule, adminGuard, sessions, apiAccess, blobStore, err := newIdentityFeatures(deps, rt.Jobs, rt.AuditLog, events.Recorder(rt.AuditLog))
+	// Register identity features: sessions first, then the audit
+	// module (its guards need sessions), then the guarded features.
+	idModule, adminGuard, sessions, auditLog, apiAccess, blobStore, err := newIdentityFeatures(deps, rt.Jobs, recorder)
 	if err != nil {
 		return nil, err
 	}
-	rt.AuditLog.MountAdminAPI(adminGuard)
-	rt.AuditLog.MountSelfAPI(sessions, session.CookieName)
 	rt.Identity = idModule
+	rt.AuditLog = auditLog
+	events.audit = rt.AuditLog
 
 	// Register outbound webhooks.
 	rt.Webhook = newWebhookModule(deps, queueClient, adminGuard)
-	events.Attach(rt.Webhook)
+	events.webhook = rt.Webhook
 
 	// Register application configuration.
-	rt.AppConfig = appconfig.New(rt.Jobs).
+	rt.AppConfig = appconfig.New(rt.Jobs, appconfig.WithGuard(adminGuard)).
 		WithStore(appconfig.NewPostgresStore(deps.DB)).
 		WithEnvDefaults(appconfig.EnvDefaults(deps.Config))
-	rt.AppConfig.UseGuard(adminGuard)
 
 	// Register the identity provider surface.
 	keyService := newKeyService(deps)
@@ -117,9 +117,6 @@ func New(deps Deps) (*Runtime, error) {
 		withDiscovery(deps, keyService),
 	)
 
-	// Register the release feed and its refresh job.
-	feed := newVersionFeed(deps)
-	rt.Jobs.SetVersionFeed(feed)
 	registerRecurringJobs(deps, rt.Jobs, feed, rt.Webhook)
 
 	return rt, nil
@@ -206,18 +203,13 @@ func auditAdapter(audit *auditlog.Module) identity.Recorder {
 	}
 }
 
-// eventFanout forwards recorded events to webhooks.
+// eventFanout forwards recorded events to audit and webhooks. Sinks
+// are wired during runtime construction, before any request can fire
+// an event.
 type eventFanout struct {
-	mu   sync.RWMutex
-	sink *webhook.Module
-	log  logger.Logger
-}
-
-// Attach sets the webhook sink.
-func (f *eventFanout) Attach(module *webhook.Module) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.sink = module
+	audit   *auditlog.Module
+	webhook *webhook.Module
+	log     logger.Logger
 }
 
 // NewEventFanout builds an event fan-out holder.
@@ -225,18 +217,17 @@ func NewEventFanout(log logger.Logger) *eventFanout {
 	return &eventFanout{log: log}
 }
 
-// Recorder records identity events and forwards them to webhooks.
-func (f *eventFanout) Recorder(audit *auditlog.Module) identity.Recorder {
+// Recorder records identity events: one audit entry plus a webhook
+// emission per event. Webhook failure is logged, never fatal.
+func (f *eventFanout) Recorder() identity.Recorder {
 	return func(ctx context.Context, e identity.AuditEvent) {
-		auditAdapter(audit)(ctx, e)
-
-		f.mu.RLock()
-		sink := f.sink
-		f.mu.RUnlock()
-		if sink == nil {
+		if f.audit != nil {
+			auditAdapter(f.audit)(ctx, e)
+		}
+		if f.webhook == nil {
 			return
 		}
-		if err := sink.Emit(ctx, e.Action, map[string]any{
+		if err := f.webhook.Emit(ctx, e.Action, map[string]any{
 			"event":  e.Action,
 			"actor":  e.Actor,
 			"target": e.Target,

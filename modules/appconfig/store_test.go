@@ -33,9 +33,7 @@ func newStoreStack(t *testing.T) (Store, *Module) {
 
 	store := NewPostgresStore(ds)
 	return store, func() *Module {
-		m := New(nil).WithStore(store)
-		m.UseGuard(testPrincipalContext)
-		return m
+		return New(nil, WithGuard(testPrincipalContext)).WithStore(store)
 	}()
 }
 

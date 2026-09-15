@@ -21,8 +21,7 @@ import (
 func mountRouter(t *testing.T, stack *testStack) chi.Router {
 	t.Helper()
 
-	module := New(stack.Service)
-	module.UseGuard(func(next http.Handler) http.Handler {
+	module := New(stack.Service, WithGuard(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("X-Admin") == "" {
 				w.WriteHeader(http.StatusForbidden)
@@ -30,7 +29,7 @@ func mountRouter(t *testing.T, stack *testStack) chi.Router {
 			}
 			next.ServeHTTP(w, r)
 		})
-	})
+	}))
 
 	r := chi.NewRouter()
 	r.Route("/api", module.APIRoutes)
@@ -78,12 +77,11 @@ func decodeEnvelope(t *testing.T, w *httptest.ResponseRecorder) envelope {
 
 func TestRoutesRequireTheAdminGuard(t *testing.T) {
 	stack := newTestStack(t, okSender())
-	module := New(stack.Service)
-	module.UseGuard(func(next http.Handler) http.Handler {
+	module := New(stack.Service, WithGuard(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusForbidden)
 		})
-	})
+	}))
 
 	r := chi.NewRouter()
 	r.Route("/api", module.APIRoutes)

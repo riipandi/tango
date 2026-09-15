@@ -8,11 +8,6 @@ import (
 // Guard wraps a handler chain.
 type Guard func(http.Handler) http.Handler
 
-// Guarded marks routes that require an injected guard.
-type Guarded interface {
-	UseGuard(guard Guard)
-}
-
 // Principal is the authenticated actor attached to a request.
 type Principal struct {
 	SessionID string

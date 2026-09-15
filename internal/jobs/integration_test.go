@@ -93,7 +93,7 @@ func TestNewRegistryRegistersQueues(t *testing.T) {
 	db := testDB(t)
 	queue := testQueue(t, db)
 
-	registry := NewRegistry(queue, &fakeMailer{}, logger.NewMock())
+	registry := NewRegistry(queue, &fakeMailer{}, logger.NewMock(), nil)
 	require.NotNil(t, registry)
 
 	// Both registered queues must accept their task types.
@@ -120,14 +120,13 @@ func TestRegistryModuleContract(t *testing.T) {
 	assert.NoError(t, registry.Stop(context.Background()))
 }
 
-func TestSetVersionFeedAndLatest(t *testing.T) {
-	registry := &Registry{jobs: map[string]Job{}, log: logger.NewMock()}
-
+func TestVersionFeedAndLatest(t *testing.T) {
 	// Without a feed, the registry reports the running build.
+	registry := &Registry{jobs: map[string]Job{}, log: logger.NewMock()}
 	assert.NotEmpty(t, registry.Latest())
 
 	feed := &VersionFeed{Fetch: func(context.Context) (string, error) { return "v9.9.9", nil }}
-	registry.SetVersionFeed(feed)
+	registry = &Registry{jobs: map[string]Job{}, log: logger.NewMock(), feed: feed}
 	require.NoError(t, feed.Refresh(context.Background()))
 	assert.Equal(t, "9.9.9", registry.Latest())
 }
@@ -135,7 +134,7 @@ func TestSetVersionFeedAndLatest(t *testing.T) {
 func TestStartSchedulesEveryRegisteredJob(t *testing.T) {
 	db := testDB(t)
 	queue := testQueue(t, db)
-	registry := NewRegistry(queue, &fakeMailer{}, logger.NewMock())
+	registry := NewRegistry(queue, &fakeMailer{}, logger.NewMock(), nil)
 
 	registry.AddJob(Job{Name: "scheduled", Interval: time.Hour, Run: func(context.Context) error { return nil }})
 	require.NoError(t, registry.Start(t.Context()))
@@ -159,7 +158,7 @@ func TestStartSchedulesEveryRegisteredJob(t *testing.T) {
 func TestRunJobReschedulesAfterSuccess(t *testing.T) {
 	db := testDB(t)
 	queue := testQueue(t, db)
-	registry := NewRegistry(queue, &fakeMailer{}, logger.NewMock())
+	registry := NewRegistry(queue, &fakeMailer{}, logger.NewMock(), nil)
 
 	ran := 0
 	registry.AddJob(Job{Name: "recurring", Interval: time.Minute, Run: func(context.Context) error {

@@ -43,7 +43,7 @@ func testPrincipalContext(next http.Handler) http.Handler {
 }
 
 func withGuard(m *Module) *Module {
-	m.UseGuard(testPrincipalContext)
+	m.guard = testPrincipalContext
 	return m
 }
 
