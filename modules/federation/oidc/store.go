@@ -63,7 +63,7 @@ type Store interface {
 	CustomClaims(ctx context.Context, userID string) (map[string]string, error)
 	UserInGroup(ctx context.Context, userID, groupID string) bool
 
-	// Client-facing surfaces (upstream /users/me/clients et al).
+	// Client-facing surfaces.
 	AccessibleClients(ctx context.Context, userID string) ([]Client, error)
 	// AuthorizedClients lists consent records; a nil userID means all users (admin view).
 	AuthorizedClients(ctx context.Context, userID *string) ([]AuthorizedClient, error)
@@ -75,12 +75,12 @@ type Store interface {
 	AddClientSecret(ctx context.Context, clientID OIDCClientID, entry ClientSecret, rawHash string) error
 	DeleteClientSecret(ctx context.Context, clientID OIDCClientID, secretID string) error
 
-	// Client logo (phase 9C): blob path + upstream-compat image_type
+	// Client logo: blob path and image type.
 	// column, cleared together.
 	SetClientLogoPath(ctx context.Context, id OIDCClientID, path *string) error
 
 	// RefreshClientMetadata rewrites the document-owned columns for a
-	// CIMD client (phase 9D refresh endpoint).
+	// CIMD client.
 	RefreshClientMetadata(ctx context.Context, id OIDCClientID, params ClientUpdateParams) error
 }
 

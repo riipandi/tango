@@ -13,9 +13,7 @@ import (
 )
 
 // Service orchestrates the device login state machine. The
-// approving device must present a live session; upstream requires a
-// fresh passkey proof for approve — here the live session suffices
-// (noted deviation until the reauthentication flow lands).
+// approving device must present a live session.
 type Service struct {
 	store        Store
 	sessions     *session.Service

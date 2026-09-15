@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// Request duration and polling cadence — upstream parity.
+// Request duration and polling cadence.
 const (
 	// RequestDuration bounds a pending login request.
 	RequestDuration = 5 * time.Minute

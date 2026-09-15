@@ -1,8 +1,4 @@
-// Package scimsync is the SCIM 2.0 outbound provisioning surface:
-// service-provider rows bind an OIDC client to a remote SCIM
-// endpoint + bearer token; a sync pushes the client's allowed users
-// and groups to the remote provider. Mirrors upstream v2.14
-// (scim_service_providers table, /api/scim/service-provider*).
+// Package scimsync provisions users and groups to a remote SCIM server.
 package scimsync
 
 import (
@@ -49,7 +45,7 @@ type UpsertParams struct {
 	OIDCClientID string
 }
 
-// Validate enforces upstream DTO rules: URL endpoint, non-empty client.
+// Validate checks the endpoint and client credentials.
 func (p UpsertParams) Validate() error {
 	p.Endpoint = strings.TrimSpace(p.Endpoint)
 	p.OIDCClientID = strings.TrimSpace(p.OIDCClientID)

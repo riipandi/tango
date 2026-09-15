@@ -31,8 +31,7 @@ type updateClaimRequest struct {
 	Value string `json:"value"`
 }
 
-// listReplaceRequest is the PUT list-replace payload (upstream
-// shape): the full new claim set for the owner.
+// listReplaceRequest is the PUT payload for replacing all claims.
 type listReplaceRequest []createClaimRequest
 
 // Validate runs per-item rules directly — validation.Validate on
@@ -187,7 +186,7 @@ func (s *Service) listForGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 // replaceForUser serves PUT /custom-claims/user/{userId}: list
-// replace (upstream shape) — the full new set in one body.
+// replace the full set in one body.
 func (s *Service) replaceForUser(w http.ResponseWriter, r *http.Request) {
 	userID, err := identity.ParseID[user.UserID](chi.URLParam(r, "userId"))
 	if err != nil {

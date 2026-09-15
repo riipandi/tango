@@ -1,8 +1,7 @@
 package oidc
 
-// handler_surfaces_test covers the phase-4 completion endpoints:
-// introspection, users/me client surfaces, secret management, and
-// the allowed-groups replace.
+// handler_surfaces_test covers introspection, client surfaces, secret
+// management, and allowed-groups replacement.
 
 import (
 	jsonv2 "encoding/json/v2"
@@ -316,8 +315,7 @@ func TestClientMetaAndPreview(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
-// TestClientLogoLifecycle covers the phase 9C logo surface: upload →
-// bare-bytes read (public) → meta has_logo flips → delete → 404.
+// TestClientLogoLifecycle covers upload, public read, metadata, and delete.
 func TestClientLogoLifecycle(t *testing.T) {
 	service, store, ds := testStack(t)
 	ctx := t.Context()

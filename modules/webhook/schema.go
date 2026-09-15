@@ -1,11 +1,10 @@
 // Package webhook registers outbound endpoints, fans application
 // events out to the subscribers of each event name, and records every
 // delivery attempt. Deliveries are signed (HMAC-SHA256 over a
-// timestamped canonical body) and retried by the task queue, so the
+// timestamped canonical body) and retried by the queue, so the
 // HTTP path never blocks on a slow receiver.
 //
-// This is a tango extension: upstream Pocket ID ships the
-// webhook_events/webhook_logs tables but no webhook surface.
+// The module owns the webhook surface and its delivery records.
 package webhook
 
 import (
@@ -50,7 +49,7 @@ const (
 
 // WebhookDeliveryTask delivers one recorded event to one endpoint. The
 // log row is the outbox record: it is written in the same transaction
-// that enqueues this task, so a rolled back event never delivers.
+// that enqueues the delivery, so a rolled back event never delivers.
 type WebhookDeliveryTask struct {
 	// LogID identifies the webhook_logs row updated per attempt.
 	LogID string `json:"log_id"`
@@ -66,7 +65,7 @@ type WebhookDeliveryTask struct {
 	Payload map[string]any `json:"payload,omitzero"`
 }
 
-// Config implements queue.Task.
+// Config defines the queue settings.
 func (WebhookDeliveryTask) Config() queue.QueueConfig {
 	return queue.QueueConfig{
 		Name:        WebhookQueue,
@@ -105,8 +104,7 @@ const AllEvents = "*"
 // webhook_events.name.
 var namePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,100}$`)
 
-// HTTP methods a webhook endpoint may use. Upstream's CHECK constraint
-// allows exactly these.
+// HTTP methods allowed for webhook endpoints.
 var allowedMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 const (
@@ -171,7 +169,7 @@ type CreateParams struct {
 	EventTypes  []string          `json:"event_types,omitzero"`
 }
 
-// Validate enforces the upstream name format plus the endpoint shape.
+// Validate checks the endpoint name and shape.
 func (p *CreateParams) Validate() error {
 	p.Name = strings.TrimSpace(p.Name)
 	p.Endpoint = strings.TrimSpace(p.Endpoint)
@@ -290,7 +288,7 @@ type Store interface {
 
 // Executor is the query surface accepted for outbox writes: the pool
 // (autocommit) or an open transaction, so the log row and the enqueued
-// delivery task commit together.
+// delivery records commit together.
 type Executor = datastore.Executor
 
 func validEndpoint(value any) error {

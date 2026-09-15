@@ -269,7 +269,7 @@ func base64URL(raw []byte) string {
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
-// credentialView is the API payload (upstream WebauthnCredentialDto).
+// credentialView is the API payload.
 func credentialView(c StoredCredential) map[string]any {
 	return map[string]any{
 		"id":               c.ID.String(),

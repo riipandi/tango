@@ -16,8 +16,7 @@ import (
 const providersTable = "public.scim_service_providers"
 
 // PostgresStore persists service providers. Tokens are stored
-// encrypted (cipher passed at construction, mirroring upstream's
-// EncryptedString); reads decrypt transparently.
+// encrypted with the configured cipher; reads decrypt transparently.
 type PostgresStore struct {
 	exec   datastore.Executor
 	cipher tokenCipher

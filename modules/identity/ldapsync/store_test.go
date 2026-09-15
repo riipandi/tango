@@ -69,7 +69,7 @@ func TestSyncLifecycle(t *testing.T) {
 	assert.Equal(t, 1, stats.UsersDeleted)
 
 	// Soft delete disables instead. The surviving user from the hard
-	// delete phase (users[:1]) is still LDAP-managed, so the full
+	// delete set (users[:1]) is still LDAP-managed, so the full
 	// clear disables it too.
 	users2 := desiredUsers()
 	stats, err = r.Run(ctx, users2, nil, true)

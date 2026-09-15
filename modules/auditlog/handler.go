@@ -1,8 +1,6 @@
 package auditlog
 
-// handler.go owns the audit log HTTP surface: the per-user listing
-// (`GET /api/audit-logs`, session required) and the admin surface
-// (`/all` + filter values, admin guard).
+// handler.go owns the audit log HTTP endpoints.
 
 import (
 	"net/http"
@@ -32,8 +30,7 @@ func (m *Module) APIRoutes(r chi.Router) {
 	admin.Get("/audit-logs/filters/client-names", m.clientNameFilters)
 }
 
-// listSelf serves GET /api/audit-logs: entries of the current user
-// only (upstream scope — the admin listing lives at /all).
+// listSelf serves entries for the current user.
 func (m *Module) listSelf(w http.ResponseWriter, r *http.Request) {
 	principal, ok := middleware.PrincipalFromContext(r.Context())
 	if !ok {
@@ -89,7 +86,7 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request, scope ListFilters)
 }
 
 // userFilters lists distinct users appearing in the log (filter
-// dropdown values upstream).
+// dropdown values.
 func (m *Module) userFilters(w http.ResponseWriter, r *http.Request) {
 	values, err := m.store.UserFilterValues(r.Context())
 	if err != nil {

@@ -1,13 +1,7 @@
 package oidc
 
-// cimd.go implements CIMD-lite: relying-party clients whose settings
-// materialize from a Client ID Metadata Document (RFC: draft-ietf-oauth-client-id-metadata-document).
-// Upstream resolves URL-shaped client ids dynamically at authorize
-// time via fosite's CIMDResolver; tango keeps typeid ids and requires
-// an admin to register the metadata URL — then create/refresh sync
-// the document-owned columns. Policy matches upstream: https only,
-// operator allowlist (default deny), size cap, no auth-method but
-// "none" (tango never persists CIMD key material).
+// cimd.go implements CIMD-lite for clients backed by a Client ID
+// Metadata Document.
 
 import (
 	"context"
@@ -20,9 +14,7 @@ import (
 	jsonv2 "encoding/json/v2"
 )
 
-// MetadataDocumentTTL mirrors the upstream cache window for a
-// materialized document (informational: tango refreshes via the
-// admin endpoint, not a background job).
+// MetadataDocumentTTL controls the metadata refresh window.
 const MetadataDocumentTTL = 24 * time.Hour
 
 // MaxMetadataDocument bounds one metadata document fetch.

@@ -1,9 +1,8 @@
 package user
 
-// profile_picture.go serves the phase 9C image surface: self/admin
-// upload + reset, and the public .png read. Upstream transcodes to a
-// square PNG (profilepicture package); tango stores the upload as-is
-// behind a MIME allowlist — no image pipeline dependency. Missing
+// profile_picture.go serves self/admin upload and reset, plus the
+// public .png read. Uploaded files are stored as-is behind a MIME
+// allowlist. Missing
 // custom pictures fall back to the appimage-bundled default.
 
 import (
@@ -55,7 +54,7 @@ func setPictureCache(w http.ResponseWriter) {
 }
 
 // serveProfilePicture serves GET /users/{id}/profile-picture.png —
-// bare image bytes (no envelope, like upstream), cache headers
+// bare image bytes without an envelope, with cache headers
 // included. Fallback chain: custom blob → bundled default → 404.
 func (s *Service) serveProfilePicture(w http.ResponseWriter, r *http.Request) {
 	id, err := identity.ParseID[UserID](chi.URLParam(r, "id"))

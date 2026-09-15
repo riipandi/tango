@@ -45,8 +45,7 @@ type CreateParams struct {
 	ExpiresAt   time.Time
 }
 
-// Validate enforces the upstream constraints (name 3–50, future
-// expiry).
+// Validate checks the name and expiry.
 func (p *CreateParams) Validate() error {
 	p.Name = strings.TrimSpace(p.Name)
 	return validation.ValidateStruct(p,
@@ -88,7 +87,7 @@ type Store interface {
 	ListForUser(ctx context.Context, userID string, params ListParams) ([]APIKey, int, error)
 	Revoke(ctx context.Context, userID string, id APIKeyID) error
 	// Renew rotates the token hash and expiry; allowed only when
-	// the key is already expired (upstream semantics).
+	// the key is already expired.
 	Renew(ctx context.Context, userID string, id APIKeyID, keyHash string, expiresAt time.Time) (APIKey, error)
 	// ValidByHash resolves a hash to the owning user, atomically
 	// bumping last_used_at (UPDATE ... RETURNING).

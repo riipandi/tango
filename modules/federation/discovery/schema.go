@@ -23,9 +23,7 @@ const (
 	jwksCacheControl = "public, max-age=300, must-revalidate"
 )
 
-// OIDC endpoint paths advertised in the discovery document. Each
-// becomes an absolute URL under the issuer; phase 4 owns their
-// implementation.
+// OIDC endpoint paths advertised in the discovery document.
 const (
 	AuthorizeEndpoint  = "/authorize"
 	TokenEndpoint      = "/api/oidc/token"

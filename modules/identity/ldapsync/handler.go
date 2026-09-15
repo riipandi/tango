@@ -13,7 +13,7 @@ import (
 )
 
 // SettingsProvider resolves the current LDAP settings (appconfig once
-// it lands; env-backed until then).
+// it is resolved by the caller).
 type SettingsProvider func(ctx context.Context) (LDAPSettings, error)
 
 // APIFeature mounts the manual sync endpoint; Startable drives the
@@ -75,7 +75,7 @@ func (f *APIFeature) syncLDAP(w http.ResponseWriter, r *http.Request) {
 }
 
 // Start arms the recurring sync ticker. It stops on context cancel or
-// Stop; a failed run is logged and retried next tick (upstream
+// Stop; a failed run is logged and retried on the next tick (
 // semantics: the schedule never dies from one bad sync).
 func (f *APIFeature) Start(ctx context.Context) error {
 	go f.loop(ctx)

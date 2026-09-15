@@ -193,8 +193,7 @@ func (s *Service) handleDeleteToken(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// tokenView is the API payload (upstream signupTokenDto, hash never
-// leaves the store).
+// tokenView is the API payload; the hash never leaves the store.
 func tokenView(t SignupToken) map[string]any {
 	return map[string]any{
 		"id":          t.ID.String(),

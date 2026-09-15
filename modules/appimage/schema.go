@@ -1,9 +1,4 @@
-// Package appimage serves the application's branding images
-// (logo light/dark, email logo, background, favicon, default profile
-// picture). Images live in the blob store under "application-images/"
-// with a per-name extension record kept in the DB; bundled defaults
-// are seeded on startup and deletion is tracked with a marker object
-// so a re-seed does not resurrect a removed image.
+// Package appimage serves the application's branding images.
 package appimage
 
 import (
@@ -20,8 +15,7 @@ import (
 	"github.com/riipandi/tango/internal/storage"
 )
 
-// Image names accepted by the API. logoLight/logoDark are selected by
-// the ?light= query flag on the logo endpoints.
+// Image names accepted by the API.
 const (
 	ImageLogoLight  = "logoLight"
 	ImageLogoDark   = "logoDark"
@@ -61,8 +55,7 @@ func MimeForExt(ext string) string {
 }
 
 // Service reads and writes application images through the blob store.
-// The extension map is process-local state seeded at startup; uploads
-// and deletes keep it in sync under a mutex.
+// The extension map is process-local state protected by a mutex.
 type Service struct {
 	store      storage.Store
 	mu         sync.RWMutex
@@ -101,8 +94,7 @@ func (s *Service) GetImage(ctx context.Context, name string) (io.ReadCloser, int
 	return reader, size, mime, nil
 }
 
-// UpdateImage stores an upload under its extension, replacing any
-// previous extension of the same image, and clears the delete marker.
+// UpdateImage stores an upload and replaces the previous image.
 func (s *Service) UpdateImage(ctx context.Context, name, filename string, r io.Reader) error {
 	if !knownImage(name) {
 		return ErrInvalidName

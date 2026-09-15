@@ -64,7 +64,7 @@ func (f Feature) APIRoutes(r chi.Router) {
 		clients.Get("/oidc/users/{id}/authorized-clients", f.service.handleListUserAuthorizedClients)
 	}
 
-	// Public logo read: bare bytes, no guard (upstream parity).
+	// Public logo read: bare bytes, no guard.
 	if f.service.images != nil {
 		r.Get("/oidc/clients/{clientId}/logo", f.service.serveClientLogo)
 	}

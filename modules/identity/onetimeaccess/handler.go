@@ -2,9 +2,7 @@ package onetimeaccess
 
 // handler.go owns the one-time access HTTP surface: admin minting
 // (token + email per user), the unauthenticated email request, and
-// the token→session exchange. Mail delivery rides the built-in queue
-// once phase 7 lands — for now send is synchronous via the mailer
-// contract.
+// the token→session exchange. Mail delivery uses the mailer contract.
 
 import (
 	"context"
@@ -199,7 +197,7 @@ func (r emailRequest) Validate() error {
 
 // handleEmailRequest serves POST /one-time-access-email
 // (unauthenticated): always 204. The policy that decides whether a
-// token is minted belongs to appconfig (phase 8); answering 204
+// token is minted belongs to appconfig; answering 204
 // unconditionally avoids account enumeration.
 func (s *Service) handleEmailRequest(w http.ResponseWriter, r *http.Request) {
 	var req emailRequest

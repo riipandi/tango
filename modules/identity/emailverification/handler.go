@@ -1,8 +1,7 @@
 package emailverification
 
 // handler.go owns the email verification HTTP surface: send (self)
-// and verify (self, token body). Mail delivery rides the built-in
-// queue from phase 7.
+// and verify (self, token body). Mail delivery uses the built-in queue.
 
 import (
 	"context"
@@ -95,7 +94,7 @@ func (f Feature) APIRoutes(r chi.Router) {
 
 // handleSend serves POST /users/me/send-email-verification: mints a
 // token for the current user and queues the verification email.
-// Upstream parity: 204 with no body — the token travels by email only.
+// Return 204 with no body; the token travels by email only.
 func (s *Service) handleSend(w http.ResponseWriter, r *http.Request) {
 	principal, ok := middleware.PrincipalFromContext(r.Context())
 	if !ok {
@@ -122,7 +121,7 @@ func (s *Service) handleSend(w http.ResponseWriter, r *http.Request) {
 
 // sendVerificationEmail queues the verification mail for the user. A
 // queued send means the SMTP transaction happens on a worker; a
-// failure here only reports that the task row was not written.
+// failure here only reports that the queue entry was not written.
 func (s *Service) sendVerificationEmail(ctx context.Context, userID user.UserID, token string) error {
 	if s.sender == nil {
 		return nil

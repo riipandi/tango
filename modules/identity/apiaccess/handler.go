@@ -310,7 +310,7 @@ func (s *Service) deleteGrant(w http.ResponseWriter, r *http.Request) {
 }
 
 // apisForClient lists the APIs a client may access, with the access
-// split per subject (upstream GET /api-access/{clientId}/apis).
+// split per subject.
 func (s *Service) apisForClient(w http.ResponseWriter, r *http.Request) {
 	clientID := chi.URLParam(r, "clientId")
 

@@ -59,7 +59,7 @@ type UpdateParams struct {
 
 // Store abstracts group persistence. SetMembers replaces the whole
 // membership of one group; ReplaceGroupsForUser is the inverse
-// (upstream PUT /users/{id}/user-groups).
+// (PUT /users/{id}/user-groups).
 type Store interface {
 	Create(ctx context.Context, params CreateParams) (UserGroup, error)
 	GetByID(ctx context.Context, id UserGroupID) (UserGroup, error)
@@ -71,7 +71,7 @@ type Store interface {
 	GroupIDsForUser(ctx context.Context, id user.UserID) ([]UserGroup, error)
 	ReplaceGroupsForUser(ctx context.Context, id user.UserID, groupIDs []UserGroupID) error
 	// ReplaceAllowedClients swaps the group-side OIDC client
-	// allowlist (upstream PUT /user-groups/{id}/allowed-oidc-clients).
+	// allowlist (PUT /user-groups/{id}/allowed-oidc-clients).
 	// Client IDs are opaque typeid strings here — identity never
 	// imports federation; the store's existence check + FK enforce
 	// validity.

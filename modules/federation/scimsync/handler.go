@@ -38,7 +38,7 @@ func parseID(raw string) (SCIMServiceProviderID, error) {
 }
 
 // providerResponse is the wire shape; the token is only present on
-// write responses (upstream shows it once).
+// write responses.
 type providerResponse struct {
 	ID           string     `json:"id"`
 	Endpoint     string     `json:"endpoint"`
@@ -68,7 +68,7 @@ type createRequest struct {
 	OIDCClientID string `json:"oidc_client_id"`
 }
 
-// Validate applies the rules mirroring upstream DTO constraints.
+// Validate applies the SCIM sync input rules.
 func (r createRequest) Validate() error {
 	return UpsertParams(r).Validate()
 }

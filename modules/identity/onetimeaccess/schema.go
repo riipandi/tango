@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Token lifetime + resend throttle — upstream parity.
+// Token lifetime and resend throttle.
 const (
 	// TokenTTL bounds one-time access tokens.
 	TokenTTL = 15 * time.Minute

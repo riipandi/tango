@@ -30,7 +30,6 @@ func TestImageLifecycle(t *testing.T) {
 	assert.Equal(t, "image/x-icon", mime)
 	assert.True(t, svc.IsSet(ImageFavicon))
 
-	// Re-upload with a different extension replaces the old object.
 	require.NoError(t, svc.UpdateImage(t.Context(), ImageFavicon, "favicon.png", strings.NewReader("png-data")))
 	_, _, mime, err = svc.GetImage(t.Context(), ImageFavicon)
 	require.NoError(t, err)

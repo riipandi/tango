@@ -17,7 +17,7 @@ import (
 
 // newStore builds the provider store over the shared test container
 // with a real cipher (tokens must round-trip encrypted). The fixture
-// client id lands in clientFixtureID; the raw datastore comes back
+// client ID is stored in clientFixtureID; the raw datastore comes back
 // for tests that need extra fixtures.
 func newStore(t *testing.T) (*PostgresStore, *datastore.Postgres) {
 	t.Helper()

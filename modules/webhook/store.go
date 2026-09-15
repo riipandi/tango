@@ -14,8 +14,7 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 )
 
-// Tables owned by this module (upstream DDL, extended by migration
-// 00027).
+// Tables owned by this module.
 const (
 	eventsTable = "public.webhook_events"
 	logsTable   = "public.webhook_logs"

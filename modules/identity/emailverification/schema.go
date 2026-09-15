@@ -1,7 +1,6 @@
 // Package emailverification verifies a user's email address via a
 // single-use token (auth_tokens, purpose = email_verification).
-// Send rides the mailer; the queue-backed async delivery lands in
-// phase 7.
+// Send uses the mailer and queue for asynchronous delivery.
 package emailverification
 
 import (

@@ -160,7 +160,7 @@ func (s *Service) ListLogs(ctx context.Context, id *WebhookID, params ListParams
 }
 
 // Emit fans an event out to its subscribers. The pending log row and
-// the queued delivery task are written in one transaction, so an
+// the queued delivery are written in one transaction, so an
 // event that never commits never delivers. A nil queue (tests) or a
 // module without subscribers degrades to a no-op.
 func (s *Service) Emit(ctx context.Context, event string, payload map[string]any) error {
@@ -196,7 +196,7 @@ func (s *Service) DeliverTo(ctx context.Context, id WebhookID, event string, pay
 }
 
 // enqueue writes one pending log row per endpoint and queues the
-// matching delivery task, all inside a single transaction.
+// matching delivery, all inside a single transaction.
 func (s *Service) enqueue(ctx context.Context, subscribers []Webhook, event string, payload map[string]any) error {
 	_, err := s.enqueueAll(ctx, subscribers, event, payload)
 	return err
@@ -227,7 +227,7 @@ func (s *Service) enqueueAll(ctx context.Context, subscribers []Webhook, event s
 		return nil, err
 	}
 
-	// One task per subscriber: each has its own log row and retry
+	// One delivery per subscriber: each has its own log row and retry
 	// budget, so a failing receiver cannot hold up the others.
 	tasks := make([]queue.Task, 0, len(subscribers))
 	logs := make([]*DeliveryLog, 0, len(subscribers))

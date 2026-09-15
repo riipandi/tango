@@ -51,7 +51,7 @@ func (r setMembersRequest) Validate() error {
 }
 
 // setUserGroupsRequest is the PUT /users/{id}/user-groups payload:
-// the complete group list for one user (upstream userGroupIds).
+// the complete group list for one user.
 type setUserGroupsRequest struct {
 	GroupIDs []string `json:"user_group_ids"`
 }
@@ -61,8 +61,7 @@ func (r setUserGroupsRequest) Validate() error {
 }
 
 // setAllowedClientsRequest is the PUT /user-groups/{id}/allowed-oidc-clients
-// payload: the complete client allowlist for one group (upstream
-// oidcClientIds; snake_case is a documented deviation).
+// payload: the complete client allowlist for one group.
 type setAllowedClientsRequest struct {
 	ClientIDs []string `json:"oidc_client_ids"`
 }
@@ -245,8 +244,7 @@ func (s *Service) setMembers(w http.ResponseWriter, r *http.Request) {
 }
 
 // setAllowedClients replaces the group's OIDC client allowlist
-// (upstream PUT /user-groups/{id}/allowed-oidc-clients) and echoes
-// the stored list back.
+// and echoes the stored list back.
 func (s *Service) setAllowedClients(w http.ResponseWriter, r *http.Request) {
 	id, err := identity.ParseID[UserGroupID](chi.URLParam(r, "id"))
 	if err != nil {
@@ -283,8 +281,7 @@ func (s *Service) setAllowedClients(w http.ResponseWriter, r *http.Request) {
 	responder.Success(w, r, http.StatusOK, map[string]any{"oidc_client_ids": clients})
 }
 
-// groupsForUser lists the groups a user belongs to (upstream
-// GET /users/{id}/groups).
+// groupsForUser lists the groups a user belongs to.
 func (s *Service) groupsForUser(w http.ResponseWriter, r *http.Request) {
 	userID, err := identity.ParseID[user.UserID](chi.URLParam(r, "id"))
 	if err != nil {
@@ -300,8 +297,7 @@ func (s *Service) groupsForUser(w http.ResponseWriter, r *http.Request) {
 	responder.Success(w, r, http.StatusOK, groups)
 }
 
-// replaceUserGroups replaces the groups a user belongs to (upstream
-// PUT /users/{id}/user-groups).
+// replaceUserGroups replaces the groups a user belongs to.
 func (s *Service) replaceUserGroups(w http.ResponseWriter, r *http.Request) {
 	userID, err := identity.ParseID[user.UserID](chi.URLParam(r, "id"))
 	if err != nil {

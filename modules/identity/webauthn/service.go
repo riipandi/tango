@@ -17,7 +17,7 @@ import (
 )
 
 // Service implements the passkey ceremonies. Login is discoverable
-// (userless): the handle selects the user, mirroring upstream.
+// (userless): the handle selects the user.
 type Service struct {
 	store        Store
 	users        user.Store

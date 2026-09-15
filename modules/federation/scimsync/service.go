@@ -19,7 +19,7 @@ import (
 // scimContentType is the SCIM 2.0 media type.
 const scimContentType = "application/scim+json"
 
-// retryAttempts bounds 429 retries per request (upstream parity).
+// retryAttempts bounds retries for a rate-limited request.
 const retryAttempts = 3
 
 // Service drives the outbound provisioning.

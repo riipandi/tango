@@ -88,7 +88,7 @@ func (s *Service) APIRoutes(r chi.Router) {
 	}
 
 	// Public read: the .png route serves bare bytes with no guard
-	// (upstream parity).
+	// Keep the response body empty.
 	if s.images != nil {
 		r.Get("/users/{id}/profile-picture.png", s.serveProfilePicture)
 	}
@@ -143,7 +143,7 @@ func eitherGuard(admin, api kernel.Guard) kernel.Guard {
 }
 
 // getCurrentUser serves GET /users/me: the signed-in user's own
-// record (upstream identity for the SPA).
+// record used by the SPA.
 func (s *Service) getCurrentUser(w http.ResponseWriter, r *http.Request) {
 	principal, ok := middleware.PrincipalFromContext(r.Context())
 	if !ok {
@@ -165,8 +165,7 @@ func (s *Service) getCurrentUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateCurrentUser serves PUT /users/me: profile self-service —
-// upstream updates name/email; email is admin-gated here (deviation
-// noted in the gap register).
+// updates the profile; email changes require admin access.
 func (s *Service) updateCurrentUser(w http.ResponseWriter, r *http.Request) {
 	principal, ok := middleware.PrincipalFromContext(r.Context())
 	if !ok {

@@ -1,6 +1,4 @@
-// Package appconfig serves the application configuration surface:
-// the public/admin GET views and the admin PUT (phase 9B), plus the
-// test-email route from the phase 7 mail queue.
+// Package appconfig serves public and admin configuration endpoints.
 package appconfig
 
 import (
@@ -71,7 +69,7 @@ func (*Module) Name() string { return ModuleName }
 
 // APIRoutes mounts the configuration endpoints relative to /api.
 func (m *Module) APIRoutes(r chi.Router) {
-	// Public bootstrap payload: no guard (upstream parity).
+	// The public bootstrap payload has no guard.
 	if m.store != nil {
 		r.Get("/application-configuration", m.listPublic)
 	}
@@ -134,9 +132,7 @@ func (m *Module) listAll(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateRequest is the PUT /application-configuration body:
-// snake_case settings object (upstream camelCase). Partial: omitted
-// keys keep their stored value — a deliberate deviation from the
-// upstream all-fields-required binding.
+// snake_case settings object. Omitted keys keep their stored value.
 type updateRequest map[string]string
 
 func (r updateRequest) Validate() error {
@@ -183,9 +179,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 }
 
 // testEmailRequest is the POST /application-configuration/test-email
-// body. Upstream addresses the signed-in administrator; an explicit
-// address is the tango extension, so an operator can prove delivery to
-// a shared inbox.
+// body. An explicit address lets operators test a shared inbox.
 type testEmailRequest struct {
 	Email string `json:"email,omitzero"`
 }
@@ -212,7 +206,7 @@ func (m *Module) testEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default to the signed-in administrator, upstream parity.
+	// Default to the signed-in administrator.
 	to := req.Email
 	if to == "" {
 		to = principal.Email

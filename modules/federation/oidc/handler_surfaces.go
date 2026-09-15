@@ -1,8 +1,7 @@
 package oidc
 
-// handler_surfaces.go hosts the newer HTTP surfaces of phase 4
-// completeness: token introspection (RFC 7662), the users/me client
-// listings, client secret management, and the end-session stub.
+// handler_surfaces.go hosts token introspection, client listings,
+// client secret management, and the end-session stub.
 
 import (
 	"net/http"
@@ -55,8 +54,7 @@ func (s *Service) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 
 // handleEndSession serves GET/POST /api/oidc/end-session: clears
 // the sign-in cookie and redirects to the client's logout callback
-// when one is registered. Full family revocation lands with the
-// session module's back-channel (phase 5).
+// when one is registered.
 func (s *Service) handleEndSession(w http.ResponseWriter, r *http.Request) {
 	// Clear the sign-in cookie; Secure mirrors the session module.
 	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- session cookie parity (SameSite=Lax, Secure off in dev)
@@ -161,8 +159,7 @@ func (s *Service) handleListUserAuthorizedClients(w http.ResponseWriter, r *http
 }
 
 // handleUpdateAllowedGroups serves PUT
-// /api/oidc/clients/{id}/allowed-user-groups (upstream shape:
-// userGroupIds list-replace).
+// /api/oidc/clients/{id}/allowed-user-groups.
 func (s *Service) handleUpdateAllowedGroups(w http.ResponseWriter, r *http.Request) {
 	id, err := OIDCParseClientID(chi.URLParam(r, "clientId"))
 	if err != nil {

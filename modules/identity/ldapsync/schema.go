@@ -2,7 +2,7 @@
 // directory: fetch the desired state (users + groups with members),
 // then create/update/disable/delete inside one transaction. Settings
 // arrive as an LDAPSettings value resolved by the caller (appconfig
-// once it lands, env until then). A manual trigger endpoint and a
+// resolved by the caller. A manual trigger endpoint and a
 // recurring ticker share the same SyncAll path.
 package ldapsync
 

@@ -1,11 +1,6 @@
 package oidc
 
-// handler_meta.go serves the admin client introspection surfaces:
-// the trimmed metadata view (GET /clients/{id}/meta) and the claims
-// preview for one user (GET /clients/{id}/preview/{userId}).
-// Upstream reference: oidc_controller.go getClientMetaDataHandler +
-// internal/oidc/preview.go (ClientPreviewBuilder) — re-expressed in
-// tango shapes without minting real JWTs.
+// handler_meta.go serves client metadata and claims preview endpoints.
 
 import (
 	"errors"
@@ -18,9 +13,7 @@ import (
 )
 
 // handleClientMeta serves GET /api/oidc/clients/{id}/meta: the
-// trimmed client view the SPA uses for launch tiles and consent
-// screens. Response keys stay snake_case (upstream camelCase is a
-// documented deviation).
+// trimmed client view used by the SPA.
 func (s *Service) handleClientMeta(w http.ResponseWriter, r *http.Request) {
 	id, ok := clientIDParam(w, r)
 	if !ok {
@@ -36,10 +29,8 @@ func (s *Service) handleClientMeta(w http.ResponseWriter, r *http.Request) {
 
 // handleClientPreview serves GET /api/oidc/clients/{id}/preview/{userId}:
 // the id_token / access_token / user_info claim maps a real
-// authorization would produce for this user and `scopes` query
-// param (space-delimited). Maps, not signed JWTs — nothing here is
-// a bearer credential. No per-client scope list exists in tango, so
-// unknown scopes pass through (upstream filters when configured).
+// authorization would produce for this user and the requested scopes.
+// It returns claim maps, not signed bearer tokens.
 func (s *Service) handleClientPreview(w http.ResponseWriter, r *http.Request) {
 	id, ok := clientIDParam(w, r)
 	if !ok {
@@ -151,7 +142,7 @@ func putProfileClaims(out map[string]any, claims UserClaims) {
 }
 
 // metaView is the trimmed client payload for discovery/configuration
-// surfaces (upstream OidcClientMetaDataDto, snake_case).
+// surfaces use snake_case.
 func (c Client) metaView() map[string]any {
 	return map[string]any{
 		"id":                        c.ID.String(),

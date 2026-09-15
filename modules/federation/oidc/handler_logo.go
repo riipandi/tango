@@ -1,10 +1,6 @@
 package oidc
 
-// handler_logo.go serves the phase 9C client-logo surface: a public
-// bare-bytes read plus admin upload/delete. Upstream transcodes
-// uploads; tango stores the file as-is behind a MIME allowlist (same
-// deviation as the user profile picture). Dark-variant logos stay a
-// 9C+ follow-up.
+// handler_logo.go serves public reads and admin writes for client logos.
 
 import (
 	"context"
@@ -44,7 +40,7 @@ func setLogoCache(w http.ResponseWriter) {
 }
 
 // serveClientLogo serves GET /oidc/clients/{id}/logo — bare image
-// bytes (no envelope), public like upstream.
+// bytes without an API envelope.
 func (s *Service) serveClientLogo(w http.ResponseWriter, r *http.Request) {
 	client, ok := s.clientForLogo(w, r)
 	if !ok {

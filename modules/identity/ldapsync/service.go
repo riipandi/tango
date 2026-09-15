@@ -21,7 +21,7 @@ import (
 // datastoreExecutor keeps the store dependency decoupled in the service.
 type datastoreExecutor = datastore.Executor
 
-// SyncInterval is the recurring cadence (matches upstream PT1H).
+// SyncInterval is the recurring sync cadence.
 const SyncInterval = time.Hour
 
 // ldapClient is the subset of the go-ldap client the sync uses; tests
@@ -104,7 +104,7 @@ func (s *Service) SyncAll(ctx context.Context, settings LDAPSettings) (SyncStats
 	}
 
 	// Admin flag comes from the configured group, resolved after the
-	// member snapshot is complete (mirrors upstream semantics).
+	// member snapshot is complete.
 	for i := range state.users {
 		if _, isAdmin := state.adminNames[state.users[i].Username]; isAdmin {
 			state.users[i].IsAdmin = true
@@ -333,7 +333,7 @@ func dnProperty(property, dn string) string {
 }
 
 // FetchPicture downloads an LDAP profile picture (URL) for storage;
-// unused until profile pictures land, kept near the sync.
+// unused while profile pictures are not part of the sync.
 func (s *Service) FetchPicture(ctx context.Context, raw string) ([]byte, error) {
 	if _, err := url.ParseRequestURI(raw); err != nil {
 		return nil, fmt.Errorf("ldapsync: picture is not a URL")

@@ -9,11 +9,8 @@ import (
 	"github.com/riipandi/tango/internal/storage"
 )
 
-// SeedDefaults copies the bundled application images from the Vite
-// output directory (web/output/images, generated from public/images)
-// into the blob store and returns the detected extension map. An
-// image is skipped when a tombstone exists (admin deleted it on
-// purpose) or when it is already stored.
+// SeedDefaults copies bundled images into the blob store and returns
+// the detected extension map. Existing images and delete markers win.
 func SeedDefaults(ctx context.Context, store storage.Store, sourceDir string) (map[string]string, error) {
 	entries, err := os.ReadDir(sourceDir)
 	if os.IsNotExist(err) {

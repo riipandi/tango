@@ -1,8 +1,6 @@
 package discovery
 
-// discoveryDocument is the subset of OIDC Discovery 1.0 we expose;
-// claims for endpoints that do not exist yet stay listed (phase 4
-// fills them in) while unsupported flavors are omitted entirely.
+// discoveryDocument is the OIDC Discovery 1.0 document we expose.
 type discoveryDocument struct {
 	Issuer                            string   `json:"issuer"`
 	AuthorizationEndpoint             string   `json:"authorization_endpoint"`

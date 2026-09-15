@@ -1,9 +1,6 @@
 package user
 
-// profile_picture_test.go drives the phase 9C picture surface over a
-// real Postgres + FS blob store: admin upload, the bare-bytes read
-// with the bundled-default fallback, reset, and rejection of
-// non-image uploads.
+// profile_picture_test.go covers the profile picture HTTP surface.
 
 import (
 	"context"
@@ -121,7 +118,7 @@ func TestProfilePictureSurface(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
 
-	// The column lands and the .png route serves the bytes bare.
+	// The route serves the stored bytes.
 	stored, err := store.GetByID(t.Context(), userID)
 	require.NoError(t, err)
 	require.NotNil(t, stored.ProfilePicturePath)

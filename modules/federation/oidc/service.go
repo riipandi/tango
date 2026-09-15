@@ -12,10 +12,8 @@ import (
 	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
-// Service implements the provider flows. Identity data arrives via
-// the store's claim readers; token signing via the Phase 3
-// KeyProvider; session cookie resolution via the injected
-// Authenticator (session feature).
+// Service implements the provider flows using injected identity and
+// session providers.
 type Service struct {
 	store         Store
 	keys          jwtutils.KeyProvider

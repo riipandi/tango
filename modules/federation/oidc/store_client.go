@@ -230,7 +230,7 @@ func (s *PostgresStore) UpdateClient(ctx context.Context, id OIDCClientID, param
 	assignments := []string{}
 	// Metadata-owned columns (name + redirect URIs) are never written
 	// from an admin snapshot for CIMD clients — a refresh may have
-	// changed them after this request read its copy (upstream:
+	// changed them after this request read its copy:
 	// CIMDDoesNotOverwriteConcurrentMetadataRefresh).
 	metadataOwned := false
 	if row, err := s.GetClient(ctx, id); err == nil && row.ClientType == "cimd" {
@@ -343,7 +343,7 @@ func (s *PostgresStore) RefreshClientMetadata(ctx context.Context, id OIDCClient
 }
 
 // SetClientLogoPath stores or clears (nil) the logo blob path and
-// keeps the upstream-compat image_type column in sync (the meta
+// keeps the image_type column in sync (the meta
 // view's has_logo reads it).
 func (s *PostgresStore) SetClientLogoPath(ctx context.Context, id OIDCClientID, logoPath *string) error {
 	imageType := new(string)

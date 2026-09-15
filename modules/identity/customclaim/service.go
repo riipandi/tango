@@ -111,8 +111,8 @@ func (s *Service) ListByUser(ctx context.Context, userID user.UserID) ([]CustomC
 	return s.store.ListByUser(ctx, userID)
 }
 
-// ReplaceForUser swaps a user's whole claim set (upstream list-
-// replace PUT). Owner scoping is applied to every item; duplicate
+// ReplaceForUser swaps a user's whole claim set. Owner scoping is
+// applied to every item; duplicate
 // keys inside one call are rejected before touching the database.
 func (s *Service) ReplaceForUser(ctx context.Context, userID user.UserID, params []UpsertParams) ([]CustomClaim, error) {
 	scoped, err := s.scopeParams(params, func(p UpsertParams) UpsertParams {

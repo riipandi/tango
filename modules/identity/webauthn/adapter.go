@@ -10,8 +10,7 @@ import (
 )
 
 // User adapts the identity user to the go-webauthn User contract.
-// The WebAuthn user handle is the user UUID bytes (upstream
-// parity — discoverable login resolves users by handle).
+// The WebAuthn user handle is the user UUID bytes.
 type User struct {
 	u             user.User
 	credentialSet []gowebauthn.Credential
@@ -40,7 +39,7 @@ func (u *User) WebAuthnCredentials() []gowebauthn.Credential {
 
 // toLibraryCredential maps a stored row to the library credential.
 // SignCount stays zero (the schema carries no counter column —
-// upstream parity); clone detection is out of scope.
+// clone detection is out of scope.
 func toLibraryCredential(row StoredCredential) gowebauthn.Credential {
 	return gowebauthn.Credential{
 		ID:              row.CredentialID,

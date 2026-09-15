@@ -1,7 +1,4 @@
-// Package auditlog captures domain events from other modules and
-// exposes them via /api/audit-logs. Storage is abstracted behind
-// Store; the composition root picks Postgres (production) — no
-// memory store.
+// Package auditlog captures domain events and exposes them via HTTP.
 package auditlog
 
 import (
@@ -15,8 +12,7 @@ import (
 const ModuleName = "auditlog"
 
 // Module is the audit log feature: a Store plus a read-only API.
-// Upstream shape: /audit-logs lists the current user's entries,
-// /audit-logs/all and the filter endpoints are admin-only.
+// The self listing is separate from the admin listing and filters.
 type Module struct {
 	store Store
 	// adminGuard (auth → RequireAdmin) protects /all + filters.

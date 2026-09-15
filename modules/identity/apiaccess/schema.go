@@ -18,7 +18,7 @@ import (
 )
 
 // Typed IDs: only URL-facing IDs carry a TypeID; permission IDs are
-// UUIDs surfaced verbatim (upstream DTOs treat them as opaque).
+// UUIDs are exposed as opaque strings.
 type (
 	apiPrefix struct{}
 
@@ -66,7 +66,7 @@ func (p *CreateParams) Validate() error {
 	)
 }
 
-// UpdateParams patches the display name (upstream apiUpdateDto).
+// UpdateParams patches the display name.
 type UpdateParams struct {
 	Name string
 }

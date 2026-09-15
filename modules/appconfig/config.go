@@ -1,11 +1,6 @@
 package appconfig
 
-// config.go catalogs the admin-editable settings: key, value type,
-// public visibility, and the env-backed default. Upstream reference:
-// internal/appconfig/model.go (tag-driven reflect walk) — tango uses
-// an explicit table so grep finds every key. LDAP and SMTP keys are
-// admin-editable with env-backed defaults (sensitive values redact in
-// the admin view); defaults fold env → catalog → DB overrides.
+// config.go defines the admin-editable settings and their defaults.
 
 import (
 	"fmt"
@@ -23,13 +18,13 @@ const (
 	typeBool   valueType = "bool"
 )
 
-// signupModes mirrors the upstream allow_user_signups enum.
+// signupModes lists the allowed signup policies.
 var signupModes = []string{"disabled", "withToken", "open"}
 
-// webauthnVerifications mirrors the upstream user-verification enum.
+// webauthnVerifications lists the allowed WebAuthn verification modes.
 var webauthnVerifications = []string{"required", "preferred"}
 
-// webauthnAttachments mirrors the upstream attachment enum.
+// webauthnAttachments lists the allowed WebAuthn attachment modes.
 var webauthnAttachments = []string{"any", "platform", "cross-platform"}
 
 // configKey describes one editable setting.
@@ -40,8 +35,7 @@ type configKey struct {
 	Default string
 	// OneOf restricts string values to a fixed set (empty = free).
 	OneOf []string
-	// Sensitive marks credentials: the admin view redacts the value
-	// (writes still round-trip, upstream parity with sensitive:"true").
+	// Sensitive marks values that must be hidden in admin responses.
 	Sensitive bool
 }
 
@@ -56,7 +50,7 @@ var configKeys = []configKey{
 	{Key: "allow_own_account_edit", Type: typeBool, Public: true, Default: "true"},
 	{Key: "allow_user_signups", Type: typeString, Public: true, Default: "disabled", OneOf: signupModes},
 
-	// Signup defaults (JSON-encoded, like upstream)
+	// Signup defaults are JSON-encoded.
 	{Key: "signup_default_user_group_ids", Type: typeString},
 	{Key: "signup_default_custom_claims", Type: typeString},
 
@@ -141,8 +135,7 @@ func slicesContains(list []string, want string) bool {
 	return slices.Contains(list, want)
 }
 
-// variable is the wire shape of one setting (snake_case; upstream
-// sends camelCase {key,type,value}).
+// variable is the wire shape of one setting.
 type variable struct {
 	Key      string `json:"key"`
 	Type     string `json:"type"`
@@ -185,7 +178,7 @@ func publicView(values map[string]string) []variable {
 
 // allView lists every key with its visibility flag (admin). The
 // stored value of a sensitive key never leaves the server: the
-// response carries an empty string instead (upstream redacts too).
+// response carries an empty string instead.
 func allView(values map[string]string) []variable {
 	out := make([]variable, 0, len(configKeys))
 	for _, entry := range configKeys {
