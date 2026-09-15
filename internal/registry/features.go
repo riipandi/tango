@@ -3,18 +3,12 @@ package registry
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/huandu/go-sqlbuilder"
-
-	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
@@ -56,129 +50,11 @@ func withLDAPSync(deps Deps, exec datastore.Executor, settingsSource *appconfigR
 	settings := func(ctx context.Context) (ldapsync.LDAPSettings, error) {
 		values, ok := settingsSource.values(ctx)
 		if !ok {
-			return envLDAPSettings(deps.Config), nil
+			return ldapsync.SettingsFromEnv(deps.Config), nil
 		}
-		return mapLDAPSettings(values), nil
+		return ldapsync.FromMergedValues(values), nil
 	}
-	feature := ldapsync.New(service, settings)
-	return feature
-}
-
-// mapLDAPSettings reads the merged appconfig values (env defaults
-// already folded) into the sync settings. Bool parsing is lenient:
-// anything but "true" is off, mirroring the env behavior.
-func mapLDAPSettings(values map[string]string) ldapsync.LDAPSettings {
-	return ldapsync.LDAPSettings{
-		Enabled:           values["ldap_enabled"] == "true",
-		URL:               values["ldap_url"],
-		BindDN:            values["ldap_bind_dn"],
-		BindPassword:      values["ldap_bind_password"],
-		Base:              values["ldap_base"],
-		UserFilter:        values["ldap_user_search_filter"],
-		GroupFilter:       values["ldap_user_group_search_filter"],
-		SkipCertVerify:    values["ldap_skip_cert_verify"] == "true",
-		AttrUserUniqueID:  values["ldap_attribute_user_unique_identifier"],
-		AttrUserUsername:  values["ldap_attribute_user_username"],
-		AttrUserEmail:     values["ldap_attribute_user_email"],
-		AttrUserFirstName: values["ldap_attribute_user_first_name"],
-		AttrUserLastName:  values["ldap_attribute_user_last_name"],
-		AttrUserDisplay:   values["ldap_attribute_user_display_name"],
-		AttrGroupUniqueID: values["ldap_attribute_group_unique_identifier"],
-		AttrGroupName:     values["ldap_attribute_group_name"],
-		AttrGroupMember:   values["ldap_attribute_group_member"],
-		AdminGroupName:    values["ldap_admin_group_name"],
-		SoftDeleteUsers:   values["ldap_soft_delete_users"] == "true",
-	}
-}
-
-// MailerSettingsFromValues builds the relay config from merged
-// appconfig values, falling back to the env config per field. The
-// mailer settings source resolves through this per send.
-func MailerSettingsFromValues(values map[string]string, fallback config.MailerConfig) config.MailerConfig {
-	out := fallback
-	if v := values["smtp_from_email"]; v != "" {
-		out.FromEmail = v
-	}
-	if v := values["smtp_from_name"]; v != "" {
-		out.FromName = v
-	}
-	if v := values["smtp_host"]; v != "" {
-		out.SMTPHost = v
-	}
-	if v := values["smtp_port"]; v != "" {
-		if port, err := strconv.Atoi(v); err == nil {
-			out.SMTPPort = port
-		}
-	}
-	if v, ok := values["smtp_username"]; ok {
-		out.SMTPUsername = v
-	}
-	if v, ok := values["smtp_password"]; ok {
-		out.SMTPPassword = v
-	}
-	if v := values["smtp_secure"]; v != "" {
-		out.SMTPSecure = v == "true"
-	}
-	return out
-}
-
-// appConfigEnvDefaults maps the koanf LDAP/Mailer sections onto the
-// appconfig keys as the env layer of the defaults fold.
-func appConfigEnvDefaults(cfg *config.Config) map[string]string {
-	return map[string]string{
-		"smtp_from_email":                        cfg.Mailer.FromEmail,
-		"smtp_from_name":                         cfg.Mailer.FromName,
-		"smtp_host":                              cfg.Mailer.SMTPHost,
-		"smtp_port":                              strconv.Itoa(cfg.Mailer.SMTPPort),
-		"smtp_username":                          cfg.Mailer.SMTPUsername,
-		"smtp_password":                          cfg.Mailer.SMTPPassword,
-		"smtp_secure":                            strconv.FormatBool(cfg.Mailer.SMTPSecure),
-		"ldap_enabled":                           strconv.FormatBool(cfg.LDAP.Enabled),
-		"ldap_url":                               cfg.LDAP.URL,
-		"ldap_bind_dn":                           cfg.LDAP.BindDN,
-		"ldap_bind_password":                     cfg.LDAP.BindPassword,
-		"ldap_base":                              cfg.LDAP.Base,
-		"ldap_user_search_filter":                cfg.LDAP.UserFilter,
-		"ldap_user_group_search_filter":          cfg.LDAP.GroupFilter,
-		"ldap_skip_cert_verify":                  strconv.FormatBool(cfg.LDAP.SkipCertVerify),
-		"ldap_attribute_user_unique_identifier":  cfg.LDAP.AttrUserUniqueID,
-		"ldap_attribute_user_username":           cfg.LDAP.AttrUserUsername,
-		"ldap_attribute_user_email":              cfg.LDAP.AttrUserEmail,
-		"ldap_attribute_user_first_name":         cfg.LDAP.AttrUserFirstName,
-		"ldap_attribute_user_last_name":          cfg.LDAP.AttrUserLastName,
-		"ldap_attribute_user_display_name":       cfg.LDAP.AttrUserDisplay,
-		"ldap_attribute_group_unique_identifier": cfg.LDAP.AttrGroupUniqueID,
-		"ldap_attribute_group_name":              cfg.LDAP.AttrGroupName,
-		"ldap_attribute_group_member":            cfg.LDAP.AttrGroupMember,
-		"ldap_admin_group_name":                  cfg.LDAP.AdminGroupName,
-		"ldap_soft_delete_users":                 strconv.FormatBool(cfg.LDAP.SoftDeleteUsers),
-	}
-}
-
-// envLDAPSettings maps env config onto the sync settings until
-// appconfig lands; admin-editable keys take over in a later pass.
-func envLDAPSettings(cfg *config.Config) ldapsync.LDAPSettings {
-	return ldapsync.LDAPSettings{
-		Enabled:           cfg.LDAP.Enabled,
-		URL:               cfg.LDAP.URL,
-		BindDN:            cfg.LDAP.BindDN,
-		BindPassword:      cfg.LDAP.BindPassword,
-		Base:              cfg.LDAP.Base,
-		UserFilter:        cfg.LDAP.UserFilter,
-		GroupFilter:       cfg.LDAP.GroupFilter,
-		SkipCertVerify:    cfg.LDAP.SkipCertVerify,
-		AttrUserUniqueID:  cfg.LDAP.AttrUserUniqueID,
-		AttrUserUsername:  cfg.LDAP.AttrUserUsername,
-		AttrUserEmail:     cfg.LDAP.AttrUserEmail,
-		AttrUserFirstName: cfg.LDAP.AttrUserFirstName,
-		AttrUserLastName:  cfg.LDAP.AttrUserLastName,
-		AttrUserDisplay:   cfg.LDAP.AttrUserDisplay,
-		AttrGroupUniqueID: cfg.LDAP.AttrGroupUniqueID,
-		AttrGroupName:     cfg.LDAP.AttrGroupName,
-		AttrGroupMember:   cfg.LDAP.AttrGroupMember,
-		AdminGroupName:    cfg.LDAP.AdminGroupName,
-		SoftDeleteUsers:   cfg.LDAP.SoftDeleteUsers,
-	}
+	return ldapsync.New(service, settings)
 }
 
 // withLDAPSync callsite in newIdentityFeatures receives the ref; the
@@ -437,17 +313,15 @@ func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *s
 		WithSelfAuth(sessions, session.CookieName)
 }
 
-// cimdAllowlistGetter reads the operator-managed CIMD URL allowlist
-// from the app config (JSON array; default deny when unset).
+// cimdAllowlistGetter feeds the OIDC module the operator-managed CIMD
+// URL allowlist from the app config (parsing lives in appconfig).
 func cimdAllowlistGetter(module *appconfig.Module) func() []string {
 	return func() []string {
 		values, err := module.MergedValues(context.Background())
 		if err != nil {
 			return nil
 		}
-		var allowlist []string
-		_ = json.Unmarshal([]byte(values["cimd_url_allowlist"]), &allowlist)
-		return allowlist
+		return appconfig.CIMDAllowlist(values)
 	}
 }
 
@@ -493,114 +367,9 @@ func withSCIMSync(deps Deps) federation.Feature {
 		panic("registry: cipher key derivation is always 32 bytes: " + err.Error())
 	}
 	store := scimsync.NewPostgresStore(deps.DB, cipher)
-	source := scimSnapshotSource{db: deps.DB}
+	source := scimsync.NewIdentitySnapshotSource(deps.DB)
 	service := scimsync.NewService(store, source, logger.Slog(deps.Logger))
 	return scimsync.New(service)
-}
-
-// scimSnapshotSource adapts the identity stores to the SCIM snapshot
-// contract, scoped by the client's group allowlist.
-type scimSnapshotSource struct {
-	db datastore.Store
-}
-
-func (s scimSnapshotSource) UsersForClient(ctx context.Context, clientID string) ([]scimsync.ScimUserRow, error) {
-	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select("DISTINCT u.id", "u.username", "u.display_name", "u.first_name", "u.last_name", "u.email", "u.disabled")
-	sb.From("public.users AS u")
-	sb.Join("public.user_groups_users AS ugu", "ugu.user_id = u.id")
-	sb.Join("public.oidc_clients_allowed_user_groups AS ag", "ag.user_group_id = ugu.user_group_id")
-	sb.Where(sb.E("ag.oidc_client_id", clientID))
-	return scimUserRows(ctx, s.db, sb)
-}
-
-func (s scimSnapshotSource) GroupsForClient(ctx context.Context, clientID string) ([]scimsync.ScimGroupRow, error) {
-	// Groups the client may see, with their member user IDs.
-	groups := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	groups.Select("g.id", "g.name")
-	groups.From("public.user_groups AS g")
-	groups.Join("public.oidc_clients_allowed_user_groups AS ag", "ag.user_group_id = g.id")
-	groups.Where(groups.E("ag.oidc_client_id", clientID))
-	gQuery, gArgs := groups.Build()
-
-	rows, err := s.db.Query(ctx, gQuery, gArgs...)
-	if err != nil {
-		return nil, fmt.Errorf("scimsync: snapshot groups: %w", err)
-	}
-	defer rows.Close()
-
-	var out []scimsync.ScimGroupRow
-	ids := make([]string, 0, 8)
-	for rows.Next() {
-		var row scimsync.ScimGroupRow
-		var idText string
-		if scanErr := rows.Scan(&idText, &row.Name); scanErr != nil {
-			return nil, fmt.Errorf("scimsync: scan group: %w", scanErr)
-		}
-		row.ID = idText
-		ids = append(ids, idText)
-		out = append(out, row)
-	}
-	if rowsErr := rows.Err(); rowsErr != nil {
-		return nil, rowsErr
-	}
-	if len(out) == 0 {
-		return out, nil
-	}
-
-	// Members of those groups.
-	members := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	members.Select("user_group_id", "user_id")
-	members.From("public.user_groups_users")
-	members.Where(members.In("user_group_id", toAny(ids)...))
-	mQuery, mArgs := members.Build()
-	mRows, err := s.db.Query(ctx, mQuery, mArgs...)
-	if err != nil {
-		return nil, fmt.Errorf("scimsync: snapshot members: %w", err)
-	}
-	defer mRows.Close()
-
-	byGroup := map[string][]string{}
-	for mRows.Next() {
-		var groupID, userID string
-		if scanErr := mRows.Scan(&groupID, &userID); scanErr != nil {
-			return nil, fmt.Errorf("scimsync: scan member: %w", scanErr)
-		}
-		byGroup[groupID] = append(byGroup[groupID], userID)
-	}
-	for i := range out {
-		out[i].Members = byGroup[out[i].ID]
-	}
-	return out, mRows.Err()
-}
-
-func scimUserRows(ctx context.Context, db datastore.Executor, sb *sqlbuilder.SelectBuilder) ([]scimsync.ScimUserRow, error) {
-	query, args := sb.Build()
-	rows, err := db.Query(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("scimsync: snapshot users: %w", err)
-	}
-	defer rows.Close()
-
-	var out []scimsync.ScimUserRow
-	for rows.Next() {
-		var row scimsync.ScimUserRow
-		var disabled bool
-		if err := rows.Scan(&row.ID, &row.Username, &row.DisplayName, &row.FirstName, &row.LastName, &row.Email, &disabled); err != nil {
-			return nil, fmt.Errorf("scimsync: scan user: %w", err)
-		}
-		row.Active = !disabled
-		out = append(out, row)
-	}
-	return out, rows.Err()
-}
-
-func toAny[T any](in []T) []any {
-	out := make([]any, len(in))
-	for i, v := range in {
-		out[i] = v
-	}
-	return out
 }
 
 // newKeyService builds the JWKS key service (private halves

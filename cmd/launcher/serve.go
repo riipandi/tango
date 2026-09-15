@@ -138,7 +138,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 				if err != nil {
 					return fallback, err
 				}
-				return registry.MailerSettingsFromValues(values, fallback), nil
+				return mailer.SettingsFromValues(values, fallback), nil
 			})
 		}
 	}

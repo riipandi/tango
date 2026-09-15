@@ -11,8 +11,6 @@ import (
 	"time"
 
 	"go.jetify.com/typeid"
-
-	"github.com/riipandi/tango/modules/federation"
 )
 
 // Typed IDs for the SCIM tables: UUIDv7 suffix, snake_case prefix
@@ -63,11 +61,3 @@ func (p UpsertParams) Validate() error {
 	}
 	return nil
 }
-
-// Feature is the wireable scimsync unit.
-type Feature struct{}
-
-// Name implements federation.Feature.
-func (Feature) Name() string { return "scimsync" }
-
-var _ federation.Feature = Feature{}

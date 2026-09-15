@@ -43,7 +43,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 ## Common Tasks
 
 - Add an endpoint: follow the matching `llms/phase-*.md` task list; create the request in Yaak (via MCP) and send it against the running server before ticking a checkbox. Exported request specs land in `api/specs/*.yaml`.
-- Add a config key: entry in `modules/appconfig/config.go` (+ env default wiring in `internal/registry`); `.env.example` documents the env name.
+- Add a config key: catalog entry in `modules/appconfig/config.go` + env layer in `modules/appconfig/env.go` (`EnvDefaults`); `.env.example` documents the env name.
 - Frontend asset images live in `public/images/` → copied to `web/output/images` by the Vite build; never embed them in Go.
 - Dev LDAP server: `deploy/glauth/` (postgres plugin backend, seeded via `seed.sql`).
 - Migrations: `tango db migrate:create`, `migrate:up`, `migrate:status` (see `tango db --help`); bump the version/count assertions in the migrator tests (`database/migrator_test.go`, `cmd/launcher/db_migrate*_test.go`) with every new migration.

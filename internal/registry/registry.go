@@ -132,7 +132,7 @@ func New(deps Deps) *kernel.Registry {
 	// test-email slice riding the phase 7 mail queue.
 	appconfigModule := appconfig.New(deps.Jobs).
 		WithStore(appconfig.NewPostgresStore(deps.DB)).
-		WithEnvDefaults(appConfigEnvDefaults(deps.Config))
+		WithEnvDefaults(appconfig.EnvDefaults(deps.Config))
 	appconfigModule.UseGuard(adminGuard)
 	reg.Register(appconfigModule)
 	// LDAP sync reads its settings through the appconfig surface; the
