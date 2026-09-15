@@ -19,6 +19,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
@@ -102,7 +103,7 @@ func (s *Service) Name() string { return "onetimeaccess" }
 // Feature is the wireable unit.
 type Feature struct {
 	service      *Service
-	adminGuard   func(http.Handler) http.Handler
+	adminGuard   kernel.Guard
 	cookieName   string
 	cookieSecure bool
 }
@@ -114,7 +115,7 @@ func New(service *Service) Feature { return Feature{service: service} }
 func (Feature) Name() string { return "onetimeaccess" }
 
 // WithAdminGuard registers the admin guard for minting.
-func (f Feature) WithAdminGuard(guard func(http.Handler) http.Handler) Feature {
+func (f Feature) WithAdminGuard(guard kernel.Guard) Feature {
 	f.adminGuard = guard
 	return f
 }

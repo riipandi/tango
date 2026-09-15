@@ -32,7 +32,11 @@ func newStoreStack(t *testing.T) (Store, *Module) {
 	t.Cleanup(func() { ds.Close() })
 
 	store := NewPostgresStore(ds)
-	return store, New(nil).WithStore(store).WithAdminGuard(testPrincipalContext)
+	return store, func() *Module {
+		m := New(nil).WithStore(store)
+		m.UseGuard(testPrincipalContext)
+		return m
+	}()
 }
 
 // TestConfigCRUD covers the public/admin views plus the PUT round

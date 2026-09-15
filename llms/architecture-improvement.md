@@ -23,7 +23,7 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
 | ----- | ----------------------------------------------------------- | ---------------------------------------------------------------------- | ------- | ---------- |
 | 1     | [arch-phase-01-mechanical-dedup.md](./arch-phase-01-mechanical-dedup.md) | Shared pgx helpers, ErrNoRows mapping, constant fixes, antree relocation | done    | 2026-09-15 |
 | 2     | [arch-phase-02-error-mapping.md](./arch-phase-02-error-mapping.md)       | Central error→HTTP mapping, remove per-handler `writeError` copies      | done    | 2026-09-15 |
-| 3     | [arch-phase-03-kernel-guards.md](./arch-phase-03-kernel-guards.md)       | `kernel.Guard` + `kernel.Authenticator`, remove guard option duplicates | planned | 2026-09-15 |
+| 3     | [arch-phase-03-kernel-guards.md](./arch-phase-03-kernel-guards.md)       | `kernel.Guard` + `kernel.Authenticator`, remove guard option duplicates | done    | 2026-09-15 |
 | 4     | [arch-phase-04-module-layout.md](./arch-phase-04-module-layout.md)       | Standard module layout, settings mapping back into modules, slim registry | planned | 2026-09-15 |
 | 5     | [arch-phase-05-token-store.md](./arch-phase-05-token-store.md)           | Consolidate duplicated `auth_tokens` stores into one token package      | planned | 2026-09-15 |
 | 6     | [arch-phase-06-oidc-split.md](./arch-phase-06-oidc-split.md)             | Decompose the 4k-LOC `federation/oidc` package per bounded context      | planned | 2026-09-15 |
@@ -47,3 +47,7 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
   removed; 21 sentinels across 8 modules now carry their HTTP status. Live curl checks pass.
   New finding for phase 3: the machine-auth mount on `/api/users` shadows the admin mount
   (pre-existing, identical on baseline).
+- 2026-09-15 Phase 3 done: `kernel.Guard`/`Guarded`/`Authenticator`/`Principal` contracts;
+  middleware aliases; 5 `RouteGuard` types removed. Two pre-existing guard bugs fixed and live-
+  verified: `/api/users` machine mount shadowed the admin mount (admin sessions 401'd), and
+  sync-ldap was anonymous-reachable (nil guard never wired, fail-open).

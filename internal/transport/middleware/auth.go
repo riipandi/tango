@@ -5,27 +5,17 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// Principal is the authenticated actor attached to the request
-// context by the auth middleware. Fields stay transport-level
-// strings; handlers parse typed IDs as needed. The middleware never
-// imports modules — resolvers are injected as interfaces.
-type Principal struct {
-	SessionID string
-	UserID    string
-	Username  string
-	Email     string
-	Provider  string
-	IsAdmin   bool
-}
+// Principal and Authenticator are the kernel contracts; the middleware
+// implements Authenticator (session resolver) structurally.
+type Principal = kernel.Principal
 
 // Authenticator resolves a session cookie token to a principal;
-// implemented by the identity session feature.
-type Authenticator interface {
-	ResolveSession(ctx context.Context, token string) (Principal, error)
-}
+// wire the verifier in the api-key phase.
+type Authenticator = kernel.Authenticator
 
 // APIKeyVerifier resolves an X-API-KEY header value to a principal;
 // wired by the registry once the api key feature lands.

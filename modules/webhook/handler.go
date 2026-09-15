@@ -38,11 +38,10 @@ func New(service *Service) *Module {
 	return &Module{service: service}
 }
 
-// WithAdminGuard protects every route. Session auth wrapped in
+// UseGuard protects every route. Session auth wrapped in
 // RequireAdmin is the production wiring.
-func (m *Module) WithAdminGuard(guard func(http.Handler) http.Handler) *Module {
+func (m *Module) UseGuard(guard kernel.Guard) {
 	m.adminGuard = guard
-	return m
 }
 
 // Store exposes the persistence layer for the recurring log-pruning

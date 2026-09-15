@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-ozzo/ozzo-validation/v4"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
@@ -65,7 +66,7 @@ func (s *Service) Name() string { return "emailverification" }
 // Feature is the wireable unit.
 type Feature struct {
 	service  *Service
-	selfAuth middleware.Authenticator
+	selfAuth kernel.Authenticator
 	cookie   string
 }
 
@@ -77,7 +78,7 @@ func (Feature) Name() string { return "emailverification" }
 
 // WithSelfAuth registers the session resolver (verification is
 // self-service only).
-func (f Feature) WithSelfAuth(auth middleware.Authenticator, cookieName string) Feature {
+func (f Feature) WithSelfAuth(auth kernel.Authenticator, cookieName string) Feature {
 	f.selfAuth, f.cookie = auth, cookieName
 	return f
 }

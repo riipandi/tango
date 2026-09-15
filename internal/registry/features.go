@@ -61,7 +61,6 @@ func withLDAPSync(deps Deps, exec datastore.Executor, settingsSource *appconfigR
 		return mapLDAPSettings(values), nil
 	}
 	feature := ldapsync.New(service, settings)
-	feature.WithGuard(nil) // guard wired by the caller below
 	return feature
 }
 
@@ -282,7 +281,9 @@ func newWebhookModule(deps Deps, guard func(http.Handler) http.Handler) *webhook
 		webhook.WithSender(webhook.NewFetcherSender(deps.Fetcher)),
 	)
 	service.RegisterQueue(deps.Queue)
-	return webhook.New(service).WithAdminGuard(guard)
+	m := webhook.New(service)
+	m.UseGuard(guard)
+	return m
 }
 
 // secretCipher derives the AES-256 key sealing module secrets at rest
@@ -401,9 +402,13 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), recorder, apiaccess.WithAdminGuard(adminAuth)),
 		apiKeys,
-		withLDAPSync(deps, deps.DB, ldapSettingsSource),
 	}
-	images.WithGuard(adminAuth)
+
+	ldapSync := withLDAPSync(deps, deps.DB, ldapSettingsSource)
+	ldapSync.UseGuard(adminAuth)
+	features = append(features, ldapSync)
+
+	images.UseGuard(adminAuth)
 	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), images
 }
 

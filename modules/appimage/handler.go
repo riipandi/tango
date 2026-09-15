@@ -6,6 +6,8 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
 )
@@ -21,34 +23,40 @@ func (s *Service) APIRoutes(r chi.Router) {
 	r.Get("/application-images/favicon", s.serveImage(ImageFavicon))
 	r.Get("/application-images/default-profile-picture", s.serveImage(ImageProfilePic))
 
-	r.With(guard).Put("/application-images/logo", s.updateLogo)
-	r.With(guard).Delete("/application-images/logo", s.deleteLogo)
-	r.With(guard).Put("/application-images/email", s.updateImage(ImageEmailLogo))
-	r.With(guard).Delete("/application-images/email", s.deleteImage(ImageEmailLogo))
-	r.With(guard).Put("/application-images/background", s.updateImage(ImageBackground))
-	r.With(guard).Delete("/application-images/background", s.deleteImage(ImageBackground))
-	r.With(guard).Put("/application-images/favicon", s.updateImage(ImageFavicon))
-	r.With(guard).Delete("/application-images/favicon", s.deleteImage(ImageFavicon))
-	r.With(guard).Put("/application-images/default-profile-picture", s.updateImage(ImageProfilePic))
-	r.With(guard).Delete("/application-images/default-profile-picture", s.deleteImage(ImageProfilePic))
+	guard := s.guard
+	if guard == nil {
+		// Unguarded builds deny mutations (fail closed).
+		guard = denyAll
+	}
+	mutate := r.With(guard)
+	mutate.Put("/application-images/logo", s.updateLogo)
+	mutate.Delete("/application-images/logo", s.deleteLogo)
+	mutate.Put("/application-images/email", s.updateImage(ImageEmailLogo))
+	mutate.Delete("/application-images/email", s.deleteImage(ImageEmailLogo))
+	mutate.Put("/application-images/background", s.updateImage(ImageBackground))
+	mutate.Delete("/application-images/background", s.deleteImage(ImageBackground))
+	mutate.Put("/application-images/favicon", s.updateImage(ImageFavicon))
+	mutate.Delete("/application-images/favicon", s.deleteImage(ImageFavicon))
+	mutate.Put("/application-images/default-profile-picture", s.updateImage(ImageProfilePic))
+	mutate.Delete("/application-images/default-profile-picture", s.deleteImage(ImageProfilePic))
 }
 
 var _ identity.APIFeature = &Service{}
+var _ kernel.Guarded = &Service{}
 
 // Name implements identity.Feature.
 func (*Service) Name() string { return "appimage" }
 
-// guard is replaced at wiring time via WithGuard; unguarded builds deny mutations (fail closed).
-var guard = func(h http.Handler) http.Handler {
+// denyAll rejects every mutation when no guard is wired.
+var denyAll = func(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
 	})
 }
 
-// WithGuard sets the admin middleware protecting mutations.
-func (s *Service) WithGuard(g func(http.Handler) http.Handler) *Service {
-	guard = g
-	return s
+// UseGuard sets the admin middleware protecting mutations.
+func (s *Service) UseGuard(g kernel.Guard) {
+	s.guard = g
 }
 
 func (s *Service) serveLogo(w http.ResponseWriter, r *http.Request) {

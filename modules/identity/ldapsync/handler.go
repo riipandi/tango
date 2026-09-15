@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
 )
@@ -19,7 +21,7 @@ type SettingsProvider func(ctx context.Context) (LDAPSettings, error)
 type APIFeature struct {
 	service  *Service
 	settings SettingsProvider
-	guard    func(chi.Router) chi.Router
+	guard    kernel.Guard
 }
 
 // New builds the feature over the sync service and a settings source.
@@ -32,22 +34,21 @@ func (*APIFeature) Name() string { return "ldapsync" }
 
 var _ identity.APIFeature = &APIFeature{}
 
-// WithGuard sets the admin middleware for the trigger endpoint.
-func (f *APIFeature) WithGuard(g func(chi.Router) chi.Router) *APIFeature {
+// UseGuard sets the admin middleware for the trigger endpoint.
+func (f *APIFeature) UseGuard(g kernel.Guard) {
 	f.guard = g
-	return f
 }
 
 // APIRoutes mounts POST /application-configuration/sync-ldap.
+// Without a guard nothing mounts — fail closed.
 func (f *APIFeature) APIRoutes(r chi.Router) {
-	mount := func(fn http.HandlerFunc) {
-		if f.guard != nil {
-			f.guard(r).Post("/application-configuration/sync-ldap", fn)
-			return
-		}
-		r.Post("/application-configuration/sync-ldap", fn)
+	if f.guard == nil {
+		return
 	}
-	mount(f.syncLDAP)
+	r.Group(func(gr chi.Router) {
+		gr.Use(f.guard)
+		gr.Post("/application-configuration/sync-ldap", f.syncLDAP)
+	})
 }
 
 // syncLDAP runs one sync inline so the response reports the outcome.

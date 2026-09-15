@@ -14,12 +14,11 @@ package oidc
 import (
 	"context"
 	"errors"
-	"net/http"
 	"time"
 
 	"go.jetify.com/typeid"
 
-	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/internal/kernel"
 )
 
 // Typed IDs for the OIDC/OAuth 2.0 tables: UUIDv7 suffix, snake_case
@@ -104,8 +103,8 @@ type APIAccessProvider interface {
 // gates the users/me surfaces. Both fail closed when absent.
 type Feature struct {
 	service    *Service
-	adminGuard func(http.Handler) http.Handler
-	selfAuth   middleware.Authenticator
+	adminGuard kernel.Guard
+	selfAuth   kernel.Authenticator
 	cookieName string
 }
 
@@ -116,13 +115,13 @@ func New(service *Service) Feature { return Feature{service: service} }
 func (Feature) Name() string { return "oidc" }
 
 // WithAdminGuard registers the admin guard for client management.
-func (f Feature) WithAdminGuard(guard func(http.Handler) http.Handler) Feature {
+func (f Feature) WithAdminGuard(guard kernel.Guard) Feature {
 	f.adminGuard = guard
 	return f
 }
 
 // WithSelfAuth registers the session resolver for users/me surfaces.
-func (f Feature) WithSelfAuth(auth middleware.Authenticator, cookieName string) Feature {
+func (f Feature) WithSelfAuth(auth kernel.Authenticator, cookieName string) Feature {
 	f.selfAuth, f.cookieName = auth, cookieName
 	return f
 }

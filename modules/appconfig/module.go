@@ -52,11 +52,10 @@ func (m *Module) WithStore(store Store) *Module {
 	return m
 }
 
-// WithAdminGuard protects the admin routes; without one nothing
+// UseGuard protects the admin routes; without one nothing
 // admin-facing mounts.
-func (m *Module) WithAdminGuard(guard func(http.Handler) http.Handler) *Module {
+func (m *Module) UseGuard(guard kernel.Guard) {
 	m.guard = guard
-	return m
 }
 
 // WithEnvDefaults seeds the env-backed defaults (LDAP_*/MAILER_*

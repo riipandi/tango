@@ -133,12 +133,6 @@ upstream handlers. Remaining gaps are planned in `llms/phase-09-parity-gap.md`.
 | PUT    | `/api/scim/service-provider/{id}`      | Update SCIM service provider | done — phase 8    |
 | POST   | `/api/scim/service-provider/{id}/sync` | Sync SCIM service provider   | done — phase 8    |
 
-## Storage
-
-| Method | Endpoint                      | Summary / Yaak Title                                   | Status                                                     |
-| ------ | ----------------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
-| GET    | `/api/storage/sqlite-warning` | Get whether the SQLite storage warning should be shown | won't port — Postgres-only (upstream-specific)             |
-
 ## User Groups
 
 | Method | Endpoint                      | Summary / Yaak Title    | Status |

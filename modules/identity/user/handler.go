@@ -2,6 +2,7 @@ package user
 
 import (
 	"net/http"
+	"strings"
 
 	jsonv2 "encoding/json/v2"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
@@ -103,20 +105,39 @@ func (s *Service) APIRoutes(r chi.Router) {
 		}
 	}
 
-	if s.guard == nil {
-		mount(r)
-	} else {
+	if s.guard != nil && s.apiGuard != nil {
+		// Session-admin and machine (API key) access share one mount:
+		// registering the same paths twice makes chi's last
+		// registration silently shadow the first.
+		r.Group(func(ar chi.Router) {
+			ar.Use(eitherGuard(s.guard, s.apiGuard))
+			mount(ar)
+		})
+	} else if s.guard != nil {
 		r.Group(func(ar chi.Router) {
 			ar.Use(s.guard)
 			mount(ar)
 		})
-	}
-
-	// Machine surface: the same admin routes behind X-API-KEY.
-	if s.apiGuard != nil {
+	} else if s.apiGuard != nil {
 		r.Group(func(ar chi.Router) {
 			ar.Use(s.apiGuard)
 			mount(ar)
+		})
+	} else {
+		mount(r)
+	}
+}
+
+// eitherGuard prefers the session-admin path; requests carrying an
+// X-API-KEY header go to the machine guard instead.
+func eitherGuard(admin, api kernel.Guard) kernel.Guard {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.TrimSpace(r.Header.Get("X-API-KEY")) != "" {
+				api(next).ServeHTTP(w, r)
+				return
+			}
+			admin(next).ServeHTTP(w, r)
 		})
 	}
 }

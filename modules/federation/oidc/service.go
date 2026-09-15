@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
@@ -19,7 +19,7 @@ import (
 type Service struct {
 	store         Store
 	keys          jwtutils.KeyProvider
-	authenticator middleware.Authenticator
+	authenticator kernel.Authenticator
 	apiAccess     APIAccessProvider
 	issuer        string
 	cookieName    string
@@ -56,7 +56,7 @@ func WithAPIAccess(p APIAccessProvider) Option { return func(s *Service) { s.api
 
 // WithAuthenticator injects the session cookie resolver used by the
 // optional-auth /authorize flow.
-func WithAuthenticator(auth middleware.Authenticator) Option {
+func WithAuthenticator(auth kernel.Authenticator) Option {
 	return func(s *Service) { s.authenticator = auth }
 }
 

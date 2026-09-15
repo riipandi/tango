@@ -94,8 +94,6 @@ are stored as-is behind the allowlist; dark-variant client logos skipped.
       `logout_callback_uris`/`grant_types` into the row (client_type `cimd`, public, PKCE),
       and admin updates skip those document-owned fields. Deviation recorded in
       `tango-deviations.md`.
-- [x] `GET /api/storage/sqlite-warning` — **won't port** (Postgres-only); keep recorded in
-      `endpoint-reference.md` as a non-goal so future audits stop flagging it.
 
 **Phase 9 final parity**: 112/113 upstream endpoints implemented; 1 non-goal
 (`sqlite-warning`). Optional stretch landed: `smtp_*`/`ldap_*` settings moved into

@@ -69,7 +69,6 @@ variant), planned: profile-picture/client-logo bytes (phase 9C).
 
 ## Deliberate non-goals
 
-- `GET /api/storage/sqlite-warning` — Postgres-only, never ported.
 - SQLite/MySQL storage backends — Postgres only.
 - Geolite IP enrichment — optional upstream tier, not ported (audit log IP column exists).
 - Upstream invitations flow (signup tokens cover the need; revisit if requested).

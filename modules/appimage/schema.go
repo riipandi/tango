@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/storage"
 )
 
@@ -66,6 +67,7 @@ type Service struct {
 	store      storage.Store
 	mu         sync.RWMutex
 	extensions map[string]string
+	guard      kernel.Guard
 }
 
 // NewService builds the service and seeds bundled defaults.

@@ -8,7 +8,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/internal/kernel"
 )
 
 // ModuleName identifies the audit log module in the registry.
@@ -22,7 +22,7 @@ type Module struct {
 	// adminGuard (auth → RequireAdmin) protects /all + filters.
 	adminGuard func(http.Handler) http.Handler
 	// selfAuth resolves the session cookie for the self listing.
-	selfAuth middleware.Authenticator
+	selfAuth kernel.Authenticator
 	cookie   string
 }
 
@@ -43,7 +43,7 @@ func (m *Module) MountAdminAPI(guard func(http.Handler) http.Handler) {
 
 // MountSelfAPI wires the session authenticator for the per-user
 // listing.
-func (m *Module) MountSelfAPI(auth middleware.Authenticator, cookieName string) {
+func (m *Module) MountSelfAPI(auth kernel.Authenticator, cookieName string) {
 	m.selfAuth = auth
 	m.cookie = cookieName
 }

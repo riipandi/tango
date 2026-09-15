@@ -17,20 +17,17 @@ import (
 // mountRouter mounts the feature the way the registry does, with a
 // guard that any request passes (or rejects with X-Block).
 func mountRouter(feature *APIFeature) chi.Router {
-	r := chi.NewRouter()
-	module := feature.WithGuard(func(next chi.Router) chi.Router {
-		next.Use(func(h http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Header.Get("X-Block") != "" {
-					w.WriteHeader(http.StatusForbidden)
-					return
-				}
-				h.ServeHTTP(w, r)
-			})
+	feature.UseGuard(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("X-Block") != "" {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
 		})
-		return next
 	})
-	r.Route("/api", module.APIRoutes)
+	r := chi.NewRouter()
+	r.Route("/api", feature.APIRoutes)
 	return r
 }
 

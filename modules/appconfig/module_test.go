@@ -43,6 +43,11 @@ func testPrincipalContext(next http.Handler) http.Handler {
 	})
 }
 
+func withGuard(m *Module) *Module {
+	m.UseGuard(testPrincipalContext)
+	return m
+}
+
 func mount(t *testing.T, module *Module) chi.Router {
 	t.Helper()
 	reg := kernel.NewRegistry()
@@ -68,7 +73,7 @@ func post(t *testing.T, router chi.Router, path, body string) *httptest.Response
 
 func TestTestEmailQueuesToTheSignedInAdmin(t *testing.T) {
 	sender := &fakeSender{}
-	router := mount(t, New(sender).WithAdminGuard(testPrincipalContext))
+	router := mount(t, withGuard(New(sender)))
 
 	w := post(t, router, "/api/application-configuration/test-email", "")
 	require.Equal(t, http.StatusAccepted, w.Code, w.Body.String())
@@ -80,7 +85,7 @@ func TestTestEmailQueuesToTheSignedInAdmin(t *testing.T) {
 
 func TestTestEmailHonoursAnExplicitRecipient(t *testing.T) {
 	sender := &fakeSender{}
-	router := mount(t, New(sender).WithAdminGuard(testPrincipalContext))
+	router := mount(t, withGuard(New(sender)))
 
 	w := post(t, router, "/api/application-configuration/test-email",
 		`{"email":"ops@example.com"}`)
@@ -90,7 +95,7 @@ func TestTestEmailHonoursAnExplicitRecipient(t *testing.T) {
 }
 
 func TestTestEmailRejectsABadAddress(t *testing.T) {
-	router := mount(t, New(&fakeSender{}).WithAdminGuard(testPrincipalContext))
+	router := mount(t, withGuard(New(&fakeSender{})))
 
 	for _, body := range []string{`{"email":"not-an-email"}`, `{"email":`} {
 		w := post(t, router, "/api/application-configuration/test-email", body)
@@ -100,7 +105,7 @@ func TestTestEmailRejectsABadAddress(t *testing.T) {
 
 func TestTestEmailSurfacesQueueFailure(t *testing.T) {
 	sender := &fakeSender{err: assert.AnError}
-	router := mount(t, New(sender).WithAdminGuard(testPrincipalContext))
+	router := mount(t, withGuard(New(sender)))
 
 	w := post(t, router, "/api/application-configuration/test-email", "")
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
@@ -108,7 +113,7 @@ func TestTestEmailSurfacesQueueFailure(t *testing.T) {
 
 func TestModuleFailClosedWithoutGuardOrMailer(t *testing.T) {
 	// No mailer: nothing to deliver, so nothing mounts.
-	router := mount(t, New(nil).WithAdminGuard(testPrincipalContext))
+	router := mount(t, withGuard(New(nil)))
 	w := post(t, router, "/api/application-configuration/test-email", "")
 	assert.Equal(t, http.StatusNotFound, w.Code)
 

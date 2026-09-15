@@ -2,25 +2,22 @@ package user
 
 import (
 	"context"
-	"net/http"
 	"strings"
 
-	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 )
 
-// RouteGuard wraps a handler with authentication middleware
 // (stdlib shape, so this package stays transport-agnostic).
-type RouteGuard func(http.Handler) http.Handler
 
 // Service holds the user business rules and HTTP surface. It is the
 // identity module's mandatory core feature.
 type Service struct {
 	store    Store
 	recorder identity.Recorder
-	guard    RouteGuard
-	apiGuard RouteGuard
-	selfAuth middleware.Authenticator
+	guard    kernel.Guard
+	apiGuard kernel.Guard
+	selfAuth kernel.Authenticator
 	cookie   string
 
 	images         ImageStore
@@ -34,20 +31,20 @@ type ServiceOption func(*Service)
 
 // WithAdminGuard protects the admin API routes; without it the
 // routes stay open (tests, isolated tooling).
-func WithAdminGuard(g RouteGuard) ServiceOption {
+func WithAdminGuard(g kernel.Guard) ServiceOption {
 	return func(s *Service) { s.guard = g }
 }
 
 // WithAPIKeyGuard adds a second admin route mount accepting the
 // X-API-KEY header, so machine clients reach the same admin surface
 // without a browser session.
-func WithAPIKeyGuard(g RouteGuard) ServiceOption {
+func WithAPIKeyGuard(g kernel.Guard) ServiceOption {
 	return func(s *Service) { s.apiGuard = g }
 }
 
 // WithSelfAuth wires the session resolver for the self-service
 // endpoints (/users/me).
-func WithSelfAuth(auth middleware.Authenticator, cookieName string) ServiceOption {
+func WithSelfAuth(auth kernel.Authenticator, cookieName string) ServiceOption {
 	return func(s *Service) { s.selfAuth, s.cookie = auth, cookieName }
 }
 

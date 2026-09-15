@@ -2,8 +2,8 @@ package apiaccess
 
 import (
 	"context"
-	"net/http"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 )
 
@@ -11,20 +11,17 @@ import (
 type Service struct {
 	store    Store
 	recorder identity.Recorder
-	guard    RouteGuard
+	guard    kernel.Guard
 }
 
 var _ identity.APIFeature = (*Service)(nil)
-
-// RouteGuard wraps a handler with authentication middleware.
-type RouteGuard func(next http.Handler) http.Handler
 
 // ServiceOption configures the API access feature.
 type ServiceOption func(*Service)
 
 // WithAdminGuard protects the routes; without it they stay open
 // (tests, isolated tooling).
-func WithAdminGuard(g RouteGuard) ServiceOption {
+func WithAdminGuard(g kernel.Guard) ServiceOption {
 	return func(s *Service) { s.guard = g }
 }
 

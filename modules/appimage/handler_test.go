@@ -29,8 +29,8 @@ func upload(t *testing.T, field, filename, content string) (body *bytes.Buffer, 
 	return &buf, writer.FormDataContentType()
 }
 
-// TestGuardFailsClosed runs before any WithGuard call: mutations must
-// be denied while the package guard is unset.
+// TestGuardFailsClosed runs before any UseGuard call: mutations must
+// be denied while no guard is wired.
 func TestGuardFailsClosed(t *testing.T) {
 	svc := NewService(mustStorage(t), nil)
 	r := chi.NewRouter()
@@ -47,10 +47,8 @@ func TestGuardFailsClosed(t *testing.T) {
 // TestHandlerImageLifecycle mounts the routes with a pass-through
 // guard and drives serve/update/delete.
 func TestHandlerImageLifecycle(t *testing.T) {
-	originalGuard := guard
-	t.Cleanup(func() { guard = originalGuard })
-
-	svc := NewService(mustStorage(t), nil).WithGuard(func(next http.Handler) http.Handler {
+	svc := NewService(mustStorage(t), nil)
+	svc.UseGuard(func(next http.Handler) http.Handler {
 		return next // pass-through: tests exercise the handler body
 	})
 	r := chi.NewRouter()

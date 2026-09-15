@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-webauthn/webauthn/protocol"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -23,8 +24,8 @@ import (
 // Feature is the wireable webauthn unit.
 type Feature struct {
 	service    *Service
-	adminGuard func(http.Handler) http.Handler
-	selfAuth   middleware.Authenticator
+	adminGuard kernel.Guard
+	selfAuth   kernel.Authenticator
 	cookieName string
 }
 
@@ -37,13 +38,13 @@ func New(service *Service) Feature { return Feature{service: service} }
 func (Feature) Name() string { return "webauthn" }
 
 // WithAdminGuard registers the admin guard for credential CRUD.
-func (f Feature) WithAdminGuard(guard func(http.Handler) http.Handler) Feature {
+func (f Feature) WithAdminGuard(guard kernel.Guard) Feature {
 	f.adminGuard = guard
 	return f
 }
 
 // WithSelfAuth registers the session resolver for ceremony auth.
-func (f Feature) WithSelfAuth(auth middleware.Authenticator, cookieName string) Feature {
+func (f Feature) WithSelfAuth(auth kernel.Authenticator, cookieName string) Feature {
 	f.selfAuth, f.cookieName = auth, cookieName
 	return f
 }

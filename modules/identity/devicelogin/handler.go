@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-ozzo/ozzo-validation/v4"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
@@ -20,7 +21,7 @@ import (
 // Feature is the wireable device login unit.
 type Feature struct {
 	service      *Service
-	selfAuth     middleware.Authenticator
+	selfAuth     kernel.Authenticator
 	cookieName   string
 	cookieSecure bool
 }
@@ -35,7 +36,7 @@ func (Feature) Name() string { return "devicelogin" }
 
 // WithSelfAuth registers the session resolver + cookie settings for
 // the inspect/decision/exchange surfaces.
-func (f Feature) WithSelfAuth(auth middleware.Authenticator, cookieName string, secure bool) Feature {
+func (f Feature) WithSelfAuth(auth kernel.Authenticator, cookieName string, secure bool) Feature {
 	f.selfAuth, f.cookieName, f.cookieSecure = auth, cookieName, secure
 	return f
 }

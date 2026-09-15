@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
 )
@@ -13,27 +13,24 @@ import (
 type Service struct {
 	store    Store
 	recorder identity.Recorder
-	guard    RouteGuard
-	selfAuth middleware.Authenticator
+	guard    kernel.Guard
+	selfAuth kernel.Authenticator
 }
 
 var _ identity.APIFeature = (*Service)(nil)
-
-// RouteGuard wraps a handler with authentication middleware.
-type RouteGuard func(next http.Handler) http.Handler
 
 // ServiceOption configures the API key feature.
 type ServiceOption func(*Service)
 
 // WithAdminGuard protects the routes; without it they stay open
 // (tests, isolated tooling).
-func WithAdminGuard(g RouteGuard) ServiceOption {
+func WithAdminGuard(g kernel.Guard) ServiceOption {
 	return func(s *Service) { s.guard = g }
 }
 
 // WithSelfAuth resolves the session cookie for the /api-keys
 // surface, which is always scoped to the caller.
-func WithSelfAuth(auth middleware.Authenticator) ServiceOption {
+func WithSelfAuth(auth kernel.Authenticator) ServiceOption {
 	return func(s *Service) { s.selfAuth = auth }
 }
 
@@ -109,19 +106,19 @@ func (s *Service) Renew(ctx context.Context, userID string, id APIKeyID, params 
 
 // Verify resolves an X-API-KEY value to a principal for the
 // transport middleware. Disabled users are rejected here.
-func (s *Service) Verify(ctx context.Context, rawKey string) (middleware.Principal, error) {
+func (s *Service) Verify(ctx context.Context, rawKey string) (kernel.Principal, error) {
 	if rawKey == "" {
-		return middleware.Principal{}, ErrInvalidCreds
+		return kernel.Principal{}, ErrInvalidCreds
 	}
 
 	_, u, err := s.store.ValidByHash(ctx, HashToken(rawKey))
 	if err != nil {
-		return middleware.Principal{}, err
+		return kernel.Principal{}, err
 	}
 	if u.Disabled {
-		return middleware.Principal{}, ErrInvalidCreds
+		return kernel.Principal{}, ErrInvalidCreds
 	}
-	return middleware.Principal{
+	return kernel.Principal{
 		UserID:   u.ID.String(),
 		Username: u.Username,
 		Email:    u.Email,

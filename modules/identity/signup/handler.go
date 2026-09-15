@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-ozzo/ozzo-validation/v4"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
@@ -23,7 +24,7 @@ type duration = time.Duration
 // Feature is the wireable signup unit.
 type Feature struct {
 	service    *Service
-	adminGuard func(http.Handler) http.Handler
+	adminGuard kernel.Guard
 	cookieName string
 }
 
@@ -36,7 +37,7 @@ func New(service *Service) Feature { return Feature{service: service} }
 func (Feature) Name() string { return "signup" }
 
 // WithAdminGuard registers the admin guard for token management.
-func (f Feature) WithAdminGuard(guard func(http.Handler) http.Handler) Feature {
+func (f Feature) WithAdminGuard(guard kernel.Guard) Feature {
 	f.adminGuard = guard
 	return f
 }

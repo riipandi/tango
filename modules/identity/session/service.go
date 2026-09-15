@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
 )
@@ -195,14 +195,14 @@ func (s *Service) RevokeAllForUser(ctx context.Context, userID user.UserID, keep
 	return s.store.RevokeAllForUser(ctx, userID, keepID)
 }
 
-// ResolveSession implements middleware.Authenticator: cookie token
+// ResolveSession implements kernel.Authenticator: cookie token
 // in, transport principal out.
-func (s *Service) ResolveSession(ctx context.Context, token string) (middleware.Principal, error) {
+func (s *Service) ResolveSession(ctx context.Context, token string) (kernel.Principal, error) {
 	u, se, err := s.Resolve(ctx, token)
 	if err != nil {
-		return middleware.Principal{}, err
+		return kernel.Principal{}, err
 	}
-	return middleware.Principal{
+	return kernel.Principal{
 		SessionID: se.ID,
 		UserID:    u.ID.String(),
 		Username:  u.Username,
