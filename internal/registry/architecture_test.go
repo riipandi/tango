@@ -30,8 +30,7 @@ var boundaryOf = func(importPath string) string {
 		return "federation"
 	case strings.HasPrefix(importPath, "github.com/riipandi/tango/modules/webhook"):
 		return "webhook"
-	case strings.HasPrefix(importPath, "github.com/riipandi/tango/modules/auditlog"),
-		strings.HasPrefix(importPath, "github.com/riipandi/tango/modules/appconfig"):
+	case strings.HasPrefix(importPath, "github.com/riipandi/tango/modules/admin/"):
 		return "admin"
 	}
 	return ""

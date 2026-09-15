@@ -17,7 +17,7 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/logger"
-	"github.com/riipandi/tango/modules/auditlog"
+	"github.com/riipandi/tango/modules/admin/auditlog"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/account"
 	"github.com/riipandi/tango/modules/identity/user"

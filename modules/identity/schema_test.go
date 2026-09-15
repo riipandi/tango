@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/riipandi/tango/modules/identity"
-	"github.com/riipandi/tango/modules/identity/apikey"
+	"github.com/riipandi/tango/modules/admin/apikey"
 	"github.com/riipandi/tango/modules/identity/multifactor"
 	"github.com/riipandi/tango/modules/identity/oauthconnections"
 	"github.com/riipandi/tango/modules/identity/session"
