@@ -8,7 +8,6 @@ import (
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.jetify.com/typeid"
 
@@ -495,14 +494,7 @@ func mustLogID(uuidText string) DeliveryLogID {
 
 // mapErr translates constraint violations into module errors.
 func mapErr(err error) error {
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
-		return ErrDuplicateName
-	}
-	return fmt.Errorf("webhook store: %w", err)
+	return datastore.MapErr(err, "webhook store", ErrNotFound, ErrDuplicateName)
 }
 
 // uuidOrNull renders a typed ID as the bare UUID its column stores.

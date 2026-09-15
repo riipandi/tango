@@ -13,7 +13,7 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
-	"github.com/riipandi/tango/pkg/antree"
+	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/pkg/responder"
 )
 

@@ -10,6 +10,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/riipandi/tango/internal/datastore"
 )
 
 // errNotCIMD marks a refresh attempt against a non-metadata client.
@@ -134,7 +136,7 @@ func (s *Service) refreshClientMetadata(ctx context.Context, client Client) (Cli
 		Description:        &description,
 		CallbackURLs:       doc.RedirectURIs,
 		LogoutCallbackURLs: doc.PostLogoutRedirectURIs,
-		IsPublic:           ptr(true),
+		IsPublic:           datastore.Ptr(true),
 		MetadataGrantTypes: doc.GrantTypes,
 	}
 	if err := s.store.RefreshClientMetadata(ctx, client.ID, params); err != nil {

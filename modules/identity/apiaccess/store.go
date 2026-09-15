@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.jetify.com/typeid"
 
@@ -746,7 +744,7 @@ func scanAPI(row scanner) (API, error) {
 
 	a.ID = mustAPIID(id)
 	a.CreatedAt = createdAt.Time
-	a.UpdatedAt = timePtr(updatedAt)
+	a.UpdatedAt = datastore.TimePtr(updatedAt)
 	return a, nil
 }
 
@@ -794,19 +792,5 @@ func mustAPIID(uuidText string) APIID {
 }
 
 func mapErr(err error) error {
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
-		return ErrDuplicate
-	}
-	return fmt.Errorf("apiaccess store: %w", err)
-}
-
-func timePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
+	return datastore.MapErr(err, "apiaccess store", ErrNotFound, ErrDuplicate)
 }

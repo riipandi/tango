@@ -8,7 +8,7 @@ package jobs
 import (
 	"time"
 
-	"github.com/riipandi/tango/pkg/antree"
+	"github.com/riipandi/tango/internal/antree"
 )
 
 // Queue names. Every task type declares exactly one; the name is the

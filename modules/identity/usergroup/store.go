@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.jetify.com/typeid"
 
@@ -421,7 +419,7 @@ func scanGroup(row scanner) (UserGroup, error) {
 
 	g.ID = mustGroupID(id)
 	g.CreatedAt = createdAt.Time
-	g.UpdatedAt = timePtr(updatedAt)
+	g.UpdatedAt = datastore.TimePtr(updatedAt)
 	return g, nil
 }
 
@@ -434,19 +432,5 @@ func mustGroupID(uuidText string) UserGroupID {
 }
 
 func mapErr(err error) error {
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
-		return ErrDuplicate
-	}
-	return fmt.Errorf("usergroup store: %w", err)
-}
-
-func timePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
+	return datastore.MapErr(err, "usergroup store", ErrNotFound, ErrDuplicate)
 }

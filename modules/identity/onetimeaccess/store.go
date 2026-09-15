@@ -36,7 +36,7 @@ func (s *PostgresStore) Upsert(ctx context.Context, token *Token) (bool, error) 
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(authTokensTable)
 	ib.Cols("user_id", "token_hash", "purpose", "expires_at", "last_sent_at")
-	ib.Values(userUUID(token.UserID), token.TokenHash, purpose, token.ExpiresAt, time.Now().UTC())
+	ib.Values(datastore.UserUUID(token.UserID), token.TokenHash, purpose, token.ExpiresAt, time.Now().UTC())
 	ib.SQL("ON CONFLICT (user_id, purpose) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at, last_sent_at = EXCLUDED.last_sent_at")
 	ib.Returning(tokenColumns...)
 
@@ -118,13 +118,3 @@ type scanner interface {
 
 // authTokensTable is the shared token table.
 const authTokensTable = "public.auth_tokens"
-
-// userUUID normalizes a typed ID string (or bare UUID) to the UUID
-// column form — user_id is a UUID column while principals carry
-// typeid strings.
-func userUUID(raw string) string {
-	if id, err := typeid.FromString(raw); err == nil && !id.IsZero() {
-		return id.UUID()
-	}
-	return raw
-}

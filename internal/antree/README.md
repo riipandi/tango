@@ -104,7 +104,7 @@ import (
     "fmt"
     "time"
 
-    "github.com/riipandi/tango/pkg/antree"
+    "github.com/riipandi/tango/internal/antree"
 )
 
 // EmailTask represents an email to send.
@@ -439,8 +439,8 @@ Tests run against a real Postgres (testcontainers, Postgres 18) using the shared
 `pkg/testutils.StartPostgres` helper; helpers in `helpers_test.go` manage per-test cleanup.
 
 ```bash
-go test ./pkg/antree/
-go test -race ./pkg/antree/
+go test ./internal/antree/
+go test -race ./internal/antree/
 ```
 
 ## Design Decisions

@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.jetify.com/typeid"
 
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/pkg/responder"
 )
@@ -224,7 +225,7 @@ func (s *Service) issueCode(ctx context.Context, client Client, principal middle
 		CodeChallenge: params.CodeChallenge,
 		MethodSHA256:  params.CodeChallengeMethod == "S256",
 		AuthMethod:    "password",
-		UserID:        userUUID(principal.UserID),
+		UserID:        datastore.UserUUID(principal.UserID),
 		ClientID:      client.ID.String(),
 		ExpiresAt:     time.Now().UTC().Add(AuthorizationCodeTTL),
 	}

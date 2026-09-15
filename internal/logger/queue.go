@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"github.com/riipandi/tango/pkg/antree"
+	"github.com/riipandi/tango/internal/antree"
 	"go.loglayer.dev/v3"
 )
 

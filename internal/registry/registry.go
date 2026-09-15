@@ -30,7 +30,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/webhook"
-	"github.com/riipandi/tango/pkg/antree"
+	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/pkg/crypto"
 )
 

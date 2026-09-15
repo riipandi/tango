@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -101,17 +100,17 @@ func (s *PostgresStore) HashByIdentity(ctx context.Context, identity string) (st
 		ID:              user.MustID(id),
 		Username:        username,
 		Email:           email,
-		FirstName:       textPtr(firstName),
-		LastName:        textPtr(lastName),
-		AvatarURL:       textPtr(avatarURL),
-		Locale:          textPtr(locale),
+		FirstName:       datastore.TextPtr(firstName),
+		LastName:        datastore.TextPtr(lastName),
+		AvatarURL:       datastore.TextPtr(avatarURL),
+		Locale:          datastore.TextPtr(locale),
 		DisplayName:     displayName,
 		IsAdmin:         isAdmin,
 		Disabled:        disabled,
-		EmailVerifiedAt: timePtr(emailVerifiedAt),
+		EmailVerifiedAt: datastore.TimePtr(emailVerifiedAt),
 		CreatedAt:       createdAt.Time,
-		UpdatedAt:       timePtr(updatedAt),
-		LastLoginAt:     timePtr(lastLoginAt),
+		UpdatedAt:       datastore.TimePtr(updatedAt),
+		LastLoginAt:     datastore.TimePtr(lastLoginAt),
 	}
 	return hash, u, nil
 }
@@ -129,18 +128,4 @@ func (s *PostgresStore) HashByUserID(ctx context.Context, userID user.UserID) (s
 		return "", ErrNoPassword
 	}
 	return hash, nil
-}
-
-func textPtr(t pgtype.Text) *string {
-	if !t.Valid {
-		return nil
-	}
-	return &t.String
-}
-
-func timePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
 }

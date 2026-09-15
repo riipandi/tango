@@ -21,7 +21,7 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
 
 | Phase | File                                                        | Scope                                                                  | Status  | Updated    |
 | ----- | ----------------------------------------------------------- | ---------------------------------------------------------------------- | ------- | ---------- |
-| 1     | [arch-phase-01-mechanical-dedup.md](./arch-phase-01-mechanical-dedup.md) | Shared pgx helpers, ErrNoRows mapping, constant fixes, antree relocation | planned | 2026-09-15 |
+| 1     | [arch-phase-01-mechanical-dedup.md](./arch-phase-01-mechanical-dedup.md) | Shared pgx helpers, ErrNoRows mapping, constant fixes, antree relocation | done    | 2026-09-15 |
 | 2     | [arch-phase-02-error-mapping.md](./arch-phase-02-error-mapping.md)       | Central error→HTTP mapping, remove per-handler `writeError` copies      | planned | 2026-09-15 |
 | 3     | [arch-phase-03-kernel-guards.md](./arch-phase-03-kernel-guards.md)       | `kernel.Guard` + `kernel.Authenticator`, remove guard option duplicates | planned | 2026-09-15 |
 | 4     | [arch-phase-04-module-layout.md](./arch-phase-04-module-layout.md)       | Standard module layout, settings mapping back into modules, slim registry | planned | 2026-09-15 |
@@ -39,3 +39,7 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
 ## Progress Log
 
 - 2026-09-15 Plan created from architecture analysis findings (no code changes yet).
+- 2026-09-15 Phase 1 done: shared pgx/error helpers in `internal/datastore` (conv.go), antree
+  relocated to `internal/`. Go gates green (default 572 pass, debug 35 pass, release 0 fail,
+  golangci-lint 0 issues); JS-side `test:ui`/oxlint failures are pre-existing environment gaps
+  (no api-client test files; `oxlint-tsgolint` undeclared).

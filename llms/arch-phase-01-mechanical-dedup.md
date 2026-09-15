@@ -1,5 +1,5 @@
 ---
-status: planned
+status: done
 updated: 2026-09-15
 ---
 
@@ -24,21 +24,34 @@ path. Do this phase first so later phases build on shared helpers.
 
 ## Tasks
 
-- [ ] Create `internal/datastore/conv` (or extend `internal/datastore`): `UserUUID(raw string)`,
+- [x] Create `internal/datastore/conv` (or extend `internal/datastore`): `UserUUID(raw string)`,
       `TimePtr(pgtype.Timestamptz)`, generic `Ptr[T]`, `Deref[T]`, and the pgtype text/bool/int
       deref variants. Replace all duplicate definitions.
-- [ ] Add `datastore.MapNoRows(err, sentinel error) error` and `datastore.Wrap(op string, err error)
+- [x] Add `datastore.MapNoRows(err, sentinel error) error` and `datastore.Wrap(op string, err error)
       error`; replace the per-store `mapErr`/`wrapErr` bodies (module prefix may move into the op
       string).
-- [ ] `apikey/service.go`: use `session.CookieName` instead of the string literal.
-- [ ] Move `pkg/antree` → `internal/antree`; update imports in `internal/queue`, `internal/jobs`,
+- [x] `apikey/service.go`: use `session.CookieName` instead of the string literal.
+- [x] Move `pkg/antree` → `internal/antree`; update imports in `internal/queue`, `internal/jobs`,
       `internal/logger`, `internal/registry`.
-- [ ] Run the full gate; confirm no behavior change (`task test`, `task lint`, `task check`).
+- [x] Run the full gate; confirm no behavior change (`task test`, `task lint`, `task check`).
 
 ## Validation
 
-`task test` (0 FAIL across all three suites), `task lint` (0 issues), `task check` (clean).
+- `task test:go`: 572 pass, 0 fail. `task test:go:debug`: 35 pass, 1 skipped.
+  `go test -tags release ./...`: 0 fail. `golangci-lint`: 0 issues. `gofmt`: clean.
+- `task test:ui` and `task check` fail in this environment for pre-existing JS-tooling reasons,
+  independent of this phase (vitest finds zero `api/**/*.test.ts` files; oxlint needs the
+  undeclared `oxlint-tsgolint` dependency for `typeAware: true`). Tracked as tooling fixes, not
+  phase-1 scope.
 
 ## Progress Log
 
 - 2026-09-15 Phase planned.
+- 2026-09-15 Implemented: `datastore.MapErr(err, store, notFound, duplicate)` replaces the
+  separate `MapNoRows` idea (one helper covers no-rows + unique-violation + wrap); 6 `mapErr`
+  bodies and apikey's `wrapErr` delegate to it. Inline `ErrNoRows` scan sites keep their
+  per-callsite sentinels. Helper renames: `userUUID` → `datastore.UserUUID` (5 defs), `timePtr` →
+  `datastore.TimePtr` (6 defs), `textPtr` → `datastore.TextPtr` (2), `ptr`/`ptrTime` →
+  `datastore.Ptr`, `deref`/`derefText`/`derefBool`/`derefInt` → `datastore.Deref`. Note:
+  `internal/storage` `deref` kept (trims "/" — different semantics). `pkg/antree` moved to
+  `internal/antree` incl. README + root README + porting-guide references.

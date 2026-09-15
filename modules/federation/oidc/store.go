@@ -460,15 +460,6 @@ func (s *PostgresStore) DeleteClient(ctx context.Context, id OIDCClientID) error
 	return nil
 }
 
-// userUUID converts a typed ID string (or bare UUID) to its UUID
-// column form, staying decoupled from the identity packages.
-func userUUID(raw string) string {
-	if id, err := typeid.FromString(raw); err == nil && !id.IsZero() {
-		return id.UUID()
-	}
-	return raw
-}
-
 // RefreshClientMetadata writes the document-owned columns for a CIMD
 // client after a re-fetch (the refresh endpoint; admin updates may
 // never touch these — see UpdateClient's guard).
@@ -480,17 +471,17 @@ func (s *PostgresStore) RefreshClientMetadata(ctx context.Context, id OIDCClient
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(oidcClientsTable)
 	ub.Set(
-		ub.Assign("name", derefText(params.Name)),
-		ub.Assign("description", derefText(params.Description)),
+		ub.Assign("name", datastore.Deref(params.Name)),
+		ub.Assign("description", datastore.Deref(params.Description)),
 		ub.Assign("callback_urls", callbacks),
 		ub.Assign("logout_callback_urls", logoutCallbacks),
-		ub.Assign("launch_url", derefText(params.LaunchURL)),
-		ub.Assign("is_public", derefBool(params.IsPublic)),
-		ub.Assign("skip_consent", derefBool(params.SkipConsent)),
-		ub.Assign("requires_reauthentication", derefBool(params.RequiresReauthentication)),
-		ub.Assign("is_group_restricted", derefBool(params.IsGroupRestricted)),
-		ub.Assign("access_token_duration_minutes", derefInt(params.AccessTokenDurationMinutes)),
-		ub.Assign("refresh_token_duration_minutes", derefInt(params.RefreshTokenDurationMinutes)),
+		ub.Assign("launch_url", datastore.Deref(params.LaunchURL)),
+		ub.Assign("is_public", datastore.Deref(params.IsPublic)),
+		ub.Assign("skip_consent", datastore.Deref(params.SkipConsent)),
+		ub.Assign("requires_reauthentication", datastore.Deref(params.RequiresReauthentication)),
+		ub.Assign("is_group_restricted", datastore.Deref(params.IsGroupRestricted)),
+		ub.Assign("access_token_duration_minutes", datastore.Deref(params.AccessTokenDurationMinutes)),
+		ub.Assign("refresh_token_duration_minutes", datastore.Deref(params.RefreshTokenDurationMinutes)),
 		ub.Assign("metadata_grant_types", grants),
 		ub.Assign("metadata_expires_at", time.Now().UTC().Add(MetadataDocumentTTL)),
 	)
@@ -505,33 +496,6 @@ func (s *PostgresStore) RefreshClientMetadata(ctx context.Context, id OIDCClient
 		return ErrNotFound
 	}
 	return nil
-}
-
-// ptr returns a pointer to v (store helpers).
-func ptr[T any](v T) *T { return &v }
-
-// derefBool flattens an optional bool (nil → false).
-func derefBool(b *bool) bool {
-	if b == nil {
-		return false
-	}
-	return *b
-}
-
-// derefInt flattens an optional int (nil → 0).
-func derefInt(n *int64) int64 {
-	if n == nil {
-		return 0
-	}
-	return *n
-}
-
-// derefText flattens an optional string (nil → "").
-func derefText(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
 
 // SetClientLogoPath stores or clears (nil) the logo blob path and
@@ -576,7 +540,7 @@ func (s *PostgresStore) SetClientGroups(ctx context.Context, id OIDCClientID, gr
 		ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 		ib.InsertInto(oidcClientsAllowedGroupsTable)
 		ib.Cols("oidc_client_id", "user_group_id")
-		ib.Values(id.String(), userUUID(groupID))
+		ib.Values(id.String(), datastore.UserUUID(groupID))
 		query, args := ib.Build()
 		if _, err := s.exec.Exec(ctx, query, args...); err != nil {
 			return fmt.Errorf("oidc store: grant group: %w", err)
@@ -781,7 +745,7 @@ func (s *PostgresStore) UpsertAuthorizedClient(ctx context.Context, userID, clie
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(userAuthorizedClientsTable)
 	ib.Cols("user_id", "client_id", "scope", "last_used_at")
-	ib.Values(userUUID(userID), clientID, scopeJSON, time.Now().UTC())
+	ib.Values(datastore.UserUUID(userID), clientID, scopeJSON, time.Now().UTC())
 	ib.SQL("ON CONFLICT (user_id, client_id) DO UPDATE SET scope = EXCLUDED.scope, last_used_at = EXCLUDED.last_used_at")
 
 	query, args := ib.Build()
@@ -806,7 +770,7 @@ func (s *PostgresStore) CreateInteraction(ctx context.Context, session Interacti
 
 	var userID any
 	if session.UserID != nil {
-		userID = userUUID(*session.UserID)
+		userID = datastore.UserUUID(*session.UserID)
 	}
 	ib.Values(
 		session.ID.UUID(), session.ConsentRequired, false, session.AuthenticationRequired, false,
@@ -864,7 +828,7 @@ func (s *PostgresStore) UpdateInteraction(ctx context.Context, id InteractionSes
 
 	assignments := []string{}
 	if userID != nil {
-		assignments = append(assignments, ub.Assign("user_id", userUUID(*userID)))
+		assignments = append(assignments, ub.Assign("user_id", datastore.UserUUID(*userID)))
 	}
 	if consentRequired != nil {
 		assignments = append(assignments, ub.Assign("consent_required", *consentRequired))
@@ -901,7 +865,7 @@ func (s *PostgresStore) UserInGroup(ctx context.Context, userID, groupID string)
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("count(*)")
 	sb.From(userGroupsUsersTable)
-	sb.Where(sb.And(sb.E("user_id", userUUID(userID)), sb.E("user_group_id", groupID)))
+	sb.Where(sb.And(sb.E("user_id", datastore.UserUUID(userID)), sb.E("user_group_id", groupID)))
 
 	query, args := sb.Build()
 	var count int
@@ -916,7 +880,7 @@ func (s *PostgresStore) UserByID(ctx context.Context, userID string) (UserProfil
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("id", "username", "email", "display_name", "email_verified_at", "disabled")
 	sb.From(usersTable)
-	sb.Where(sb.E("id", userUUID(userID)))
+	sb.Where(sb.E("id", datastore.UserUUID(userID)))
 
 	query, args := sb.Build()
 	var (
@@ -946,7 +910,7 @@ func (s *PostgresStore) UserGroups(ctx context.Context, userID string) ([]string
 	sb.Select("g.name")
 	sb.From(userGroupsTable + " g")
 	sb.Join(userGroupsUsersTable + " m ON m.user_group_id = g.id")
-	sb.Where(sb.E("m.user_id", userUUID(userID)))
+	sb.Where(sb.E("m.user_id", datastore.UserUUID(userID)))
 	sb.OrderBy("g.name")
 
 	query, args := sb.Build()
@@ -978,7 +942,7 @@ func (s *PostgresStore) CustomClaims(ctx context.Context, userID string) (map[st
 	sb.Select("key", "value")
 	sb.From(customClaimsTable)
 
-	condition := sb.E("user_id", userUUID(userID))
+	condition := sb.E("user_id", datastore.UserUUID(userID))
 	if len(groupIDs) > 0 {
 		condition = sb.Or(condition, sb.In("user_group_id", sqlbuilder.List(groupIDs)))
 	}
@@ -1007,7 +971,7 @@ func (s *PostgresStore) userGroupIDs(ctx context.Context, userID string) ([]stri
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("user_group_id")
 	sb.From(userGroupsUsersTable)
-	sb.Where(sb.E("user_id", userUUID(userID)))
+	sb.Where(sb.E("user_id", datastore.UserUUID(userID)))
 
 	query, args := sb.Build()
 	rows, err := s.exec.Query(ctx, query, args...)
@@ -1053,7 +1017,7 @@ func (s *PostgresStore) AccessibleClients(ctx context.Context, userID string) ([
 	sb.From(oidcClientsTable + " c")
 	sb.Where(sb.Or(
 		sb.E("c.is_group_restricted", false),
-		"EXISTS (SELECT 1 FROM "+oidcClientsAllowedGroupsTable+" g JOIN "+userGroupsUsersTable+" m ON m.user_group_id = g.user_group_id WHERE g.oidc_client_id = c.id AND m.user_id = "+sb.Var(userUUID(userID))+")",
+		"EXISTS (SELECT 1 FROM "+oidcClientsAllowedGroupsTable+" g JOIN "+userGroupsUsersTable+" m ON m.user_group_id = g.user_group_id WHERE g.oidc_client_id = c.id AND m.user_id = "+sb.Var(datastore.UserUUID(userID))+")",
 	))
 	sb.OrderBy("c.created_at DESC")
 
@@ -1082,7 +1046,7 @@ func (s *PostgresStore) AuthorizedClients(ctx context.Context, userID *string) (
 	sb.Select("a.user_id", "a.client_id", "a.scope", "a.last_used_at")
 	sb.From(userAuthorizedClientsTable + " a")
 	if userID != nil {
-		sb.Where(sb.E("a.user_id", userUUID(*userID)))
+		sb.Where(sb.E("a.user_id", datastore.UserUUID(*userID)))
 	}
 	sb.OrderBy("a.last_used_at DESC")
 
@@ -1125,7 +1089,7 @@ func scanAuthorizedClient(row scanner) (*AuthorizedClient, error) {
 func (s *PostgresStore) DeleteAuthorization(ctx context.Context, userID, clientID string) error {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(userAuthorizedClientsTable)
-	db.Where(db.And(db.E("user_id", userUUID(userID)), db.E("client_id", clientID)))
+	db.Where(db.And(db.E("user_id", datastore.UserUUID(userID)), db.E("client_id", clientID)))
 
 	query, args := db.Build()
 	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
@@ -1143,7 +1107,7 @@ func (s *PostgresStore) RevokeClientTokens(ctx context.Context, clientID, userID
 	ub.Where(ub.And(
 		ub.E("client_id", clientID),
 		ub.E("active", true),
-		"request_data->>'subject' = "+ub.Var(userUUID(userID)),
+		"request_data->>'subject' = "+ub.Var(datastore.UserUUID(userID)),
 	))
 
 	query, args := ub.Build()

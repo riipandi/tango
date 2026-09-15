@@ -7,7 +7,6 @@ import (
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.jetify.com/typeid"
 
@@ -271,14 +270,7 @@ func mustClaimID(uuidText string) CustomClaimID {
 }
 
 func mapErr(err error) error {
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
-		return ErrDuplicate
-	}
-	return fmt.Errorf("customclaim store: %w", err)
+	return datastore.MapErr(err, "customclaim store", ErrNotFound, ErrDuplicate)
 }
 
 func uuidOrNull(s *string) any {

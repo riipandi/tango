@@ -80,7 +80,7 @@ A modular monolith: one binary, features are self-contained modules.
 | `internal/transport`                | HTTP server, middleware, SPA serving                                |
 | `internal/logger`                   | LogLayer logging incl. the task queue adapter                       |
 | `modules/*`                         | Feature modules, each owning its schema and store                   |
-| `pkg/antree`                        | Postgres-backed in-process task queue (see below)                   |
+| `internal/antree`                        | Postgres-backed in-process task queue (see below)                   |
 | `pkg/*{crypto,jwtutils,responder}*` | Shared building blocks: secret crypto, JWT (jwx), response envelope |
 | `pkg/testutils`                     | Test helpers: shared testcontainers Postgres                        |
 | `database/migrations`               | Goose SQL migrations, the single source of schema truth             |
@@ -89,7 +89,7 @@ Typed identifiers (`user_*, audit_*`) come from `go.jetify.com/typeid`.
 
 ### Task queue
 
-Background jobs run on `pkg/antree`, a port of [backlite][backlite]
+Background jobs run on `internal/antree`, a port of [backlite][backlite]
 (MIT): a type-safe, Postgres-backed queue that executes inside the app
 process — no broker needed. Queues are registered in the registry, tasks
 are plain Go types encoded with `encoding/json/v2`, and the schema lives

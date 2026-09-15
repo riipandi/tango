@@ -33,7 +33,7 @@ func (s *PostgresStore) Upsert(ctx context.Context, token *Token) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(authTokensTable)
 	ib.Cols("user_id", "token_hash", "purpose", "expires_at")
-	ib.Values(userUUID(token.UserID), token.TokenHash, purpose, token.ExpiresAt)
+	ib.Values(datastore.UserUUID(token.UserID), token.TokenHash, purpose, token.ExpiresAt)
 	ib.SQL("ON CONFLICT (user_id, purpose) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at")
 	ib.Returning(tokenColumns...)
 
@@ -86,7 +86,7 @@ func scanToken(row scanner) (*Token, error) {
 		return nil, fmt.Errorf("emailverification store: token id %q is not a UUID: %w", id, err)
 	}
 	t.ID = parsed.String()
-	t.UserID = userUUID(userID)
+	t.UserID = datastore.UserUUID(userID)
 	t.CreatedAt = created
 	t.ExpiresAt = expires
 	return &t, nil
@@ -106,12 +106,3 @@ type scanner interface {
 
 // authTokensTable is the shared token table.
 const authTokensTable = "public.auth_tokens"
-
-// userUUID normalizes a typed ID string (or bare UUID) to the UUID
-// column form.
-func userUUID(raw string) string {
-	if id, err := typeid.FromString(raw); err == nil && !id.IsZero() {
-		return id.UUID()
-	}
-	return raw
-}

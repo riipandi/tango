@@ -11,7 +11,6 @@ import (
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.jetify.com/typeid"
 
@@ -48,7 +47,7 @@ func (s *PostgresStore) Create(ctx context.Context, userID string, keyHash strin
 	ib.Cols("user_id", "name", "prefix", "description", "key_hash", "expires_at")
 	// prefix is the recognizable key head shown in the UI; the
 	// lookup key itself is only the SHA-256 hash.
-	ib.Values(userUUID(userID), params.Name, keyPrefix, params.Description, []byte(keyHash), params.ExpiresAt)
+	ib.Values(datastore.UserUUID(userID), params.Name, keyPrefix, params.Description, []byte(keyHash), params.ExpiresAt)
 	ib.Returning(keyColumns...)
 
 	query, args := ib.Build()
@@ -64,7 +63,7 @@ func (s *PostgresStore) ListForUser(ctx context.Context, userID string, params L
 	csb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	csb.Select("count(*)")
 	csb.From(apiKeysTable)
-	csb.Where(csb.E("user_id", userUUID(userID)))
+	csb.Where(csb.E("user_id", datastore.UserUUID(userID)))
 
 	countQuery, countArgs := csb.Build()
 	var total int
@@ -75,7 +74,7 @@ func (s *PostgresStore) ListForUser(ctx context.Context, userID string, params L
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select(keyColumns...)
 	sb.From(apiKeysTable)
-	sb.Where(sb.E("user_id", userUUID(userID)))
+	sb.Where(sb.E("user_id", datastore.UserUUID(userID)))
 	sb.OrderBy("created_at DESC", "id DESC")
 	if !params.All() && params.Limit > 0 {
 		sb.Limit(params.Limit).Offset(params.Offset())
@@ -103,7 +102,7 @@ func (s *PostgresStore) ListForUser(ctx context.Context, userID string, params L
 func (s *PostgresStore) Revoke(ctx context.Context, userID string, id APIKeyID) error {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(apiKeysTable)
-	db.Where(db.E("id", id.UUIDBytes()), db.E("user_id", userUUID(userID)))
+	db.Where(db.E("id", id.UUIDBytes()), db.E("user_id", datastore.UserUUID(userID)))
 
 	query, args := db.Build()
 	tag, err := s.exec.Exec(ctx, query, args...)
@@ -121,7 +120,7 @@ func (s *PostgresStore) Renew(ctx context.Context, userID string, id APIKeyID, k
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(apiKeysTable)
 	ub.Set(ub.Assign("key_hash", []byte(keyHash)), ub.Assign("expires_at", expiresAt))
-	ub.Where(ub.E("id", id.UUIDBytes()), ub.E("user_id", userUUID(userID)),
+	ub.Where(ub.E("id", id.UUIDBytes()), ub.E("user_id", datastore.UserUUID(userID)),
 		"expires_at <= CURRENT_TIMESTAMP")
 	ub.Returning(keyColumns...)
 
@@ -134,7 +133,7 @@ func (s *PostgresStore) Renew(ctx context.Context, userID string, id APIKeyID, k
 			gsb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 			gsb.Select("count(*)")
 			gsb.From(apiKeysTable)
-			gsb.Where(gsb.E("id", id.UUIDBytes()), gsb.E("user_id", userUUID(userID)))
+			gsb.Where(gsb.E("id", id.UUIDBytes()), gsb.E("user_id", datastore.UserUUID(userID)))
 
 			gQuery, gArgs := gsb.Build()
 			var known int
@@ -197,16 +196,6 @@ func (s *PostgresStore) userByID(ctx context.Context, id APIKeyID) (user.User, e
 	return user.NewPostgresStore(s.exec).GetByID(ctx, id2)
 }
 
-// userUUID converts a wire typeid string to the bare UUID the
-// api_keys.user_id column stores.
-func userUUID(raw string) string {
-	id, err := typeid.Parse[user.UserID](raw)
-	if err != nil {
-		return raw
-	}
-	return id.UUID()
-}
-
 // scanner covers pgx.Rows and pgx.Row.
 type scanner interface {
 	Scan(dest ...any) error
@@ -238,8 +227,8 @@ func scanKey(row scanner) (APIKey, error) {
 	}
 	k.ExpiresAt = expires.Time
 	k.CreatedAt = created.Time
-	k.LastUsedAt = timePtr(lastUsed)
-	k.ExpirationEmailSentAt = timePtr(emailAt)
+	k.LastUsedAt = datastore.TimePtr(lastUsed)
+	k.ExpirationEmailSentAt = datastore.TimePtr(emailAt)
 	return k, nil
 }
 
@@ -252,27 +241,13 @@ func mustKeyID(uuidText string) APIKeyID {
 }
 
 func mapErr(err error) error {
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
-		return ErrDuplicate
-	}
-	return fmt.Errorf("apikey store: %w", err)
+	return datastore.MapErr(err, "apikey store", ErrNotFound, ErrDuplicate)
 }
 
 // wrapErr wraps a store error without re-mapping ErrNoRows (callers
 // that pre-map keep their sentinel).
 func wrapErr(op string, err error) error {
-	return fmt.Errorf("apikey store: %s: %w", op, err)
-}
-
-func timePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
+	return datastore.Wrap("apikey store", op, err)
 }
 
 // NewToken draws an opaque 256-bit token, base64url-encoded.

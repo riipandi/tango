@@ -7,7 +7,6 @@ import (
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5/pgtype"
-	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -88,7 +87,7 @@ func (s *PostgresStore) Decide(ctx context.Context, code, decision, userID strin
 	ub.Update(requestsTable)
 	ub.Set(
 		ub.Assign("status", decision),
-		ub.Assign("user_id", userUUID(userID)),
+		ub.Assign("user_id", datastore.UserUUID(userID)),
 	)
 	ub.Where(ub.And(ub.E("code", code), ub.E("status", StatusPending), ub.GT("expires_at", time.Now().UTC())))
 
@@ -152,14 +151,4 @@ func scanRequest(row scanner) (*Request, error) {
 // scanner covers pgx.Rows and pgx.Row.
 type scanner interface {
 	Scan(dest ...any) error
-}
-
-// userUUID normalizes a typed ID string (or bare UUID) to the UUID
-// column form — user_id is a UUID column while principals carry
-// typeid strings.
-func userUUID(raw string) string {
-	if id, err := typeid.FromString(raw); err == nil && !id.IsZero() {
-		return id.UUID()
-	}
-	return raw
 }

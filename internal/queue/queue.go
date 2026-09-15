@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/riipandi/tango/pkg/antree"
+	"github.com/riipandi/tango/internal/antree"
 )
 
 // Module is the kernel lifecycle adapter for the queue client.

@@ -135,7 +135,7 @@ Yaak's cookie jar; for anonymous-401 checks use curl (the jar re-sends cookies).
 | `middleware`, `apikey`                                                        | `internal/transport/middleware`, `modules/identity/apikey`                                   |
 | `webauthn`, `devicelogin`, `onetimeaccess`, `usersignup`, `emailverification` | `modules/identity/*`                                                                         |
 | `oidc`, `api` (apis resource)                                                 | `modules/federation/oidc`, `modules/identity/apiaccess`                                      |
-| `appconfig`, `auditlogs`, `storage`, `email`, `job`                           | `modules/appconfig`, `modules/auditlog`, `internal/storage`, `internal/mailer`, `pkg/antree` |
+| `appconfig`, `auditlogs`, `storage`, `email`, `job`                           | `modules/appconfig`, `modules/auditlog`, `internal/storage`, `internal/mailer`, `internal/antree` |
 | `ldapsync`, `scimsync`                                                        | `modules/identity/ldapsync`, `modules/federation/scimsync`                                   |
 
 ## Gotchas (phases 1–5)

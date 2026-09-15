@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/pkg/jwtutils"
 )
@@ -105,7 +106,7 @@ type UserClaims struct {
 // the granted scope set. Subject is normalized to the UUID column
 // form — the stable `sub` every relying party sees.
 func (s *Service) claimsFor(ctx context.Context, userID, scope, sid string, authTime time.Time) (UserClaims, error) {
-	claims := UserClaims{Subject: userUUID(userID), SessionID: sid, Custom: map[string]any{}}
+	claims := UserClaims{Subject: datastore.UserUUID(userID), SessionID: sid, Custom: map[string]any{}}
 
 	if scopeHas(scope, ScopeProfile) || scopeHas(scope, ScopeEmail) {
 		u, err := s.store.UserByID(ctx, userID)

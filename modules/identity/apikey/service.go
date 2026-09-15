@@ -6,6 +6,7 @@ import (
 
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/session"
 )
 
 // Service holds the API key business rules and HTTP surface.
@@ -134,7 +135,7 @@ func (s *Service) currentSelf(r *http.Request) (string, bool) {
 	if s.selfAuth == nil {
 		return "", false
 	}
-	cookie, err := r.Cookie("tango_session")
+	cookie, err := r.Cookie(session.CookieName)
 	if err != nil || cookie.Value == "" {
 		return "", false
 	}

@@ -126,8 +126,8 @@ func (s *PostgresStore) Create(ctx context.Context, params CreateParams) (User, 
 		ID:          MustID(id),
 		Username:    params.Username,
 		Email:       params.Email,
-		FirstName:   textPtr(firstName),
-		LastName:    textPtr(lastName),
+		FirstName:   datastore.TextPtr(firstName),
+		LastName:    datastore.TextPtr(lastName),
 		DisplayName: displayName,
 		IsAdmin:     params.IsAdmin,
 		CreatedAt:   createdAt.Time,
@@ -272,7 +272,7 @@ func (s *PostgresStore) UpdateProfile(ctx context.Context, id UserID, params Upd
 func (s *PostgresStore) SetProfilePicturePath(ctx context.Context, id UserID, picturePath *string) error {
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(usersTable)
-	ub.Set(ub.Assign("profile_picture_path", textOrNull(derefText(picturePath))))
+	ub.Set(ub.Assign("profile_picture_path", textOrNull(datastore.Deref(picturePath))))
 	ub.Where(ub.E("id", id.UUIDBytes()))
 
 	query, args := ub.Build()
@@ -352,26 +352,19 @@ func scanUser(row scanner) (User, error) {
 		ID:                 MustID(id),
 		Username:           username,
 		Email:              email,
-		FirstName:          textPtr(firstName),
-		LastName:           textPtr(lastName),
-		AvatarURL:          textPtr(avatarURL),
-		Locale:             textPtr(locale),
+		FirstName:          datastore.TextPtr(firstName),
+		LastName:           datastore.TextPtr(lastName),
+		AvatarURL:          datastore.TextPtr(avatarURL),
+		Locale:             datastore.TextPtr(locale),
 		DisplayName:        displayName,
 		IsAdmin:            isAdmin,
 		Disabled:           disabled,
-		EmailVerifiedAt:    timePtr(emailVerifiedAt),
+		EmailVerifiedAt:    datastore.TimePtr(emailVerifiedAt),
 		CreatedAt:          createdAt.Time,
-		UpdatedAt:          timePtr(updatedAt),
-		LastLoginAt:        timePtr(lastLoginAt),
-		ProfilePicturePath: textPtr(picturePath),
+		UpdatedAt:          datastore.TimePtr(updatedAt),
+		LastLoginAt:        datastore.TimePtr(lastLoginAt),
+		ProfilePicturePath: datastore.TextPtr(picturePath),
 	}, nil
-}
-
-func textPtr(t pgtype.Text) *string {
-	if !t.Valid {
-		return nil
-	}
-	return &t.String
 }
 
 // textOrNull maps empty strings to SQL NULL.
@@ -380,21 +373,6 @@ func textOrNull(s string) any {
 		return nil
 	}
 	return s
-}
-
-// derefText flattens an optional string (nil → "" → NULL).
-func derefText(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
-func timePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
 }
 
 // MustID converts a stored UUID to the typed ID. TypeIDs wrap

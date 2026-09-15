@@ -2,12 +2,10 @@ package session
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/huandu/go-sqlbuilder"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/riipandi/tango/internal/datastore"
@@ -37,7 +35,7 @@ func (s *PostgresStore) Create(ctx context.Context, se *Session) error {
 	ib.InsertInto(sessionsTable)
 	ib.Cols("id", "user_id", "provider", "token_hash", "user_agent", "device_name", "ip_address", "expires_at")
 	ib.Values(se.ID, se.UserID.UUIDBytes(), se.Provider, se.TokenHash,
-		textOrNull(deref(se.UserAgent)), textOrNull(deref(se.DeviceName)), textOrNull(deref(se.IPAddress)), se.ExpiresAt)
+		textOrNull(datastore.Deref(se.UserAgent)), textOrNull(datastore.Deref(se.DeviceName)), textOrNull(datastore.Deref(se.IPAddress)), se.ExpiresAt)
 	ib.Returning("created_at")
 
 	query, args := ib.Build()
@@ -102,27 +100,27 @@ func (s *PostgresStore) ValidByTokenHash(ctx context.Context, tokenHash string) 
 	}
 
 	se.UserID = user.MustID(uid)
-	se.UserAgent = textPtr(userAgent)
-	se.DeviceName = textPtr(deviceName)
-	se.IPAddress = textPtr(ipAddress)
-	se.RefreshedAt = timePtr(refreshedAt)
-	se.RevokedAt = timePtr(revokedAt)
+	se.UserAgent = datastore.TextPtr(userAgent)
+	se.DeviceName = datastore.TextPtr(deviceName)
+	se.IPAddress = datastore.TextPtr(ipAddress)
+	se.RefreshedAt = datastore.TimePtr(refreshedAt)
+	se.RevokedAt = datastore.TimePtr(revokedAt)
 
 	u := user.User{
 		ID:              se.UserID,
 		Username:        username,
 		Email:           email,
-		FirstName:       textPtr(firstName),
-		LastName:        textPtr(lastName),
-		AvatarURL:       textPtr(avatarURL),
-		Locale:          textPtr(locale),
+		FirstName:       datastore.TextPtr(firstName),
+		LastName:        datastore.TextPtr(lastName),
+		AvatarURL:       datastore.TextPtr(avatarURL),
+		Locale:          datastore.TextPtr(locale),
 		DisplayName:     displayName,
 		IsAdmin:         isAdmin,
 		Disabled:        disabled,
-		EmailVerifiedAt: timePtr(emailVerifiedAt),
+		EmailVerifiedAt: datastore.TimePtr(emailVerifiedAt),
 		CreatedAt:       uCreatedAt.Time,
-		UpdatedAt:       timePtr(uUpdatedAt),
-		LastLoginAt:     timePtr(uLastLoginAt),
+		UpdatedAt:       datastore.TimePtr(uUpdatedAt),
+		LastLoginAt:     datastore.TimePtr(uLastLoginAt),
 	}
 	return se, u, nil
 }
@@ -231,13 +229,13 @@ func (s *PostgresStore) ListActiveForUser(ctx context.Context, userID user.UserI
 			continue
 		}
 		se.UserID = user.MustID(uid)
-		se.UserAgent = textPtr(userAgent)
-		se.DeviceName = textPtr(deviceName)
-		se.IPAddress = textPtr(ipAddress)
+		se.UserAgent = datastore.TextPtr(userAgent)
+		se.DeviceName = datastore.TextPtr(deviceName)
+		se.IPAddress = datastore.TextPtr(ipAddress)
 		se.CreatedAt = createdAt.Time
 		se.ExpiresAt = expiresAt.Time
-		se.RefreshedAt = timePtr(refreshedAt)
-		se.RevokedAt = timePtr(revokedAt)
+		se.RefreshedAt = datastore.TimePtr(refreshedAt)
+		se.RevokedAt = datastore.TimePtr(revokedAt)
 		out = append(out, se)
 	}
 	return out, rows.Err()
@@ -245,37 +243,13 @@ func (s *PostgresStore) ListActiveForUser(ctx context.Context, userID user.UserI
 
 // mapErr folds driver errors into the Store contract.
 func mapErr(err error) error {
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	return fmt.Errorf("session store: %w", err)
+	return datastore.MapErr(err, "session store", ErrNotFound, nil)
 }
 
+// textOrNull keeps empty strings as SQL NULL.
 func textOrNull(s string) any {
 	if s == "" {
 		return nil
 	}
 	return s
-}
-
-// deref flattens an optional string for SQL NULL handling.
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
-func textPtr(t pgtype.Text) *string {
-	if !t.Valid {
-		return nil
-	}
-	return &t.String
-}
-
-func timePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
 )
@@ -310,7 +311,7 @@ func (s *Service) mintTokens(ctx context.Context, client Client, userID, scope, 
 			"scope":     scope,
 		},
 		ClientID:  client.ID.String(),
-		ExpiresAt: ptrTime(now.Add(accessTTL)),
+		ExpiresAt: datastore.Ptr(now.Add(accessTTL)),
 	}
 	refreshRow := OAuth2Session{
 		Kind:      KindRefresh,
@@ -326,7 +327,7 @@ func (s *Service) mintTokens(ctx context.Context, client Client, userID, scope, 
 			"auth_time":             family.authTime.Unix(),
 		},
 		ClientID:  client.ID.String(),
-		ExpiresAt: ptrTime(now.Add(refreshTTL)),
+		ExpiresAt: datastore.Ptr(now.Add(refreshTTL)),
 	}
 	if err := s.store.PutSession(ctx, accessRow); err != nil {
 		return nil, err
@@ -408,6 +409,3 @@ func (s *Service) signIDToken(ctx context.Context, key jwk.Key, client Client, c
 	}
 	return signer.Sign(private, std)
 }
-
-// ptrTime returns a pointer to t.
-func ptrTime(t time.Time) *time.Time { return &t }
