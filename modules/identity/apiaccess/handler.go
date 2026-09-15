@@ -95,7 +95,7 @@ type clientAPIGrantResponse struct {
 
 // APIRoutes mounts the API registry endpoints inside the shared
 // /api group, behind the admin guard when one is wired.
-func (s *Service) APIRoutes(r chi.Router) {
+func (s *Service) APIRoutes(r chi.Router, g identity.RouteGroups) {
 	mount := func(ar chi.Router) {
 		ar.Get("/apis", s.list)
 		ar.Post("/apis", s.create)
@@ -114,12 +114,12 @@ func (s *Service) APIRoutes(r chi.Router) {
 		ar.Get("/api-access/{clientId}/assignable-apis", s.assignableAPIs)
 	}
 
-	if s.guard == nil {
+	if g.Admin == nil {
 		mount(r)
 		return
 	}
 	r.Group(func(ar chi.Router) {
-		ar.Use(s.guard)
+		ar.Use(g.Admin)
 		mount(ar)
 	})
 }
@@ -148,8 +148,8 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apis, total, err := s.List(r.Context(), ListParams{
-		Query:            r.URL.Query().Get("search"),
-		PaginationParams: params,
+		Query: r.URL.Query().Get("search"),
+		Page:  Page{Page: params.Page, Limit: params.Limit},
 	})
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
@@ -264,7 +264,7 @@ func (s *Service) listClients(w http.ResponseWriter, r *http.Request, id APIID, 
 		return
 	}
 
-	listParams := ListParams{Query: r.URL.Query().Get("search"), PaginationParams: params}
+	listParams := ListParams{Query: r.URL.Query().Get("search"), Page: Page{Page: params.Page, Limit: params.Limit}}
 	var (
 		clients []ClientRef
 		total   int
@@ -371,8 +371,8 @@ func (s *Service) assignableAPIs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apis, total, err := s.AssignableAPIs(r.Context(), clientID, ListParams{
-		Query:            r.URL.Query().Get("search"),
-		PaginationParams: params,
+		Query: r.URL.Query().Get("search"),
+		Page:  Page{Page: params.Page, Limit: params.Limit},
 	})
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")

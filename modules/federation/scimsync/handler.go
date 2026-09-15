@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.jetify.com/typeid"
 
+	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
@@ -24,7 +25,7 @@ func New(service *Service) *APIFeature { return &APIFeature{service: service} }
 func (*APIFeature) Name() string { return "scimsync" }
 
 // APIRoutes mounts the SCIM service-provider endpoints.
-func (f *APIFeature) APIRoutes(r chi.Router) {
+func (f *APIFeature) APIRoutes(r chi.Router, _ federation.RouteGroups) {
 	r.Get("/oidc/clients/{id}/scim-service-provider", f.getByClient)
 	r.Post("/scim/service-provider", f.create)
 	r.Post("/scim/service-provider/{id}/sync", f.sync)

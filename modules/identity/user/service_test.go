@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/riipandi/tango/modules/identity"
-	"github.com/riipandi/tango/pkg/responder"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -128,7 +127,7 @@ func TestStoreListNewestFirst(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	users, _, err := store.List(t.Context(), ListParams{PaginationParams: responder.PaginationParams{Page: 1, Limit: 25}})
+	users, _, err := store.List(t.Context(), ListParams{Page: Page{Page: 1, Limit: 25}})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(users), 2)
 	// The two just-created users are the newest; newest first.

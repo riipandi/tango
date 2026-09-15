@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-ozzo/ozzo-validation/v4"
 
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
@@ -24,7 +23,6 @@ type duration = time.Duration
 // Feature is the wireable signup unit.
 type Feature struct {
 	service    *Service
-	adminGuard kernel.Guard
 	cookieName string
 }
 
@@ -34,12 +32,6 @@ func New(service *Service) Feature { return Feature{service: service} }
 // Name names the feature for logs.
 func (Feature) Name() string { return "signup" }
 
-// WithAdminGuard registers the admin guard for token management.
-func (f Feature) WithAdminGuard(guard kernel.Guard) Feature {
-	f.adminGuard = guard
-	return f
-}
-
 // WithCookie wires the session cookie settings (signup issues a
 // session).
 func (f Feature) WithCookie(name string, secure bool) Feature {
@@ -48,14 +40,14 @@ func (f Feature) WithCookie(name string, secure bool) Feature {
 }
 
 // APIRoutes mounts the signup endpoints relative to the /api group.
-func (f Feature) APIRoutes(r chi.Router) {
+func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
 	r.Post("/signup", f.service.handleSignUp)
 	r.Post("/signup/setup", f.service.handleSetup)
 
-	if f.adminGuard == nil {
+	if g.Admin == nil {
 		return
 	}
-	admin := r.With(f.adminGuard)
+	admin := r.With(g.Admin)
 	admin.Get("/signup-tokens", f.service.handleListTokens)
 	admin.Post("/signup-tokens", f.service.handleCreateToken)
 	admin.Delete("/signup-tokens/{id}", f.service.handleDeleteToken)

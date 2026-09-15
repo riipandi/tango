@@ -16,6 +16,7 @@ import (
 
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -47,8 +48,8 @@ func newTestStack(t *testing.T) (chi.Router, *Service, *session.Service, *passwo
 
 	r := chi.NewRouter()
 	r.Route("/api", func(r chi.Router) {
-		sessions.APIRoutes(r)
-		svc.APIRoutes(r)
+		sessions.APIRoutes(r, identity.RouteGroups{})
+		svc.APIRoutes(r, identity.RouteGroups{})
 	})
 	return r, svc, sessions, passwords, users
 }

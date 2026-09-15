@@ -91,7 +91,7 @@ type groupsResponse struct {
 
 // APIRoutes mounts the group endpoints inside the shared /api group,
 // behind the admin guard when one is wired.
-func (s *Service) APIRoutes(r chi.Router) {
+func (s *Service) APIRoutes(r chi.Router, g identity.RouteGroups) {
 	mount := func(ar chi.Router) {
 		ar.Get("/user-groups", s.list)
 		ar.Post("/user-groups", s.create)
@@ -105,12 +105,12 @@ func (s *Service) APIRoutes(r chi.Router) {
 		ar.Put("/users/{id}/user-groups", s.replaceUserGroups)
 	}
 
-	if s.guard == nil {
+	if g.Admin == nil {
 		mount(r)
 		return
 	}
 	r.Group(func(ar chi.Router) {
-		ar.Use(s.guard)
+		ar.Use(g.Admin)
 		mount(ar)
 	})
 }
@@ -140,7 +140,7 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 
 	groups, total, err := s.List(r.Context(), ListParams{
 		Query:            r.URL.Query().Get("query"),
-		PaginationParams: params,
+		Page: Page{Page: params.Page, Limit: params.Limit},
 	})
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")

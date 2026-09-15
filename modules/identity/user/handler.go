@@ -89,12 +89,11 @@ func (r updateProfileRequest) Validate() error {
 // AdminUpdateParams (identical field sets).
 
 // APIRoutes mounts the user endpoints inside the shared /api group.
-// Admin CRUD mounts behind the admin guard when one is wired;
-// /users/me is self-service (session auth only) and mounts when a
-// self authenticator is wired.
-func (s *Service) APIRoutes(r chi.Router) {
-	if s.selfAuth != nil {
-		self := r.With(middleware.RequireAuth(s.selfAuth, s.cookie))
+// Admin CRUD mounts behind the admin group when one is wired;
+// /users/me is self-service (session auth only).
+func (s *Service) APIRoutes(r chi.Router, g identity.RouteGroups) {
+	if g.Self != nil {
+		self := r.With(g.Self)
 		self.Get("/users/me", s.getCurrentUser)
 		self.Put("/users/me", s.updateCurrentUser)
 		if s.images != nil {
@@ -121,25 +120,26 @@ func (s *Service) APIRoutes(r chi.Router) {
 		}
 	}
 
-	if s.guard != nil && s.apiGuard != nil {
+	switch {
+	case g.Admin != nil && g.APIKey != nil:
 		// Session-admin and machine (API key) access share one mount:
 		// registering the same paths twice makes chi's last
 		// registration silently shadow the first.
 		r.Group(func(ar chi.Router) {
-			ar.Use(eitherGuard(s.guard, s.apiGuard))
+			ar.Use(eitherGuard(g.Admin, g.APIKey))
 			mount(ar)
 		})
-	} else if s.guard != nil {
+	case g.Admin != nil:
 		r.Group(func(ar chi.Router) {
-			ar.Use(s.guard)
+			ar.Use(g.Admin)
 			mount(ar)
 		})
-	} else if s.apiGuard != nil {
+	case g.APIKey != nil:
 		r.Group(func(ar chi.Router) {
-			ar.Use(s.apiGuard)
+			ar.Use(g.APIKey)
 			mount(ar)
 		})
-	} else {
+	default:
 		mount(r)
 	}
 }
@@ -251,7 +251,7 @@ func (s *Service) listUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, total, err := s.List(r.Context(), ListParams{
 		Query:            r.URL.Query().Get("query"),
-		PaginationParams: params,
+		Page: Page{Page: params.Page, Limit: params.Limit},
 	})
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")

@@ -11,18 +11,15 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-ozzo/ozzo-validation/v4"
 
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
 
 // Feature is the wireable device login unit.
 type Feature struct {
-	service      *Service
-	selfAuth     kernel.Authenticator
-	cookieName   string
-	cookieSecure bool
+	service *Service
 }
 
 // New wires the feature to its service.
@@ -31,24 +28,17 @@ func New(service *Service) Feature { return Feature{service: service} }
 // Name names the feature for logs.
 func (Feature) Name() string { return "devicelogin" }
 
-// WithSelfAuth registers the session resolver + cookie settings for
-// the inspect/decision/exchange surfaces.
-func (f Feature) WithSelfAuth(auth kernel.Authenticator, cookieName string, secure bool) Feature {
-	f.selfAuth, f.cookieName, f.cookieSecure = auth, cookieName, secure
-	return f
-}
-
 // APIRoutes mounts the device login endpoints relative to the /api
-// group. Without a self authenticator the approving surfaces are
-// skipped (fail closed).
-func (f Feature) APIRoutes(r chi.Router) {
+// group. Without a self group the approving surfaces are skipped
+// (fail closed).
+func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
 	r.Post("/device-login/requests", f.service.handleCreate)
 	r.Post("/device-login/requests/{id}/exchange", f.service.handleExchange)
 
-	if f.selfAuth == nil {
+	if g.Self == nil {
 		return
 	}
-	self := r.With(middleware.RequireAuth(f.selfAuth, f.cookieName))
+	self := r.With(g.Self)
 	self.Post("/device-login/verification", f.service.handleInspect)
 	self.Post("/device-login/verification/decision", f.service.handleDecision)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
@@ -92,13 +93,13 @@ func newPictureRouter(t *testing.T, withDefault bool) (chi.Router, *PostgresStor
 		})
 	}
 
-	svc := NewService(store, nil,
-		WithSelfAuth(&fakeSelf{principal: middleware.Principal{UserID: created.ID.String()}}, "tango_session"),
-		WithImages(blobs, defaults),
-	)
+	svc := NewService(store, nil, WithImages(blobs, defaults))
+	self := middleware.RequireAuth(&fakeSelf{principal: middleware.Principal{UserID: created.ID.String()}}, "tango_session")
 
 	r := chi.NewRouter()
-	r.Route("/api", svc.APIRoutes)
+	r.Route("/api", func(r chi.Router) {
+		svc.APIRoutes(r, identity.RouteGroups{Self: self})
+	})
 	return r, store, created.ID
 }
 

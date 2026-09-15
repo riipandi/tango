@@ -79,8 +79,8 @@ func (r updateClaimRequest) Validate() error {
 }
 
 // APIRoutes mounts the claim endpoints inside the shared /api group,
-// behind the admin guard when one is wired.
-func (s *Service) APIRoutes(r chi.Router) {
+// behind the admin group when one is wired.
+func (s *Service) APIRoutes(r chi.Router, g identity.RouteGroups) {
 	mount := func(ar chi.Router) {
 		ar.Get("/custom-claims/suggestions", s.suggestions)
 		ar.Get("/custom-claims/user/{userId}", s.listForUser)
@@ -95,12 +95,12 @@ func (s *Service) APIRoutes(r chi.Router) {
 		ar.Delete("/custom-claims/user-group/{userGroupId}/{claimId}", s.deleteForGroup)
 	}
 
-	if s.guard == nil {
+	if g.Admin == nil {
 		mount(r)
 		return
 	}
 	r.Group(func(ar chi.Router) {
-		ar.Use(s.guard)
+		ar.Use(g.Admin)
 		mount(ar)
 	})
 }

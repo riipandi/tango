@@ -47,7 +47,7 @@ type keyResponse struct {
 // APIRoutes mounts the API key endpoints inside the shared /api
 // group. The surface is always session-authenticated and scoped to
 // the caller; no admin-only routes here.
-func (s *Service) APIRoutes(r chi.Router) {
+func (s *Service) APIRoutes(r chi.Router, g identity.RouteGroups) {
 	mount := func(ar chi.Router) {
 		ar.Get("/api-keys", s.list)
 		ar.Post("/api-keys", s.create)
@@ -55,25 +55,13 @@ func (s *Service) APIRoutes(r chi.Router) {
 		ar.Post("/api-keys/{id}/renew", s.renew)
 	}
 
-	if s.selfAuth == nil {
+	if g.Self == nil {
 		mount(r)
 		return
 	}
 	r.Group(func(ar chi.Router) {
-		ar.Use(s.selfGuard)
+		ar.Use(g.Self)
 		mount(ar)
-	})
-}
-
-// selfGuard resolves the session cookie and rejects anonymous
-// requests; self-scoped surface, no admin check.
-func (s *Service) selfGuard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := s.currentSelf(r); !ok {
-			responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
-			return
-		}
-		next.ServeHTTP(w, r)
 	})
 }
 
@@ -90,7 +78,7 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keys, total, err := s.List(r.Context(), userID, ListParams{PaginationParams: params})
+	keys, total, err := s.List(r.Context(), userID, ListParams{Page: Page{Page: params.Page, Limit: params.Limit}})
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return

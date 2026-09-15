@@ -54,12 +54,11 @@ func withAPIKeys(deps Deps, sessions *session.Service, audit *auditlog.Module) *
 	return apikey.NewService(
 		apikey.NewPostgresStore(deps.DB),
 		auditAdapter(audit),
-		apikey.WithSelfAuth(sessions),
 	)
 }
 
 // withWebAuthn builds the passkey feature.
-func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, adminAuth func(http.Handler) http.Handler) identity.APIFeature {
+func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service) identity.APIFeature {
 	appURL := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service, err := webauthn.NewService(
 		webauthn.NewPostgresStore(deps.DB),
@@ -75,7 +74,7 @@ func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, 
 	if err != nil {
 		panic("registry: webauthn init: " + err.Error())
 	}
-	return webauthn.New(service).WithAdminGuard(adminAuth).WithSelfAuth(sessions, session.CookieName)
+	return webauthn.New(service)
 }
 
 // newWebhookModule builds the webhook service and queue processor.
@@ -117,19 +116,19 @@ func registerRecurringJobs(deps Deps, reg *jobs.Registry, feed *jobs.VersionFeed
 
 // newIdentityFeatures builds the identity module: sessions first, the
 // audit module second (its guards need sessions), then the guarded
-// features. It also returns the session service and API-access store
-// shared with the federation surface.
-func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Recorder) (*identity.Module, func(http.Handler) http.Handler, *session.Service, *auditlog.Module, *apiaccess.PostgresStore, storage.Store, error) {
+// features. It also returns the session service, route groups, and
+// API-access store shared with the federation surface.
+func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Recorder) (*identity.Module, identity.RouteGroups, *session.Service, *auditlog.Module, *apiaccess.PostgresStore, storage.Store, error) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	// Share one blob backend across images and client logos.
 	blobStore, err := storage.New(deps.Config.Storage)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
+		return nil, identity.RouteGroups{}, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
 	}
 	bundled, err := storage.SeedBundledImages(context.Background(), blobStore, web.ImagesDir)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
+		return nil, identity.RouteGroups{}, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
 	}
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, recorder)
@@ -154,13 +153,15 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 	)
 
 	apiKeys := withAPIKeys(deps, sessions, audit)
+	groups := identity.RouteGroups{
+		Admin:  adminAuth,
+		Self:   auth,
+		APIKey: middleware.RequireAPIKey(apiKeys.Verify),
+	}
 
 	core := user.NewService(
 		user.NewPostgresStore(deps.DB),
 		recorder,
-		user.WithAdminGuard(adminAuth),
-		user.WithAPIKeyGuard(middleware.RequireAPIKey(apiKeys.Verify)),
-		user.WithSelfAuth(sessions, session.CookieName),
 		user.WithImages(blobStore, defaultPictureProvider(bundled)),
 	)
 
@@ -168,47 +169,45 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		core,
 		account.NewService(user.NewPostgresStore(deps.DB), passwords, sessions, recorder),
 		sessions,
-		usergroup.NewService(usergroup.NewPostgresStore(deps.DB), recorder, usergroup.WithAdminGuard(adminAuth)),
-		customclaim.NewService(customclaim.NewPostgresStore(deps.DB), recorder, customclaim.WithAdminGuard(adminAuth)),
-		withWebAuthn(deps, audit, sessions, adminAuth),
+		usergroup.NewService(usergroup.NewPostgresStore(deps.DB), recorder),
+		customclaim.NewService(customclaim.NewPostgresStore(deps.DB), recorder),
+		withWebAuthn(deps, audit, sessions),
 		devicelogin.New(devicelogin.NewService(
 			devicelogin.NewPostgresStore(deps.DB),
 			sessions,
 			user.NewPostgresStore(deps.DB),
 			recorder,
 			devicelogin.WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
-		)).WithSelfAuth(sessions, session.CookieName, deps.Config.App.Mode != "development"),
+		)),
 		onetimeaccess.New(onetimeaccess.NewService(
 			token.NewStore(deps.DB, token.PurposeOneTimeAccess),
 			user.NewPostgresStore(deps.DB),
 			sessions,
 			recorder,
 			onetimeaccess.WithMail(jobsReg, deps.Config.Public.BaseURL),
-		)).WithAdminGuard(adminAuth).
-			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
+		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		emailverification.New(emailverification.NewService(
 			token.NewStore(deps.DB, token.PurposeEmailVerification),
 			emailVerificationAdapter(user.NewPostgresStore(deps.DB)),
 			recorder,
 			emailverification.WithMail(jobsReg, user.NewPostgresStore(deps.DB), deps.Config.Public.BaseURL),
-		)).WithSelfAuth(sessions, session.CookieName),
+		)),
 		signup.New(signup.NewService(
 			signup.NewPostgresStore(deps.DB),
 			user.NewPostgresStore(deps.DB),
 			usergroup.NewPostgresStore(deps.DB),
 			sessions,
 			recorder,
-		)).WithAdminGuard(adminAuth).
-			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
-		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), recorder, apiaccess.WithAdminGuard(adminAuth)),
+		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
+		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), recorder),
 		apiKeys,
 	)
 
-	return module, adminAuth, sessions, audit, apiaccess.NewPostgresStore(deps.DB), blobStore, nil
+	return module, groups, sessions, audit, apiaccess.NewPostgresStore(deps.DB), blobStore, nil
 }
 
 // withOIDC builds the OIDC provider feature.
-func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore, appconfigModule *appconfig.Module) federation.ProviderFeature {
+func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore, appconfigModule *appconfig.Module) federation.ProviderFeature {
 	issuer := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service := oidc.NewService(
 		oidc.NewPostgresStore(deps.DB),
@@ -223,9 +222,7 @@ func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *s
 		oidc.WithCIMDAllowlist(cimdAllowlistGetter(appconfigModule)),
 		oidc.WithCookieSecure(deps.Config.App.Mode != "development"),
 	)
-	return oidc.New(service).
-		WithAdminGuard(adminGuard).
-		WithSelfAuth(sessions, session.CookieName)
+	return oidc.New(service)
 }
 
 // cimdAllowlistGetter returns the configured CIMD URL allowlist.

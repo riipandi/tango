@@ -11,13 +11,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/riipandi/tango/modules/identity"
 )
 
 // newTestRouter mounts the user core (real Postgres store) inside
 // the shared /api group, the way the identity module does.
 func newTestRouter(t *testing.T) chi.Router {
 	r := chi.NewRouter()
-	r.Route("/api", NewService(newTestStore(t), nil).APIRoutes)
+	r.Route("/api", func(r chi.Router) {
+		NewService(newTestStore(t), nil).APIRoutes(r, identity.RouteGroups{})
+	})
 	return r
 }
 

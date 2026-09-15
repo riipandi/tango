@@ -61,7 +61,7 @@ type sessionView struct {
 }
 
 // APIRoutes mounts self-service endpoints, all cookie-guarded.
-func (s *Service) APIRoutes(r chi.Router) {
+func (s *Service) APIRoutes(r chi.Router, _ identity.RouteGroups) {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequireAuth(s.sessions, session.CookieName))
 		r.Get("/account", s.profile)

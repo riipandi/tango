@@ -3,7 +3,6 @@ package usergroup
 import (
 	"context"
 
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
 )
@@ -12,17 +11,10 @@ import (
 type Service struct {
 	store    Store
 	recorder identity.Recorder
-	guard    kernel.Guard
 }
 
 // ServiceOption configures the group feature.
 type ServiceOption func(*Service)
-
-// WithAdminGuard protects the routes; without it they stay open
-// (tests, isolated tooling).
-func WithAdminGuard(g kernel.Guard) ServiceOption {
-	return func(s *Service) { s.guard = g }
-}
 
 // NewService builds the group feature on the given store.
 func NewService(store Store, recorder identity.Recorder, opts ...ServiceOption) *Service {

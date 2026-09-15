@@ -278,7 +278,7 @@ func (m *Module) writeLogs(w http.ResponseWriter, r *http.Request, id *WebhookID
 		return
 	}
 
-	logs, total, err := m.service.ListLogs(r.Context(), id, PageParams(params))
+	logs, total, err := m.service.ListLogs(r.Context(), id, ListParams{Page: Page{Page: params.Page, Limit: params.Limit}})
 	if err != nil {
 		writeError(w, r, err)
 		return

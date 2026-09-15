@@ -8,7 +8,6 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/user"
-	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -106,7 +105,7 @@ func TestMembershipRoundTrip(t *testing.T) {
 	assert.Equal(t, []user.UserID{b.ID}, members)
 
 	list, total, err := store.List(ctx, ListParams{Query: "members_" + stamp,
-		PaginationParams: responder.PaginationParams{Page: 1, Limit: 10}})
+		Page: Page{Page: 1, Limit: 10}})
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	assert.Equal(t, 1, total)

@@ -16,12 +16,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/modules/federation"
 )
 
 // mountRouter mounts the feature the way the federation module does.
 func mountRouter(svc *Service) chi.Router {
 	r := chi.NewRouter()
-	r.Route("/api", New(svc).APIRoutes)
+	r.Route("/api", func(r chi.Router) { New(svc).APIRoutes(r, federation.RouteGroups{}) })
 	return r
 }
 

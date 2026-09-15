@@ -12,7 +12,6 @@ import (
 	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/modules/identity/user"
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // Typed IDs for the user group tables: UUIDv7 suffix, snake_case
@@ -78,10 +77,29 @@ type Store interface {
 	AllowedClientIDs(ctx context.Context, id UserGroupID) ([]string, error)
 }
 
+// Page is the store-level paging window: plain ints with no HTTP
+// dependency. The handler converts the request query into it.
+type Page struct {
+	Page  int
+	Limit int
+}
+
+// All reports whether the listing skips paging (page or limit is the
+// all marker -1).
+func (p Page) All() bool { return p.Page == -1 || p.Limit == -1 }
+
+// Offset returns the SQL offset for the current page.
+func (p Page) Offset() int {
+	if p.All() || p.Page < 1 || p.Limit < 1 {
+		return 0
+	}
+	return (p.Page - 1) * p.Limit
+}
+
 // ListParams narrows and pages the admin listing.
 type ListParams struct {
 	Query string
-	responder.PaginationParams
+	Page
 }
 
 // Errors surfaced by the store; the handler maps them to statuses.

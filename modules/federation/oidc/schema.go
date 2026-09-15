@@ -17,8 +17,6 @@ import (
 	"time"
 
 	"go.jetify.com/typeid"
-
-	"github.com/riipandi/tango/internal/kernel"
 )
 
 // Typed IDs for the OIDC/OAuth 2.0 tables: UUIDv7 suffix, snake_case
@@ -98,14 +96,9 @@ type APIAccessProvider interface {
 }
 
 // Feature is the wireable oidc unit backed by the provider service.
-// The admin guard (auth → RequireAdmin) applies to client
-// management at mount time (handler.go); the self authenticator
-// gates the users/me surfaces. Both fail closed when absent.
+// Guards are not stored: the mount call receives the route groups.
 type Feature struct {
-	service    *Service
-	adminGuard kernel.Guard
-	selfAuth   kernel.Authenticator
-	cookieName string
+	service *Service
 }
 
 // New wires the feature to its service.
@@ -113,18 +106,6 @@ func New(service *Service) Feature { return Feature{service: service} }
 
 // Name implements federation.Feature.
 func (Feature) Name() string { return "oidc" }
-
-// WithAdminGuard registers the admin guard for client management.
-func (f Feature) WithAdminGuard(guard kernel.Guard) Feature {
-	f.adminGuard = guard
-	return f
-}
-
-// WithSelfAuth registers the session resolver for users/me surfaces.
-func (f Feature) WithSelfAuth(auth kernel.Authenticator, cookieName string) Feature {
-	f.selfAuth, f.cookieName = auth, cookieName
-	return f
-}
 
 // Errors surfaced to relying parties (RFC 6749 §5.2) and handlers.
 var (

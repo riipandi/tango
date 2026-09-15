@@ -20,7 +20,7 @@ type stubAPIFeature struct {
 	stubFeature
 }
 
-func (f stubAPIFeature) APIRoutes(r chi.Router) {
+func (f stubAPIFeature) APIRoutes(r chi.Router, _ RouteGroups) {
 	r.Get("/stub", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 }
 
@@ -28,7 +28,7 @@ type stubCore struct {
 	stubFeature
 }
 
-func (f stubCore) APIRoutes(r chi.Router) {
+func (f stubCore) APIRoutes(r chi.Router, _ RouteGroups) {
 	r.Get("/users", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 }
 
@@ -56,7 +56,7 @@ func TestFeatureRoutesMounted(t *testing.T) {
 	mod := newTestModule(stubCore{}, stubAPIFeature{stubFeature{name: "stub"}})
 
 	r := chi.NewRouter()
-	r.Route("/api", mod.APIRoutes)
+	r.Route("/api", func(r chi.Router) { mod.APIRoutes(r, RouteGroups{}) })
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/stub", nil))
@@ -72,7 +72,7 @@ func TestModuleUnknownPath(t *testing.T) {
 	mod := newTestModule(stubCore{})
 
 	r := chi.NewRouter()
-	r.Route("/api", mod.APIRoutes)
+	r.Route("/api", func(r chi.Router) { mod.APIRoutes(r, RouteGroups{}) })
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/nope", nil))
@@ -83,7 +83,7 @@ func TestModuleMethodNotAllowed(t *testing.T) {
 	mod := newTestModule(stubCore{})
 
 	r := chi.NewRouter()
-	r.Route("/api", mod.APIRoutes)
+	r.Route("/api", func(r chi.Router) { mod.APIRoutes(r, RouteGroups{}) })
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/users", nil))

@@ -5,6 +5,8 @@ package identity
 
 import (
 	"github.com/go-chi/chi/v5"
+
+	"github.com/riipandi/tango/internal/kernel"
 )
 
 // Feature is one mounted unit inside the identity surface: a feature
@@ -13,10 +15,19 @@ type Feature interface {
 	Name() string
 }
 
+// RouteGroups carries the authentication middleware chains a feature
+// applies at mount time; the composition root builds each chain once.
+// A nil group leaves its guarded routes unmounted (fail closed).
+type RouteGroups struct {
+	Admin  kernel.Guard // session auth + admin requirement
+	Self   kernel.Guard // session auth (cookie)
+	APIKey kernel.Guard // API-key auth
+}
+
 // APIFeature mounts endpoints inside the shared /api group.
 type APIFeature interface {
 	Feature
-	APIRoutes(r chi.Router)
+	APIRoutes(r chi.Router, g RouteGroups)
 }
 
 // Module is the identity surface: the user core plus each explicitly
@@ -75,39 +86,39 @@ func New(
 
 // APIRoutes mounts the user core, then every wired feature's
 // endpoints, in construction order. Unwired features stay unmounted.
-func (m *Module) APIRoutes(r chi.Router) {
-	m.core.APIRoutes(r)
+func (m *Module) APIRoutes(r chi.Router, g RouteGroups) {
+	m.core.APIRoutes(r, g)
 	if m.account != nil {
-		m.account.APIRoutes(r)
+		m.account.APIRoutes(r, g)
 	}
 	if m.sessions != nil {
-		m.sessions.APIRoutes(r)
+		m.sessions.APIRoutes(r, g)
 	}
 	if m.groups != nil {
-		m.groups.APIRoutes(r)
+		m.groups.APIRoutes(r, g)
 	}
 	if m.claims != nil {
-		m.claims.APIRoutes(r)
+		m.claims.APIRoutes(r, g)
 	}
 	if m.passkeys != nil {
-		m.passkeys.APIRoutes(r)
+		m.passkeys.APIRoutes(r, g)
 	}
 	if m.devices != nil {
-		m.devices.APIRoutes(r)
+		m.devices.APIRoutes(r, g)
 	}
 	if m.onetime != nil {
-		m.onetime.APIRoutes(r)
+		m.onetime.APIRoutes(r, g)
 	}
 	if m.emailv != nil {
-		m.emailv.APIRoutes(r)
+		m.emailv.APIRoutes(r, g)
 	}
 	if m.signup != nil {
-		m.signup.APIRoutes(r)
+		m.signup.APIRoutes(r, g)
 	}
 	if m.apiaccess != nil {
-		m.apiaccess.APIRoutes(r)
+		m.apiaccess.APIRoutes(r, g)
 	}
 	if m.apikeys != nil {
-		m.apikeys.APIRoutes(r)
+		m.apikeys.APIRoutes(r, g)
 	}
 }

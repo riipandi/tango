@@ -4,21 +4,17 @@ import (
 	"context"
 	"strings"
 
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 )
 
 // (stdlib shape, so this package stays transport-agnostic).
 
 // Service holds the user business rules and HTTP surface. It is the
-// identity module's mandatory core feature.
+// identity module's mandatory core feature. Guards are not stored:
+// the mount call receives the route groups.
 type Service struct {
 	store    Store
 	recorder identity.Recorder
-	guard    kernel.Guard
-	apiGuard kernel.Guard
-	selfAuth kernel.Authenticator
-	cookie   string
 
 	images         ImageStore
 	defaultPicture DefaultPictureFunc
@@ -26,25 +22,6 @@ type Service struct {
 
 // ServiceOption configures the user core.
 type ServiceOption func(*Service)
-
-// WithAdminGuard protects the admin API routes; without it the
-// routes stay open (tests, isolated tooling).
-func WithAdminGuard(g kernel.Guard) ServiceOption {
-	return func(s *Service) { s.guard = g }
-}
-
-// WithAPIKeyGuard adds a second admin route mount accepting the
-// X-API-KEY header, so machine clients reach the same admin surface
-// without a browser session.
-func WithAPIKeyGuard(g kernel.Guard) ServiceOption {
-	return func(s *Service) { s.apiGuard = g }
-}
-
-// WithSelfAuth wires the session resolver for the self-service
-// endpoints (/users/me).
-func WithSelfAuth(auth kernel.Authenticator, cookieName string) ServiceOption {
-	return func(s *Service) { s.selfAuth, s.cookie = auth, cookieName }
-}
 
 // NewService builds the user core on top of the given store. The
 // optional recorder captures audit events.

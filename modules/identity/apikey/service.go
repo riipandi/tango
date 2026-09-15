@@ -5,32 +5,20 @@ import (
 	"net/http"
 
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
-	"github.com/riipandi/tango/modules/identity/session"
 )
 
-// Service holds the API key business rules and HTTP surface.
+// Service holds the API key business rules and HTTP surface. Guards
+// are not stored: the mount call receives the route groups, and the
+// self surface reads the principal from the request context.
 type Service struct {
 	store    Store
 	recorder identity.Recorder
-	guard    kernel.Guard
-	selfAuth kernel.Authenticator
 }
 
 // ServiceOption configures the API key feature.
 type ServiceOption func(*Service)
-
-// WithAdminGuard protects the routes; without it they stay open
-// (tests, isolated tooling).
-func WithAdminGuard(g kernel.Guard) ServiceOption {
-	return func(s *Service) { s.guard = g }
-}
-
-// WithSelfAuth resolves the session cookie for the /api-keys
-// surface, which is always scoped to the caller.
-func WithSelfAuth(auth kernel.Authenticator) ServiceOption {
-	return func(s *Service) { s.selfAuth = auth }
-}
 
 // NewService builds the feature on the given store.
 func NewService(store Store, recorder identity.Recorder, opts ...ServiceOption) *Service {
@@ -125,17 +113,11 @@ func (s *Service) Verify(ctx context.Context, rawKey string) (kernel.Principal, 
 	}, nil
 }
 
-// currentSelf resolves the session principal for self-scoped routes.
+// currentSelf resolves the caller from the principal the session
+// middleware attached to the request context.
 func (s *Service) currentSelf(r *http.Request) (string, bool) {
-	if s.selfAuth == nil {
-		return "", false
-	}
-	cookie, err := r.Cookie(session.CookieName)
-	if err != nil || cookie.Value == "" {
-		return "", false
-	}
-	p, err := s.selfAuth.ResolveSession(r.Context(), cookie.Value)
-	if err != nil {
+	p, ok := middleware.PrincipalFromContext(r.Context())
+	if !ok || p.UserID == "" {
 		return "", false
 	}
 	return p.UserID, true

@@ -14,7 +14,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
@@ -99,7 +98,6 @@ func (s *Service) Name() string { return "onetimeaccess" }
 // Feature is the wireable unit.
 type Feature struct {
 	service      *Service
-	adminGuard   kernel.Guard
 	cookieName   string
 	cookieSecure bool
 }
@@ -110,12 +108,6 @@ func New(service *Service) Feature { return Feature{service: service} }
 // Name names the feature for logs.
 func (Feature) Name() string { return "onetimeaccess" }
 
-// WithAdminGuard registers the admin guard for minting.
-func (f Feature) WithAdminGuard(guard kernel.Guard) Feature {
-	f.adminGuard = guard
-	return f
-}
-
 // WithCookie wires the session cookie settings for the exchange.
 func (f Feature) WithCookie(name string, secure bool) Feature {
 	f.cookieName, f.cookieSecure = name, secure
@@ -124,17 +116,17 @@ func (f Feature) WithCookie(name string, secure bool) Feature {
 
 // APIRoutes mounts the one-time access endpoints relative to the
 // /api group.
-func (f Feature) APIRoutes(r chi.Router) {
+func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
 	// Anonymous: email request + token exchange.
 	r.Post("/one-time-access-email", f.service.handleEmailRequest)
 	r.Post("/one-time-access-token/{token}", func(w http.ResponseWriter, req *http.Request) {
 		f.service.handleExchange(w, req, f.cookieName, f.cookieSecure)
 	})
 
-	if f.adminGuard == nil {
+	if g.Admin == nil {
 		return
 	}
-	admin := r.With(f.adminGuard)
+	admin := r.With(g.Admin)
 	admin.Post("/users/{id}/one-time-access-token", f.service.handleAdminMintToken)
 	admin.Post("/users/{id}/one-time-access-email", f.service.handleAdminSendEmail)
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/identity/user"
 )
 
@@ -39,11 +40,11 @@ func (f *fakeAuthenticator) ResolveSession(_ context.Context, token string) (mid
 // guard mounted for client management.
 func newRouter(t *testing.T, service *Service, auth *fakeAuthenticator) chi.Router {
 	t.Helper()
-	feature := New(service).
-		WithAdminGuard(func(next http.Handler) http.Handler {
-			return middleware.RequireAuth(auth, "tango_session")(middleware.RequireAdmin(next))
-		}).
-		WithSelfAuth(auth, "tango_session")
+	feature := New(service)
+	adminGuard := func(next http.Handler) http.Handler {
+		return middleware.RequireAuth(auth, "tango_session")(middleware.RequireAdmin(next))
+	}
+	selfGuard := middleware.RequireAuth(auth, "tango_session")
 
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
@@ -58,7 +59,7 @@ func newRouter(t *testing.T, service *Service, auth *fakeAuthenticator) chi.Rout
 		})
 	})
 	feature.Routes(r)
-	feature.APIRoutes(r)
+	feature.APIRoutes(r, federation.RouteGroups{Admin: adminGuard, Self: selfGuard})
 	return r
 }
 

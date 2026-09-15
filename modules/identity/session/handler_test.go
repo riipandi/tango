@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/user"
 )
@@ -23,7 +24,7 @@ func newTestRouter(t *testing.T, opts ...ServiceOption) (chi.Router, *Service, *
 
 	r := chi.NewRouter()
 	r.Route("/api", func(r chi.Router) {
-		sessions.APIRoutes(r)
+		sessions.APIRoutes(r, identity.RouteGroups{})
 	})
 	return r, sessions, passwords, users
 }

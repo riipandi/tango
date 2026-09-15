@@ -8,7 +8,6 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/user"
-	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -105,7 +104,7 @@ func TestKeyPagination(t *testing.T) {
 	}
 
 	keys, total, err := store.ListForUser(ctx, userID, ListParams{
-		PaginationParams: responder.PaginationParams{Page: 1, Limit: 2},
+		Page: Page{Page: 1, Limit: 2},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 3, total)

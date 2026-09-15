@@ -38,7 +38,7 @@ type signInResponse struct {
 
 // APIRoutes mounts the auth endpoints inside the shared /api group:
 // public sign-in, then cookie-guarded session management.
-func (s *Service) APIRoutes(r chi.Router) {
+func (s *Service) APIRoutes(r chi.Router, _ identity.RouteGroups) {
 	r.Post("/auth/sign-in", s.signIn)
 
 	r.Group(func(r chi.Router) {

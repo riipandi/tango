@@ -56,6 +56,10 @@ type Runtime struct {
 	Webhook    *webhook.Module
 	AppConfig  *appconfig.Module
 	Federation *federation.Module
+
+	// Route groups shared by the identity and federation surfaces.
+	identityGroups   identity.RouteGroups
+	federationGroups federation.RouteGroups
 }
 
 // New builds the runtime in registration order.
@@ -91,7 +95,7 @@ func New(deps Deps) (*Runtime, error) {
 
 	// Register identity features: sessions first, then the audit
 	// module (its guards need sessions), then the guarded features.
-	idModule, adminGuard, sessions, auditLog, apiAccess, blobStore, err := newIdentityFeatures(deps, rt.Jobs, recorder)
+	idModule, groups, sessions, auditLog, apiAccess, blobStore, err := newIdentityFeatures(deps, rt.Jobs, recorder)
 	if err != nil {
 		return nil, err
 	}
@@ -100,24 +104,29 @@ func New(deps Deps) (*Runtime, error) {
 	events.audit = rt.AuditLog
 
 	// Register outbound webhooks.
-	rt.Webhook = newWebhookModule(deps, queueClient, adminGuard)
+	rt.Webhook = newWebhookModule(deps, queueClient, groups.Admin)
 	events.webhook = rt.Webhook
 
 	// Register application configuration.
-	rt.AppConfig = appconfig.New(rt.Jobs, appconfig.WithGuard(adminGuard)).
+	rt.AppConfig = appconfig.New(rt.Jobs, appconfig.WithGuard(groups.Admin)).
 		WithStore(appconfig.NewPostgresStore(deps.DB)).
 		WithEnvDefaults(appconfig.EnvDefaults(deps.Config))
 
 	// Register the identity provider surface.
 	keyService := newKeyService(deps)
 	rt.Federation = federation.New(
-		withOIDC(deps, rt.AuditLog, keyService, sessions, adminGuard, apiAccess, blobStore, rt.AppConfig),
+		withOIDC(deps, rt.AuditLog, keyService, sessions, apiAccess, blobStore, rt.AppConfig),
 		withSCIMSync(deps),
 		keyService,
 		withDiscovery(deps, keyService),
 	)
 
 	registerRecurringJobs(deps, rt.Jobs, feed, rt.Webhook)
+
+	// The transport boundary mounts these groups; the runtime keeps
+	// the chains so every module shares one wiring.
+	rt.identityGroups = groups
+	rt.federationGroups = federation.RouteGroups{Admin: groups.Admin, Self: groups.Self}
 
 	return rt, nil
 }
@@ -134,10 +143,10 @@ func (rt *Runtime) MountAPI(api chi.Router) {
 	api.MethodNotAllowed(responder.MethodNotAllowedJSON)
 
 	rt.AuditLog.APIRoutes(api)
-	rt.Identity.APIRoutes(api)
+	rt.Identity.APIRoutes(api, rt.identityGroups)
 	rt.Webhook.APIRoutes(api)
 	rt.AppConfig.APIRoutes(api)
-	rt.Federation.APIRoutes(api)
+	rt.Federation.APIRoutes(api, rt.federationGroups)
 }
 
 // Start starts lifecycle modules in registration order.

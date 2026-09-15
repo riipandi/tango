@@ -13,7 +13,6 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/queue"
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // secretBytes is the entropy of a signing secret (hex-encoded, so 64
@@ -405,10 +404,4 @@ func parseDeliveryLogID(raw string) (DeliveryLogID, error) {
 		return DeliveryLogID{}, fmt.Errorf("webhook: invalid log id: %w", err)
 	}
 	return id, nil
-}
-
-// PageParams converts the parsed HTTP pagination into the store-level
-// paging window.
-func PageParams(params responder.PaginationParams) ListParams {
-	return ListParams{Page: Page{Page: params.Page, Limit: params.Limit}}
 }

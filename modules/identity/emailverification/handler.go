@@ -14,7 +14,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-ozzo/ozzo-validation/v4"
 
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
@@ -64,9 +63,7 @@ func (s *Service) Name() string { return "emailverification" }
 
 // Feature is the wireable unit.
 type Feature struct {
-	service  *Service
-	selfAuth kernel.Authenticator
-	cookie   string
+	service *Service
 }
 
 // New wires the feature to its service.
@@ -75,19 +72,14 @@ func New(service *Service) Feature { return Feature{service: service} }
 // Name names the feature for logs.
 func (Feature) Name() string { return "emailverification" }
 
-// WithSelfAuth registers the session resolver (verification is
+// APIRoutes mounts the endpoints relative to the /api group. Without
+// a self group nothing mounts (fail closed: verification is
 // self-service only).
-func (f Feature) WithSelfAuth(auth kernel.Authenticator, cookieName string) Feature {
-	f.selfAuth, f.cookie = auth, cookieName
-	return f
-}
-
-// APIRoutes mounts the endpoints relative to the /api group.
-func (f Feature) APIRoutes(r chi.Router) {
-	if f.selfAuth == nil {
-		return // fail closed: verification is self-service
+func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
+	if g.Self == nil {
+		return
 	}
-	self := r.With(middleware.RequireAuth(f.selfAuth, f.cookie))
+	self := r.With(g.Self)
 	self.Post("/users/me/send-email-verification", f.service.handleSend)
 	self.Post("/users/me/verify-email", f.service.handleVerify)
 }

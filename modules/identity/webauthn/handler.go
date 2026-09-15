@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-webauthn/webauthn/protocol"
 
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -23,10 +22,7 @@ import (
 
 // Feature is the wireable webauthn unit.
 type Feature struct {
-	service    *Service
-	adminGuard kernel.Guard
-	selfAuth   kernel.Authenticator
-	cookieName string
+	service *Service
 }
 
 // New wires the feature to its service.
@@ -35,34 +31,22 @@ func New(service *Service) Feature { return Feature{service: service} }
 // Name names the feature for logs.
 func (Feature) Name() string { return "webauthn" }
 
-// WithAdminGuard registers the admin guard for credential CRUD.
-func (f Feature) WithAdminGuard(guard kernel.Guard) Feature {
-	f.adminGuard = guard
-	return f
-}
-
-// WithSelfAuth registers the session resolver for ceremony auth.
-func (f Feature) WithSelfAuth(auth kernel.Authenticator, cookieName string) Feature {
-	f.selfAuth, f.cookieName = auth, cookieName
-	return f
-}
-
 // APIRoutes mounts the passkey endpoints relative to the /api group.
-// Without guards/self-auth the affected groups are simply skipped —
+// Without wired groups the affected routes are simply skipped —
 // fail closed.
-func (f Feature) APIRoutes(r chi.Router) {
+func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
 	// Anonymous: discoverable login ceremony.
 	r.Post("/webauthn/login/begin", f.service.handleBeginLogin)
 	r.Post("/webauthn/login/finish", f.service.handleFinishLogin)
 
-	if f.selfAuth != nil {
-		self := r.With(middleware.RequireAuth(f.selfAuth, f.cookieName))
+	if g.Self != nil {
+		self := r.With(g.Self)
 		self.Post("/webauthn/register/begin", f.service.handleBeginRegistration)
 		self.Post("/webauthn/register/finish", f.service.handleFinishRegistration)
 	}
 
-	if f.adminGuard != nil {
-		admin := r.With(f.adminGuard)
+	if g.Admin != nil {
+		admin := r.With(g.Admin)
 		admin.Get("/users/{id}/webauthn-credentials", f.service.handleListCredentials)
 		admin.Delete("/users/{id}/webauthn-credentials/{credentialId}", f.service.handleDeleteCredential)
 		admin.Put("/users/{id}/webauthn-credentials/{credentialId}", f.service.handleRenameCredential)

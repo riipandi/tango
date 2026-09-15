@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"go.jetify.com/typeid"
-
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // usersTable is the table backing the User entity.
@@ -61,11 +59,29 @@ type User struct {
 	ProfilePicturePath *string `json:"-"`
 }
 
+// Page is the store-level paging window: plain ints with no HTTP
+// dependency. The handler converts the request query into it.
+type Page struct {
+	Page  int
+	Limit int
+}
+
+// All reports whether the listing skips paging (page or limit is the
+// all marker -1).
+func (p Page) All() bool { return p.Page == -1 || p.Limit == -1 }
+
+// Offset returns the SQL offset for the current page.
+func (p Page) Offset() int {
+	if p.All() || p.Page < 1 || p.Limit < 1 {
+		return 0
+	}
+	return (p.Page - 1) * p.Limit
+}
+
 // ListParams narrows and pages the admin listing.
 type ListParams struct {
 	Query string // matches username, email, display name (ILIKE)
-	// PaginationParams pages the result set.
-	responder.PaginationParams
+	Page
 }
 
 // Store abstracts user persistence: the memory store backs tests,

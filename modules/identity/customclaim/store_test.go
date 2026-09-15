@@ -17,6 +17,7 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -51,12 +52,12 @@ func newTestStack(t *testing.T) (chi.Router, *PostgresStore, *user.PostgresStore
 		return middleware.RequireAuth(sessions, session.CookieName)(middleware.RequireAdmin(next))
 	}
 
-	svc := NewService(store, nil, WithAdminGuard(adminGuard))
+	svc := NewService(store, nil)
 
 	r := chi.NewRouter()
 	r.Route("/api", func(r chi.Router) {
-		sessions.APIRoutes(r)
-		svc.APIRoutes(r)
+		sessions.APIRoutes(r, identity.RouteGroups{})
+		svc.APIRoutes(r, identity.RouteGroups{Admin: adminGuard})
 	})
 	return r, store, users, groups, passwords
 }

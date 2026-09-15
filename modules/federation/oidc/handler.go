@@ -18,7 +18,7 @@ import (
 	"github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 
-	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
@@ -33,15 +33,15 @@ func (f Feature) Routes(r chi.Router) {
 // APIRoutes mounts /api/oidc endpoints — implements
 // federation.APIFeature. Paths are RELATIVE to the /api group (the
 // discovery document advertises the absolute /api/oidc/* URLs).
-// Client management mounts only when an admin guard is wired
-// (WithAdminGuard) — fail closed.
-func (f Feature) APIRoutes(r chi.Router) {
+// Client management mounts only when an admin group is wired —
+// fail closed.
+func (f Feature) APIRoutes(r chi.Router, g federation.RouteGroups) {
 	r.Post(tokenAPIPath, f.service.handleToken)
 	r.Post(userinfoAPIPath, f.service.handleUserInfo)
 	r.Get(userinfoAPIPath, f.service.handleUserInfo)
 
-	if f.adminGuard != nil {
-		clients := r.With(f.adminGuard)
+	if g.Admin != nil {
+		clients := r.With(g.Admin)
 		clients.Route(clientsAPIPrefix, func(cr chi.Router) {
 			cr.Get("/", f.service.handleListClients)
 			cr.Post("/", f.service.handleCreateClient)
@@ -69,8 +69,8 @@ func (f Feature) APIRoutes(r chi.Router) {
 		r.Get("/oidc/clients/{clientId}/logo", f.service.serveClientLogo)
 	}
 
-	if f.selfAuth != nil {
-		self := r.With(middleware.RequireAuth(f.selfAuth, f.cookieName))
+	if g.Self != nil {
+		self := r.With(g.Self)
 		self.Get("/oidc/users/me/clients", f.service.handleAccessibleClients)
 		self.Get("/oidc/users/me/authorized-clients", f.service.handleMyAuthorizedClients)
 		self.Delete("/oidc/users/me/authorized-clients/{clientId}", f.service.handleRevokeMyAuthorization)

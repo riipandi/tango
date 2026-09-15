@@ -63,7 +63,7 @@ func testServer(t *testing.T, cfg *config.Config) *HTTPServer {
 	return NewHTTPServer(RouteSet{
 		MountAPI: func(r chi.Router) {
 			audit.APIRoutes(r)
-			idModule.APIRoutes(r)
+			idModule.APIRoutes(r, identity.RouteGroups{})
 		},
 	}, cfg, testLogger(), nil, nil)
 }

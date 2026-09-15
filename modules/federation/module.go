@@ -7,6 +7,8 @@ import (
 	"fmt"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/riipandi/tango/internal/kernel"
 )
 
 // ModuleName identifies the federation module in the registry.
@@ -22,7 +24,7 @@ type Feature interface {
 // APIFeature mounts endpoints inside the shared /api group.
 type APIFeature interface {
 	Feature
-	APIRoutes(r chi.Router)
+	APIRoutes(r chi.Router, g RouteGroups)
 }
 
 // StartableFeature holds resources with a lifecycle: started in
@@ -38,6 +40,14 @@ type StartableFeature interface {
 type RootRoutableFeature interface {
 	Feature
 	Routes(r chi.Router)
+}
+
+// RouteGroups carries the authentication middleware chains a feature
+// applies at mount time; the composition root builds each chain once.
+// A nil group leaves its guarded routes unmounted (fail closed).
+type RouteGroups struct {
+	Admin kernel.Guard // session auth + admin requirement
+	Self  kernel.Guard // session auth (cookie)
 }
 
 // ProviderFeature is the OIDC surface: protocol routes on the root
@@ -70,9 +80,9 @@ func (m *Module) Name() string { return ModuleName }
 
 // APIRoutes mounts the provider feature endpoints inside the shared
 // /api group.
-func (m *Module) APIRoutes(r chi.Router) {
-	m.provider.APIRoutes(r)
-	m.scim.APIRoutes(r)
+func (m *Module) APIRoutes(r chi.Router, g RouteGroups) {
+	m.provider.APIRoutes(r, g)
+	m.scim.APIRoutes(r, g)
 }
 
 // Routes mounts the root-router routes (OIDC /authorize, discovery)
