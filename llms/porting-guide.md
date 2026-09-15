@@ -25,6 +25,13 @@ References:
 | 7     | [phase-07-jobs-webhooks.md](./phase-07-jobs-webhooks.md)         | Antree consumers, webhooks, scheduler             | done        | 2026-09-14 |
 | 8     | [phase-08-sync-storage.md](./phase-08-sync-storage.md)           | LDAP, SCIM, S3 storage, app images                | done    | 2026-09-14 |
 
+## Architecture Improvement Plan (post-port)
+
+Refactor plan from the 2026-09-15 architecture analysis — behavior-preserving dedup and module
+separation work. Index: [architecture-improvement.md](./architecture-improvement.md) with phases
+`arch-phase-01` … `arch-phase-06` (same status protocol as the porting phases; no Yaak checks
+required unless a task touches route mounting).
+
 ## Status Protocol (mandatory)
 
 Every phase file carries YAML front matter and a progress log. When work on a phase happens:

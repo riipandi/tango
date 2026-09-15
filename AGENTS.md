@@ -5,7 +5,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 ## Project Overview
 
 - Port of upstream Pocket ID (`~/Developer/github.com/pocket-id/pocket-id`, tag `v2.14.0` — read it locally, never fetch from the web) onto a Go/Postgres stack, deliberately diverging where the porting plan says so.
-- Read `llms/README.md` before adding features: porting plan, endpoint reference (`llms/endpoint-reference.md`), deviations register (`llms/tango-deviations.md`), per-phase task lists (`llms/phase-*.md`).
+- Read `llms/porting-guide.md` before adding features: porting plan, endpoint reference (`llms/endpoint-reference.md`), deviations register (`llms/tango-deviations.md`), per-phase task lists (`llms/phase-*.md`).
 - The upstream port is complete (parity 112/113, one recorded non-goal); new work should check the deviations doc first so upstream shapes do not leak into handlers.
 
 ## Tech Stack & Tooling
