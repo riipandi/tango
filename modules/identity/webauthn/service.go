@@ -72,7 +72,7 @@ func WithCookieName(name string) ServiceOption {
 	return func(s *Service) { s.cookieName = name }
 }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (s *Service) Name() string { return "webauthn" }
 
 // BeginRegistration starts the attestation ceremony for a user.

@@ -19,6 +19,7 @@ import (
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/account"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
@@ -48,7 +49,17 @@ func testServer(t *testing.T, cfg *config.Config) *HTTPServer {
 	t.Cleanup(func() { db.Close() })
 
 	audit := auditlog.New(auditlog.NewPostgresStore(db))
-	idModule := identity.New(user.NewService(user.NewPostgresStore(db), nil))
+	core := user.NewService(user.NewPostgresStore(db), nil)
+	idModule := identity.New(
+		core,
+		account.NewService(user.NewPostgresStore(db), nil, nil, nil),
+		nil,                     // sessions: self-service surfaces stay unmounted
+		nil,                     // groups
+		nil,                     // claims
+		nil, nil, nil, nil, nil, // optional features
+		nil, // api-access
+		nil, // api-keys
+	)
 	return NewHTTPServer(RouteSet{
 		MountAPI: func(r chi.Router) {
 			audit.APIRoutes(r)

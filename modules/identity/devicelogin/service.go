@@ -41,7 +41,7 @@ func WithCookie(name string, secure bool) ServiceOption {
 	return func(s *Service) { s.cookieName, s.cookieSecure = name, secure }
 }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (s *Service) Name() string { return "devicelogin" }
 
 // Created carries the create response: the request id (the poll

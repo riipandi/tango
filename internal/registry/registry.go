@@ -90,13 +90,13 @@ func New(deps Deps) (*Runtime, error) {
 	events := NewEventFanout(deps.Logger)
 
 	// Register identity features.
-	core, features, adminGuard, sessions, apiAccess, blobStore, err := newIdentityFeatures(deps, rt.Jobs, rt.AuditLog, events.Recorder(rt.AuditLog))
+	idModule, adminGuard, sessions, apiAccess, blobStore, err := newIdentityFeatures(deps, rt.Jobs, rt.AuditLog, events.Recorder(rt.AuditLog))
 	if err != nil {
 		return nil, err
 	}
 	rt.AuditLog.MountAdminAPI(adminGuard)
 	rt.AuditLog.MountSelfAPI(sessions, session.CookieName)
-	rt.Identity = identity.New(core, features...)
+	rt.Identity = idModule
 
 	// Register outbound webhooks.
 	rt.Webhook = newWebhookModule(deps, queueClient, adminGuard)
@@ -126,9 +126,8 @@ func New(deps Deps) (*Runtime, error) {
 }
 
 // MountRoot mounts root-router routes (OIDC protocol endpoints,
-// images) in registration order.
+// discovery) in registration order.
 func (rt *Runtime) MountRoot(r chi.Router) {
-	rt.Identity.Routes(r)
 	rt.Federation.Routes(r)
 }
 
@@ -152,7 +151,6 @@ func (rt *Runtime) Start(ctx context.Context) error {
 	}{
 		{"queue", rt.Queue.Start},
 		{"jobs", rt.Jobs.Start},
-		{"identity", rt.Identity.Start},
 		{"federation", rt.Federation.Start},
 	} {
 		if err := step.run(ctx); err != nil {
@@ -170,7 +168,6 @@ func (rt *Runtime) Stop(ctx context.Context) error {
 		run  func(context.Context) error
 	}{
 		{"federation", rt.Federation.Stop},
-		{"identity", rt.Identity.Stop},
 		{"jobs", rt.Jobs.Stop},
 		{"queue", rt.Queue.Stop},
 	} {

@@ -14,8 +14,6 @@ type Service struct {
 	guard    kernel.Guard
 }
 
-var _ identity.APIFeature = (*Service)(nil)
-
 // ServiceOption configures the API access feature.
 type ServiceOption func(*Service)
 
@@ -34,7 +32,7 @@ func NewService(store Store, recorder identity.Recorder, opts ...ServiceOption) 
 	return s
 }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (s *Service) Name() string { return "apiaccess" }
 
 func (s *Service) record(action, actor, target string) {

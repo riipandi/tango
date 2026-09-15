@@ -93,7 +93,7 @@ func (s *Service) sendAccessEmail(ctx context.Context, u user.User, code, redire
 	})
 }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (s *Service) Name() string { return "onetimeaccess" }
 
 // Feature is the wireable unit.
@@ -107,7 +107,7 @@ type Feature struct {
 // New wires the feature to its service.
 func New(service *Service) Feature { return Feature{service: service} }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (Feature) Name() string { return "onetimeaccess" }
 
 // WithAdminGuard registers the admin guard for minting.

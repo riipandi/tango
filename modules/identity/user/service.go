@@ -24,8 +24,6 @@ type Service struct {
 	defaultPicture DefaultPictureFunc
 }
 
-var _ identity.APIFeature = (*Service)(nil)
-
 // ServiceOption configures the user core.
 type ServiceOption func(*Service)
 
@@ -58,7 +56,7 @@ func NewService(store Store, recorder identity.Recorder, opts ...ServiceOption) 
 	return s
 }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (s *Service) Name() string { return "user" }
 
 // List returns matching users, newest first, with pagination

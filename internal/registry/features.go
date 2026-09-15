@@ -59,7 +59,7 @@ func withAPIKeys(deps Deps, sessions *session.Service, audit *auditlog.Module) *
 }
 
 // withWebAuthn builds the passkey feature.
-func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, adminAuth func(http.Handler) http.Handler) identity.Feature {
+func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, adminAuth func(http.Handler) http.Handler) identity.APIFeature {
 	appURL := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service, err := webauthn.NewService(
 		webauthn.NewPostgresStore(deps.DB),
@@ -117,18 +117,19 @@ func registerRecurringJobs(deps Deps, reg *jobs.Registry, feed *jobs.VersionFeed
 	reg.AddJob(jobs.VersionJob(feed, deps.Logger))
 }
 
-// newIdentityFeatures builds the user service and identity features.
-func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, audit *auditlog.Module, recorder identity.Recorder) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, storage.Store, error) {
+// newIdentityFeatures builds the identity module and the session
+// service plus API-access store shared with the federation surface.
+func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, audit *auditlog.Module, recorder identity.Recorder) (*identity.Module, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, storage.Store, error) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	// Share one blob backend across images and client logos.
 	blobStore, err := storage.New(deps.Config.Storage)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
 	}
 	bundled, err := storage.SeedBundledImages(context.Background(), blobStore, web.ImagesDir)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
 	}
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, recorder)
@@ -157,9 +158,9 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, audit *auditlog.Modu
 		user.WithImages(blobStore, defaultPictureProvider(bundled)),
 	)
 
-	features := []identity.Feature{
+	module := identity.New(
+		core,
 		account.NewService(user.NewPostgresStore(deps.DB), passwords, sessions, recorder),
-		passwords,
 		sessions,
 		usergroup.NewService(usergroup.NewPostgresStore(deps.DB), recorder, usergroup.WithAdminGuard(adminAuth)),
 		customclaim.NewService(customclaim.NewPostgresStore(deps.DB), recorder, customclaim.WithAdminGuard(adminAuth)),
@@ -195,13 +196,13 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, audit *auditlog.Modu
 			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), recorder, apiaccess.WithAdminGuard(adminAuth)),
 		apiKeys,
-	}
+	)
 
-	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), blobStore, nil
+	return module, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), blobStore, nil
 }
 
 // withOIDC builds the OIDC provider feature.
-func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore, appconfigModule *appconfig.Module) federation.Feature {
+func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore, appconfigModule *appconfig.Module) federation.ProviderFeature {
 	issuer := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service := oidc.NewService(
 		oidc.NewPostgresStore(deps.DB),
@@ -264,7 +265,7 @@ func emailVerificationAdapter(users user.Store) emailverification.Verifier {
 }
 
 // withSCIMSync builds the SCIM provisioning feature.
-func withSCIMSync(deps Deps) federation.Feature {
+func withSCIMSync(deps Deps) federation.APIFeature {
 	cipherKey := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
 	cipher, err := crypto.NewCipher(cipherKey[:])
 	if err != nil {
@@ -287,7 +288,7 @@ func newKeyService(deps Deps) *jwks.Service {
 }
 
 // withDiscovery mounts the well-known endpoints.
-func withDiscovery(deps Deps, keys *jwks.Service) federation.Feature {
+func withDiscovery(deps Deps, keys *jwks.Service) federation.RootRoutableFeature {
 	provider := jwtutils.NewCachedKeyProvider(keys, jwks.CacheTTL)
 	return discovery.New(provider, deps.Config.Public.BaseURL)
 }

@@ -28,12 +28,10 @@ type Feature struct {
 	cookieName string
 }
 
-var _ identity.APIFeature = (*Feature)(nil)
-
 // New wires the feature to its service.
 func New(service *Service) Feature { return Feature{service: service} }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (Feature) Name() string { return "signup" }
 
 // WithAdminGuard registers the admin guard for token management.

@@ -1,116 +1,113 @@
-// Package identity owns internal authn/authz concerns: HTTP layer,
-// business rules, and storage. Mounted inside the shared /api group.
+// Package identity owns internal authn/authz: user accounts plus the
+// features wired at the composition root. The provider surface for
+// other systems lives in modules/federation.
 package identity
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"slices"
-
 	"github.com/go-chi/chi/v5"
 )
 
-// ModuleName identifies the identity module in the registry.
-const ModuleName = "identity"
-
-// Module is the identity feature unit: the mandatory user core plus
-// the selected features.
-type Module struct {
-	core APIFeature
-
-	// features in selection order; seen guards duplicates.
-	features []Feature
-	seen     map[string]bool
+// Feature is one mounted unit inside the identity surface: a feature
+// left out of New has no routes.
+type Feature interface {
+	Name() string
 }
 
-// New builds the module from the mandatory user core plus the
-// selected features; anything omitted has no routes, storage, or
-// lifecycle. Fails fast on a malformed feature set.
-func New(core APIFeature, features ...Feature) *Module {
+// APIFeature mounts endpoints inside the shared /api group.
+type APIFeature interface {
+	Feature
+	APIRoutes(r chi.Router)
+}
+
+// Module is the identity surface: the user core plus each explicitly
+// wired feature, mounted in construction order. There is no feature
+// discovery or late registration.
+type Module struct {
+	core      APIFeature
+	account   APIFeature
+	sessions  APIFeature
+	groups    APIFeature
+	claims    APIFeature
+	passkeys  APIFeature
+	devices   APIFeature
+	onetime   APIFeature
+	emailv    APIFeature
+	signup    APIFeature
+	apiaccess APIFeature
+	apikeys   APIFeature
+}
+
+// New wires the identity surface. The user core is mandatory; a nil
+// one is a wiring bug. Any other feature left out (nil) simply has no
+// routes.
+func New(
+	core APIFeature,
+	account APIFeature,
+	sessions APIFeature,
+	groups APIFeature,
+	claims APIFeature,
+	passkeys APIFeature,
+	devices APIFeature,
+	onetime APIFeature,
+	emailv APIFeature,
+	signup APIFeature,
+	apiaccess APIFeature,
+	apikeys APIFeature,
+) *Module {
 	if core == nil {
 		panic("identity: nil user core")
 	}
-
-	m := &Module{
-		core: core,
-		seen: make(map[string]bool, len(features)),
+	return &Module{
+		core:      core,
+		account:   account,
+		sessions:  sessions,
+		groups:    groups,
+		claims:    claims,
+		passkeys:  passkeys,
+		devices:   devices,
+		onetime:   onetime,
+		emailv:    emailv,
+		signup:    signup,
+		apiaccess: apiaccess,
+		apikeys:   apikeys,
 	}
-
-	for _, f := range features {
-		if f == nil {
-			panic("identity: nil feature")
-		}
-		if m.seen[f.Name()] {
-			panic(fmt.Sprintf("identity: duplicate feature %q", f.Name()))
-		}
-		m.seen[f.Name()] = true
-		m.features = append(m.features, f)
-	}
-
-	return m
 }
 
-func (m *Module) Name() string { return ModuleName }
-
-// APIRoutes mounts the user core and every selected feature's
-// endpoints inside the shared /api group. Implements kernel.APIRoutable.
+// APIRoutes mounts the user core, then every wired feature's
+// endpoints, in construction order. Unwired features stay unmounted.
 func (m *Module) APIRoutes(r chi.Router) {
 	m.core.APIRoutes(r)
-
-	for _, f := range m.features {
-		if af, ok := f.(APIFeature); ok {
-			af.APIRoutes(r)
-		}
+	if m.account != nil {
+		m.account.APIRoutes(r)
 	}
-}
-
-// Routes mounts root-router routes declared by root-routable
-// features. Implements kernel.RootRoutable.
-func (m *Module) Routes(r chi.Router) {
-	for _, f := range m.features {
-		if rf, ok := f.(RootRoutableFeature); ok {
-			rf.Routes(r)
-		}
+	if m.sessions != nil {
+		m.sessions.APIRoutes(r)
 	}
-}
-
-// Start starts the user core then startable features in selection
-// order. Implements kernel.Startable.
-func (m *Module) Start(ctx context.Context) error {
-	if sf, ok := m.core.(StartableFeature); ok {
-		if err := sf.Start(ctx); err != nil {
-			return fmt.Errorf("start feature %q: %w", m.core.Name(), err)
-		}
+	if m.groups != nil {
+		m.groups.APIRoutes(r)
 	}
-
-	for _, f := range m.features {
-		if sf, ok := f.(StartableFeature); ok {
-			if err := sf.Start(ctx); err != nil {
-				return fmt.Errorf("start feature %q: %w", f.Name(), err)
-			}
-		}
+	if m.claims != nil {
+		m.claims.APIRoutes(r)
 	}
-	return nil
-}
-
-// Stop stops startable features in reverse selection order (core
-// last) and joins all errors so one failing feature does not block
-// the rest.
-func (m *Module) Stop(ctx context.Context) error {
-	var errs []error
-	for _, f := range slices.Backward(m.features) {
-		if sf, ok := f.(StartableFeature); ok {
-			if err := sf.Stop(ctx); err != nil {
-				errs = append(errs, fmt.Errorf("stop feature %q: %w", f.Name(), err))
-			}
-		}
+	if m.passkeys != nil {
+		m.passkeys.APIRoutes(r)
 	}
-
-	if sf, ok := m.core.(StartableFeature); ok {
-		if err := sf.Stop(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("stop feature %q: %w", m.core.Name(), err))
-		}
+	if m.devices != nil {
+		m.devices.APIRoutes(r)
 	}
-	return errors.Join(errs...)
+	if m.onetime != nil {
+		m.onetime.APIRoutes(r)
+	}
+	if m.emailv != nil {
+		m.emailv.APIRoutes(r)
+	}
+	if m.signup != nil {
+		m.signup.APIRoutes(r)
+	}
+	if m.apiaccess != nil {
+		m.apiaccess.APIRoutes(r)
+	}
+	if m.apikeys != nil {
+		m.apikeys.APIRoutes(r)
+	}
 }

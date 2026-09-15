@@ -75,7 +75,7 @@ func NewService(store Store, verifier Verifier, users user.Store, recorder ident
 	return s
 }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (s *Service) Name() string { return "session" }
 
 // ErrInvalidCredentials mirrors the password feature error so the

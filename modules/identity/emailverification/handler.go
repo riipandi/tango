@@ -59,7 +59,7 @@ func NewService(store token.Store, verifier Verifier, recorder identity.Recorder
 	return s
 }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (s *Service) Name() string { return "emailverification" }
 
 // Feature is the wireable unit.
@@ -72,7 +72,7 @@ type Feature struct {
 // New wires the feature to its service.
 func New(service *Service) Feature { return Feature{service: service} }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (Feature) Name() string { return "emailverification" }
 
 // WithSelfAuth registers the session resolver (verification is

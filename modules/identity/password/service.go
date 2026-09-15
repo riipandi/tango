@@ -28,7 +28,7 @@ func NewService(store Store, hasher *crypto.PasswordHasher, recorder identity.Re
 	return &Service{store: store, hasher: hasher, recorder: recorder}
 }
 
-// Name implements identity.Feature. The feature is headless: its
+// Name names the feature for logs. The feature is headless: its
 // routes (sign-in, sign-out) live in the session feature.
 func (s *Service) Name() string { return "password" }
 

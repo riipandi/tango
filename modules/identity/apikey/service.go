@@ -17,8 +17,6 @@ type Service struct {
 	selfAuth kernel.Authenticator
 }
 
-var _ identity.APIFeature = (*Service)(nil)
-
 // ServiceOption configures the API key feature.
 type ServiceOption func(*Service)
 
@@ -43,7 +41,7 @@ func NewService(store Store, recorder identity.Recorder, opts ...ServiceOption) 
 	return s
 }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (s *Service) Name() string { return "apikey" }
 
 func (s *Service) record(action, actor, target string) {

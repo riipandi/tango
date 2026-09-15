@@ -18,15 +18,13 @@ type Service struct {
 	recorder  identity.Recorder
 }
 
-var _ identity.APIFeature = (*Service)(nil)
-
 // NewService builds the account feature on the core stores and the
 // session/password features it composes.
 func NewService(users user.Store, passwords *password.Service, sessions *session.Service, recorder identity.Recorder) *Service {
 	return &Service{users: users, passwords: passwords, sessions: sessions, recorder: recorder}
 }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (s *Service) Name() string { return "account" }
 
 // changePassword verifies the current secret, rotates the credential,

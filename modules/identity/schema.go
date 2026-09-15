@@ -6,10 +6,8 @@ package identity
 import (
 	"context"
 
-	"github.com/go-chi/chi/v5"
 	"go.jetify.com/typeid"
 
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 )
 
@@ -38,29 +36,4 @@ type AuditEvent struct {
 	Action string
 	Actor  string
 	Target string
-}
-
-// Feature is one selectable unit: a feature left out of New has no
-// routes, storage, or lifecycle.
-type Feature interface {
-	Name() string
-}
-
-// APIFeature mounts endpoints inside the shared /api group.
-type APIFeature interface {
-	Feature
-	APIRoutes(r chi.Router)
-}
-
-// StartableFeature holds resources with a lifecycle: started after the
-// module core, stopped before it.
-type StartableFeature interface {
-	Feature
-	kernel.Startable
-}
-
-// RootRoutableFeature mounts routes on the root router, outside /api.
-type RootRoutableFeature interface {
-	Feature
-	Routes(r chi.Router)
 }

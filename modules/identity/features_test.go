@@ -1,14 +1,11 @@
 package identity
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,23 +32,28 @@ func (f stubCore) APIRoutes(r chi.Router) {
 	r.Get("/users", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 }
 
-type stubStartableFeature struct {
-	stubFeature
-	events *[]string
-}
-
-func (f stubStartableFeature) Start(ctx context.Context) error {
-	*f.events = append(*f.events, "start:"+f.name)
-	return nil
-}
-
-func (f stubStartableFeature) Stop(ctx context.Context) error {
-	*f.events = append(*f.events, "stop:"+f.name)
-	return nil
+// newTestModule fills the mandatory feature slots with stubs; the
+// five optional slots (passkeys..signup) come from the caller.
+func newTestModule(core APIFeature, optional ...APIFeature) *Module {
+	mandatory := []APIFeature{
+		core,
+		stubAPIFeature{stubFeature{name: "account"}},
+		stubAPIFeature{stubFeature{name: "sessions"}},
+		stubAPIFeature{stubFeature{name: "groups"}},
+		stubAPIFeature{stubFeature{name: "claims"}},
+	}
+	optionalSlots := make([]APIFeature, 5)
+	copy(optionalSlots, optional)
+	tail := []APIFeature{
+		stubAPIFeature{stubFeature{name: "apiaccess"}},
+		stubAPIFeature{stubFeature{name: "apikeys"}},
+	}
+	all := append(append(mandatory, optionalSlots...), tail...)
+	return New(all[0], all[1], all[2], all[3], all[4], all[5], all[6], all[7], all[8], all[9], all[10], all[11])
 }
 
 func TestFeatureRoutesMounted(t *testing.T) {
-	mod := New(stubCore{}, stubAPIFeature{stubFeature{name: "stub"}})
+	mod := newTestModule(stubCore{}, stubAPIFeature{stubFeature{name: "stub"}})
 
 	r := chi.NewRouter()
 	r.Route("/api", mod.APIRoutes)
@@ -67,7 +69,7 @@ func TestFeatureRoutesMounted(t *testing.T) {
 }
 
 func TestModuleUnknownPath(t *testing.T) {
-	mod := New(stubCore{})
+	mod := newTestModule(stubCore{})
 
 	r := chi.NewRouter()
 	r.Route("/api", mod.APIRoutes)
@@ -78,7 +80,7 @@ func TestModuleUnknownPath(t *testing.T) {
 }
 
 func TestModuleMethodNotAllowed(t *testing.T) {
-	mod := New(stubCore{})
+	mod := newTestModule(stubCore{})
 
 	r := chi.NewRouter()
 	r.Route("/api", mod.APIRoutes)
@@ -90,79 +92,6 @@ func TestModuleMethodNotAllowed(t *testing.T) {
 
 func TestNilCorePanics(t *testing.T) {
 	require.Panics(t, func() {
-		New(nil)
+		newTestModule(nil)
 	})
-}
-
-func TestFeatureWithoutRoutesMountsHarmlessly(t *testing.T) {
-	mod := New(stubCore{}, stubFeature{name: "plain"})
-
-	r := chi.NewRouter()
-	r.Route("/api", mod.APIRoutes)
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/users", nil))
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestDuplicateFeaturePanics(t *testing.T) {
-	require.Panics(t, func() {
-		New(stubCore{}, stubFeature{name: "x"}, stubFeature{name: "x"})
-	})
-}
-
-func TestNilFeaturePanics(t *testing.T) {
-	require.Panics(t, func() {
-		New(stubCore{}, nil)
-	})
-}
-
-func TestFeatureLifecycleOrder(t *testing.T) {
-	var events []string
-	mod := New(stubCore{},
-		stubStartableFeature{stubFeature{name: "a"}, &events},
-		stubFeature{name: "plain"},
-		stubStartableFeature{stubFeature{name: "b"}, &events},
-	)
-	require.NoError(t, mod.Start(context.Background()))
-	require.NoError(t, mod.Stop(context.Background()))
-
-	assert.Equal(t, []string{"start:a", "start:b", "stop:b", "stop:a"}, events)
-}
-
-func TestFeatureRootRoutesMounted(t *testing.T) {
-	var mounted bool
-	rootFeature := rootStub{stubFeature{name: "root"}, &mounted}
-
-	mod := New(stubCore{}, rootFeature)
-	require.Implements(t, (*kernel.RootRoutable)(nil), mod)
-
-	r := chi.NewRouter()
-	mod.Routes(r)
-	assert.True(t, mounted, "root-routable feature must be mounted")
-}
-
-type rootStub struct {
-	stubFeature
-	mounted *bool
-}
-
-func (f rootStub) Routes(r chi.Router) { *f.mounted = true }
-
-type failingStartable struct {
-	stubFeature
-}
-
-func (f failingStartable) Start(ctx context.Context) error { return nil }
-
-func (f failingStartable) Stop(ctx context.Context) error {
-	return errors.New("boom")
-}
-
-func TestFeatureStopErrorWrapped(t *testing.T) {
-	mod := New(stubCore{}, failingStartable{stubFeature{name: "bad"}})
-
-	err := mod.Stop(context.Background())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), `stop feature "bad"`)
 }

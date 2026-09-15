@@ -13,7 +13,6 @@ import (
 
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
-	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
@@ -26,12 +25,10 @@ type Feature struct {
 	cookieSecure bool
 }
 
-var _ identity.APIFeature = (*Feature)(nil)
-
 // New wires the feature to its service.
 func New(service *Service) Feature { return Feature{service: service} }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (Feature) Name() string { return "devicelogin" }
 
 // WithSelfAuth registers the session resolver + cookie settings for

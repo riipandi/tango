@@ -33,7 +33,7 @@ func NewService(store Store, users user.Store, groups usergroup.Store, sessions 
 	return &Service{store: store, users: users, groups: groups, sessions: sessions, recorder: recorder}
 }
 
-// Name implements identity.Feature.
+// Name names the feature for logs.
 func (s *Service) Name() string { return "signup" }
 
 // namePattern mirrors the admin-user rules for signup names.

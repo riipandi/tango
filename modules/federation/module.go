@@ -4,9 +4,7 @@ package federation
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -14,79 +12,85 @@ import (
 // ModuleName identifies the federation module in the registry.
 const ModuleName = "federation"
 
-// Module is the federation feature unit: the selected provider
-// features.
-type Module struct {
-	// features in selection order; seen guards duplicates.
-	features []Feature
-	seen     map[string]bool
+// Feature is one mounted unit chosen at the composition root. A
+// feature left out of New does not exist: no routes, no storage, no
+// lifecycle.
+type Feature interface {
+	Name() string
 }
 
-// New builds the module from the selected features; anything omitted
-// has no routes, storage, or lifecycle. Fails fast on a malformed
-// feature set.
-func New(features ...Feature) *Module {
-	m := &Module{seen: make(map[string]bool, len(features))}
+// APIFeature mounts endpoints inside the shared /api group.
+type APIFeature interface {
+	Feature
+	APIRoutes(r chi.Router)
+}
 
-	for _, f := range features {
-		if f == nil {
-			panic("federation: nil feature")
-		}
-		if m.seen[f.Name()] {
-			panic(fmt.Sprintf("federation: duplicate feature %q", f.Name()))
-		}
-		m.seen[f.Name()] = true
-		m.features = append(m.features, f)
+// StartableFeature holds resources with a lifecycle: started in
+// selection order, stopped in reverse.
+type StartableFeature interface {
+	Feature
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+}
+
+// RootRoutableFeature mounts routes on the root router, outside /api
+// — e.g. the OIDC /authorize endpoint.
+type RootRoutableFeature interface {
+	Feature
+	Routes(r chi.Router)
+}
+
+// ProviderFeature is the OIDC surface: protocol routes on the root
+// router plus client/token management inside /api.
+type ProviderFeature interface {
+	APIFeature
+	RootRoutableFeature
+}
+
+// Module is the federation surface: the explicitly wired provider
+// features, mounted in construction order. There is no feature
+// discovery or late registration.
+type Module struct {
+	provider  ProviderFeature
+	scim      APIFeature
+	keys      StartableFeature
+	discovery RootRoutableFeature
+}
+
+// New wires the federation surface. The signing-key service is
+// mandatory; a nil one is a wiring bug.
+func New(provider ProviderFeature, scim APIFeature, keys StartableFeature, discovery RootRoutableFeature) *Module {
+	if provider == nil || scim == nil || keys == nil || discovery == nil {
+		panic("federation: nil module dependency")
 	}
-
-	return m
+	return &Module{provider: provider, scim: scim, keys: keys, discovery: discovery}
 }
 
 func (m *Module) Name() string { return ModuleName }
 
-// APIRoutes mounts every selected feature's endpoints inside the
-// shared /api group. Implements kernel.APIRoutable.
+// APIRoutes mounts the provider feature endpoints inside the shared
+// /api group.
 func (m *Module) APIRoutes(r chi.Router) {
-	for _, f := range m.features {
-		if af, ok := f.(APIFeature); ok {
-			af.APIRoutes(r)
-		}
-	}
+	m.provider.APIRoutes(r)
+	m.scim.APIRoutes(r)
 }
 
-// Routes mounts root-router routes declared by root-routable
-// features. Implements kernel.RootRoutable.
+// Routes mounts the root-router routes (OIDC /authorize, discovery)
+// outside /api.
 func (m *Module) Routes(r chi.Router) {
-	for _, f := range m.features {
-		if rf, ok := f.(RootRoutableFeature); ok {
-			rf.Routes(r)
-		}
-	}
+	m.provider.Routes(r)
+	m.discovery.Routes(r)
 }
 
-// Start starts startable features in selection order. Implements
-// kernel.Startable.
+// Start guarantees the signing key exists before token issuance.
 func (m *Module) Start(ctx context.Context) error {
-	for _, f := range m.features {
-		if sf, ok := f.(StartableFeature); ok {
-			if err := sf.Start(ctx); err != nil {
-				return fmt.Errorf("start feature %q: %w", f.Name(), err)
-			}
-		}
+	if err := m.keys.Start(ctx); err != nil {
+		return fmt.Errorf("start feature %q: %w", m.keys.Name(), err)
 	}
 	return nil
 }
 
-// Stop stops startable features in reverse selection order and joins
-// all errors so one failing feature does not block the rest.
+// Stop stops the federation features in reverse construction order.
 func (m *Module) Stop(ctx context.Context) error {
-	var errs []error
-	for _, f := range slices.Backward(m.features) {
-		if sf, ok := f.(StartableFeature); ok {
-			if err := sf.Stop(ctx); err != nil {
-				errs = append(errs, fmt.Errorf("stop feature %q: %w", f.Name(), err))
-			}
-		}
-	}
-	return errors.Join(errs...)
+	return m.keys.Stop(ctx)
 }
