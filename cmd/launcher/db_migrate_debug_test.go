@@ -28,8 +28,7 @@ func parseOnlyDebug(t *testing.T, args ...string) string {
 	return kctx.Command()
 }
 
-// TestDBCommandGrammarDebug locks in the debug command set:
-// manage, migration, and development-only operations all parse.
+// TestDBCommandGrammarDebug locks in the debug command set.
 func TestDBCommandGrammarDebug(t *testing.T) {
 	require.Equal(t, "db dump <mode>", parseOnlyDebug(t, "db", "dump", "all"))
 	require.Equal(t, "db dump <mode>", parseOnlyDebug(t, "db", "dump", "data"))
@@ -49,8 +48,8 @@ func TestDBCommandGrammarDebug(t *testing.T) {
 	require.Equal(t, "db migrate:reset", parseOnlyDebug(t, "db", "migrate:reset", "--up"))
 }
 
-// TestMigrateResetUp rolls everything back and re-applies it in one
-// command, ending at the highest version with no pending files.
+// TestMigrateResetUp rolls back and re-applies migrations,
+// ending at the highest version with no pending files.
 func TestMigrateResetUp(t *testing.T) {
 	chdirRepoRoot(t)
 

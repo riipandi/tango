@@ -10,9 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestDBCommandGrammar locks in the release command set: manage
-// plus up, down, status, and version exist; the development-only
-// migration commands do not.
+// TestDBCommandGrammar locks in the release command set.
 func TestDBCommandGrammar(t *testing.T) {
 	require.Equal(t, "db dump <mode>", parseOnly(t, "db", "dump", "all"))
 	require.Equal(t, "db dump <mode>", parseOnly(t, "db", "dump", "data"))

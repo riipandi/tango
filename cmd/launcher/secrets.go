@@ -102,10 +102,8 @@ func printSecrets(keys secretsBundle) {
 	}
 }
 
-// sanitizeOutputPath cleans an operator-supplied output path and
-// rejects traversal that escapes the working directory via leading
-// ".." components (gosec G703). Absolute paths stay allowed:
-// operators may target any location explicitly.
+// sanitizeOutputPath cleans the output path and rejects traversal
+// outside the working directory (gosec G703). Absolute paths are allowed.
 func sanitizeOutputPath(path, label string) (string, error) {
 	cleaned := filepath.Clean(path)
 	if cleaned == "." || cleaned == ".." ||

@@ -30,7 +30,7 @@ const (
 
 // CLI is Kong's command-line grammar.
 type CLI struct {
-	// Global CLi args
+	// Global CLI args
 	EnvFile string           `help:"Load environment variables from a dotenv file (default: .env.local when present)"`
 	DataDir string           `name:"data-dir" help:"Application data directory for on-disk runtime state"`
 	Version kong.VersionFlag `short:"V" help:"Show the application version"`
@@ -53,7 +53,7 @@ func globalOverrides(cli *CLI) map[string]any {
 }
 
 // loadConfig layers global flags, command overrides, env file, and environment.
-// Global flags win. An empty --env-file uses .env.local when present.
+// Global flags win; empty --env-file uses .env.local.
 func loadConfig(cli *CLI, extra map[string]any) (*config.Config, error) {
 	envFile := cli.EnvFile
 	if envFile == "" {

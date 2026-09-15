@@ -13,8 +13,7 @@ import (
 
 // TestDBLifecycle exercises the manage commands end to end
 // against the shared testcontainer database: dump, a failing mode,
-// and the gated restore/import paths. It runs in both build
-// variants.
+// and the gated restore/import paths. Runs in both build variants.
 func TestDBLifecycle(t *testing.T) {
 	requirePGTools(t)
 	chdirRepoRoot(t)
@@ -75,9 +74,8 @@ func TestDBLifecycle(t *testing.T) {
 	t.Cleanup(func() { _ = os.Remove(sqlFile) })
 }
 
-// backupPathFromOutput extracts the backup path from a
-// dump/export command's stdout: the last whitespace-separated
-// field after the dumped/exported marker.
+// backupPathFromOutput extracts the backup path from
+// dump/export stdout: the last field after the marker.
 func backupPathFromOutput(t *testing.T, out string) string {
 	t.Helper()
 
@@ -92,8 +90,7 @@ func backupPathFromOutput(t *testing.T, out string) string {
 	return strings.TrimSpace(fields[len(fields)-1])
 }
 
-// requirePGTools skips the test when the PostgreSQL client
-// binaries are not installed locally.
+// requirePGTools skips the test when PostgreSQL client tools are unavailable.
 func requirePGTools(t *testing.T) {
 	t.Helper()
 

@@ -1,10 +1,13 @@
 //go:build !debug
 
+// Package database provides release migration operations against
+// compiled-in SQL files.
+package database
+
 // TestMigrationsLifecycle applies the embedded migrations (release
 // surface), inspects the resulting schemas, rolls back, and
-// re-applies. The test runs against the shared testcontainers
-// Postgres, never against the compose stack.
-package database
+// re-applies. Runs against the shared testcontainers Postgres,
+// never against the compose stack.
 
 import (
 	"database/sql"
@@ -107,16 +110,14 @@ func TestMigrationsLifecycle(t *testing.T) {
 	).Scan(&tables))
 	assert.Equal(t, 0, tables, "goose_db_version must not exist")
 
-	// The down target is read-only: after it reports, the
-	// migration is still applied.
+	// The down target is read-only: after it reports, the migration is still applied.
 	target, err := MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
 	assert.Equal(t, int64(31), target.Version)
 	assert.Equal(t, "applied", target.State)
 
-	// Roll back the most recent migration, verify the state
-	// flipped to pending, then re-apply.
+	// Roll back the most recent migration, verify the state flipped to pending, then re-apply.
 	outcome, err := MigrateDown(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, outcome)

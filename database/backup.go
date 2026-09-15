@@ -1,12 +1,12 @@
-// Thin wrapper over pg_dump/pg_restore/psql.
+// Package database wraps pg_dump, pg_restore, and psql.
 //
-//	dump: pg_dump custom format (fast, small)
-//	export: pg_dump plain SQL (portable)
-//	restore: pg_restore from a dump
-//	import: psql from a SQL file
+//	dump:     pg_dump in custom format
+//	export:   pg_dump in plain SQL
+//	restore:  pg_restore from a dump file
+//	import:   psql from a SQL file
 //
-// DSN parsed with pgx only. restore/import are destructive;
-// the caller gates them (confirm/--force/--dry-run).
+// DSNs are parsed with pgx only. restore/import are destructive;
+// callers gate them with confirm, --force, and --dry-run.
 package database
 
 import (
@@ -316,6 +316,6 @@ func runToolWith(ctx context.Context, bin string, parts connParts, args ...strin
 }
 
 // commandString renders a --dry-run line; password stays in env.
-func commandString(bin string, parts connParts, args []string) string {
+func commandString(bin string, _ connParts, args []string) string {
 	return fmt.Sprintf("%s %s", filepath.Base(bin), strings.Join(args, " "))
 }

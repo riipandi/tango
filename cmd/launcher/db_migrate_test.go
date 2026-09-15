@@ -14,10 +14,7 @@ import (
 )
 
 // TestMigrateLifecycle runs up, a guarded down, and status against
-// the shared testcontainer database, configured through the
-// environment the same way operators do it. It runs in both build
-// variants — the command set only differs in development-only
-// subcommands, not in these.
+// the shared testcontainer database. Runs in both build variants.
 func TestMigrateLifecycle(t *testing.T) {
 	chdirRepoRoot(t)
 
@@ -75,7 +72,6 @@ func TestMigrateLifecycle(t *testing.T) {
 }
 
 // parseOnly resolves the selected command path without running it.
-// Debug-only plugins are appended by the per-variant test files.
 func parseOnly(t *testing.T, args ...string) string {
 	t.Helper()
 
@@ -91,9 +87,8 @@ func parseOnly(t *testing.T, args ...string) string {
 	return kctx.Command()
 }
 
-// runMigrate runs a migrate command and returns its captured
-// stdout plus any execution error, with the destructive-action
-// gates switched to the given stdin source.
+// runMigrate runs a migrate command and returns captured stdout
+// plus any execution error, with stdin/interactive gates swapped.
 func runMigrate(t *testing.T, interactive bool, stdin io.Reader, args ...string) (string, error) {
 	t.Helper()
 

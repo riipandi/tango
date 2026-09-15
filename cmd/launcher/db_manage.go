@@ -7,7 +7,7 @@ import (
 	"github.com/riipandi/tango/database"
 )
 
-// DB manage commands write backups under <data-dir>/backup.
+// Database commands write backups under <data-dir>/backup.
 // Restore and import require --force unless --dry-run.
 
 type DBDumpCmd struct {

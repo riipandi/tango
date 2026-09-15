@@ -1,5 +1,7 @@
 //go:build debug
 
+// Package database reads on-disk migrations so new files apply
+// without a rebuild in debug builds.
 package database
 
 import (
@@ -32,13 +34,10 @@ func migrationsSource() fs.FS {
 	}
 	sub, err := fs.Sub(DatabaseMigrations, embeddedMigrationsDir)
 	if err != nil {
-		// Embed pattern is compile-time fixed; mismatch is a bug.
 		panic(fmt.Sprintf("embed migrations: %v", err))
 	}
 	return sub
 }
-
-// Debug reads on-disk so new files apply without rebuild.
 
 // MigrateUp applies all pending migrations.
 func MigrateUp(ctx context.Context, dsn string) ([]MigrationOutcome, error) {

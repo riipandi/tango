@@ -16,7 +16,8 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 )
 
-// SetupCmd bootstraps the first admin account. Only valid on a fresh database (no users yet); refused otherwise.
+// SetupCmd bootstraps the first admin account.
+// Only valid on a fresh database; refused otherwise.
 type SetupCmd struct {
 	AdminEmail    string `help:"Email address for the admin account"`
 	AdminPassword string `help:"Password for the admin account (omit to be prompted, hidden input)"`

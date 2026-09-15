@@ -31,8 +31,8 @@ func TestServeRunLifecycle(t *testing.T) {
 	// lifecycle test points it at the shared testcontainer.
 	pg := testutils.StartPostgres(t.Context(), t)
 	t.Setenv("DATABASE_URL", pg.DSN)
-	// The server expects an migrated schema (deploy order:
-	// migrate → serve); the jwks bootstrap queries on start.
+	// The server expects a migrated schema (deploy order: migrate → serve);
+	// the jwks bootstrap queries on start.
 	if _, err := database.MigrateUp(t.Context(), pg.DSN); err != nil {
 		t.Fatalf("apply migrations: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestServeRunLifecycle(t *testing.T) {
 
 	// Wait for the server to accept connections; every probe body
 	// is closed inside the closure. Budget covers first-boot RSA
-	// key generation (registry start) alongside the DB ping.
+	// key generation alongside the DB ping.
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
 		resp, err := http.Get(url)

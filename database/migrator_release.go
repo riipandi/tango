@@ -1,5 +1,7 @@
 //go:build !debug
 
+// Package database applies/inspects compiled-in migrations.
+// Scaffolding and reset are debug-only.
 package database
 
 import (
@@ -9,9 +11,6 @@ import (
 
 // Migrations dir inside the embedded FS.
 const embeddedMigrationsDir = "migrations"
-
-// Release applies/inspects compiled-in migrations. Scaffolding and
-// reset are debug-only.
 
 // migrationsSource returns embedded migrations as a Provider root.
 func migrationsSource() fs.FS {
