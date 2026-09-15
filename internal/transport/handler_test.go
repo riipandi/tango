@@ -9,7 +9,6 @@ import (
 	jsonv2 "encoding/json/v2"
 
 	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -104,7 +103,7 @@ func TestAPIRootHandler(t *testing.T) {
 
 func TestStaticAssetsHandler(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger(), nil, nil)
+	srv := NewHTTPServer(RouteSet{}, cfg, testLogger(), nil, nil)
 
 	// Missing files return JSON 404.
 	w := httptest.NewRecorder()

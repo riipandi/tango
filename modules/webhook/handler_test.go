@@ -14,8 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.jetify.com/typeid"
-
-	"github.com/riipandi/tango/internal/kernel"
 )
 
 // mountRouter wires the module the way the registry does: inside the
@@ -34,10 +32,8 @@ func mountRouter(t *testing.T, stack *testStack) chi.Router {
 		})
 	})
 
-	reg := kernel.NewRegistry()
-	reg.Register(module)
 	r := chi.NewRouter()
-	r.Route("/api", reg.ApplyAPI)
+	r.Route("/api", module.APIRoutes)
 	return r
 }
 
@@ -89,10 +85,8 @@ func TestRoutesRequireTheAdminGuard(t *testing.T) {
 		})
 	})
 
-	reg := kernel.NewRegistry()
-	reg.Register(module)
 	r := chi.NewRouter()
-	r.Route("/api", reg.ApplyAPI)
+	r.Route("/api", module.APIRoutes)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/webhooks", nil))
@@ -103,10 +97,8 @@ func TestRoutesNotMountedWithoutAGuard(t *testing.T) {
 	stack := newTestStack(t, okSender())
 	module := New(stack.Service) // no guard: fail closed
 
-	reg := kernel.NewRegistry()
-	reg.Register(module)
 	r := chi.NewRouter()
-	r.Route("/api", reg.ApplyAPI)
+	r.Route("/api", module.APIRoutes)
 
 	for _, path := range []string{"/api/webhooks", "/api/webhook-logs"} {
 		w := httptest.NewRecorder()

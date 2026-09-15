@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/web"
@@ -18,8 +17,15 @@ type HTTPServer struct {
 	Server *http.Server
 }
 
-// NewHTTPServer wires middleware, core routes, and registry modules.
-func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Logger, limiter func(http.Handler) http.Handler, latest LatestVersionSource) *HTTPServer {
+// RouteSet carries the explicit route-mount callbacks from the
+// application runtime so the transport boundary needs no registry.
+type RouteSet struct {
+	MountRoot func(chi.Router)
+	MountAPI  func(chi.Router)
+}
+
+// NewHTTPServer wires middleware, core routes, and runtime routes.
+func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limiter func(http.Handler) http.Handler, latest LatestVersionSource) *HTTPServer {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -31,7 +37,9 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 	r.Get("/healthz", RootHealthzHandler)
 	r.Get("/.well-known/version", VersionHandler)
 
-	registry.Apply(r)
+	if routes.MountRoot != nil {
+		routes.MountRoot(r)
+	}
 
 	// Mount the shared /api group.
 	r.Route("/api", func(r chi.Router) {
@@ -42,7 +50,9 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 		r.Get("/healthz", HealthCheckHandler)
 		r.Get("/version/current", VersionCurrentHandler)
 		r.Get("/version/latest", VersionLatestHandler(latest))
-		registry.ApplyAPI(r)
+		if routes.MountAPI != nil {
+			routes.MountAPI(r)
+		}
 	})
 
 	// Mount the SPA fallback last.

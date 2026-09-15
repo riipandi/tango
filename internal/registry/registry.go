@@ -3,17 +3,19 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"go.jetify.com/typeid"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/jobs"
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
@@ -24,7 +26,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/webhook"
-	"github.com/riipandi/tango/pkg/crypto"
+	"github.com/riipandi/tango/pkg/responder"
 )
 
 // Deps are shared dependencies for modules.
@@ -43,30 +45,28 @@ type Deps struct {
 
 	// DB is the shared Postgres store.
 	DB datastore.Store
-
-	// Queue is the shared task queue client built by New.
-	Queue *queue.Client
-
-	// Cipher seals secrets at rest.
-	Cipher *crypto.Cipher
-
-	// Jobs owns queue registrations and recurring jobs.
-	Jobs *jobs.Registry
-
-	// Webhooks emits application events to registered endpoints.
-	Webhooks *webhook.Module
-
-	// VersionFeed caches the newest published release.
-	VersionFeed *jobs.VersionFeed
 }
 
-// New builds the registry in registration order.
-func New(deps Deps) *kernel.Registry {
+// Runtime is the concrete composition root: it owns construction
+// order, route mounting, and start/stop lifecycle explicitly. Fields
+// are filled once by New and never mutated afterwards.
+type Runtime struct {
+	Queue      *queue.Module
+	Jobs       *jobs.Registry
+	AuditLog   *auditlog.Module
+	Identity   *identity.Module
+	Webhook    *webhook.Module
+	AppConfig  *appconfig.Module
+	Federation *federation.Module
+}
+
+// New builds the runtime in registration order.
+func New(deps Deps) (*Runtime, error) {
 	if deps.DB == nil {
-		panic("registry: nil database store")
+		return nil, errors.New("registry: nil database store")
 	}
 
-	reg := kernel.NewRegistry()
+	rt := &Runtime{}
 
 	// Register the queue first so it stops last.
 	queueClient, err := queue.NewClient(queue.ClientConfig{
@@ -77,56 +77,108 @@ func New(deps Deps) *kernel.Registry {
 		CleanupInterval: time.Duration(deps.Config.Queue.CleanupInterval) * time.Second,
 	})
 	if err != nil {
-		panic(fmt.Sprintf("registry: task queue: %v", err))
+		return nil, fmt.Errorf("registry: task queue: %w", err)
 	}
-	deps.Queue = queueClient
-	reg.Register(queue.New(queueClient))
+	rt.Queue = queue.New(queueClient)
 
 	// Register email and maintenance consumers.
-	deps.Jobs = jobs.NewRegistry(queueClient, deps.Mailer, deps.Logger)
-	reg.Register(deps.Jobs)
+	rt.Jobs = jobs.NewRegistry(queueClient, deps.Mailer, deps.Logger)
 
-	audit := auditlog.New(auditlog.NewPostgresStore(deps.DB))
-	reg.Register(audit)
+	rt.AuditLog = auditlog.New(auditlog.NewPostgresStore(deps.DB))
 
 	// Domain events are recorded and forwarded to webhooks.
 	events := NewEventFanout(deps.Logger)
 
 	// Register identity features.
-	core, identityFeatures, adminGuard, sessions, apiAccess, blobStore := newIdentityFeatures(deps, audit, events.Recorder(audit))
-	audit.MountAdminAPI(adminGuard)
-	audit.MountSelfAPI(sessions, session.CookieName)
-	reg.Register(identity.New(core, identityFeatures...))
+	core, features, adminGuard, sessions, apiAccess, blobStore, err := newIdentityFeatures(deps, rt.Jobs, rt.AuditLog, events.Recorder(rt.AuditLog))
+	if err != nil {
+		return nil, err
+	}
+	rt.AuditLog.MountAdminAPI(adminGuard)
+	rt.AuditLog.MountSelfAPI(sessions, session.CookieName)
+	rt.Identity = identity.New(core, features...)
 
 	// Register outbound webhooks.
-	webhooks := newWebhookModule(deps, adminGuard)
-	deps.Webhooks = webhooks
-	reg.Register(webhooks)
-	events.Attach(webhooks)
+	rt.Webhook = newWebhookModule(deps, queueClient, adminGuard)
+	events.Attach(rt.Webhook)
 
 	// Register application configuration.
-	appconfigModule := appconfig.New(deps.Jobs).
+	rt.AppConfig = appconfig.New(rt.Jobs).
 		WithStore(appconfig.NewPostgresStore(deps.DB)).
 		WithEnvDefaults(appconfig.EnvDefaults(deps.Config))
-	appconfigModule.UseGuard(adminGuard)
-	reg.Register(appconfigModule)
+	rt.AppConfig.UseGuard(adminGuard)
 
 	// Register the identity provider surface.
 	keyService := newKeyService(deps)
-	reg.Register(federation.New(
-		withOIDC(deps, audit, keyService, sessions, adminGuard, apiAccess, blobStore, appconfigModule),
+	rt.Federation = federation.New(
+		withOIDC(deps, rt.AuditLog, keyService, sessions, adminGuard, apiAccess, blobStore, rt.AppConfig),
 		withSCIMSync(deps),
 		keyService,
 		withDiscovery(deps, keyService),
-	))
+	)
 
 	// Register the release feed and its refresh job.
 	feed := newVersionFeed(deps)
-	deps.VersionFeed = feed
-	deps.Jobs.SetVersionFeed(feed)
-	registerRecurringJobs(deps, feed, webhooks)
+	rt.Jobs.SetVersionFeed(feed)
+	registerRecurringJobs(deps, rt.Jobs, feed, rt.Webhook)
 
-	return reg
+	return rt, nil
+}
+
+// MountRoot mounts root-router routes (OIDC protocol endpoints,
+// images) in registration order.
+func (rt *Runtime) MountRoot(r chi.Router) {
+	rt.Identity.Routes(r)
+	rt.Federation.Routes(r)
+}
+
+// MountAPI mounts API routes in registration order.
+func (rt *Runtime) MountAPI(api chi.Router) {
+	api.NotFound(responder.NotFoundJSON)
+	api.MethodNotAllowed(responder.MethodNotAllowedJSON)
+
+	rt.AuditLog.APIRoutes(api)
+	rt.Identity.APIRoutes(api)
+	rt.Webhook.APIRoutes(api)
+	rt.AppConfig.APIRoutes(api)
+	rt.Federation.APIRoutes(api)
+}
+
+// Start starts lifecycle modules in registration order.
+func (rt *Runtime) Start(ctx context.Context) error {
+	for _, step := range []struct {
+		name string
+		run  func(context.Context) error
+	}{
+		{"queue", rt.Queue.Start},
+		{"jobs", rt.Jobs.Start},
+		{"identity", rt.Identity.Start},
+		{"federation", rt.Federation.Start},
+	} {
+		if err := step.run(ctx); err != nil {
+			return fmt.Errorf("start module %q: %w", step.name, err)
+		}
+	}
+	return nil
+}
+
+// Stop stops lifecycle modules in reverse order and joins errors.
+func (rt *Runtime) Stop(ctx context.Context) error {
+	var errs []error
+	for _, step := range []struct {
+		name string
+		run  func(context.Context) error
+	}{
+		{"federation", rt.Federation.Stop},
+		{"identity", rt.Identity.Stop},
+		{"jobs", rt.Jobs.Stop},
+		{"queue", rt.Queue.Stop},
+	} {
+		if err := step.run(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("stop module %q: %w", step.name, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // auditAdapter converts identity audit events into auditlog entries.

@@ -15,13 +15,12 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
-	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/internal/transport/middleware"
-	"github.com/riipandi/tango/modules/appconfig"
 	"github.com/riipandi/tango/web"
 )
 
@@ -56,12 +55,11 @@ func rateLimiter(db *datastore.Postgres) func(http.Handler) http.Handler {
 
 // latestVersion exposes the cached release feed from the jobs module
 // for /api/version/latest; a nil source keeps the deployed version.
-func latestVersion(reg *kernel.Registry) transport.LatestVersionSource {
-	source, ok := reg.Get("jobs").(transport.LatestVersionSource)
-	if !ok {
+func latestVersion(feed *jobs.Registry) transport.LatestVersionSource {
+	if feed == nil {
 		return nil
 	}
-	return source
+	return feed
 }
 
 // Run starts the server and shuts it down on signal.
@@ -122,28 +120,29 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		Logger:    lg,
 	})
 
-	reg := registry.New(registry.Deps{Config: cfg, Logger: lg, Fetcher: fch, Mailer: ml, DB: db})
+	rt, err := registry.New(registry.Deps{Config: cfg, Logger: lg, Fetcher: fch, Mailer: ml, DB: db})
+	if err != nil {
+		return fmt.Errorf("build runtime: %w", err)
+	}
 
 	// SMTP relay settings become admin-editable: the mailer resolves
 	// them per send from the appconfig surface (env values stay the
 	// default layer). Late-bound — the module exists after New.
-	if module, ok := reg.Get(appconfig.ModuleName).(*appconfig.Module); ok {
-		if setter, ok := ml.(mailer.SettingsSourceSetter); ok {
-			fallback := cfg.Mailer
-			setter.SetSettingsSource(func(ctx context.Context) (config.MailerConfig, error) {
-				values, err := module.MergedValues(ctx)
-				if err != nil {
-					return fallback, err
-				}
-				return mailer.SettingsFromValues(values, fallback), nil
-			})
-		}
+	if setter, ok := ml.(mailer.SettingsSourceSetter); ok {
+		fallback := cfg.Mailer
+		setter.SetSettingsSource(func(ctx context.Context) (config.MailerConfig, error) {
+			values, err := rt.AppConfig.MergedValues(ctx)
+			if err != nil {
+				return fallback, err
+			}
+			return mailer.SettingsFromValues(values, fallback), nil
+		})
 	}
-	if err := reg.Start(context.Background()); err != nil {
+	if err := rt.Start(context.Background()); err != nil {
 		return fmt.Errorf("start modules: %w", err)
 	}
 
-	srv := transport.NewHTTPServer(reg, cfg, lg, rateLimiter(db), latestVersion(reg))
+	srv := transport.NewHTTPServer(transport.RouteSet{MountRoot: rt.MountRoot, MountAPI: rt.MountAPI}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs))
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	serveErr := make(chan error, 1)
 	go func() {
@@ -170,7 +169,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		return fmt.Errorf("shutdown server: %w", err)
 	}
 
-	if err := reg.Stop(shutdownCtx); err != nil {
+	if err := rt.Stop(shutdownCtx); err != nil {
 		lg.WithError(err).Warn("module shutdown errors")
 	}
 

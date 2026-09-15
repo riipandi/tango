@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/stretchr/testify/assert"
@@ -50,10 +49,8 @@ func withGuard(m *Module) *Module {
 
 func mount(t *testing.T, module *Module) chi.Router {
 	t.Helper()
-	reg := kernel.NewRegistry()
-	reg.Register(module)
 	r := chi.NewRouter()
-	r.Route("/api", reg.ApplyAPI)
+	r.Route("/api", module.APIRoutes)
 	return r
 }
 

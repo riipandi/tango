@@ -9,7 +9,6 @@ import (
 	"slices"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/riipandi/tango/internal/kernel"
 )
 
 // ModuleName identifies the federation module in the registry.
@@ -26,7 +25,7 @@ type Module struct {
 // New builds the module from the selected features; anything omitted
 // has no routes, storage, or lifecycle. Fails fast on a malformed
 // feature set.
-func New(features ...Feature) kernel.Module {
+func New(features ...Feature) *Module {
 	m := &Module{seen: make(map[string]bool, len(features))}
 
 	for _, f := range features {

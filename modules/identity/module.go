@@ -9,7 +9,6 @@ import (
 	"slices"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/riipandi/tango/internal/kernel"
 )
 
 // ModuleName identifies the identity module in the registry.
@@ -28,7 +27,7 @@ type Module struct {
 // New builds the module from the mandatory user core plus the
 // selected features; anything omitted has no routes, storage, or
 // lifecycle. Fails fast on a malformed feature set.
-func New(core APIFeature, features ...Feature) kernel.Module {
+func New(core APIFeature, features ...Feature) *Module {
 	if core == nil {
 		panic("identity: nil user core")
 	}

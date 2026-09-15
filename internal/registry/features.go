@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/appconfig"
@@ -77,16 +79,16 @@ func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, 
 }
 
 // newWebhookModule builds the webhook service and queue processor.
-func newWebhookModule(deps Deps, guard func(http.Handler) http.Handler) *webhook.Module {
+func newWebhookModule(deps Deps, queueClient *queue.Client, guard func(http.Handler) http.Handler) *webhook.Module {
 	service := webhook.NewService(
 		webhook.NewPostgresStore(deps.DB),
 		deps.DB,
-		deps.Queue,
+		queueClient,
 		secretCipher(deps),
 		deps.Logger,
 		webhook.WithSender(webhook.NewFetcherSender(deps.Fetcher)),
 	)
-	service.RegisterQueue(deps.Queue)
+	service.RegisterQueue(queueClient)
 	m := webhook.New(service)
 	m.UseGuard(guard)
 	return m
@@ -108,28 +110,25 @@ func newVersionFeed(deps Deps) *jobs.VersionFeed {
 }
 
 // registerRecurringJobs registers cleanup and release-feed jobs.
-func registerRecurringJobs(deps Deps, feed *jobs.VersionFeed, webhooks *webhook.Module) {
-	if deps.Jobs == nil {
-		return
-	}
-	deps.Jobs.AddJob(jobs.CleanupTokens(deps.DB, deps.Logger))
-	deps.Jobs.AddJob(jobs.CleanupWebhookLogs(webhooks.Store(), deps.Logger))
-	deps.Jobs.AddJob(jobs.RemindExpiringAPIKeys(deps.DB, deps.Jobs, deps.Logger))
-	deps.Jobs.AddJob(jobs.VersionJob(feed, deps.Logger))
+func registerRecurringJobs(deps Deps, reg *jobs.Registry, feed *jobs.VersionFeed, webhooks *webhook.Module) {
+	reg.AddJob(jobs.CleanupTokens(deps.DB, deps.Logger))
+	reg.AddJob(jobs.CleanupWebhookLogs(webhooks.Store(), deps.Logger))
+	reg.AddJob(jobs.RemindExpiringAPIKeys(deps.DB, reg, deps.Logger))
+	reg.AddJob(jobs.VersionJob(feed, deps.Logger))
 }
 
 // newIdentityFeatures builds the user service and identity features.
-func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Recorder) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, storage.Store) {
+func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, audit *auditlog.Module, recorder identity.Recorder) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, storage.Store, error) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	// Share one blob backend across images and client logos.
 	blobStore, err := storage.New(deps.Config.Storage)
 	if err != nil {
-		panic("registry: storage init: " + err.Error())
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
 	}
 	bundled, err := storage.SeedBundledImages(context.Background(), blobStore, web.ImagesDir)
 	if err != nil {
-		panic("registry: bundled images init: " + err.Error())
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
 	}
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, recorder)
@@ -177,14 +176,14 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 			user.NewPostgresStore(deps.DB),
 			sessions,
 			recorder,
-			onetimeaccess.WithMail(deps.Jobs, deps.Config.Public.BaseURL),
+			onetimeaccess.WithMail(jobsReg, deps.Config.Public.BaseURL),
 		)).WithAdminGuard(adminAuth).
 			WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		emailverification.New(emailverification.NewService(
 			token.NewStore(deps.DB, token.PurposeEmailVerification),
 			emailVerificationAdapter(user.NewPostgresStore(deps.DB)),
 			recorder,
-			emailverification.WithMail(deps.Jobs, user.NewPostgresStore(deps.DB), deps.Config.Public.BaseURL),
+			emailverification.WithMail(jobsReg, user.NewPostgresStore(deps.DB), deps.Config.Public.BaseURL),
 		)).WithSelfAuth(sessions, session.CookieName),
 		signup.New(signup.NewService(
 			signup.NewPostgresStore(deps.DB),
@@ -198,7 +197,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 		apiKeys,
 	}
 
-	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), blobStore
+	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), blobStore, nil
 }
 
 // withOIDC builds the OIDC provider feature.

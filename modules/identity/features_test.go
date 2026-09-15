@@ -54,7 +54,7 @@ func TestFeatureRoutesMounted(t *testing.T) {
 	mod := New(stubCore{}, stubAPIFeature{stubFeature{name: "stub"}})
 
 	r := chi.NewRouter()
-	r.Route("/api", mod.(kernel.APIRoutable).APIRoutes)
+	r.Route("/api", mod.APIRoutes)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/stub", nil))
@@ -70,7 +70,7 @@ func TestModuleUnknownPath(t *testing.T) {
 	mod := New(stubCore{})
 
 	r := chi.NewRouter()
-	r.Route("/api", mod.(kernel.APIRoutable).APIRoutes)
+	r.Route("/api", mod.APIRoutes)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/nope", nil))
@@ -81,7 +81,7 @@ func TestModuleMethodNotAllowed(t *testing.T) {
 	mod := New(stubCore{})
 
 	r := chi.NewRouter()
-	r.Route("/api", mod.(kernel.APIRoutable).APIRoutes)
+	r.Route("/api", mod.APIRoutes)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/users", nil))
@@ -98,7 +98,7 @@ func TestFeatureWithoutRoutesMountsHarmlessly(t *testing.T) {
 	mod := New(stubCore{}, stubFeature{name: "plain"})
 
 	r := chi.NewRouter()
-	r.Route("/api", mod.(kernel.APIRoutable).APIRoutes)
+	r.Route("/api", mod.APIRoutes)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/users", nil))
@@ -123,8 +123,7 @@ func TestFeatureLifecycleOrder(t *testing.T) {
 		stubStartableFeature{stubFeature{name: "a"}, &events},
 		stubFeature{name: "plain"},
 		stubStartableFeature{stubFeature{name: "b"}, &events},
-	).(kernel.Startable)
-
+	)
 	require.NoError(t, mod.Start(context.Background()))
 	require.NoError(t, mod.Stop(context.Background()))
 
@@ -139,7 +138,7 @@ func TestFeatureRootRoutesMounted(t *testing.T) {
 	require.Implements(t, (*kernel.RootRoutable)(nil), mod)
 
 	r := chi.NewRouter()
-	mod.(kernel.RootRoutable).Routes(r)
+	mod.Routes(r)
 	assert.True(t, mounted, "root-routable feature must be mounted")
 }
 
@@ -163,7 +162,7 @@ func (f failingStartable) Stop(ctx context.Context) error {
 func TestFeatureStopErrorWrapped(t *testing.T) {
 	mod := New(stubCore{}, failingStartable{stubFeature{name: "bad"}})
 
-	err := mod.(kernel.Startable).Stop(context.Background())
+	err := mod.Stop(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `stop feature "bad"`)
 }

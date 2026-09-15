@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
@@ -128,8 +127,6 @@ func mountWithGuards(t *testing.T, mod *Module) chi.Router {
 		})
 	})
 
-	reg := kernel.NewRegistry()
-	reg.Register(mod)
 	r := chi.NewRouter()
 	r.Route("/api", func(api chi.Router) {
 		api.Use(func(next http.Handler) http.Handler {
@@ -137,7 +134,7 @@ func mountWithGuards(t *testing.T, mod *Module) chi.Router {
 				next.ServeHTTP(w, req.WithContext(middleware.WithPrincipal(req.Context(), fixedPrincipal)))
 			})
 		})
-		reg.ApplyAPI(api)
+		mod.APIRoutes(api)
 	})
 	return r
 }
@@ -220,10 +217,8 @@ func TestSelfListingScopesToCurrentUser(t *testing.T) {
 	require.NoError(t, mod.Record(ctx, &Entry{Event: "user.signed_out"}))
 
 	mod.MountSelfAPI(&fakeAuthenticator{principal: principal}, "tango_session")
-	reg := kernel.NewRegistry()
-	reg.Register(mod)
 	r := chi.NewRouter()
-	r.Route("/api", reg.ApplyAPI)
+	r.Route("/api", mod.APIRoutes)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs", nil)
 	req.AddCookie(&http.Cookie{Name: "tango_session", Value: "any"})
@@ -247,12 +242,9 @@ func TestModuleContracts(t *testing.T) {
 	mod := New(newTestStore(t))
 	assert.Equal(t, ModuleName, mod.Name())
 
-	reg := kernel.NewRegistry()
-	reg.Register(mod) // must not panic: APIRoutable, unique name
-
 	// Without guards nothing is mounted — fail closed.
 	r := chi.NewRouter()
-	r.Route("/api", reg.ApplyAPI)
+	r.Route("/api", mod.APIRoutes)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/audit-logs", nil))
 	assert.Equal(t, http.StatusNotFound, w.Code)

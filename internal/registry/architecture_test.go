@@ -1,10 +1,12 @@
 package registry
 
 import (
+	"context"
 	"go/parser"
 	"go/token"
 	"io/fs"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,9 +94,11 @@ func collectRoutes(t *testing.T, r chi.Router) []string {
 // composition root must yield each API method+pattern exactly once,
 // never twice from overlapping feature registrations.
 func TestAPIRoutesMountEachPathOnce(t *testing.T) {
-	reg := New(testDeps(t))
+	rt, err := New(testDeps(t))
+	require.NoError(t, err)
+
 	api := chi.NewRouter()
-	reg.ApplyAPI(api)
+	rt.MountAPI(api)
 
 	seen := map[string]int{}
 	for _, route := range collectRoutes(t, api) {
@@ -109,4 +113,52 @@ func TestAPIRoutesMountEachPathOnce(t *testing.T) {
 		}
 	}
 	assert.Empty(t, duplicates, "routes mounted more than once")
+}
+
+// TestRootRoutesMountEachPathOnce pins ownership of the root surface
+// (protocol endpoints mounted outside /api).
+func TestRootRoutesMountEachPathOnce(t *testing.T) {
+	rt, err := New(testDeps(t))
+	require.NoError(t, err)
+
+	root := chi.NewRouter()
+	rt.MountRoot(root)
+
+	seen := map[string]int{}
+	for _, route := range collectRoutes(t, root) {
+		seen[route]++
+	}
+	assert.Greater(t, len(seen), 0, "root routes must be mounted")
+
+	duplicates := []string{}
+	for route, count := range seen {
+		if count > 1 {
+			duplicates = append(duplicates, route)
+		}
+	}
+	assert.Empty(t, duplicates, "root routes mounted more than once")
+}
+
+// The LDAP sync endpoint is an excluded upstream feature; the route
+// must stay unmounted even though application configuration is served.
+func TestLDAPSyncEndpointNotMounted(t *testing.T) {
+	rt, err := New(testDeps(t))
+	require.NoError(t, err)
+	api := chi.NewRouter()
+	rt.MountAPI(api)
+
+	w := httptest.NewRecorder()
+	api.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/application-configuration/sync-ldap", nil))
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestRuntimeStartStopOrder pins the explicit lifecycle order: start
+// queue-first, stop queue-last.
+func TestRuntimeStartStopOrder(t *testing.T) {
+	rt, err := New(testDeps(t))
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, rt.Start(ctx))
+	require.NoError(t, rt.Stop(ctx))
 }

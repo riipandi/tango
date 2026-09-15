@@ -12,10 +12,10 @@ import (
 
 	jsonv2 "encoding/json/v2"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/identity"
@@ -47,10 +47,14 @@ func testServer(t *testing.T, cfg *config.Config) *HTTPServer {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	reg := kernel.NewRegistry()
-	reg.Register(auditlog.New(auditlog.NewPostgresStore(db)))
-	reg.Register(identity.New(user.NewService(user.NewPostgresStore(db), nil)))
-	return NewHTTPServer(reg, cfg, testLogger(), nil, nil)
+	audit := auditlog.New(auditlog.NewPostgresStore(db))
+	idModule := identity.New(user.NewService(user.NewPostgresStore(db), nil))
+	return NewHTTPServer(RouteSet{
+		MountAPI: func(r chi.Router) {
+			audit.APIRoutes(r)
+			idModule.APIRoutes(r)
+		},
+	}, cfg, testLogger(), nil, nil)
 }
 
 func TestNewHTTPServerRoutes(t *testing.T) {
@@ -128,7 +132,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 
 func TestHTTPServerShutdown(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger(), nil, nil)
+	srv := NewHTTPServer(RouteSet{}, cfg, testLogger(), nil, nil)
 
 	// Shutdown is safe before the server listens.
 	assert.NoError(t, srv.Shutdown(contextWithTimeout()))
