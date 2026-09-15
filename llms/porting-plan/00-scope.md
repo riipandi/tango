@@ -5,6 +5,18 @@ updated: 2026-09-15
 
 # Scope and Rules
 
+## Architecture constraints
+
+- Keep `cmd/launcher` as the CLI and server entrypoint. Do not create a replacement command tree.
+- Keep the current flat `internal/` package layout. Do not introduce `internal/app`,
+  `internal/platform`, `internal/domain`, or another infrastructure tree.
+- Keep `internal/registry` as the composition root, but simplify it into an explicit concrete
+  runtime builder. Do not replace it with a generic plugin registry.
+- Apply the main module reduction under `modules/`: identity, federation, admin, and webhook are
+  the four application boundaries.
+- Do not add a dependency-injection framework, service locator, generic event bus, microservice
+  boundary, or message broker.
+
 ## In scope
 
 - Pocket ID endpoints listed in `llms/endpoint-reference.md`, verified against the local v2.14.0
@@ -14,6 +26,7 @@ updated: 2026-09-15
 - Password sign-in, change-password, forgot-password, and reset-password flows.
 - TOTP MFA enrollment, verification, recovery, disablement, and session integration.
 - Tango webhooks, including signing, delivery, retries, and logs.
+- Canonical recoverable-secret encryption through `pkg/crypto` with the `enc:` prefix.
 
 ## Explicit non-goals
 
@@ -43,7 +56,14 @@ disabled, or left unreachable; never count it silently as completed parity.
   removed/excluded endpoints so stale requests do not imply supported API surface.
 - Keep each task in one atomic commit containing only the task, its tests, and required docs.
 - Run focused tests, then `task test`, `task lint`, and `task check` before marking a task done.
+- Run focused tests and Yaak requests with explicit timeouts and fail-fast behavior. Stop on the
+  first failure or hang; do not wait for a long default integration/container timeout.
+- If local Pocket ID behavior, a database field, or an endpoint contract is ambiguous, record the
+  evidence and ask the project owner for confirmation. Do not guess or update the matrix/Yaak
+  expectation until the dependent decision is confirmed.
 - Never commit real reset tokens, TOTP seeds, webhook secrets, or other credentials.
+- New recoverable encrypted values must be written as `enc:<ciphertext>` by `pkg/crypto`; do not
+  add local encryption formats or encrypt values that only need one-way verification.
 
 ## Context and completion rule
 

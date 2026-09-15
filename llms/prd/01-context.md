@@ -19,6 +19,10 @@ Provide a maintainable, Postgres-backed authentication and OIDC service whose in
 behaviorally compatible with Pocket ID v2.14.0 while using tango's architecture and standard JSON
 response envelope.
 
+The architecture must preserve `cmd/launcher` and the current flat `internal/` layout. Complexity
+reduction is focused on four explicit application modules under `modules/`: identity, federation,
+admin, and webhook.
+
 ## Outcomes
 
 1. Consumers can use the in-scope Pocket ID endpoints without changing method, path, parameters,
@@ -30,6 +34,8 @@ response envelope.
 5. Services can subscribe to signed webhook events with reliable delivery logs.
 6. Agents can verify every endpoint through focused tests and Yaak MCP requests.
 7. The code remains modular, understandable, Postgres-only, and free of excluded-feature residue.
+8. Every new recoverable encrypted value uses the canonical `enc:` prefix from `pkg/crypto`,
+   while hash-only values remain one-way hashes.
 
 ## Non-goals
 
@@ -37,6 +43,7 @@ response envelope.
 - Supporting SQLite or MySQL.
 - Building LDAP, Application Images, or a generic identity-provider abstraction.
 - Replacing Yaak verification with unit tests alone.
+- Replacing the current command entrypoint or creating a new nested internal platform tree.
 
 ## Success metrics
 
@@ -45,3 +52,4 @@ response envelope.
 - 0 known responder-envelope violations outside documented bare-response exceptions.
 - Password, MFA, and webhook security cases pass automated tests and live checks.
 - Full project test, lint, format, and vet gates pass.
+- No new recoverable encrypted value is stored without the `enc:` prefix.

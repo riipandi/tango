@@ -8,7 +8,7 @@ owner: tango-auth-porting
 
 ## Test layers
 
-1. **Unit tests**: pure validation, crypto, signature, mapping, and policy behavior.
+1. **Unit tests**: pure validation, crypto prefix, signature, mapping, and policy behavior.
 2. **Module tests**: service/store behavior with real Postgres and transaction checks.
 3. **Handler tests**: request decoding, responder envelope, status, auth, cookies, and headers.
 4. **Route tests**: public method/path mounts and middleware order.
@@ -35,3 +35,7 @@ owner: tango-auth-porting
 - Database migrations apply cleanly to a fresh Postgres instance and existing test data remains
   consistent after cleanup migrations.
 - Full test, lint, format, vet, and race checks pass.
+- Focused and live checks fail fast with explicit timeouts; hangs, unavailable containers, and
+  stalled Yaak requests are reported as the first failure.
+- Ambiguous upstream behavior is not guessed. The agent records evidence and asks the project owner
+  for confirmation before changing the dependent implementation, matrix, or Yaak request.

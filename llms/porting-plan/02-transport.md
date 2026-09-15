@@ -7,8 +7,9 @@ updated: 2026-09-15
 
 Goal: make route and response behavior consistent before feature-specific fixes.
 
-Prerequisites: complete excluded-feature cleanup and the contract baseline. Use `pkg/responder` and
-`internal/transport` as the response and error contract sources.
+Prerequisites: complete excluded-feature cleanup, target architecture, and the contract baseline.
+Keep `cmd/launcher` unchanged as the caller. `internal/transport` remains the HTTP server boundary;
+use `pkg/responder` and `internal/transport` as the response and error contract sources.
 
 ## Tasks
 
@@ -27,4 +28,6 @@ Prerequisites: complete excluded-feature cleanup and the contract baseline. Use 
 Add tests for route mounts, envelope shape, validation errors, auth errors, pagination metadata,
 bare protocol responses, cookies, and required headers. Whenever a route or header changes, update
 and re-send its Yaak request with the same method, URL, parameters, headers, body, auth, and expected
-response as the matrix. Verify no route is mounted twice or under `/api/api/...`.
+response as the matrix. Verify no route is mounted twice or under `/api/api/...`. Use explicit
+timeouts and fail-fast execution; stop a stalled request instead of waiting for the default timeout.
+Ask the project owner before resolving an ambiguous upstream header or response behavior.

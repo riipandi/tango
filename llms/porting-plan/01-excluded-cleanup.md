@@ -9,8 +9,9 @@ Goal: remove the existing LDAP and Application Images implementation from the ru
 only shared code that is still required by in-scope features.
 
 Prerequisites: read `00-scope.md`; inspect `internal/registry`, `modules/appconfig`, migrations,
-compose files, and active `rg` references. Do not delete shared storage, mailer, profile-picture,
-or configuration code until its callers are checked.
+compose files, and active `rg` references. Keep `cmd/launcher` and the existing `internal/`
+package layout unchanged. Do not delete shared storage, mailer, profile-picture, or configuration
+code until its callers are checked.
 
 ## Tasks
 
@@ -23,9 +24,9 @@ or configuration code until its callers are checked.
 
 2. **Remove LDAP runtime wiring**
 
-   Unmount `sync-ldap`, remove the `ldapsync` feature from registry construction, remove LDAP
-   settings providers, and make application configuration unaware of LDAP-only consumers. Add route
-   tests proving the endpoint is not mounted. Commit: `refactor: remove LDAP runtime wiring`.
+   Unmount `sync-ldap`, remove the `ldapsync` feature from the concrete registry runtime, remove
+   LDAP settings providers, and make application configuration unaware of LDAP-only consumers. Add
+   route tests proving the endpoint is not mounted. Commit: `refactor: remove LDAP runtime wiring`.
 
 3. **Remove the LDAP module and dependency**
 
@@ -48,8 +49,9 @@ or configuration code until its callers are checked.
 6. **Remove Application Images runtime paths**
 
    Unmount Application Images routes, remove `modules/appimage` only when no shared caller remains,
-   and preserve storage code required by other in-scope features. Delete its tests, fixtures, and
-   Yaak requests. Commit: `chore: remove application images integration`.
+   and preserve the existing flat `internal/storage` package for any remaining profile or client
+   media feature. Delete its tests, fixtures, and Yaak requests. Commit:
+   `chore: remove application images integration`.
 
 7. **Clean references and verify the removal**
 

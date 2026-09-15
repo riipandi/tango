@@ -16,6 +16,7 @@ load only the context needed for a task.
 - Endpoint inventory: [`llms/endpoint-reference.md`](../endpoint-reference.md)
 - Upstream schema reference: [`llms/database-reference.sql`](../database-reference.sql)
 - Tango response contract: [`pkg/responder/`](../../pkg/responder/)
+- Tango encryption contract: [`pkg/crypto/`](../../pkg/crypto/)
 - Tango transport contract: [`internal/transport/`](../../internal/transport/)
 - Historical work: [`llms/archived/`](../archived/), context only
 - Upstream API reference: <https://pocket-id.org/docs/api>
@@ -31,6 +32,8 @@ load only the context needed for a task.
 7. [Data, security, and maintainability](./07-data-security.md)
 8. [Verification and release acceptance](./08-verification.md)
 9. [Delivery, dependencies, and risks](./09-delivery.md)
+10. [Architecture requirements](./10-architecture.md)
+11. [Recoverable secret encryption](./11-encryption.md)
 
 ## Decision status
 

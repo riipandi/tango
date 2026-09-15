@@ -22,6 +22,9 @@ owner: tango-auth-porting
   policy.
 - Duplicate attempts are safe to inspect and do not corrupt endpoint state.
 - Secret rotation affects new deliveries without exposing old or new secrets through the API.
+- Stored signing secrets use `pkg/crypto` and the canonical `enc:` prefix; the prefix never appears
+  in public responses because the secret is redacted or returned only as newly generated plaintext
+  when the route explicitly requires a one-time response.
 - Queue and pruning behavior remain bounded and do not block the originating HTTP request.
 
 ## Data exposure rules

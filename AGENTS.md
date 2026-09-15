@@ -23,13 +23,14 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 
 ## Architecture
 
-- `internal/kernel` defines the module contract (`Name()` plus optional `APIRoutes`/`Routes`/`Startable`); `internal/registry` wires modules into the HTTP server.
+- `cmd/launcher` remains the CLI and server entrypoint. `internal/registry` is the explicit composition root. Keep `internal/` flat and avoid adding `internal/app`, `internal/platform`, or a generic plugin registry. Application boundaries are `modules/identity`, `modules/federation`, `modules/admin`, and `modules/webhook`.
 - `modules/<area>/<feature>/{schema,service,store,handler}.go` — exactly one store file named `store.go`, Postgres-backed via `internal/datastore`. No memory-store implementations.
-- `modules/identity` — accounts core + auth features (session, password, webauthn, signup, apikey, apiaccess, ldapsync, ...). `modules/federation` — provider surface (oidc, jwks, discovery, scimsync). Authn/authz features never leave `modules/identity`.
-- Admin-editable settings live in `app_config` via `modules/appconfig` (keys `smtp_*`, `ldap_*`, plus general/OIDC); defaults fold catalog < env < DB. Cross-module consumers read through the appconfig surface (`MergedValues`), not raw env. Sensitive values redact in the admin view but resolve for wired consumers (mailer per-send source, LDAP sync).
+- `modules/identity` — accounts core + auth features (session, password, webauthn, signup, apikey, apiaccess, ...). `modules/federation` — provider surface (oidc, jwks, discovery, scimsync). Authn/authz features never leave `modules/identity`.
+- Admin-editable settings live in `app_config` via `modules/appconfig`; defaults fold catalog < env < DB. Cross-module consumers read through the appconfig surface (`MergedValues`), not raw env. Sensitive values redact in the admin view but resolve for their owning consumers.
 - Schema is owned by `database/migrations/` (goose). Never embed or auto-create schema. Migration DDL is verbatim: editing an applied migration does not re-run it; reset via `tango db migrate:down --force --count N` then `migrate:up`.
 - Typed IDs per module via `go.jetify.com/typeid`; the prefix lives in the module's `schema.go`. Only URL-facing/cross-module IDs carry TypeID; token/code rows use SHA-256 keys plus DB `uuidv7()`.
 - Background work runs on the built-in queue `internal/queue` (tango-owned; based on backlite): Postgres-backed, in-process dispatcher, schema in migrations. Consumers register queue processors and enqueue typed tasks; the engine reads/writes only through `internal/datastore` (`Executor`/`WithTx`). Recurring maintenance lives in `internal/jobs` (`Job` registry, fixed-delay self-rescheduling).
+- Recoverable encrypted values use `pkg/crypto.Cipher` and are written with the exact `enc:` prefix (`enc:<ciphertext>`). Passwords, reset/session tokens, API keys, and recovery codes remain hashes when verification is sufficient. Do not add another encryption format.
 - `llms/database-reference.sql` — upstream schema dump for parity checks.
 
 ## Conventions
@@ -50,13 +51,16 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 - Add an endpoint: follow the matching `llms/phase-*.md` task list; create the request in Yaak (via MCP) and send it against the running server before ticking a checkbox. Exported request specs land in `api/specs/*.yaml`.
 - Add a config key: catalog entry in `modules/appconfig/config.go` + env layer in `modules/appconfig/env.go` (`EnvDefaults`); `.env.example` documents the env name.
 - Frontend asset images live in `public/images/` → copied to `web/output/images` by the Vite build; never embed them in Go.
-- Dev LDAP server: `deploy/glauth/` (postgres plugin backend, seeded via `seed.sql`).
+- LDAP-specific development services and configuration are legacy cleanup scope; do not add new
+  dependencies on `deploy/glauth/` or LDAP settings.
 - Migrations: `tango db migrate:create`, `migrate:up`, `migrate:status` (see `tango db --help`); bump the version/count assertions in the migrator tests (`database/migrator_test.go`, `cmd/launcher/db_migrate*_test.go`) with every new migration.
 
 ## Gotchas / Anti-patterns
 
 - Check `gofmt -l` before committing; lefthook `format-go` and `format-js` block dirty trees. Committing without a JS file staged can still fail `format-js` — retry or use `--no-verify` after confirming `format-go` is clean.
 - `env.example` and `internal/config` are kept in sync by a test — new config keys must be documented in `.env.example`.
+- Tests and Yaak requests must fail fast with explicit timeouts. Prefer focused commands with `-failfast` where supported; stop and report a hung test, unavailable container, or stalled request instead of waiting for a long default timeout.
+- When local Pocket ID behavior, a database field, or an API contract is ambiguous, do not guess. Record the evidence and ask the project owner for confirmation before changing dependent code, endpoint matrices, or Yaak requests.
 - Route params with IDs only accept TypeID form (`user_...`, `oidc_client_...`); raw UUIDs 404.
 - `compose.yaml` `pocketid` service runs upstream Pocket ID for parity testing; its DB holds real schema state — do not wipe it casually.
 - Commits are local only; never push without being asked.

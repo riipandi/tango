@@ -14,6 +14,8 @@ owner: tango-auth-porting
 - Support sign-in, sign-out, session inspection, password change, forgot-password, and
   reset-password.
 - Hash reset tokens at rest; make them expiring, single-use, and atomically consumed.
+- Do not encrypt passwords, reset tokens, session tokens, or recovery codes when verification is
+  the only required operation.
 - Queue recovery email delivery through the existing queue/mailer path.
 - Invalidate affected sessions after reset and rotate authentication cookies.
 - Audit credential changes and security-sensitive events without logging secrets.
@@ -22,7 +24,8 @@ owner: tango-auth-porting
 ## TOTP requirements
 
 - Support enrollment, confirmation, status, verification, disablement, and recovery codes.
-- Encrypt seeds at rest and never return an active seed after enrollment.
+- Encrypt seeds at rest with `pkg/crypto` using `enc:` and never return an active seed after
+  enrollment.
 - Use documented algorithm, digits, period, and bounded clock-skew behavior.
 - Prevent code replay within the accepted time window.
 - Hash recovery codes, show them only once, and invalidate used or rotated codes.

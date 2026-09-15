@@ -46,3 +46,15 @@ For every route, an agent must:
 5. Record status/header/body evidence and intentional deviations.
 
 Stale or orphaned Yaak requests are a parity failure.
+
+## Architecture constraints for parity work
+
+- `cmd/launcher` must continue to load config, open infrastructure, start the runtime, and shut it
+  down.
+- `internal/transport` remains responsible for server middleware and HTTP server setup.
+- `internal/registry` remains the composition root but should expose an explicit runtime rather than
+  discover modules through generic capability interfaces.
+- Endpoint ownership must resolve to identity, federation, admin, or webhook. Do not create a new
+  module just to own one endpoint.
+- At-rest encryption changes must not alter public response shapes. Secret-bearing endpoints remain
+  redacted or one-time-only and use `pkg/responder` for normal JSON responses.

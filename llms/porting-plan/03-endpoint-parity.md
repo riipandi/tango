@@ -9,9 +9,10 @@ Goal: fix existing modules in endpoint-matrix order. For every task, compare ups
 change only the owning DTO/store/service/handler, add real-Postgres tests, send Yaak requests, and
 update the matrix.
 
-Prerequisites: complete transport normalization. Work in the listed order. Before editing an
-endpoint, reproduce its current request and response, then compare it with upstream. Do not refactor
-unrelated modules during a parity task.
+Prerequisites: complete transport normalization and the target architecture decisions. Work in the
+listed order. Before editing an endpoint, reproduce its current request and response, then compare
+it with upstream. Keep route ownership in the four module boundaries; do not create one new module
+per endpoint family.
 
 ## Tasks
 
@@ -28,7 +29,8 @@ unrelated modules during a parity task.
    `fix: align SCIM and configuration contracts`.
 
 Do not port LDAP or Application Images. If shared code depends on either feature, split the
-dependency at the module boundary and retain only the in-scope behavior.
+dependency at the module boundary and retain only the in-scope behavior. The target module owners
+are `modules/identity`, `modules/federation`, `modules/admin`, and `modules/webhook`.
 
 ## Acceptance criteria for each family
 
@@ -39,3 +41,7 @@ dependency at the module boundary and retain only the in-scope behavior.
 - Yaak requests cover success, unauthorized, and invalid input cases and are updated and re-sent
   whenever any route, parameter, header, body, status, or response field changes.
 - The matrix and `llms/tango-deviations.md` are updated before the commit.
+- Focused tests and Yaak requests use explicit timeouts and fail-fast behavior. An unavailable
+  dependency or hanging request is reported immediately.
+- If upstream source, docs, or live behavior conflict, record the evidence and ask the project owner
+  before selecting a contract or changing the parity matrix.

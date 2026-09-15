@@ -7,15 +7,16 @@ updated: 2026-09-15
 
 Goal: provide secure password authentication without coupling password policy to session storage.
 
-Prerequisites: complete transport normalization and inspect `modules/identity/password` and
-`modules/identity/session`. Keep credential verification in password and session creation in
-session; handlers only coordinate validation and responder output.
+Prerequisites: complete transport normalization and inspect the identity boundary. Password,
+session, and MFA belong under `modules/identity`; they are use cases of one identity module, not
+independent runtime plugins. Keep credential verification and session creation behind identity
+services; handlers only coordinate validation and responder output.
 
 ## Security and Yaak acceptance criteria
 
 - Invalid sign-in and forgot-password requests do not reveal account existence.
 - Password hashes and reset tokens are never returned or logged; reset tokens are hashed, expiring,
-  and single-use.
+  and single-use. Do not use `enc:` for values that only need verification.
 - Reset invalidates the intended sessions and rotates authentication cookies.
 - Cookies use configured Secure, HttpOnly, SameSite, and Path attributes.
 - Update and re-send Yaak requests for cookie attributes, recovery bodies, auth headers, status codes,
