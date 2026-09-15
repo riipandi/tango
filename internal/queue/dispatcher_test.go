@@ -1,4 +1,4 @@
-package antree
+package queue
 
 import (
 	"bytes"
@@ -144,7 +144,7 @@ func TestDispatcherCleaner(t *testing.T) {
 	store := newPool(t)
 	d := &dispatcher{
 		numWorkers: 1,
-		client:     &Client{db: store},
+		client:     &Client{store: poolStore{pool: store}},
 		log:        &noLogger{},
 	}
 	task := completedTask{
@@ -255,14 +255,14 @@ func TestDispatcherProcessTaskSuccess(t *testing.T) {
 		attempts:  1,
 		createdAt: now(),
 	}
-	insertTask(t, d.client.db, tk)
+	insertTask(t, d.client.store, tk)
 
 	d.processTask(d.ctx, d.ready, tk)
 	assert.True(t, called, "called")
-	require.Len(t, getTasks(t, d.client.db), 0)
+	require.Len(t, getTasks(t, d.client.store), 0)
 	assert.Len(t, d.ready, 0, "ready")
 
-	completed := getCompletedTasks(t, d.client.db)
+	completed := getCompletedTasks(t, d.client.store)
 	require.Len(t, completed, 1)
 	assert.Equal(t, tk.id, completed[0].id, "id")
 	assert.Equal(t, "test", completed[0].queue, "queue")
@@ -290,11 +290,11 @@ func TestDispatcherProcessTaskNoRetention(t *testing.T) {
 		attempts:  1,
 		createdAt: now(),
 	}
-	insertTask(t, d.client.db, tk)
+	insertTask(t, d.client.store, tk)
 
 	d.processTask(d.ctx, d.ready, tk)
-	require.Len(t, getTasks(t, d.client.db), 0)
-	require.Len(t, getCompletedTasks(t, d.client.db), 0)
+	require.Len(t, getTasks(t, d.client.store), 0)
+	require.Len(t, getCompletedTasks(t, d.client.store), 0)
 }
 
 func TestDispatcherProcessTaskRetainNoData(t *testing.T) {
@@ -311,12 +311,12 @@ func TestDispatcherProcessTaskRetainNoData(t *testing.T) {
 		attempts:  1,
 		createdAt: now(),
 	}
-	insertTask(t, d.client.db, tk)
+	insertTask(t, d.client.store, tk)
 
 	d.processTask(d.ctx, d.ready, tk)
-	require.Len(t, getTasks(t, d.client.db), 0)
+	require.Len(t, getTasks(t, d.client.store), 0)
 
-	completed := getCompletedTasks(t, d.client.db)
+	completed := getCompletedTasks(t, d.client.store)
 	require.Len(t, completed, 1)
 	assert.Nil(t, completed[0].task, "task data shouldn't have been retained")
 }
@@ -335,12 +335,12 @@ func TestDispatcherProcessTaskRetainForever(t *testing.T) {
 		attempts:  1,
 		createdAt: now(),
 	}
-	insertTask(t, d.client.db, tk)
+	insertTask(t, d.client.store, tk)
 
 	d.processTask(d.ctx, d.ready, tk)
-	require.Len(t, getTasks(t, d.client.db), 0)
+	require.Len(t, getTasks(t, d.client.store), 0)
 
-	completed := getCompletedTasks(t, d.client.db)
+	completed := getCompletedTasks(t, d.client.store)
 	require.Len(t, completed, 1)
 	assert.Nil(t, completed[0].expiresAt, "expires at")
 }
@@ -367,19 +367,19 @@ func TestDispatcherProcessTaskRetainDataFailed(t *testing.T) {
 			attempts:  2,
 			createdAt: now(),
 		}
-		insertTask(t, d.client.db, tk)
+		insertTask(t, d.client.store, tk)
 
 		d.processTask(d.ctx, d.ready, tk)
-		require.Len(t, getTasks(t, d.client.db), 0)
+		require.Len(t, getTasks(t, d.client.store), 0)
 
-		completed := getCompletedTasks(t, d.client.db)
+		completed := getCompletedTasks(t, d.client.store)
 		require.Len(t, completed, 1)
 		if succeed {
 			assert.Nil(t, completed[0].task, "task data shouldn't have been retained")
 		} else {
 			assert.NotNil(t, completed[0].task, "task data should have been retained")
 		}
-		deleteCompletedTasks(t, d.client.db)
+		deleteCompletedTasks(t, d.client.store)
 	}
 }
 
@@ -405,12 +405,12 @@ func TestDispatcherProcessTaskRetainFailed(t *testing.T) {
 			attempts:  2,
 			createdAt: now(),
 		}
-		insertTask(t, d.client.db, tk)
+		insertTask(t, d.client.store, tk)
 
 		d.processTask(d.ctx, d.ready, tk)
-		require.Len(t, getTasks(t, d.client.db), 0)
+		require.Len(t, getTasks(t, d.client.store), 0)
 
-		completed := getCompletedTasks(t, d.client.db)
+		completed := getCompletedTasks(t, d.client.store)
 		if succeed {
 			assert.Len(t, completed, 0)
 		} else {
@@ -436,13 +436,13 @@ func TestDispatcherProcessTaskPanic(t *testing.T) {
 		task:      encode(t, &testTask{Val: "1"}),
 		createdAt: now(),
 	}
-	insertTask(t, d.client.db, tk)
+	insertTask(t, d.client.store, tk)
 
 	d.processTask(d.ctx, d.ready, tk)
 	assert.True(t, called, "called")
 	waitForChan(t, d.ready)
 
-	got := getTasks(t, d.client.db)
+	got := getTasks(t, d.client.store)
 	require.Len(t, got, 1)
 	require.NotNil(t, got[0].lastExecutedAt)
 	assert.Equal(t, now().UnixMilli(), got[0].lastExecutedAt.UnixMilli(), "last executed at")
@@ -468,14 +468,14 @@ func TestDispatcherProcessTaskFailure(t *testing.T) {
 		attempts:  1,
 		createdAt: now(),
 	}
-	insertTask(t, d.client.db, tk)
+	insertTask(t, d.client.store, tk)
 
 	// First attempt: released back to the queue.
 	d.processTask(d.ctx, d.ready, tk)
 	assert.True(t, called, "called")
 	waitForChan(t, d.ready)
 
-	got := getTasks(t, d.client.db)
+	got := getTasks(t, d.client.store)
 	require.Len(t, got, 1)
 	require.NotNil(t, got[0].lastExecutedAt)
 	assert.Equal(t, now().UnixMilli(), got[0].lastExecutedAt.UnixMilli(), "last executed at")
@@ -488,9 +488,9 @@ func TestDispatcherProcessTaskFailure(t *testing.T) {
 	d.processTask(d.ctx, d.ready, tk)
 	assert.True(t, called, "called")
 	assert.Len(t, d.ready, 0, "ready")
-	require.Len(t, getTasks(t, d.client.db), 0)
+	require.Len(t, getTasks(t, d.client.store), 0)
 
-	completed := getCompletedTasks(t, d.client.db)
+	completed := getCompletedTasks(t, d.client.store)
 	require.Len(t, completed, 1)
 	assert.Equal(t, tk.id, completed[0].id, "id")
 	assert.Equal(t, "test", completed[0].queue, "queue")
@@ -518,11 +518,11 @@ func TestDispatcherProcessTaskUnregisteredQueue(t *testing.T) {
 		task:      []byte("x"),
 		createdAt: now(),
 	}
-	insertTask(t, d.client.db, tk)
+	insertTask(t, d.client.store, tk)
 
 	assert.NotPanics(t, func() { d.processTask(d.ctx, d.ready, tk) })
-	require.Len(t, getTasks(t, d.client.db), 0)
-	require.Len(t, getCompletedTasks(t, d.client.db), 0)
+	require.Len(t, getTasks(t, d.client.store), 0)
+	require.Len(t, getCompletedTasks(t, d.client.store), 0)
 }
 
 func TestDispatcherFetcher(t *testing.T) {
@@ -557,7 +557,7 @@ func TestDispatcherFetcher(t *testing.T) {
 	}))
 
 	for i := range ids {
-		insertTask(t, d.client.db, &queuedTask{
+		insertTask(t, d.client.store, &queuedTask{
 			id:        ids[i],
 			queue:     "test",
 			task:      encode(t, &testTask{Val: "1"}),
@@ -568,7 +568,7 @@ func TestDispatcherFetcher(t *testing.T) {
 	d.fetch(ctx, d.tasks, d.ticker, d.ready, d.trigger)
 
 	// The first three tasks were claimed for the three workers; the rest untouched.
-	rows, err := d.client.db.Query(context.Background(), "SELECT id, claimed_at FROM "+tasksTable)
+	rows, err := d.client.store.Query(context.Background(), "SELECT id, claimed_at FROM "+tasksTable)
 	require.NoError(t, err)
 	defer rows.Close()
 
@@ -597,11 +597,11 @@ func TestDispatcherFetcher(t *testing.T) {
 	}
 
 	// The workers completed the first three tasks.
-	taskIDsExist(t, d.client.db, ids[3:5])
-	completedTaskIDsExist(t, d.client.db, ids[0:3])
+	taskIDsExist(t, d.client.store, ids[3:5])
+	completedTaskIDsExist(t, d.client.store, ids[0:3])
 
 	// The attempt count was incremented on the completed tasks.
-	for _, task := range getCompletedTasks(t, d.client.db) {
+	for _, task := range getCompletedTasks(t, d.client.store) {
 		assert.Equal(t, 1, task.attempts, "attempts")
 	}
 
@@ -609,9 +609,9 @@ func TestDispatcherFetcher(t *testing.T) {
 	waitForChan(t, d.ready)
 
 	// A scheduled task resets the ticker to its wait time.
-	deleteTasks(t, d.client.db)
+	deleteTasks(t, d.client.store)
 	scheduledID := nextTaskID()
-	insertTask(t, d.client.db, &queuedTask{
+	insertTask(t, d.client.store, &queuedTask{
 		id:        scheduledID,
 		queue:     "test",
 		task:      encode(t, &testTask{Val: "1"}),

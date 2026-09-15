@@ -1,10 +1,11 @@
-// Package antree provides type-safe, persistent task queues backed by
-// Postgres that run within the application process instead of an external
-// message broker.
+// Package queue provides the built-in, type-safe task queue backed by
+// Postgres that runs within the application process instead of an
+// external message broker.
 //
-// A port of github.com/mikestefanello/backlite (MIT license), adapted to
-// Postgres as a single self-contained package.
-package antree
+// The engine is owned by tango; it originated as a port of
+// github.com/mikestefanello/backlite (MIT license, see Credits in
+// README.md), adapted to Postgres and integrated with internal/datastore.
+package queue
 
 import (
 	"bytes"
@@ -17,7 +18,8 @@ import (
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/riipandi/tango/internal/datastore"
 )
 
 // now returns the current time in a way that tests can override.
@@ -28,7 +30,7 @@ var now = func() time.Time {
 type (
 	// Client registers queues and adds tasks to them for execution.
 	Client struct {
-		db     *pgxpool.Pool
+		store  datastore.Store
 		log    Logger
 		queues queues
 
@@ -40,7 +42,9 @@ type (
 
 	// ClientConfig contains configuration for the Client.
 	ClientConfig struct {
-		DB *pgxpool.Pool
+		// Store is the shared Postgres backend; the queue reads and
+		// writes through its Executor surface and WithTx.
+		Store datastore.Store
 
 		// Logger logs task execution. Omit to disable logging.
 		Logger Logger
@@ -83,8 +87,8 @@ func FromContext(ctx context.Context) *Client {
 // NewClient initializes a new Client.
 func NewClient(cfg ClientConfig) (*Client, error) {
 	switch {
-	case cfg.DB == nil:
-		return nil, errors.New("missing database")
+	case cfg.Store == nil:
+		return nil, errors.New("missing database store")
 	case cfg.NumWorkers < 1:
 		return nil, errors.New("at least one worker required")
 	case cfg.ReleaseAfter <= 0:
@@ -96,7 +100,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	}
 
 	c := &Client{
-		db:     cfg.DB,
+		store:  cfg.Store,
 		log:    cfg.Logger,
 		queues: queues{registry: make(map[string]Queue)},
 		buffers: sync.Pool{
@@ -138,7 +142,7 @@ func (c *Client) Stop(ctx context.Context) bool {
 }
 
 // Notify tells the dispatcher that new tasks were added. Only needed when
-// tasks are added within a caller-managed transaction (see TaskAddOp.Tx).
+// tasks are added within a caller-managed transaction (see TaskAddOp.Executor).
 func (c *Client) Notify() {
 	c.dispatcher.Notify()
 }
@@ -146,13 +150,13 @@ func (c *Client) Notify() {
 // Flush deletes all pending (unclaimed) tasks and returns how many were
 // removed. Claimed tasks — in flight or awaiting release — are untouched.
 func (c *Client) Flush(ctx context.Context) (int64, error) {
-	return flushTasks(ctx, c.db)
+	return flushTasks(ctx, c.store)
 }
 
 // FlushCompleted deletes all completed task records and returns how many
 // were removed, bypassing retention expiry.
 func (c *Client) FlushCompleted(ctx context.Context) (int64, error) {
-	return flushCompletedTasks(ctx, c.db)
+	return flushCompletedTasks(ctx, c.store)
 }
 
 // save persists a task add operation and returns the task IDs.
@@ -173,7 +177,7 @@ func (c *Client) save(op *TaskAddOp) ([]string, error) {
 	}
 
 	ids := make([]string, len(op.tasks))
-	insert := func(exec Executor) error {
+	insert := func(exec datastore.Executor) error {
 		for i, t := range op.tasks {
 			buf.Reset()
 			if err = jsonv2.MarshalWrite(buf, t); err != nil {
@@ -198,27 +202,14 @@ func (c *Client) save(op *TaskAddOp) ([]string, error) {
 		// The caller owns the transaction and commits it, then notifies us.
 		err = insert(op.exec)
 	} else {
-		// We own the transaction: roll back on failure, commit, notify.
-		var tx pgx.Tx
-		if tx, err = op.client.db.Begin(op.ctx); err != nil {
-			return nil, err
+		// We own the transaction: WithTx rolls back on failure and
+		// commits on success; notify after.
+		err = op.client.store.WithTx(op.ctx, func(exec datastore.Executor) error {
+			return insert(exec)
+		})
+		if err == nil {
+			c.Notify()
 		}
-		defer func() {
-			if err == nil {
-				return
-			}
-			if rollbackErr := tx.Rollback(op.ctx); rollbackErr != nil {
-				c.log.Error("failed to rollback task creation transaction", "error", rollbackErr)
-			}
-		}()
-
-		if err = insert(tx); err != nil {
-			return nil, err
-		}
-		if err = tx.Commit(op.ctx); err != nil {
-			return nil, err
-		}
-		c.Notify()
 	}
 	if err != nil {
 		return nil, err
@@ -239,7 +230,7 @@ func (c *Client) Status(ctx context.Context, taskID string) (TaskStatus, error) 
 
 	var claimed bool
 	runningQuery, runningArgs := running.Build()
-	err := c.db.QueryRow(ctx, runningQuery, runningArgs...).Scan(&claimed)
+	err := c.store.QueryRow(ctx, runningQuery, runningArgs...).Scan(&claimed)
 	switch {
 	case err == nil:
 		if claimed {
@@ -260,7 +251,7 @@ func (c *Client) Status(ctx context.Context, taskID string) (TaskStatus, error) 
 
 	var success bool
 	succeededQuery, succeededArgs := succeeded.Build()
-	if err := c.db.QueryRow(ctx, succeededQuery, succeededArgs...).Scan(&success); err != nil {
+	if err := c.store.QueryRow(ctx, succeededQuery, succeededArgs...).Scan(&success); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return TaskStatusNotFound, nil
 		}

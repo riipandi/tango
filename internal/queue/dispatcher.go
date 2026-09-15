@@ -1,4 +1,4 @@
-package antree
+package queue
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/riipandi/tango/internal/datastore"
 )
 
 type (
@@ -203,7 +205,7 @@ func (d *dispatcher) cleaner(ctx, shutdownCtx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := deleteExpiredCompletedTasks(ctx, d.client.db); err != nil {
+			if err := deleteExpiredCompletedTasks(ctx, d.client.store); err != nil {
 				d.log.Error("failed to delete expired completed tasks", "error", err)
 			}
 		case <-shutdownCtx.Done():
@@ -256,7 +258,7 @@ func (d *dispatcher) fetch(ctx context.Context, tasks chan *queuedTask, ticker *
 
 	// One extra row beyond the workers: the next upcoming task, so the
 	// scheduler knows when to query again without polling.
-	queued, err := getScheduledTasks(ctx, d.client.db, now().Add(-d.releaseAfter), workers+1)
+	queued, err := getScheduledTasks(ctx, d.client.store, now().Add(-d.releaseAfter), workers+1)
 	if err != nil {
 		d.log.Error("fetch tasks query failed", "error", err)
 		return
@@ -284,7 +286,7 @@ func (d *dispatcher) fetch(ctx context.Context, tasks chan *queuedTask, ticker *
 
 	// Tasks claimed by another dispatcher within the deadline stay with the
 	// winner and are never executed twice.
-	claimed, claimErr := queued.claim(ctx, d.client.db, now().Add(-d.releaseAfter))
+	claimed, claimErr := queued.claim(ctx, d.client.store, now().Add(-d.releaseAfter))
 	if claimErr != nil {
 		err = claimErr
 		d.log.Error("failed to claim tasks", "error", claimErr)
@@ -337,7 +339,7 @@ func (d *dispatcher) processTask(ctx context.Context, ready chan struct{}, t *qu
 		// Never registered: the task can never execute. Discard it instead of
 		// re-claiming it forever or crashing the worker.
 		d.log.Error("queue not registered, discarding task", "id", t.id, "queue", t.queue)
-		if delErr := t.deleteTx(ctx, d.client.db); delErr != nil {
+		if delErr := t.deleteTx(ctx, d.client.store); delErr != nil {
 			d.log.Error("failed to discard task", "id", t.id, "queue", t.queue, "error", delErr)
 		}
 		return
@@ -377,33 +379,15 @@ func (d *dispatcher) processTask(ctx context.Context, ready chan struct{}, t *qu
 func (d *dispatcher) taskSuccess(ctx context.Context, q Queue, t *queuedTask, started time.Time, dur time.Duration) {
 	d.log.Info("task processed", "id", t.id, "queue", t.queue, "duration", dur, "attempt", t.attempts)
 
-	var err error
-	defer func() {
-		if err != nil {
-			d.log.Error("failed to update task success", "id", t.id, "queue", t.queue, "error", err)
+	err := d.client.store.WithTx(ctx, func(exec datastore.Executor) error {
+		if err := t.deleteTx(ctx, exec); err != nil {
+			return err
 		}
-	}()
-
-	tx, err := d.client.db.Begin(ctx)
+		return d.taskComplete(ctx, exec, q, t, started, dur, nil)
+	})
 	if err != nil {
-		return
+		d.log.Error("failed to update task success", "id", t.id, "queue", t.queue, "error", err)
 	}
-	defer func() {
-		if err == nil {
-			return
-		}
-		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-			d.log.Error("failed to rollback task success", "id", t.id, "queue", t.queue, "error", rollbackErr)
-		}
-	}()
-
-	if err = t.deleteTx(ctx, tx); err != nil {
-		return
-	}
-	if err = d.taskComplete(ctx, tx, q, t, started, dur, nil); err != nil {
-		return
-	}
-	err = tx.Commit(ctx)
 }
 
 // taskFailure releases a failed task back to the queue when attempts remain,
@@ -414,7 +398,7 @@ func (d *dispatcher) taskFailure(ctx context.Context, ready chan struct{}, q Que
 
 	if remaining >= 1 {
 		t.lastExecutedAt = &started
-		if err := t.fail(ctx, d.client.db, now().Add(q.Config().Backoff)); err != nil {
+		if err := t.fail(ctx, d.client.store, now().Add(q.Config().Backoff)); err != nil {
 			d.log.Error("failed to update task failure", "id", t.id, "queue", t.queue, "error", err)
 		}
 		// Schedule a fetch so the dispatcher learns the new wait time.
@@ -422,29 +406,19 @@ func (d *dispatcher) taskFailure(ctx context.Context, ready chan struct{}, q Que
 		return
 	}
 
-	tx, err := d.client.db.Begin(ctx)
-	if err != nil {
-		d.log.Error("failed to update task failure", "id", t.id, "queue", t.queue, "error", err)
-		return
-	}
-
-	err = t.deleteTx(ctx, tx)
-	if err == nil {
-		err = d.taskComplete(ctx, tx, q, t, started, dur, taskErr)
-	}
-	if err == nil {
-		err = tx.Commit(ctx)
-	}
-	if err != nil {
-		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-			d.log.Error("failed to rollback task failure", "id", t.id, "queue", t.queue, "error", rollbackErr)
+	err := d.client.store.WithTx(ctx, func(exec datastore.Executor) error {
+		if err := t.deleteTx(ctx, exec); err != nil {
+			return err
 		}
+		return d.taskComplete(ctx, exec, q, t, started, dur, taskErr)
+	})
+	if err != nil {
 		d.log.Error("failed to update task failure", "id", t.id, "queue", t.queue, "error", err)
 	}
 }
 
 // taskComplete records a completed task when the queue retains them.
-func (d *dispatcher) taskComplete(ctx context.Context, exec Executor, q Queue, t *queuedTask, started time.Time, dur time.Duration, taskErr error) error {
+func (d *dispatcher) taskComplete(ctx context.Context, exec datastore.Executor, q Queue, t *queuedTask, started time.Time, dur time.Duration, taskErr error) error {
 	ret := q.Config().Retention
 	if ret == nil {
 		return nil

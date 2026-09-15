@@ -29,6 +29,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 - Admin-editable settings live in `app_config` via `modules/appconfig` (keys `smtp_*`, `ldap_*`, plus general/OIDC); defaults fold catalog < env < DB. Cross-module consumers read through the appconfig surface (`MergedValues`), not raw env. Sensitive values redact in the admin view but resolve for wired consumers (mailer per-send source, LDAP sync).
 - Schema is owned by `database/migrations/` (goose). Never embed or auto-create schema. Migration DDL is verbatim: editing an applied migration does not re-run it; reset via `tango db migrate:down --force --count N` then `migrate:up`.
 - Typed IDs per module via `go.jetify.com/typeid`; the prefix lives in the module's `schema.go`. Only URL-facing/cross-module IDs carry TypeID; token/code rows use SHA-256 keys plus DB `uuidv7()`.
+- Background work runs on the built-in queue `internal/queue` (tango-owned; based on backlite): Postgres-backed, in-process dispatcher, schema in migrations. Consumers register queue processors and enqueue typed tasks; the engine reads/writes only through `internal/datastore` (`Executor`/`WithTx`). Recurring maintenance lives in `internal/jobs` (`Job` registry, fixed-delay self-rescheduling).
 - `llms/database-reference.sql` — upstream schema dump for parity checks.
 
 ## Conventions

@@ -1,4 +1,4 @@
-package antree
+package queue
 
 // Logger logs queue operations. log/slog.Logger satisfies this as-is;
 // adapt any other logger with LoggerFunc. Params are alternating key/value

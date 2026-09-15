@@ -1,10 +1,10 @@
-package antree
+package queue
 
 import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/riipandi/tango/internal/datastore"
 )
 
 type (
@@ -20,7 +20,7 @@ type (
 		ctx    context.Context
 		tasks  []Task
 		wait   *time.Time
-		exec   Executor
+		exec   datastore.Executor
 	}
 )
 
@@ -42,18 +42,12 @@ func (t *TaskAddOp) Wait(duration time.Duration) *TaskAddOp {
 	return t
 }
 
-// Tx adds the tasks as part of the given transaction. The caller owns the
-// transaction and must commit it, then call Client.Notify — the dispatcher
-// cannot know when a transaction commits without polling.
-func (t *TaskAddOp) Tx(tx pgx.Tx) *TaskAddOp {
-	t.exec = tx
-	return t
-}
-
-// Executor adds the tasks through the given executor (typically an open
-// transaction from another package's data layer, e.g. datastore.Executor).
-// Same ownership rules as Tx: the caller commits, then calls Client.Notify.
-func (t *TaskAddOp) Executor(exec Executor) *TaskAddOp {
+// Executor adds the tasks through the given executor — typically an
+// open transaction (pgx.Tx from Pool().Begin, or the datastore WithTx
+// callback) so the enqueue joins the caller's transaction. The caller
+// owns the transaction and must commit it, then call Client.Notify —
+// the dispatcher cannot know when a transaction commits without polling.
+func (t *TaskAddOp) Executor(exec datastore.Executor) *TaskAddOp {
 	t.exec = exec
 	return t
 }

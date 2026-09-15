@@ -1,7 +1,7 @@
 package emailverification
 
 // handler.go owns the email verification HTTP surface: send (self)
-// and verify (self, token body). Mail delivery rides the antree
+// and verify (self, token body). Mail delivery rides the built-in
 // queue from phase 7.
 
 import (

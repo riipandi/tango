@@ -15,7 +15,6 @@ import (
 
 	"go.jetify.com/typeid"
 
-	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
@@ -56,7 +55,7 @@ type Deps struct {
 	// Queue is the shared task queue client, built by New from
 	// DB.Pool(). Features register their queues on it at build time;
 	// the queue module runs the dispatcher. Not set by callers.
-	Queue *antree.Client
+	Queue *queue.Client
 
 	// Cipher seals secrets at rest (webhook signing secrets). Built
 	// by New from auth.secret_key; not set by callers.
@@ -87,8 +86,8 @@ func New(deps Deps) *kernel.Registry {
 
 	// Task queue: first registered so its Stop drains last. Features
 	// register named queues via deps.Queue before the server starts.
-	queueClient, err := antree.NewClient(antree.ClientConfig{
-		DB:              deps.DB.Pool(),
+	queueClient, err := queue.NewClient(queue.ClientConfig{
+		Store:           deps.DB,
 		Logger:          logger.QueueLogger(deps.Logger),
 		NumWorkers:      deps.Config.Queue.Workers,
 		ReleaseAfter:    time.Duration(deps.Config.Queue.ReleaseAfter) * time.Second,

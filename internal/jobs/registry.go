@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
+	"github.com/riipandi/tango/internal/queue"
 )
 
 // Mailer is the delivery contract the email queue needs; internal/mailer
@@ -39,7 +39,7 @@ type Job struct {
 // jobs. Queues are registered at build time; jobs are scheduled once
 // by Start.
 type Registry struct {
-	queue *antree.Client
+	queue *queue.Client
 	mail  Mailer
 	log   logger.Logger
 
@@ -57,20 +57,20 @@ type Registry struct {
 
 // NewRegistry registers the shared queues on the client: transactional
 // email and recurring maintenance. The webhook delivery queue is
-// declared in the same jobs package (its payload type lives here) but
-// registered by the webhook module, which owns the processor.
-func NewRegistry(queue *antree.Client, mail Mailer, log logger.Logger) *Registry {
+// registered by the webhook module, which owns the payload type and the
+// processor.
+func NewRegistry(client *queue.Client, mail Mailer, log logger.Logger) *Registry {
 	r := &Registry{
-		queue: queue,
+		queue: client,
 		mail:  mail,
 		log:   log,
 		jobs:  make(map[string]Job),
 	}
 
-	queue.Register(antree.NewQueue(func(ctx context.Context, task EmailTask) error {
+	client.Register(queue.NewQueue(func(ctx context.Context, task EmailTask) error {
 		return r.deliverEmail(ctx, task)
 	}))
-	queue.Register(antree.NewQueue(func(ctx context.Context, task RecurringTask) error {
+	client.Register(queue.NewQueue(func(ctx context.Context, task RecurringTask) error {
 		return r.runJob(ctx, task)
 	}))
 

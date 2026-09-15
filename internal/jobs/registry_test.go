@@ -68,19 +68,6 @@ func TestEmailTaskConfig(t *testing.T) {
 	assert.Positive(t, cfg.Backoff)
 }
 
-func TestWebhookDeliveryTaskConfigRetainsFailures(t *testing.T) {
-	cfg := WebhookDeliveryTask{}.Config()
-	assert.Equal(t, WebhookQueue, cfg.Name)
-	assert.Equal(t, WebhookMaxAttempts, cfg.MaxAttempts)
-	assert.Equal(t, WebhookRequestTimeout*4/3, cfg.Timeout, "queue timeout must exceed the receiver deadline")
-
-	require.NotNil(t, cfg.Retention)
-	assert.True(t, cfg.Retention.OnlyFailed, "only failed deliveries are retained")
-	assert.Equal(t, WebhookRetention, cfg.Retention.Duration)
-	require.NotNil(t, cfg.Retention.Data)
-	assert.True(t, cfg.Retention.Data.OnlyFailed)
-}
-
 func TestRecurringTaskConfig(t *testing.T) {
 	cfg := RecurringTask{}.Config()
 	assert.Equal(t, MaintenanceQueue, cfg.Name)

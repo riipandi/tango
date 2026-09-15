@@ -1,9 +1,9 @@
-// Integration tests for the antree queue. Every test that touches the
+// Integration tests for the queue. Every test that touches the
 // database runs against the shared testcontainer Postgres (real pgx pool,
 // real migrations) — no in-memory or fake store involved. Tests that only
 // exercise in-process logic (queue decoding, adapters) stay pure.
 
-package antree
+package queue
 
 import (
 	"bytes"
@@ -16,8 +16,11 @@ import (
 
 	jsonv2 "encoding/json/v2"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -62,11 +65,54 @@ func newPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
+// poolStore adapts a testcontainer pool to datastore.Store so tests
+// exercise the same WithTx path the production client uses.
+type poolStore struct{ pool *pgxpool.Pool }
+
+func (p poolStore) HealthCheck(ctx context.Context) error { return p.pool.Ping(ctx) }
+
+func (p poolStore) Close() error {
+	p.pool.Close()
+	return nil
+}
+
+func (p poolStore) Pool() *pgxpool.Pool { return p.pool }
+
+func (p poolStore) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	return p.pool.Exec(ctx, sql, args...)
+}
+
+func (p poolStore) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return p.pool.Query(ctx, sql, args...)
+}
+
+func (p poolStore) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	return p.pool.QueryRow(ctx, sql, args...)
+}
+
+func (p poolStore) WithTx(ctx context.Context, fn func(datastore.Executor) error) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// newStore wraps the shared testcontainer pool in a datastore.Store.
+func newStore(t *testing.T) datastore.Store {
+	t.Helper()
+	return poolStore{pool: newPool(t)}
+}
+
 // mustNewClient builds a client backed by the testcontainer database.
 func mustNewClient(t *testing.T) *Client {
 	t.Helper()
 	client, err := NewClient(ClientConfig{
-		DB:              newPool(t),
+		Store:           newStore(t),
 		NumWorkers:      1,
 		ReleaseAfter:    time.Hour,
 		CleanupInterval: 6 * time.Hour,
@@ -89,7 +135,7 @@ func pointer[T any](v T) *T {
 }
 
 // getTasks loads all queued tasks ordered by ID.
-func getTasks(t *testing.T, exec Executor) queuedTasks {
+func getTasks(t *testing.T, exec datastore.Executor) queuedTasks {
 	t.Helper()
 	tasks, err := scanQueuedTasks(context.Background(), exec,
 		`SELECT id, queue, task, attempts, wait_until, created_at, last_executed_at, claimed_at
@@ -99,20 +145,20 @@ func getTasks(t *testing.T, exec Executor) queuedTasks {
 }
 
 // insertTask inserts a queued task directly.
-func insertTask(t *testing.T, exec Executor, task *queuedTask) {
+func insertTask(t *testing.T, exec datastore.Executor, task *queuedTask) {
 	t.Helper()
 	require.NoError(t, task.insertTx(context.Background(), exec))
 }
 
 // deleteTasks removes all queued tasks.
-func deleteTasks(t *testing.T, exec Executor) {
+func deleteTasks(t *testing.T, exec datastore.Executor) {
 	t.Helper()
 	_, err := exec.Exec(context.Background(), "DELETE FROM "+tasksTable)
 	require.NoError(t, err)
 }
 
 // getCompletedTasks loads all completed tasks ordered by ID.
-func getCompletedTasks(t *testing.T, exec Executor) []*completedTask {
+func getCompletedTasks(t *testing.T, exec datastore.Executor) []*completedTask {
 	t.Helper()
 	tasks, err := scanCompletedTasks(context.Background(), exec,
 		`SELECT id, created_at, queue, last_executed_at, attempts, last_duration_micro, succeeded, task, expires_at, error
@@ -122,20 +168,20 @@ func getCompletedTasks(t *testing.T, exec Executor) []*completedTask {
 }
 
 // insertCompleted inserts a completed task directly.
-func insertCompleted(t *testing.T, exec Executor, task completedTask) {
+func insertCompleted(t *testing.T, exec datastore.Executor, task completedTask) {
 	t.Helper()
 	require.NoError(t, task.insertTx(context.Background(), exec))
 }
 
 // deleteCompletedTasks removes all completed tasks.
-func deleteCompletedTasks(t *testing.T, exec Executor) {
+func deleteCompletedTasks(t *testing.T, exec datastore.Executor) {
 	t.Helper()
 	_, err := exec.Exec(context.Background(), "DELETE FROM "+completedTasksTable)
 	require.NoError(t, err)
 }
 
 // taskIDsExist asserts the given task IDs exist in the queued table.
-func taskIDsExist(t *testing.T, exec Executor, ids []string) {
+func taskIDsExist(t *testing.T, exec datastore.Executor, ids []string) {
 	t.Helper()
 	idMap := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
@@ -148,7 +194,7 @@ func taskIDsExist(t *testing.T, exec Executor, ids []string) {
 }
 
 // completedTaskIDsExist asserts the given IDs exist in the completed table.
-func completedTaskIDsExist(t *testing.T, exec Executor, ids []string) {
+func completedTaskIDsExist(t *testing.T, exec datastore.Executor, ids []string) {
 	t.Helper()
 	idMap := make(map[string]struct{}, len(ids))
 	for _, id := range ids {

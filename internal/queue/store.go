@@ -1,14 +1,14 @@
-package antree
+package queue
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/huandu/go-sqlbuilder"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"uuid"
+
+	"github.com/huandu/go-sqlbuilder"
+
+	"github.com/riipandi/tango/internal/datastore"
 )
 
 // Table names owned by the queue schema migrations. Qualified with
@@ -17,14 +17,6 @@ const (
 	tasksTable          = "public.queue_tasks"
 	completedTasksTable = "public.queue_tasks_completed"
 )
-
-// Executor is the minimal query surface the queue needs; both a pgx pool and
-// an open pgx transaction satisfy it.
-type Executor interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}
 
 // queuedTask is a row in the queue_tasks table.
 type queuedTask struct {
@@ -41,7 +33,7 @@ type queuedTask struct {
 // insertTx inserts a queued task as part of the given executor. The ID is
 // generated in the app (UUIDv7) so callers can reference the task before
 // the insert commits, and because it is time-sortable.
-func (t *queuedTask) insertTx(ctx context.Context, exec Executor) error {
+func (t *queuedTask) insertTx(ctx context.Context, exec datastore.Executor) error {
 	if len(t.id) == 0 {
 		t.id = uuid.NewV7().String()
 	}
@@ -57,27 +49,27 @@ func (t *queuedTask) insertTx(ctx context.Context, exec Executor) error {
 
 	query, args := ib.Build()
 	if _, err := exec.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("antree: insert task: %w", err)
+		return datastore.Wrap("queue", "insert task", err)
 	}
 	return nil
 }
 
 // deleteTx deletes a queued task as part of the given executor.
-func (t *queuedTask) deleteTx(ctx context.Context, exec Executor) error {
+func (t *queuedTask) deleteTx(ctx context.Context, exec datastore.Executor) error {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(tasksTable)
 	db.Where(db.Equal("id", t.id))
 
 	query, args := db.Build()
 	if _, err := exec.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("antree: delete task: %w", err)
+		return datastore.Wrap("queue", "delete task", err)
 	}
 	return nil
 }
 
 // fail releases a claimed task back to the queue and schedules it for
 // another execution.
-func (t *queuedTask) fail(ctx context.Context, exec Executor, waitUntil time.Time) error {
+func (t *queuedTask) fail(ctx context.Context, exec datastore.Executor, waitUntil time.Time) error {
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(tasksTable)
 	ub.Set(
@@ -89,7 +81,7 @@ func (t *queuedTask) fail(ctx context.Context, exec Executor, waitUntil time.Tim
 
 	query, args := ub.Build()
 	if _, err := exec.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("antree: fail task: %w", err)
+		return datastore.Wrap("queue", "fail task", err)
 	}
 	return nil
 }
@@ -100,7 +92,7 @@ type queuedTasks []*queuedTask
 // IDs actually claimed. Tasks claimed by another dispatcher within the
 // deadline are left to the winner, so contended tasks are never executed
 // twice.
-func (t queuedTasks) claim(ctx context.Context, exec Executor, deadline time.Time) ([]string, error) {
+func (t queuedTasks) claim(ctx context.Context, exec datastore.Executor, deadline time.Time) ([]string, error) {
 	if len(t) == 0 {
 		return nil, nil
 	}
@@ -122,7 +114,7 @@ func (t queuedTasks) claim(ctx context.Context, exec Executor, deadline time.Tim
 	query, args := ub.Build()
 	rows, err := exec.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("antree: claim tasks: %w", err)
+		return nil, datastore.Wrap("queue", "claim tasks", err)
 	}
 	defer rows.Close()
 
@@ -130,22 +122,22 @@ func (t queuedTasks) claim(ctx context.Context, exec Executor, deadline time.Tim
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("antree: claim tasks: %w", err)
+			return nil, datastore.Wrap("queue", "claim tasks", err)
 		}
 		claimed = append(claimed, id)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("antree: claim tasks: %w", err)
+		return nil, datastore.Wrap("queue", "claim tasks", err)
 	}
 
 	return claimed, nil
 }
 
 // scanQueuedTasks loads queued tasks from the database using the given query.
-func scanQueuedTasks(ctx context.Context, exec Executor, query string, args ...any) (queuedTasks, error) {
+func scanQueuedTasks(ctx context.Context, exec datastore.Executor, query string, args ...any) (queuedTasks, error) {
 	rows, err := exec.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("antree: select tasks: %w", err)
+		return nil, datastore.Wrap("queue", "select tasks", err)
 	}
 	defer rows.Close()
 
@@ -153,12 +145,12 @@ func scanQueuedTasks(ctx context.Context, exec Executor, query string, args ...a
 	for rows.Next() {
 		var task queuedTask
 		if err := rows.Scan(&task.id, &task.queue, &task.task, &task.attempts, &task.waitUntil, &task.createdAt, &task.lastExecutedAt, &task.claimedAt); err != nil {
-			return nil, fmt.Errorf("antree: scan task: %w", err)
+			return nil, datastore.Wrap("queue", "scan task", err)
 		}
 		tasks = append(tasks, &task)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("antree: select tasks: %w", err)
+		return nil, datastore.Wrap("queue", "select tasks", err)
 	}
 
 	return tasks, nil
@@ -167,7 +159,7 @@ func scanQueuedTasks(ctx context.Context, exec Executor, query string, args ...a
 // getScheduledTasks loads the next tasks up for execution, ordered by
 // execution time. The deadline includes tasks whose claim expired, so the
 // dispatcher can release them again.
-func getScheduledTasks(ctx context.Context, exec Executor, deadline time.Time, limit int) (queuedTasks, error) {
+func getScheduledTasks(ctx context.Context, exec datastore.Executor, deadline time.Time, limit int) (queuedTasks, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("id", "queue", "task", "attempts", "wait_until", "created_at", "last_executed_at", "NULL")
 	sb.From(tasksTable)
@@ -195,7 +187,7 @@ type completedTask struct {
 }
 
 // insertTx inserts a completed task as part of the given executor.
-func (t *completedTask) insertTx(ctx context.Context, exec Executor) error {
+func (t *completedTask) insertTx(ctx context.Context, exec datastore.Executor) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(completedTasksTable)
 	ib.Cols("id", "created_at", "queue", "last_executed_at", "attempts", "last_duration_micro", "succeeded", "task", "expires_at", "error")
@@ -214,16 +206,16 @@ func (t *completedTask) insertTx(ctx context.Context, exec Executor) error {
 
 	query, args := ib.Build()
 	if _, err := exec.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("antree: insert completed task: %w", err)
+		return datastore.Wrap("queue", "insert completed task", err)
 	}
 	return nil
 }
 
 // scanCompletedTasks loads completed tasks from the database using the given query.
-func scanCompletedTasks(ctx context.Context, exec Executor, query string, args ...any) ([]*completedTask, error) {
+func scanCompletedTasks(ctx context.Context, exec datastore.Executor, query string, args ...any) ([]*completedTask, error) {
 	rows, err := exec.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("antree: select completed tasks: %w", err)
+		return nil, datastore.Wrap("queue", "select completed tasks", err)
 	}
 	defer rows.Close()
 
@@ -232,33 +224,33 @@ func scanCompletedTasks(ctx context.Context, exec Executor, query string, args .
 		var task completedTask
 		var lastDuration int64
 		if err := rows.Scan(&task.id, &task.createdAt, &task.queue, &task.lastExecutedAt, &task.attempts, &lastDuration, &task.succeeded, &task.task, &task.expiresAt, &task.err); err != nil {
-			return nil, fmt.Errorf("antree: scan completed task: %w", err)
+			return nil, datastore.Wrap("queue", "scan completed task", err)
 		}
 		task.lastDuration = time.Duration(lastDuration) * time.Microsecond
 		tasks = append(tasks, &task)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("antree: select completed tasks: %w", err)
+		return nil, datastore.Wrap("queue", "select completed tasks", err)
 	}
 
 	return tasks, nil
 }
 
 // deleteExpiredCompletedTasks removes completed tasks whose expiry passed.
-func deleteExpiredCompletedTasks(ctx context.Context, exec Executor) error {
+func deleteExpiredCompletedTasks(ctx context.Context, exec datastore.Executor) error {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(completedTasksTable)
 	db.Where("expires_at IS NOT NULL", db.LTE("expires_at", time.Now()))
 
 	query, args := db.Build()
 	if _, err := exec.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("antree: delete expired completed tasks: %w", err)
+		return datastore.Wrap("queue", "delete expired completed tasks", err)
 	}
 	return nil
 }
 
 // flushTasks deletes every unclaimed queued task and returns the count.
-func flushTasks(ctx context.Context, exec Executor) (int64, error) {
+func flushTasks(ctx context.Context, exec datastore.Executor) (int64, error) {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(tasksTable)
 	db.Where("claimed_at IS NULL")
@@ -266,20 +258,20 @@ func flushTasks(ctx context.Context, exec Executor) (int64, error) {
 	query, args := db.Build()
 	tag, err := exec.Exec(ctx, query, args...)
 	if err != nil {
-		return 0, fmt.Errorf("antree: flush tasks: %w", err)
+		return 0, datastore.Wrap("queue", "flush tasks", err)
 	}
 	return tag.RowsAffected(), nil
 }
 
 // flushCompletedTasks deletes every completed task record and returns the count.
-func flushCompletedTasks(ctx context.Context, exec Executor) (int64, error) {
+func flushCompletedTasks(ctx context.Context, exec datastore.Executor) (int64, error) {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(completedTasksTable)
 
 	query, args := db.Build()
 	tag, err := exec.Exec(ctx, query, args...)
 	if err != nil {
-		return 0, fmt.Errorf("antree: flush completed tasks: %w", err)
+		return 0, datastore.Wrap("queue", "flush completed tasks", err)
 	}
 	return tag.RowsAffected(), nil
 }

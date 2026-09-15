@@ -10,10 +10,9 @@ import (
 
 	"go.jetify.com/typeid"
 
-	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -31,7 +30,7 @@ type cipher interface {
 // out (the outbox write), and signed delivery.
 type Service struct {
 	store  Store
-	queue  *antree.Client
+	queue  *queue.Client
 	cipher cipher
 	db     datastore.Store
 	log    logger.Logger
@@ -64,7 +63,7 @@ func WithSender(sender Sender) ServiceOption {
 
 // NewService builds the feature over its dependencies. db is used for
 // the outbox transaction; queue carries the delivery tasks.
-func NewService(store Store, db datastore.Store, queue *antree.Client, sealer cipher, log logger.Logger, opts ...ServiceOption) *Service {
+func NewService(store Store, db datastore.Store, queue *queue.Client, sealer cipher, log logger.Logger, opts ...ServiceOption) *Service {
 	s := &Service{
 		store:  store,
 		db:     db,
@@ -81,10 +80,10 @@ func NewService(store Store, db datastore.Store, queue *antree.Client, sealer ci
 
 // RegisterQueue registers the webhook delivery queue on the shared
 // client. Called at build time by the composition root, before the
-// dispatcher starts; a second call panics inside antree (duplicate
+// dispatcher starts; a second call panics inside the queue (duplicate
 // queue name), which is the intended fail-fast for double wiring.
-func (s *Service) RegisterQueue(queue *antree.Client) {
-	queue.Register(antree.NewQueue(func(ctx context.Context, task jobs.WebhookDeliveryTask) error {
+func (s *Service) RegisterQueue(client *queue.Client) {
+	client.Register(queue.NewQueue(func(ctx context.Context, task WebhookDeliveryTask) error {
 		return s.Deliver(ctx, task)
 	}))
 }
@@ -230,7 +229,7 @@ func (s *Service) enqueueAll(ctx context.Context, subscribers []Webhook, event s
 
 	// One task per subscriber: each has its own log row and retry
 	// budget, so a failing receiver cannot hold up the others.
-	tasks := make([]antree.Task, 0, len(subscribers))
+	tasks := make([]queue.Task, 0, len(subscribers))
 	logs := make([]*DeliveryLog, 0, len(subscribers))
 	logIDs := make([]DeliveryLogID, 0, len(subscribers))
 
@@ -251,7 +250,7 @@ func (s *Service) enqueueAll(ctx context.Context, subscribers []Webhook, event s
 			}
 			logs = append(logs, entry)
 			logIDs = append(logIDs, entry.ID)
-			tasks = append(tasks, jobs.WebhookDeliveryTask{
+			tasks = append(tasks, WebhookDeliveryTask{
 				LogID:     entry.ID.String(),
 				WebhookID: hookID.String(),
 				Event:     event,
@@ -273,7 +272,7 @@ func (s *Service) enqueueAll(ctx context.Context, subscribers []Webhook, event s
 
 // Deliver executes one queued delivery and records the attempt. The
 // error is returned so the queue applies its retry schedule.
-func (s *Service) Deliver(ctx context.Context, task jobs.WebhookDeliveryTask) error {
+func (s *Service) Deliver(ctx context.Context, task WebhookDeliveryTask) error {
 	logID, err := parseDeliveryLogID(task.LogID)
 	if err != nil {
 		return err

@@ -1,4 +1,4 @@
-package antree
+package queue
 
 import (
 	"context"
@@ -34,20 +34,9 @@ func TestTaskAddOpWait(t *testing.T) {
 	assert.Equal(t, now().Add(time.Hour), *op.wait)
 }
 
-func TestTaskAddOpTx(t *testing.T) {
-	c := mustNewClient(t)
-	tx, err := c.db.Begin(t.Context())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
-
-	op := &TaskAddOp{}
-	op.Tx(tx)
-	assert.Equal(t, tx, op.exec)
-}
-
 func TestTaskAddOpExecutor(t *testing.T) {
 	c := mustNewClient(t)
-	tx, err := c.db.Begin(t.Context())
+	tx, err := c.store.Pool().Begin(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
 
@@ -66,7 +55,7 @@ func TestTaskAddOpSaveSingle(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, ids, 1)
 
-	got := getTasks(t, c.db)
+	got := getTasks(t, c.store)
 	require.Len(t, got, 1)
 	assert.Equal(t, ids[0], got[0].id, "id")
 	isTask(t, queuedTask{
@@ -87,7 +76,7 @@ func TestTaskAddOpSaveWait(t *testing.T) {
 	_, err := c.Add(tk).Wait(time.Hour).Save()
 	require.NoError(t, err)
 
-	got := getTasks(t, c.db)
+	got := getTasks(t, c.store)
 	require.Len(t, got, 1)
 	isTask(t, queuedTask{
 		queue:     tk.Config().Name,
@@ -108,7 +97,7 @@ func TestTaskAddOpSaveMultiple(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, ids, 2)
 
-	got := getTasks(t, c.db)
+	got := getTasks(t, c.store)
 	require.Len(t, got, 2)
 	assert.Equal(t, ids[0], got[0].id, "id.0")
 	assert.Equal(t, ids[1], got[1].id, "id.1")
@@ -150,13 +139,13 @@ func TestTaskAddOpSaveTransaction(t *testing.T) {
 	tk := testTask{Val: "e"}
 
 	// The caller owns the transaction: no notify until it commits.
-	tx, err := c.db.Begin(t.Context())
+	tx, err := c.store.Pool().Begin(t.Context())
 	require.NoError(t, err)
-	_, err = c.Add(tk).Tx(tx).Save()
+	_, err = c.Add(tk).Executor(tx).Save()
 	require.NoError(t, err)
 	assert.False(t, m.notified, "must not notify before commit")
 	require.NoError(t, tx.Commit(t.Context()))
-	require.Len(t, getTasks(t, c.db), 1)
+	require.Len(t, getTasks(t, c.store), 1)
 }
 
 func TestTaskAddOpSaveEncodeFailure(t *testing.T) {
@@ -167,12 +156,12 @@ func TestTaskAddOpSaveEncodeFailure(t *testing.T) {
 	tk := testTaskEncodeFail{Val: make(chan int)}
 
 	// Caller transaction: the encode error propagates and the tx rolls back.
-	tx, err := c.db.Begin(t.Context())
+	tx, err := c.store.Pool().Begin(t.Context())
 	require.NoError(t, err)
-	_, err = c.Add(tk).Tx(tx).Save()
+	_, err = c.Add(tk).Executor(tx).Save()
 	assert.Error(t, err)
 	require.NoError(t, tx.Rollback(t.Context()))
-	require.Len(t, getTasks(t, c.db), 0)
+	require.Len(t, getTasks(t, c.store), 0)
 }
 
 func TestTaskAddOpSaveRollback(t *testing.T) {
@@ -184,7 +173,7 @@ func TestTaskAddOpSaveRollback(t *testing.T) {
 	_, err := c.Add(testTaskEncodeFail{Val: make(chan int)}).Save()
 	assert.Error(t, err)
 	assert.False(t, m.notified)
-	require.Len(t, getTasks(t, c.db), 0)
+	require.Len(t, getTasks(t, c.store), 0)
 }
 
 func TestTaskAddOpSaveZeroTasks(t *testing.T) {

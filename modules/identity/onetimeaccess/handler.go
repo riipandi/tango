@@ -2,7 +2,7 @@ package onetimeaccess
 
 // handler.go owns the one-time access HTTP surface: admin minting
 // (token + email per user), the unauthenticated email request, and
-// the token→session exchange. Mail delivery rides the antree queue
+// the token→session exchange. Mail delivery rides the built-in queue
 // once phase 7 lands — for now send is synchronous via the mailer
 // contract.
 

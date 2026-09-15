@@ -14,11 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/riipandi/tango/database"
-	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
+	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/testutils"
 )
@@ -46,10 +46,10 @@ func testDB(t *testing.T) datastore.Store {
 	return db
 }
 
-func testQueue(t *testing.T, db datastore.Store) *antree.Client {
+func testQueue(t *testing.T, db datastore.Store) *queue.Client {
 	t.Helper()
-	client, err := antree.NewClient(antree.ClientConfig{
-		DB:           db.Pool(),
+	client, err := queue.NewClient(queue.ClientConfig{
+		Store:        db,
 		NumWorkers:   1,
 		ReleaseAfter: time.Hour,
 	})

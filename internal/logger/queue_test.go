@@ -12,7 +12,7 @@ import (
 	"go.loglayer.dev/v3"
 )
 
-// TestQueueLogger proves the antree logger adapter: params become log
+// TestQueueLogger proves the queue logger adapter: params become log
 // fields on top of the application logger stack.
 func TestQueueLogger(t *testing.T) {
 	var buf bytes.Buffer

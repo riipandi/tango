@@ -1,11 +1,12 @@
-# Antree
+# Queue
 
-Antree is a task queue library for Go, built on PostgreSQL. It provides type-safe, persistent task
-queues that run within your application — no external message broker required.
+Queue is tango's built-in task queue, built on PostgreSQL. It provides type-safe, persistent
+task queues that run within the application — no external message broker required.
 
-> **Origin:** a port of [Backlite](https://github.com/mikestefanello/backlite)
-> (originally SQLite-based) to PostgreSQL with `pgx/v5`, UUIDv7 primary keys, `TIMESTAMPTZ`
-> columns, `go-sqlbuilder` query construction, and `encoding/json/v2` payloads.
+> **Origin:** based on [Backlite](https://github.com/mikestefanello/backlite) (MIT, originally
+> SQLite-based), ported to PostgreSQL with `pgx/v5`, UUIDv7 primary keys, `TIMESTAMPTZ`
+> columns, `go-sqlbuilder` query construction, and `encoding/json/v2` payloads. Upstream is
+> no longer tracked: the engine is owned and evolved by tango.
 
 ## Features
 
@@ -82,9 +83,9 @@ previous generation to drain, so restarts never race a shutdown in progress.
 ## Installation
 
 This package lives inside the `tango` module and is not published. The app wires it in
-`internal/registry`: the client is built from `deps.DB.Pool()` with `QUEUE_*` config, the
-`internal/queue` kernel module starts/stops the dispatcher, and features register their queues
-via `deps.Queue.Register(...)`.
+`internal/registry`: the client is built from `deps.DB` (the shared `datastore.Store`) with
+`QUEUE_*` config, the kernel module in this package (`module.go`) starts/stops the dispatcher,
+and features register their queues via `deps.Queue.Register(...)`.
 
 Schema is owned by the migrations (`database/migrations/00010_create_queue_tables.sql`) — run
 `task db:migrate`; the client never creates tables itself.
@@ -104,7 +105,7 @@ import (
     "fmt"
     "time"
 
-    "github.com/riipandi/tango/internal/antree"
+    "github.com/riipandi/tango/internal/queue"
 )
 
 // EmailTask represents an email to send.
@@ -114,16 +115,16 @@ type EmailTask struct {
     Body    string `json:"body"`
 }
 
-func (e EmailTask) Config() antree.QueueConfig {
-    return antree.QueueConfig{
+func (e EmailTask) Config() queue.QueueConfig {
+    return queue.QueueConfig{
         Name:        "email",
         MaxAttempts: 3,
         Timeout:     30 * time.Second,
         Backoff:     10 * time.Second, // retry after 10s on failure
-        Retention: &antree.Retention{
+        Retention: &queue.Retention{
             Duration:   7 * 24 * time.Hour, // keep completed records for 7 days
             OnlyFailed: true,               // only retain failures
-            Data: &antree.RetainData{
+            Data: &queue.RetainData{
                 OnlyFailed: true,
             },
         },
@@ -134,14 +135,14 @@ func (e EmailTask) Config() antree.QueueConfig {
 ### 2. Create the Client
 
 ```go
-pool, err := pgxpool.New(context.Background(), "postgresql://user:pass@localhost:5432/mydb")
+store, err := datastore.New(context.Background(), datastore.Options{DSN: "postgresql://user:pass@localhost:5432/mydb"})
 if err != nil {
     panic(err)
 }
-defer pool.Close()
+defer store.Close()
 
-client, err := antree.NewClient(antree.ClientConfig{
-    DB:              pool,
+client, err := queue.NewClient(queue.ClientConfig{
+    Store:           store,
     NumWorkers:      5,
     ReleaseAfter:    5 * time.Minute,
     CleanupInterval: 1 * time.Hour,
@@ -156,7 +157,7 @@ if err != nil {
 ### 3. Register Queues
 
 ```go
-client.Register(antree.NewQueue[EmailTask](func(ctx context.Context, task EmailTask) error {
+client.Register(queue.NewQueue[EmailTask](func(ctx context.Context, task EmailTask) error {
     fmt.Printf("Sending email to %s: %s\n", task.To, task.Subject)
     // ... send email ...
     return nil
@@ -208,7 +209,7 @@ client.Stop(context.Background())
 
 | Field             | Type            | Required | Description                                                                                                               |
 | ----------------- | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `DB`              | `*pgxpool.Pool` | Yes      | PostgreSQL connection pool                                                                                                |
+| `Store`           | `datastore.Store` | Yes    | PostgreSQL backend (Executor surface + WithTx); built once in the registry |
 | `Logger`          | `Logger`        | No       | Custom logger (defaults to no-op)                                                                                         |
 | `NumWorkers`      | `int`           | Yes      | Number of concurrent worker goroutines (must be >= 1)                                                                     |
 | `ReleaseAfter`    | `time.Duration` | Yes      | Duration after which a stuck task is released back to the queue (should exceed your longest expected task execution time) |
@@ -242,7 +243,7 @@ client.Stop(context.Background())
 
 ### `NewClient(cfg ClientConfig) (*Client, error)`
 
-Creates a new antree client. Validates config and initializes the internal dispatcher.
+Creates a new queue client. Validates config and initializes the internal dispatcher.
 
 ### `(*Client).Register(queue Queue)`
 
@@ -268,9 +269,9 @@ ids, err := client.Add(myTask).Ctx(requestCtx).Save()
 
 // Inside a transaction
 tx, _ := pool.Begin(ctx)
-ids, err := client.Add(myTask).Tx(tx).Save()
+ids, err := client.Add(myTask).Executor(tx).Save()
 tx.Commit(ctx)
-client.Notify() // required when using Tx()
+client.Notify() // required when using Executor()
 ```
 
 ### `(*Client).Start(ctx context.Context)`
@@ -306,7 +307,7 @@ Returns the current status of a task by ID:
 ### `(*Client).Notify()`
 
 Notifies the dispatcher that a new task was added. **Only required when adding tasks inside an
-external transaction** (via `TaskAddOp.Tx()`), because the dispatcher cannot observe transaction
+external transaction** (via `TaskAddOp.Executor()`), because the dispatcher cannot observe transaction
 commits.
 
 ### `(*Client).Flush(ctx context.Context) (int64, error)`
@@ -332,8 +333,8 @@ removed, err := client.FlushCompleted(ctx)
 Retrieves the client from a processor context, allowing processors to enqueue follow-up tasks:
 
 ```go
-client.Register(antree.NewQueue[OrderTask](func(ctx context.Context, task OrderTask) error {
-    antree.FromContext(ctx).Add(EmailTask{To: task.Email}).Save()
+client.Register(queue.NewQueue[OrderTask](func(ctx context.Context, task OrderTask) error {
+    queue.FromContext(ctx).Add(EmailTask{To: task.Email}).Save()
     return nil
 }))
 ```
@@ -393,7 +394,7 @@ if _, err = tx.Exec(ctx, "INSERT INTO orders (...) VALUES (...)"); err != nil {
 ids, err := client.Add(EmailTask{
     To:      "customer@example.com",
     Subject: "Order confirmed",
-}).Tx(tx).Save()
+}).Executor(tx).Save()
 if err != nil {
     _ = tx.Rollback(ctx)
     return err
@@ -439,8 +440,8 @@ Tests run against a real Postgres (testcontainers, Postgres 18) using the shared
 `pkg/testutils.StartPostgres` helper; helpers in `helpers_test.go` manage per-test cleanup.
 
 ```bash
-go test ./internal/antree/
-go test -race ./internal/antree/
+go test ./internal/queue/
+go test -race ./internal/queue/
 ```
 
 ## Design Decisions

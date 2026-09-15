@@ -14,11 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/riipandi/tango/database"
-	"github.com/riipandi/tango/internal/antree"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/testutils"
 )
@@ -29,7 +29,7 @@ type testStack struct {
 	Service *Service
 	Store   *PostgresStore
 	DB      datastore.Store
-	Queue   *antree.Client
+	Queue   *queue.Client
 	Sender  *captureSender
 }
 
@@ -46,8 +46,8 @@ func newTestStack(t *testing.T, sender *captureSender) *testStack {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	queue, err := antree.NewClient(antree.ClientConfig{
-		DB:           db.Pool(),
+	client, err := queue.NewClient(queue.ClientConfig{
+		Store:        db,
 		NumWorkers:   1,
 		ReleaseAfter: time.Hour,
 	})
@@ -66,13 +66,13 @@ func newTestStack(t *testing.T, sender *captureSender) *testStack {
 	require.NoError(t, err)
 
 	store := NewPostgresStore(db)
-	service := NewService(store, db, queue, sealer, logger.NewMock(),
+	service := NewService(store, db, client, sealer, logger.NewMock(),
 		WithClock(func() time.Time { return time.Now().UTC() }),
 		WithSender(sender),
 	)
-	service.RegisterQueue(queue)
+	service.RegisterQueue(client)
 
-	stack := &testStack{Service: service, Store: store, DB: db, Queue: queue, Sender: sender}
+	stack := &testStack{Service: service, Store: store, DB: db, Queue: client, Sender: sender}
 	t.Cleanup(func() {
 		// Draining the queue keeps a late delivery out of the next test.
 
@@ -276,8 +276,8 @@ func TestRetryScheduleRecordsEveryAttempt(t *testing.T) {
 	logID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
 	require.NoError(t, err)
 
-	for attempt := range jobs.WebhookMaxAttempts {
-		deliverErr := stack.Service.Deliver(ctx, jobs.WebhookDeliveryTask{
+	for attempt := range WebhookMaxAttempts {
+		deliverErr := stack.Service.Deliver(ctx, WebhookDeliveryTask{
 			LogID:     logID.String(),
 			WebhookID: hook.ID.String(),
 			Event:     "user.created",
@@ -286,10 +286,10 @@ func TestRetryScheduleRecordsEveryAttempt(t *testing.T) {
 		assert.Error(t, deliverErr, "attempt %d must surface the failure", attempt+1)
 	}
 
-	assert.Equal(t, jobs.WebhookMaxAttempts, sender.count(), "each attempt reaches the receiver")
+	assert.Equal(t, WebhookMaxAttempts, sender.count(), "each attempt reaches the receiver")
 
 	recorded := stack.onlyLog(t, hook.ID)
-	assert.Equal(t, jobs.WebhookMaxAttempts, recorded.Attempts)
+	assert.Equal(t, WebhookMaxAttempts, recorded.Attempts)
 	assert.False(t, recorded.Succeeded)
 	require.NotNil(t, recorded.Error)
 	assert.Contains(t, *recorded.Error, "500")
@@ -309,7 +309,7 @@ func TestDeliveryToDisabledEndpointNeverCallsOut(t *testing.T) {
 	logID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
 	require.NoError(t, err)
 
-	err = stack.Service.Deliver(ctx, jobs.WebhookDeliveryTask{
+	err = stack.Service.Deliver(ctx, WebhookDeliveryTask{
 		LogID:     logID.String(),
 		WebhookID: hook.ID.String(),
 		Event:     "user.created",
@@ -330,7 +330,7 @@ func TestRotateSecretInvalidatesTheOldSignature(t *testing.T) {
 
 	logID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
 	require.NoError(t, err)
-	require.NoError(t, stack.Service.Deliver(ctx, jobs.WebhookDeliveryTask{
+	require.NoError(t, stack.Service.Deliver(ctx, WebhookDeliveryTask{
 		LogID:     logID.String(),
 		WebhookID: hook.ID.String(),
 		Event:     "user.created",
@@ -452,7 +452,7 @@ func TestHTTPDeliveryAgainstLiveReceiver(t *testing.T) {
 	logEntry := &DeliveryLog{WebhookID: &hook.ID}
 	require.NoError(t, store.InsertLog(ctx, db, logEntry))
 	require.NotZero(t, logEntry.ID)
-	require.NoError(t, service.Deliver(ctx, jobs.WebhookDeliveryTask{
+	require.NoError(t, service.Deliver(ctx, WebhookDeliveryTask{
 		LogID:     logEntry.ID.String(),
 		WebhookID: hook.ID.String(),
 		Event:     "user.created",
@@ -493,7 +493,7 @@ func TestServiceNameAndDoubleRegistrationPanics(t *testing.T) {
 	stack := newTestStack(t, okSender())
 	assert.Equal(t, ModuleName, stack.Service.Name())
 
-	// Double wiring is a build-time bug; antree rejects the duplicate.
+	// Double wiring is a build-time bug; the queue rejects the duplicate.
 	assert.Panics(t, func() { stack.Service.RegisterQueue(stack.Queue) })
 }
 

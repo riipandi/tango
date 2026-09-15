@@ -1,4 +1,4 @@
-package antree
+package queue
 
 import (
 	"context"
@@ -28,10 +28,10 @@ func (d *mockDispatcher) Stop(_ context.Context) bool {
 func (d *mockDispatcher) Notify() { d.notified = true }
 
 func TestNewClient(t *testing.T) {
-	store := newPool(t)
+	store := newStore(t)
 
 	c, err := NewClient(ClientConfig{
-		DB:              store,
+		Store:           store,
 		Logger:          slog.Default(),
 		NumWorkers:      2,
 		ReleaseAfter:    time.Second,
@@ -55,15 +55,15 @@ func TestNewClientDefaultLogger(t *testing.T) {
 }
 
 func TestNewClientValidation(t *testing.T) {
-	store := newPool(t)
+	store := newStore(t)
 
-	_, err := NewClient(ClientConfig{DB: nil, NumWorkers: 1, ReleaseAfter: time.Second})
+	_, err := NewClient(ClientConfig{Store: nil, NumWorkers: 1, ReleaseAfter: time.Second})
 	assert.Error(t, err)
 
-	_, err = NewClient(ClientConfig{DB: store, NumWorkers: 0, ReleaseAfter: time.Second})
+	_, err = NewClient(ClientConfig{Store: store, NumWorkers: 0, ReleaseAfter: time.Second})
 	assert.Error(t, err)
 
-	_, err = NewClient(ClientConfig{DB: store, NumWorkers: 1, ReleaseAfter: 0})
+	_, err = NewClient(ClientConfig{Store: store, NumWorkers: 1, ReleaseAfter: 0})
 	assert.Error(t, err)
 }
 
@@ -163,25 +163,25 @@ func TestClientStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, TaskStatusNotFound, s)
 
-	insertTask(t, c.db, &queuedTask{id: id, queue: "test", task: []byte("test")})
+	insertTask(t, c.store, &queuedTask{id: id, queue: "test", task: []byte("test")})
 	s, err = c.Status(ctx, id)
 	require.NoError(t, err)
 	assert.Equal(t, TaskStatusPending, s)
 
-	_, err = (queuedTasks{{id: id}}).claim(ctx, c.db, now().Add(-time.Second))
+	_, err = (queuedTasks{{id: id}}).claim(ctx, c.store, now().Add(-time.Second))
 	require.NoError(t, err)
 	s, err = c.Status(ctx, id)
 	require.NoError(t, err)
 	assert.Equal(t, TaskStatusRunning, s)
 
 	completedID := nextTaskID()
-	insertCompleted(t, c.db, completedTask{id: completedID, queue: "test"})
+	insertCompleted(t, c.store, completedTask{id: completedID, queue: "test"})
 	s, err = c.Status(ctx, completedID)
 	require.NoError(t, err)
 	assert.Equal(t, TaskStatusSuccess, s)
 
 	failedID := nextTaskID()
-	insertCompleted(t, c.db, completedTask{id: failedID, queue: "test", err: pointer("err")})
+	insertCompleted(t, c.store, completedTask{id: failedID, queue: "test", err: pointer("err")})
 	s, err = c.Status(ctx, failedID)
 	require.NoError(t, err)
 	assert.Equal(t, TaskStatusFailure, s)
@@ -192,9 +192,9 @@ func TestClientFlush(t *testing.T) {
 
 	pending := &queuedTask{queue: "test", task: encode(t, &testTask{Val: "1"})}
 	claimed := &queuedTask{queue: "test", task: encode(t, &testTask{Val: "2"})}
-	insertTask(t, c.db, pending)
-	insertTask(t, c.db, claimed)
-	_, err := c.db.Exec(context.Background(),
+	insertTask(t, c.store, pending)
+	insertTask(t, c.store, claimed)
+	_, err := c.store.Exec(context.Background(),
 		"UPDATE "+tasksTable+" SET claimed_at = now() WHERE id = $1", claimed.id)
 	require.NoError(t, err)
 
@@ -202,7 +202,7 @@ func TestClientFlush(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), n)
 
-	tasks := getTasks(t, c.db)
+	tasks := getTasks(t, c.store)
 	require.Len(t, tasks, 1)
 	assert.Equal(t, claimed.id, tasks[0].id)
 }
@@ -210,12 +210,12 @@ func TestClientFlush(t *testing.T) {
 func TestClientFlushCompleted(t *testing.T) {
 	c := mustNewClient(t)
 
-	insertCompleted(t, c.db, completedTask{id: nextTaskID(), queue: "test"})
-	insertCompleted(t, c.db, completedTask{id: nextTaskID(), queue: "test", succeeded: true})
-	require.Len(t, getCompletedTasks(t, c.db), 2)
+	insertCompleted(t, c.store, completedTask{id: nextTaskID(), queue: "test"})
+	insertCompleted(t, c.store, completedTask{id: nextTaskID(), queue: "test", succeeded: true})
+	require.Len(t, getCompletedTasks(t, c.store), 2)
 
 	n, err := c.FlushCompleted(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), n)
-	assert.Empty(t, getCompletedTasks(t, c.db))
+	assert.Empty(t, getCompletedTasks(t, c.store))
 }

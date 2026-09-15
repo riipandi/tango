@@ -22,8 +22,64 @@ import (
 	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/pkg/responder"
 )
+
+// Delivery queue tuning. Webhook attempts are bounded by the queue's own
+// backoff, so the values here stay deliberately small: a failing
+// receiver must not stall the worker pool for minutes.
+const (
+	// WebhookQueue is the registry key of the delivery queue; it must
+	// stay stable across releases.
+	WebhookQueue = "webhook"
+	// WebhookMaxAttempts is the retry budget for one signed delivery.
+	WebhookMaxAttempts = 5
+	// WebhookTimeout bounds the outbound request; the spec fixes 30s,
+	// the extra 10s absorbs connection setup and TLS.
+	WebhookTimeout = 40 * time.Second
+	// WebhookRequestTimeout is the receiver-facing deadline.
+	WebhookRequestTimeout = 30 * time.Second
+	// WebhookBackoff is the wait between delivery attempts.
+	WebhookBackoff = 30 * time.Second
+	// WebhookRetention keeps completed delivery tasks for a week so
+	// failed payloads stay inspectable; the webhook_logs row is the
+	// primary record and is pruned separately.
+	WebhookRetention = 7 * 24 * time.Hour
+)
+
+// WebhookDeliveryTask delivers one recorded event to one endpoint. The
+// log row is the outbox record: it is written in the same transaction
+// that enqueues this task, so a rolled back event never delivers.
+type WebhookDeliveryTask struct {
+	// LogID identifies the webhook_logs row updated per attempt.
+	LogID string `json:"log_id"`
+
+	// WebhookID identifies the endpoint row.
+	WebhookID string `json:"webhook_id"`
+
+	// Event is the event name the endpoint subscribed to.
+	Event string `json:"event"`
+
+	// Payload is the event body; the delivery signs its canonical JSON
+	// encoding byte for byte.
+	Payload map[string]any `json:"payload,omitzero"`
+}
+
+// Config implements queue.Task.
+func (WebhookDeliveryTask) Config() queue.QueueConfig {
+	return queue.QueueConfig{
+		Name:        WebhookQueue,
+		MaxAttempts: WebhookMaxAttempts,
+		Timeout:     WebhookTimeout,
+		Backoff:     WebhookBackoff,
+		Retention: &queue.Retention{
+			Duration:   WebhookRetention,
+			OnlyFailed: true,
+			Data:       &queue.RetainData{OnlyFailed: true},
+		},
+	}
+}
 
 // Typed IDs: UUIDv7 suffix plus a snake_case prefix matching the
 // singular table name.

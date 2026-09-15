@@ -1,5 +1,5 @@
 ---
-status: planned
+status: done
 updated: 2026-09-15
 ---
 
@@ -81,22 +81,22 @@ Consumer direction stays one-way: `modules/*` and `internal/jobs` may depend on
 
 ## Tasks
 
-- [ ] Move `internal/antree/*` → `internal/queue/` with package rename `antree` → `queue`;
+- [x] Move `internal/antree/*` → `internal/queue/` with package rename `antree` → `queue`;
       fold the kernel adapter in as `module.go`; delete the old `internal/queue/queue.go`
       adapter and its test; update the package doc (built-in subsystem, backlite credit kept).
-- [ ] Swap `ClientConfig.DB *pgxpool.Pool` → `Store datastore.Store`; delete the local
+- [x] Swap `ClientConfig.DB *pgxpool.Pool` → `Store datastore.Store`; delete the local
       `Executor` interface in favor of `datastore.Executor`; make the transactional save
       path use `WithTx`; keep the public `Add`/`Status`/`Flush*` signatures unchanged.
-- [ ] Apply `datastore.Wrap("queue", op, err)` to store error returns; keep the
+- [x] Apply `datastore.Wrap("queue", op, err)` to store error returns; keep the
       `Status()` `ErrNoRows → TaskStatusNotFound` mapping.
-- [ ] Move `WebhookDeliveryTask` from `internal/jobs/schema.go` to `modules/webhook/schema.go`
+- [x] Move `WebhookDeliveryTask` from `internal/jobs/schema.go` to `modules/webhook/schema.go`
       and update its consumers (webhook service/tests, jobs registry test).
-- [ ] Update all consumers to the `queue` import: `internal/jobs`, `internal/logger`,
+- [x] Update all consumers to the `queue` import: `internal/jobs`, `internal/logger`,
       `internal/registry`, `modules/webhook`, plus tests.
-- [ ] Sync docs: rewrite `internal/queue/README.md` header as built-in subsystem (Credits
+- [x] Sync docs: rewrite `internal/queue/README.md` header as built-in subsystem (Credits
       section stays), update root README + porting-guide references from `pkg/antree` /
       `internal/antree`, and record the ownership decision in `AGENTS.md` architecture notes.
-- [ ] Full gate: `task test` (all three suites), `task lint`, `task check`; queue
+- [x] Full gate: `task test` (all three suites), `task lint`, `task check`; queue
       integration tests (testcontainers) green; no new migration, migrator count tests
       untouched.
 
@@ -107,6 +107,23 @@ Behavior-preserving: no endpoint, envelope, or schema change; task rows are comp
 tests in `internal/jobs` + `modules/webhook` cover enqueue → claim → process → complete
 round-trips against Postgres. A CLI smoke run (`serve` with `QUEUE_*` set) confirms the
 dispatcher starts and drains on shutdown.
+
+All passing on 2026-09-15: `task test:go` 532 pass / 0 fail (1 skip: network-dependent),
+debug suite 35 pass, release-tag suite all ok, golangci-lint 0 issues, vet + format clean.
+Serve smoke on a scratch DB: "task dispatcher started" at boot, graceful "shutting down
+dispatcher" on SIGTERM, zero errors. `task check`'s oxlint step still fails pre-existing
+(missing `oxlint-tsgolint` dep, environmental since phase 1).
+
+Implementation notes beyond the plan:
+
+- `save()` and the dispatcher's success/failure paths now use `WithTx` end to end — the
+  engine holds no `pgxpool` reference at all; `Store.Pool()` is never called by the engine.
+- `TaskAddOp.Tx(pgx.Tx)` stays (used by tests); `TaskAddOp.Executor(datastore.Executor)`
+  is the module-facing path (webhook outbox enqueue inside its own `WithTx`).
+- Two shadowed parameters named `queue` (`jobs.NewRegistry`, `webhook.RegisterQueue`)
+  renamed to `client` — the package import now owns the name.
+- `WebhookLogRetention` stays in `internal/jobs/cleanup.go`: it is the cleanup job's prune
+  cadence, not delivery tuning.
 
 ## Risks
 
@@ -125,3 +142,10 @@ dispatcher starts and drains on shutdown.
 
 - 2026-09-15 Phase planned after the ownership decision (upstream no longer tracked;
   queue is the project's own foundation). Cron explicitly deferred.
+- 2026-09-15 Done: engine lives in `internal/queue` (adapter folded in as `module.go`),
+  datastore-integrated (`Store`/`WithTx`, no pool), store errors via `datastore.Wrap`,
+  webhook payload owned by `modules/webhook`, docs synced. All gates green + serve smoke
+  (dispatcher start/drain).
+- 2026-09-15 Signature cleanup: the backlite-era `TaskAddOp.Tx(pgx.Tx)` is removed —
+  `Executor(datastore.Executor)` is the single transactional path (pgx.Tx satisfies it);
+  stale `antree` comments swept from jobs/logger/webhook/identity handlers.
