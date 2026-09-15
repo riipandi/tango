@@ -10,7 +10,6 @@ package webhook
 import (
 	"context"
 	"errors"
-	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
@@ -22,7 +21,6 @@ import (
 
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/queue"
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // Delivery queue tuning. Webhook attempts are bounded by the queue's own
@@ -122,13 +120,13 @@ const (
 // Errors surfaced to handlers; statuses live on the sentinels.
 var (
 	// ErrNotFound covers unknown endpoints and delivery logs.
-	ErrNotFound = responder.NewError(http.StatusNotFound, "webhook: not found")
+	ErrNotFound = errors.New("webhook: not found")
 	// ErrDuplicateName is a unique-constraint violation on name.
-	ErrDuplicateName = responder.NewError(http.StatusConflict, "webhook: name already exists")
+	ErrDuplicateName = errors.New("webhook: name already exists")
 	// ErrDisabled reports a delivery against a disabled endpoint.
-	ErrDisabled = responder.NewError(http.StatusConflict, "webhook: endpoint is disabled")
+	ErrDisabled = errors.New("webhook: endpoint is disabled")
 	// ErrTooLarge rejects an oversized event payload.
-	ErrTooLarge = responder.NewError(http.StatusRequestEntityTooLarge, "webhook: payload exceeds the size limit")
+	ErrTooLarge = errors.New("webhook: payload exceeds the size limit")
 )
 
 // Webhook is one registered endpoint.
@@ -228,11 +226,30 @@ func (p *UpdateParams) Validate() error {
 	)
 }
 
+// Page is the store-level paging window: plain ints with no HTTP
+// dependency. The handler converts the request query into it.
+type Page struct {
+	Page  int
+	Limit int
+}
+
+// All reports whether the listing skips paging (page or limit is the
+// all marker -1).
+func (p Page) All() bool { return p.Page == -1 || p.Limit == -1 }
+
+// Offset returns the SQL offset for the current page.
+func (p Page) Offset() int {
+	if p.All() || p.Page < 1 || p.Limit < 1 {
+		return 0
+	}
+	return (p.Page - 1) * p.Limit
+}
+
 // ListParams narrows and pages the endpoint listing.
 type ListParams struct {
 	Enabled *bool
 	Event   string
-	responder.PaginationParams
+	Page
 }
 
 // DeliveryLog is one webhook_logs row: the outbox record plus the

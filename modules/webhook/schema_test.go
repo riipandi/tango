@@ -158,7 +158,7 @@ func TestWriteErrorMapsDomainErrors(t *testing.T) {
 			w := newRecorder()
 			req := newRequest()
 
-			responder.WriteError(w, req, tc.err)
+			writeError(w, req, tc.err)
 			assert.Equal(t, tc.status, w.Code)
 		})
 	}

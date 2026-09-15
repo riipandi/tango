@@ -407,7 +407,8 @@ func parseDeliveryLogID(raw string) (DeliveryLogID, error) {
 	return id, nil
 }
 
-// PageParams narrows endpoint listings by the request query.
+// PageParams converts the parsed HTTP pagination into the store-level
+// paging window.
 func PageParams(params responder.PaginationParams) ListParams {
-	return ListParams{PaginationParams: params}
+	return ListParams{Page: Page{Page: params.Page, Limit: params.Limit}}
 }

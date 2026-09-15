@@ -1,6 +1,7 @@
 package user
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -16,6 +17,21 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
+
+// writeError maps user domain errors onto HTTP statuses; anything
+// else keeps the shared mapping. Used by the picture surface too.
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		responder.NotFoundJSON(w, r)
+	case errors.Is(err, ErrDuplicate):
+		responder.Fail(w, r, http.StatusConflict, err.Error())
+	case errors.Is(err, ErrInvalidUsername), errors.Is(err, ErrInvalidEmail):
+		responder.Fail(w, r, http.StatusBadRequest, err.Error())
+	default:
+		responder.WriteError(w, r, err)
+	}
+}
 
 // createUserRequest is the POST /users payload; optional fields
 // default like the store does (empty → NULL / display-name fallback).
@@ -158,7 +174,7 @@ func (s *Service) getCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.GetByID(r.Context(), id)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, u)
@@ -187,7 +203,7 @@ func (s *Service) updateCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.store.UpdateProfile(r.Context(), id, UpdateProfileParams(req))
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, u)
@@ -202,7 +218,7 @@ func (s *Service) createUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.Create(r.Context(), CreateParams(req))
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 
@@ -218,7 +234,7 @@ func (s *Service) getUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.GetByID(r.Context(), id)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 
@@ -262,7 +278,7 @@ func (s *Service) updateUser(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.Update(r.Context(), id, AdminUpdateParams(req))
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, u)
@@ -277,7 +293,7 @@ func (s *Service) deleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Delete(r.Context(), id); err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})

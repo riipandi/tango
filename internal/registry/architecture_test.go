@@ -73,6 +73,46 @@ func TestModuleBoundariesDoNotImportAcrossApplicationAreas(t *testing.T) {
 	assert.Empty(t, violations, "cross-boundary concrete imports")
 }
 
+// TestStoreFilesStayTransportFree pins the persistence boundary:
+// store files must not import the HTTP transport stack or the
+// response envelope — mapping to HTTP belongs to handlers.
+func TestStoreFilesStayTransportFree(t *testing.T) {
+	banned := []string{
+		"github.com/riipandi/tango/pkg/responder",
+		"github.com/riipandi/tango/internal/transport",
+		"net/http",
+	}
+
+	violations := []string{}
+	err := filepath.WalkDir("../../modules", func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		base := filepath.Base(path)
+		isStore := base == "store.go" || strings.HasSuffix(base, "_store.go")
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || !isStore {
+			return nil
+		}
+
+		src, err := os.ReadFile(path)
+		require.NoError(t, err)
+		file, err := parser.ParseFile(token.NewFileSet(), path, src, parser.ImportsOnly)
+		require.NoError(t, err)
+
+		for _, imp := range file.Imports {
+			imported := strings.Trim(imp.Path.Value, `"`)
+			for _, b := range banned {
+				if imported == b {
+					violations = append(violations, path+" imports "+imported)
+				}
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Empty(t, violations, "store files importing transport concerns")
+}
+
 func packagePath(filePath string) string {
 	return "github.com/riipandi/tango/" + filepath.Dir(filePath)
 }

@@ -14,6 +14,19 @@ import (
 	"github.com/riipandi/tango/pkg/validate"
 )
 
+// writeError maps user-group domain errors onto HTTP statuses;
+// anything else keeps the shared mapping.
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		responder.NotFoundJSON(w, r)
+	case errors.Is(err, ErrDuplicate):
+		responder.Fail(w, r, http.StatusConflict, err.Error())
+	default:
+		responder.WriteError(w, r, err)
+	}
+}
+
 // createGroupRequest is the POST /user-groups payload.
 type createGroupRequest struct {
 	Name        string `json:"name"`
@@ -112,7 +125,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 
 	g, err := s.Create(r.Context(), CreateParams(req))
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusCreated, g)
@@ -146,7 +159,7 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 
 	g, err := s.GetByID(r.Context(), id)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 
@@ -175,7 +188,7 @@ func (s *Service) update(w http.ResponseWriter, r *http.Request) {
 
 	g, err := s.Update(r.Context(), id, UpdateParams(req))
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, g)
@@ -189,7 +202,7 @@ func (s *Service) deleteGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Delete(r.Context(), id); err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
@@ -205,7 +218,7 @@ func (s *Service) memberIDs(w http.ResponseWriter, r *http.Request) {
 
 	members, err := s.MemberIDs(r.Context(), id)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, memberIDStrings(members))
@@ -237,7 +250,7 @@ func (s *Service) setMembers(w http.ResponseWriter, r *http.Request) {
 			responder.Fail(w, r, http.StatusUnprocessableEntity, ErrInvalidIDs.Error())
 			return
 		}
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"member_ids": req.UserIDs})
@@ -269,7 +282,7 @@ func (s *Service) setAllowedClients(w http.ResponseWriter, r *http.Request) {
 			responder.Fail(w, r, http.StatusUnprocessableEntity, ErrInvalidIDs.Error())
 			return
 		}
-		responder.WriteError(w, r, replaceErr)
+		writeError(w, r, replaceErr)
 		return
 	}
 
@@ -323,7 +336,7 @@ func (s *Service) replaceUserGroups(w http.ResponseWriter, r *http.Request) {
 			responder.Fail(w, r, http.StatusUnprocessableEntity, ErrInvalidIDs.Error())
 			return
 		}
-		responder.WriteError(w, r, setErr)
+		writeError(w, r, setErr)
 		return
 	}
 

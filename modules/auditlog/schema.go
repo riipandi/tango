@@ -5,7 +5,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/riipandi/tango/pkg/responder"
 	"go.jetify.com/typeid"
 )
 
@@ -67,13 +66,32 @@ type ListFilters struct {
 	To     *time.Time
 }
 
+// Page is the store-level paging window: plain ints with no HTTP
+// dependency. The handler converts the request query into it.
+type Page struct {
+	Page  int
+	Limit int
+}
+
+// All reports whether the listing skips paging (page or limit is the
+// all marker -1).
+func (p Page) All() bool { return p.Page == -1 || p.Limit == -1 }
+
+// Offset returns the SQL offset for the current page.
+func (p Page) Offset() int {
+	if p.All() || p.Page < 1 || p.Limit < 1 {
+		return 0
+	}
+	return (p.Page - 1) * p.Limit
+}
+
 // Store abstracts audit persistence: Postgres for production, no
 // memory store. Record assigns Entry.ID (and CreatedAt when zero) on
 // the pointed-to entry. List returns the matching entries (newest
 // first) plus the total row count.
 type Store interface {
 	Record(ctx context.Context, entry *Entry) error
-	List(ctx context.Context, filters ListFilters, params responder.PaginationParams) ([]Entry, int, error)
+	List(ctx context.Context, filters ListFilters, params Page) ([]Entry, int, error)
 	UserFilterValues(ctx context.Context) ([]string, error)
 	ClientNameFilterValues(ctx context.Context) ([]string, error)
 }

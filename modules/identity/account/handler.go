@@ -190,10 +190,19 @@ func (s *Service) revokeSession(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeError keeps the account-specific wording for a wrong current
-// password; everything else goes through the shared mapping.
+// password, maps weak passwords to 422 and session misses to 404,
+// and defers the rest to the shared mapping.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, password.ErrInvalidCredentials) {
 		responder.Fail(w, r, http.StatusBadRequest, "current password is incorrect")
+		return
+	}
+	if errors.Is(err, password.ErrWeakPassword) {
+		responder.Fail(w, r, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	if errors.Is(err, session.ErrNotFound) {
+		responder.NotFoundJSON(w, r)
 		return
 	}
 	responder.WriteError(w, r, err)

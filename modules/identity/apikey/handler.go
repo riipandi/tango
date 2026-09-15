@@ -1,6 +1,7 @@
 package apikey
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -10,6 +11,19 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
+
+// writeError maps api-key domain errors onto HTTP statuses; anything
+// else keeps the shared mapping.
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		responder.NotFoundJSON(w, r)
+	case errors.Is(err, ErrDuplicate), errors.Is(err, ErrNotExpired), errors.Is(err, ErrInvalidCreds):
+		responder.Fail(w, r, http.StatusConflict, err.Error())
+	default:
+		responder.WriteError(w, r, err)
+	}
+}
 
 // createKeyRequest is the POST /api-keys payload.
 type createKeyRequest struct {
@@ -110,7 +124,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:   expiresAt,
 	})
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusCreated, keyResponse{APIKey: k, Token: token})
@@ -130,7 +144,7 @@ func (s *Service) revoke(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Revoke(r.Context(), userID, id); err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
@@ -164,7 +178,7 @@ func (s *Service) renew(w http.ResponseWriter, r *http.Request) {
 
 	k, token, err := s.Renew(r.Context(), userID, id, RenewParams{ExpiresAt: expiresAt})
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, keyResponse{APIKey: k, Token: token})

@@ -1,6 +1,7 @@
 package apiaccess
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -9,6 +10,21 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
+
+// writeError maps apiaccess domain errors onto HTTP statuses;
+// anything else keeps the shared mapping.
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		responder.NotFoundJSON(w, r)
+	case errors.Is(err, ErrDuplicate):
+		responder.Fail(w, r, http.StatusConflict, err.Error())
+	case errors.Is(err, ErrUnknownClient), errors.Is(err, ErrUnknownPerms):
+		responder.Fail(w, r, http.StatusUnprocessableEntity, err.Error())
+	default:
+		responder.WriteError(w, r, err)
+	}
+}
 
 // createAPIRequest is the POST /apis payload.
 type createAPIRequest struct {
@@ -118,7 +134,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 
 	a, err := s.Create(r.Context(), CreateParams(req))
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusCreated, a)
@@ -151,7 +167,7 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 
 	a, err := s.GetByID(r.Context(), id)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, a)
@@ -173,7 +189,7 @@ func (s *Service) update(w http.ResponseWriter, r *http.Request) {
 
 	a, err := s.Update(r.Context(), id, UpdateParams(req))
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, a)
@@ -187,7 +203,7 @@ func (s *Service) deleteAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Delete(r.Context(), id); err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
@@ -215,7 +231,7 @@ func (s *Service) setPermissions(w http.ResponseWriter, r *http.Request) {
 
 	out, err := s.SetPermissions(r.Context(), id, perms)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"permissions": out})
@@ -283,7 +299,7 @@ func (s *Service) upsertGrant(w http.ResponseWriter, r *http.Request) {
 
 	g, err := s.UpsertGrant(r.Context(), id, clientID, GrantParams(req))
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, grantResponse{
@@ -303,7 +319,7 @@ func (s *Service) deleteGrant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.DeleteGrant(r.Context(), id, chi.URLParam(r, "clientId")); err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
@@ -382,7 +398,7 @@ func (s *Service) setCIMDAccess(w http.ResponseWriter, r *http.Request) {
 
 	a, err := s.SetCIMDAccess(r.Context(), id, req.Enabled, req.PermissionIDs)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, a)

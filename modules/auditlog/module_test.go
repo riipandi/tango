@@ -15,7 +15,6 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity/user"
-	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,7 +76,7 @@ func TestRecordPersistsEnumsAndPayload(t *testing.T) {
 	}
 	require.NoError(t, store.Record(t.Context(), &entry))
 
-	entries, total, err := store.List(t.Context(), ListFilters{}, responder.PaginationParams{Page: 1, Limit: 10})
+	entries, total, err := store.List(t.Context(), ListFilters{}, Page{Page: 1, Limit: 10})
 	require.NoError(t, err)
 	require.Positive(t, total)
 	require.NotEmpty(t, entries)
@@ -309,14 +308,14 @@ func TestListFiltersByUserAndEvent(t *testing.T) {
 	filtered, total, err := store.List(ctx, ListFilters{
 		Event:  "user.signed_in",
 		UserID: u.ID.UUID(),
-	}, responder.PaginationParams{Page: 1, Limit: 10})
+	}, Page{Page: 1, Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, filtered, 1)
 	assert.Equal(t, "user.signed_in", filtered[0].Event)
 	assert.Equal(t, 1, total)
 
 	byUser, _, err := store.List(ctx, ListFilters{UserID: u.ID.UUID()},
-		responder.PaginationParams{Page: 1, Limit: 10})
+		Page{Page: 1, Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, byUser, 1)
 

@@ -76,7 +76,7 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request, scope ListFilters)
 		filters.To = &parsed
 	}
 
-	entries, total, err := m.store.List(r.Context(), filters, params)
+	entries, total, err := m.store.List(r.Context(), filters, Page{Page: params.Page, Limit: params.Limit})
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return

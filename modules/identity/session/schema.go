@@ -6,13 +6,12 @@ package session
 
 import (
 	"context"
-	"net/http"
+	"errors"
 	"time"
 
 	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/modules/identity/user"
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // Typed IDs for the session tables: UUIDv7 suffix, snake_case prefix
@@ -64,7 +63,7 @@ type Meta struct {
 var (
 	// ErrNotFound is returned when no session matches, including
 	// expired and revoked ones (they must be indistinguishable).
-	ErrNotFound = responder.NewError(http.StatusNotFound, "session: not found")
+	ErrNotFound = errors.New("session: not found")
 )
 
 // Store persists sessions. Validity (revoked/expired) is enforced

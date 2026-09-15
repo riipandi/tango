@@ -10,7 +10,6 @@ import (
 	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // PostgresStore persists audit entries in public.audit_logs. It
@@ -81,7 +80,7 @@ func (s *PostgresStore) Record(ctx context.Context, entry *Entry) error {
 
 // List returns matching entries newest first plus the total count.
 // All-page params (-1) skip LIMIT/OFFSET.
-func (s *PostgresStore) List(ctx context.Context, filters ListFilters, params responder.PaginationParams) ([]Entry, int, error) {
+func (s *PostgresStore) List(ctx context.Context, filters ListFilters, params Page) ([]Entry, int, error) {
 	csb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	csb.Select("count(*)")
 	csb.From("public.audit_logs")

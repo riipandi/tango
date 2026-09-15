@@ -1,6 +1,7 @@
 package customclaim
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -12,6 +13,19 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
+
+// writeError maps custom-claim domain errors onto HTTP statuses;
+// anything else keeps the shared mapping.
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		responder.NotFoundJSON(w, r)
+	case errors.Is(err, ErrDuplicate):
+		responder.Fail(w, r, http.StatusConflict, err.Error())
+	default:
+		responder.WriteError(w, r, err)
+	}
+}
 
 // createClaimRequest is the POST payload for both owner scopes.
 type createClaimRequest struct {
@@ -130,7 +144,7 @@ func (s *Service) createForUser(w http.ResponseWriter, r *http.Request) {
 
 	claim, err := s.CreateForUser(r.Context(), userID, UpsertParams{Key: req.Key, Value: req.Value})
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusCreated, claim)
@@ -151,7 +165,7 @@ func (s *Service) updateForUser(w http.ResponseWriter, r *http.Request) {
 
 	claim, err := s.UpdateValue(r.Context(), claimID, req.Value)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, claim)
@@ -164,7 +178,7 @@ func (s *Service) deleteForUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.Delete(r.Context(), claimID); err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
@@ -202,7 +216,7 @@ func (s *Service) replaceForUser(w http.ResponseWriter, r *http.Request) {
 
 	claims, err := s.ReplaceForUser(r.Context(), userID, req.params())
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, claims)
@@ -224,7 +238,7 @@ func (s *Service) replaceForGroup(w http.ResponseWriter, r *http.Request) {
 
 	claims, err := s.ReplaceForGroup(r.Context(), groupID, req.params())
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, claims)
@@ -245,7 +259,7 @@ func (s *Service) createForGroup(w http.ResponseWriter, r *http.Request) {
 
 	claim, err := s.CreateForGroup(r.Context(), groupID, UpsertParams{Key: req.Key, Value: req.Value})
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusCreated, claim)
@@ -266,7 +280,7 @@ func (s *Service) updateForGroup(w http.ResponseWriter, r *http.Request) {
 
 	claim, err := s.UpdateValue(r.Context(), claimID, req.Value)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, claim)
@@ -279,7 +293,7 @@ func (s *Service) deleteForGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.Delete(r.Context(), claimID); err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})

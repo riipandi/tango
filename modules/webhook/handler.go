@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +13,21 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
+
+// writeError maps webhook domain errors onto HTTP statuses; anything
+// else keeps the shared mapping.
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		responder.NotFoundJSON(w, r)
+	case errors.Is(err, ErrDuplicateName), errors.Is(err, ErrDisabled):
+		responder.Fail(w, r, http.StatusConflict, err.Error())
+	case errors.Is(err, ErrTooLarge):
+		responder.Fail(w, r, http.StatusRequestEntityTooLarge, err.Error())
+	default:
+		responder.WriteError(w, r, err)
+	}
+}
 
 // ModuleName identifies the webhook module in the registry.
 const ModuleName = "webhook"
@@ -94,7 +110,7 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	listParams := ListParams{PaginationParams: params}
+	listParams := ListParams{Page: Page{Page: params.Page, Limit: params.Limit}}
 	if raw := r.URL.Query().Get("enabled"); raw != "" {
 		enabled, parseErr := strconv.ParseBool(raw)
 		if parseErr != nil {
@@ -123,7 +139,7 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 
 	hook, err := m.service.Create(r.Context(), req)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusCreated, hook)
@@ -138,7 +154,7 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) {
 
 	hook, err := m.service.Get(r.Context(), id)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, hook)
@@ -160,7 +176,7 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 
 	hook, err := m.service.Update(r.Context(), id, req)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, hook)
@@ -174,7 +190,7 @@ func (m *Module) remove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := m.service.Delete(r.Context(), id); err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{"deleted": true})
@@ -189,7 +205,7 @@ func (m *Module) rotateSecret(w http.ResponseWriter, r *http.Request) {
 
 	secret, err := m.service.RotateSecret(r.Context(), id)
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]string{
@@ -233,7 +249,7 @@ func (m *Module) test(w http.ResponseWriter, r *http.Request) {
 		"source": "tango",
 	})
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusAccepted, map[string]any{
@@ -264,7 +280,7 @@ func (m *Module) writeLogs(w http.ResponseWriter, r *http.Request, id *WebhookID
 
 	logs, total, err := m.service.ListLogs(r.Context(), id, PageParams(params))
 	if err != nil {
-		responder.WriteError(w, r, err)
+		writeError(w, r, err)
 		return
 	}
 	responder.Success(w, r, http.StatusOK, logs, responder.WithPaginationFrom(params, total))
