@@ -41,10 +41,7 @@ type Module struct {
 	adminGuard func(http.Handler) http.Handler
 }
 
-var (
-	_ kernel.Module      = (*Module)(nil)
-	_ kernel.APIRoutable = (*Module)(nil)
-)
+var _ = (*Module)(nil)
 
 // Option configures the webhook module at construction.
 type Option func(*Module)
@@ -79,7 +76,7 @@ func (m *Module) Emit(ctx context.Context, event string, payload map[string]any)
 	return m.service.Emit(ctx, event, payload)
 }
 
-// Name implements kernel.Module.
+// Name identifies the module.
 func (*Module) Name() string { return ModuleName }
 
 // APIRoutes mounts the endpoints relative to the /api group.

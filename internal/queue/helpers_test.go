@@ -71,8 +71,6 @@ func (p poolStore) Close() error {
 	return nil
 }
 
-func (p poolStore) Pool() *pgxpool.Pool { return p.pool }
-
 func (p poolStore) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 	return p.pool.Exec(ctx, sql, args...)
 }

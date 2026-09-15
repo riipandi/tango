@@ -15,7 +15,7 @@ func New(client *Client) *Module {
 	return &Module{client: client}
 }
 
-// Name implements kernel.Module.
+// Name identifies the module.
 func (m *Module) Name() string {
 	return "queue"
 }

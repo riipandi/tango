@@ -39,7 +39,7 @@ func (s *Service) Start(ctx context.Context) error {
 	return s.EnsureSigningKey(ctx)
 }
 
-// Stop implements kernel.Startable; no background resources.
+// Stop ends the lifecycle: no background resources.
 func (s *Service) Stop(context.Context) error { return nil }
 
 // Name implements federation.Feature.

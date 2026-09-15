@@ -7,7 +7,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Executor is the query surface for a pool or transaction.
@@ -23,9 +22,6 @@ type Store interface {
 	Executor
 
 	WithTx(ctx context.Context, fn func(Executor) error) error
-
-	// Pool exposes the raw pgx pool to infrastructure code.
-	Pool() *pgxpool.Pool
 }
 
 // Backend provides health checks and shutdown.

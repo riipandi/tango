@@ -35,8 +35,7 @@ func TestTaskAddOpWait(t *testing.T) {
 }
 
 func TestTaskAddOpExecutor(t *testing.T) {
-	c := mustNewClient(t)
-	tx, err := c.store.Pool().Begin(t.Context())
+	tx, err := newPool(t).Begin(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
 
@@ -139,7 +138,7 @@ func TestTaskAddOpSaveTransaction(t *testing.T) {
 	tk := testTask{Val: "e"}
 
 	// The caller owns the transaction; notify comes after commit.
-	tx, err := c.store.Pool().Begin(t.Context())
+	tx, err := newPool(t).Begin(t.Context())
 	require.NoError(t, err)
 	_, err = c.Add(tk).Executor(tx).Save()
 	require.NoError(t, err)
@@ -156,7 +155,7 @@ func TestTaskAddOpSaveEncodeFailure(t *testing.T) {
 	tk := testTaskEncodeFail{Val: make(chan int)}
 
 	// An encode error propagates and rolls back the caller transaction.
-	tx, err := c.store.Pool().Begin(t.Context())
+	tx, err := newPool(t).Begin(t.Context())
 	require.NoError(t, err)
 	_, err = c.Add(tk).Executor(tx).Save()
 	assert.Error(t, err)

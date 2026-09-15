@@ -27,10 +27,7 @@ type Module struct {
 	envDefaults map[string]string
 }
 
-var (
-	_ kernel.Module      = (*Module)(nil)
-	_ kernel.APIRoutable = (*Module)(nil)
-)
+var _ = (*Module)(nil)
 
 // MailSender queues transactional email; internal/jobs implements it.
 type MailSender interface {
@@ -71,7 +68,7 @@ func (m *Module) WithEnvDefaults(defaults map[string]string) *Module {
 	return m
 }
 
-// Name implements kernel.Module.
+// Name identifies the module.
 func (*Module) Name() string { return ModuleName }
 
 // APIRoutes mounts the configuration endpoints relative to /api.
