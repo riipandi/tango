@@ -17,6 +17,7 @@ load only the context needed for a task.
 - Upstream schema reference: [`llms/database-reference.sql`](../database-reference.sql)
 - Tango response contract: [`pkg/responder/`](../../pkg/responder/)
 - Tango encryption contract: [`pkg/crypto/`](../../pkg/crypto/)
+- PostgreSQL design contract: [`llms/prd/12-database.md`](./12-database.md)
 - Tango transport contract: [`internal/transport/`](../../internal/transport/)
 - Historical work: [`llms/archived/`](../archived/), context only
 - Upstream API reference: <https://pocket-id.org/docs/api>
@@ -34,6 +35,7 @@ load only the context needed for a task.
 9. [Delivery, dependencies, and risks](./09-delivery.md)
 10. [Architecture requirements](./10-architecture.md)
 11. [Recoverable secret encryption](./11-encryption.md)
+12. [PostgreSQL database requirements](./12-database.md)
 
 ## Decision status
 

@@ -102,6 +102,11 @@ back a successful domain operation.
 - Existing TypeID and Postgres boundaries remain unchanged unless a task explicitly documents them.
 - Recoverable secrets cross module storage boundaries only through `pkg/crypto` and use the
   canonical `enc:` format. Hash-only values remain hashes.
+- PostgreSQL uses one `public` schema with logical module ownership. Core credentials, sessions,
+  MFA, permissions, webhook subscriptions, deliveries, and attempts use relational tables; JSONB is
+  limited to flexible metadata and event payloads.
+- Fresh migrations define the final schema. No legacy tables, compatibility columns, fallback
+  readers, dual writes, compatibility views, or transitional adapters are allowed.
 
 ## Required architecture tests
 
@@ -124,10 +129,11 @@ back a successful domain operation.
 6. Consolidate existing appconfig, audit, API, API-key, and claim packages under `modules/admin`.
 7. Add the durable event/outbox boundary without adding another queue.
 8. Narrow datastore and kernel contracts.
-9. Delete compatibility scaffolding after all callers migrate.
+9. Remove obsolete generic registry, adapters, excluded feature paths, and dead packages without
+   replacing them with compatibility wrappers.
 
-Each step is behavior-preserving, has focused tests, updates affected Yaak requests, and is one
-atomic commit.
+Each step preserves the intended in-scope public behavior, has focused tests, updates affected Yaak
+requests, and is one atomic commit. It must not preserve obsolete internal or database shapes.
 
 ## Architecture acceptance criteria
 
@@ -140,4 +146,5 @@ atomic commit.
 - No concrete sibling-module dependency exists outside composition wiring.
 - Events needed by audit/webhooks survive domain commit and remain retryable.
 - Full API behavior, responder envelope, migrations, and Yaak evidence remain green.
-- Encryption-format tests, legacy-read compatibility tests, and secret-redaction checks remain green.
+- Encryption-format tests, unprefixed-value rejection tests, schema-contract tests, and
+  secret-redaction checks remain green.

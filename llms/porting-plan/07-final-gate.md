@@ -25,8 +25,10 @@ architecture has been introduced.
 - LDAP and Application Images are explicitly excluded and have no accidental route dependency.
 - Password recovery, TOTP MFA, and webhooks have Postgres tests, security-case tests, and Yaak
   verification.
-- Every new recoverable encrypted value uses `pkg/crypto` and begins with `enc:`; legacy values
-  are covered by bounded compatibility-read tests.
+- Every recoverable encrypted value uses `pkg/crypto` and begins with `enc:`; unprefixed values are
+  rejected and no compatibility-read test exists.
+- No legacy code, fallback reader, dual write, compatibility view, or transitional database column
+  remains in the implementation.
 - Test, lint, format, and vet gates pass without unnecessary abstractions.
 
 ## Yaak evidence requirement

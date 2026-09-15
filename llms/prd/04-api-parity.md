@@ -58,3 +58,5 @@ Stale or orphaned Yaak requests are a parity failure.
   module just to own one endpoint.
 - At-rest encryption changes must not alter public response shapes. Secret-bearing endpoints remain
   redacted or one-time-only and use `pkg/responder` for normal JSON responses.
+- The target API is final-state only. Do not keep old routes, fallback request shapes, compatibility
+  response branches, or adapters for superseded tango implementations.

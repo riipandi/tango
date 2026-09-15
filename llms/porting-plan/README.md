@@ -24,19 +24,24 @@ The implementation is Postgres-only, follows existing module boundaries, and avo
 abstractions without a current caller. Do not copy Pocket ID's Gin, GORM, database, or response
 types into tango.
 
+The target is a fresh implementation. Agents must not add legacy code, backward-compatibility
+branches, fallback readers, dual writes, compatibility views, transitional columns, or adapters for
+removed behavior.
+
 ## Execution order
 
 1. [Scope and rules](./00-scope.md)
 2. [Excluded-feature cleanup](./01-excluded-cleanup.md)
 3. [Target architecture](./architecture.md)
-4. [Contract baseline](./01-baseline.md)
-5. [Transport and responder](./02-transport.md)
-6. [Encrypted value prefix](./08-crypto-prefix.md)
-7. [Upstream endpoint parity](./03-endpoint-parity.md)
-8. [Password authentication](./04-password.md)
-9. [TOTP MFA](./05-mfa-totp.md)
-10. [Webhooks](./06-webhooks.md)
-11. [Final review and gate](./07-final-gate.md)
+4. [Database design](./database.md)
+5. [Contract baseline](./01-baseline.md)
+6. [Transport and responder](./02-transport.md)
+7. [Encrypted value prefix](./08-crypto-prefix.md)
+8. [Upstream endpoint parity](./03-endpoint-parity.md)
+9. [Password authentication](./04-password.md)
+10. [TOTP MFA](./05-mfa-totp.md)
+11. [Webhooks](./06-webhooks.md)
+12. [Final review and gate](./07-final-gate.md)
 
 Every numbered task is intended to be one atomic commit. Agents must update the relevant status,
 contract matrix, tests, and Yaak evidence in the same task. Suggested commit messages are included

@@ -26,8 +26,8 @@ owner: tango-auth-porting
 - Keep security-sensitive actions auditable without recording secret values.
 - Use bounded timeouts and rate limits for credential, MFA, and webhook operations.
 - Every new recoverable encrypted database value starts with exactly `enc:`. There is one bounded
-  compatibility-read path for known legacy ciphertext; it never accepts plaintext as encrypted
-  data and rewrites successful legacy reads when safe.
+  storage contract for new data. Unprefixed ciphertext is invalid and must fail closed; no legacy
+  reader, fallback decoder, or rewrite migration is allowed.
 
 ## Maintainability
 
@@ -43,6 +43,8 @@ owner: tango-auth-porting
   compatibility constraints, or side effects.
 - Remove dead LDAP and Application Images paths rather than keeping dormant abstractions.
 - Preserve behavior with tests before simplifying touched modules.
+- Do not retain legacy code, compatibility adapters, dual writes, transitional columns, or fallback
+  readers. This project accepts the final target shape directly.
 
 ## Dependency direction
 

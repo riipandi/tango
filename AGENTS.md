@@ -31,6 +31,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 - Typed IDs per module via `go.jetify.com/typeid`; the prefix lives in the module's `schema.go`. Only URL-facing/cross-module IDs carry TypeID; token/code rows use SHA-256 keys plus DB `uuidv7()`.
 - Background work runs on the built-in queue `internal/queue` (tango-owned; based on backlite): Postgres-backed, in-process dispatcher, schema in migrations. Consumers register queue processors and enqueue typed tasks; the engine reads/writes only through `internal/datastore` (`Executor`/`WithTx`). Recurring maintenance lives in `internal/jobs` (`Job` registry, fixed-delay self-rescheduling).
 - Recoverable encrypted values use `pkg/crypto.Cipher` and are written with the exact `enc:` prefix (`enc:<ciphertext>`). Passwords, reset/session tokens, API keys, and recovery codes remain hashes when verification is sufficient. Do not add another encryption format.
+- This is a fresh target implementation: do not add legacy code, backward-compatibility branches, fallback readers, compatibility views, dual writes, transitional columns, or adapters for removed behavior. Delete obsolete paths instead.
 - `llms/database-reference.sql` — upstream schema dump for parity checks.
 
 ## Conventions

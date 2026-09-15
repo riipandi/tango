@@ -36,6 +36,9 @@ owner: tango-auth-porting
 LDAP is already present in the repository and must be removed before parity work. Application Images
 must be removed or isolated when its callers are proven unrelated to the in-scope product.
 
+This is a fresh target. Do not preserve old implementation paths for backward compatibility. Remove
+obsolete code, tables, routes, fixtures, and adapters instead of wrapping or branching around them.
+
 ## Target module ownership
 
 ```text

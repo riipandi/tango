@@ -27,7 +27,7 @@ internal/config      process configuration
 internal/datastore   Postgres pool and transaction primitives
 internal/fetcher     outbound HTTP client
 internal/jobs        email and recurring job coordination
-internal/kernel      only small shared auth/runtime contracts during migration
+internal/kernel      only small shared auth/runtime contracts
 internal/logger      logging
 internal/mailer      email delivery
 internal/queue       Postgres-backed task queue
@@ -152,7 +152,8 @@ For a domain transaction:
 
 ```text
 write domain state
-write audit/outbox record
+write audit/outbox record with immutable delivery bytes
+commit
 enqueue or notify after commit
 worker delivers webhook and records attempts
 ```
@@ -171,6 +172,12 @@ second queue implementation.
 - Narrow broad `datastore.Store` usage over time; do not expose `Pool()` to application modules.
 - Use `pkg/crypto` as the only encryption implementation. Recoverable stored values use the
   canonical `enc:` prefix; hash-only values remain one-way hashes.
+- PostgreSQL uses one `public` schema with logical table ownership by module. Do not introduce
+  schema-per-module, RLS, partitioning, or database-per-module without a measured requirement.
+- Use relational tables for credentials, sessions, MFA recovery codes, permissions, webhook
+  subscriptions, deliveries, and attempts. JSONB is limited to flexible metadata and event payloads.
+- Fresh migrations define the final schema. Do not add legacy tables, compatibility columns, fallback
+  readers, dual writes, compatibility views, or transitional adapters.
 - Domain errors are plain errors owned by the module.
 - HTTP status and responder envelopes are mapped in transport/handlers.
 - `pkg/responder` must not be imported by domain services or stores.
@@ -195,10 +202,12 @@ second queue implementation.
 8. **Narrow infrastructure interfaces** — remove application reliance on datastore pool access and
    remove unused kernel capability interfaces. Commit: `refactor: narrow infrastructure boundaries`.
 9. **Apply the encryption contract** — keep recoverable secret handling inside owning modules,
-   route it through `pkg/crypto`, and preserve the `enc:` format during the module moves. Commit:
+   route it through `pkg/crypto`, and enforce the strict `enc:` format in code and database tests.
+   Commit:
    `fix: standardize encrypted value storage`.
-10. **Delete compatibility scaffolding** — remove the old generic registry, adapters, and dead
-   packages only after all callers migrate. Commit: `chore: remove obsolete module scaffolding`.
+10. **Remove obsolete scaffolding** — remove the old generic registry, adapters, excluded feature
+   tables, routes, and dead packages. Do not replace them with compatibility wrappers. Commit:
+   `chore: remove obsolete module scaffolding`.
 
 ## Architecture acceptance criteria
 
@@ -211,6 +220,7 @@ second queue implementation.
 - No module imports another module's concrete implementation for ordinary reads.
 - No application module implements a second encryption format or writes recoverable ciphertext
   without the `enc:` prefix.
+- No compatibility branch, legacy reader, dual-write path, or transitional schema artifact exists.
 - Event delivery has a durable transaction boundary.
 - Existing endpoint behavior, response envelope, Yaak requests, and migrations remain valid after
   each structural change.

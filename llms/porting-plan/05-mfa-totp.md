@@ -15,6 +15,8 @@ session handling; do not create a generic identity-provider or authentication-po
 
 - TOTP seeds are encrypted at rest with `pkg/crypto` and the canonical `enc:` prefix; they are
   never returned after enrollment.
+- Store MFA state separately from full sessions. Pending authentication, active TOTP state, and
+  recovery codes must not be represented by flags or JSONB fields on `users` or `sessions`.
 - Codes use constant-time verification, documented bounded skew, and replay protection.
 - Recovery codes are stored as hashes, shown once, and invalidated after use or rotation.
 - Pending authentication expires, cannot be upgraded by another user, and is cleared on sign-out.
@@ -27,8 +29,9 @@ session handling; do not create a generic identity-provider or authentication-po
    route names from existing module conventions before writing handlers. Define issuer, digits,
    period, skew, recovery-code count, and session assurance. Commit:
    `docs: define TOTP MFA contracts`.
-2. Add a Postgres migration for TOTP state, `enc:` encrypted seed, recovery-code hashes, consumed
-   timestamps, and audit data. Never return the seed after enrollment. Commit:
+2. Add a Postgres migration for dedicated TOTP state, `enc:` encrypted seed, recovery-code hash
+   rows, consumed timestamps, pending-auth state, and audit data. Never return the seed after
+   enrollment. Commit:
    `feat: add Postgres TOTP MFA storage`.
 3. Implement seed generation, provisioning data, constant-time verification, bounded clock skew,
    replay protection, recovery-code hashing, and recovery-code rotation without an HTTP dependency.

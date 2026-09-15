@@ -20,9 +20,8 @@ enc:<base64.RawStdEncoding(AES-256-GCM nonce || ciphertext || authentication tag
 ```
 
 The prefix is case-sensitive and exact. `Encrypt` always emits it. `Decrypt` validates it before
-decoding and rejects missing or malformed prefixes in the canonical path. Existing unprefixed
-ciphertext may be read only through a bounded compatibility path owned by the relevant store and
-must be rewritten to the canonical format after a successful read when safe.
+decoding and rejects missing or malformed prefixes. There is no unprefixed format, legacy reader,
+fallback decoder, dual-write path, compatibility column, or rewrite migration.
 
 The expected shape is `enc:THIS_IS_ENCRYPTED_STRING`, where the suffix is an actual authenticated
 ciphertext, not the literal placeholder text.
@@ -52,15 +51,15 @@ field. LDAP and Application Images are excluded and must not be added to the inv
 - Decrypt failures fail closed and identify only the owning field or operation.
 - Key rotation and multi-key fallback are separate approved work; this requirement does not add
   unbounded format negotiation.
+- Ciphertext without `enc:` is invalid and must not be interpreted as plaintext or as an older
+  supported format.
 
-## Compatibility requirements
+## Fresh-schema requirements
 
-- Existing rows written before the prefix change remain readable during the migration window.
-- Legacy reads are explicit, limited to known recoverable columns, and never cause plaintext to be
-  stored or returned.
-- Successful legacy reads are rewritten with `enc:` when the owning transaction can do so safely.
-- Failed rewrites preserve the original stored value and produce an observable, redacted failure.
-- New writes and all newly created fixtures use `enc:` only.
+- Every new database schema and fixture uses `enc:` from the first write.
+- Known encrypted columns use a database marker constraint where practical.
+- The application fails fast on invalid encrypted configuration or malformed stored ciphertext.
+- There are no legacy migrations, compatibility views, fallback readers, or temporary formats.
 
 ## API and verification requirements
 
@@ -76,7 +75,7 @@ Required tests cover:
 - round-trip Unicode and empty plaintext;
 - random nonce and tamper rejection;
 - malformed, missing, and duplicate prefix handling;
-- legacy read and safe rewrite for every known recoverable column;
+- database rejection of unprefixed stored values;
 - key-size/configuration errors;
 - API redaction and one-time secret responses;
 - no secret leakage in logs, audit data, errors, or Yaak artifacts.
@@ -97,5 +96,6 @@ timeout. Use a narrower focused test before retrying a broader gate.
 - Every new recoverable encrypted database value starts with `enc:`.
 - Hash-only values remain one-way hashes.
 - No excluded LDAP or Application Images code is reintroduced.
-- Fresh and upgraded Postgres databases pass the migration and compatibility tests.
+- Fresh Postgres databases pass the migration and storage-contract tests.
+- No legacy code or backward-compatibility behavior exists.
 - All affected endpoint matrix rows, Yaak requests, and deviations are current.

@@ -16,6 +16,8 @@ updated: 2026-09-15
   the four application boundaries.
 - Do not add a dependency-injection framework, service locator, generic event bus, microservice
   boundary, or message broker.
+- This is a fresh target schema. Do not preserve legacy code, legacy routes, fallback readers,
+  compatibility adapters, compatibility views, dual writes, or transitional database columns.
 
 ## In scope
 
@@ -64,6 +66,8 @@ disabled, or left unreachable; never count it silently as completed parity.
 - Never commit real reset tokens, TOTP seeds, webhook secrets, or other credentials.
 - New recoverable encrypted values must be written as `enc:<ciphertext>` by `pkg/crypto`; do not
   add local encryption formats or encrypt values that only need one-way verification.
+- An unprefixed encrypted value is invalid. Do not add a legacy decoder or backward-compatibility
+  branch to make it readable.
 
 ## Context and completion rule
 

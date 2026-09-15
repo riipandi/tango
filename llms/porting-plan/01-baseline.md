@@ -7,7 +7,7 @@ updated: 2026-09-15
 
 Goal: replace optimistic historical status with a verified implementation inventory.
 
-Prerequisites: complete `01-excluded-cleanup.md` and `architecture.md`. Use the local Pocket ID
+Prerequisites: complete `01-excluded-cleanup.md`, `architecture.md`, and `database.md`. Use the local Pocket ID
 v2.14.0 checkout, `llms/endpoint-reference.md`, `llms/database-reference.sql`, `pkg/responder/`,
 `pkg/crypto/`, and current route mounts as inputs. Capture the current `cmd/launcher` →
 `internal/registry` → `internal/transport` bootstrap path before changing it.
@@ -25,7 +25,8 @@ v2.14.0 checkout, `llms/endpoint-reference.md`, `llms/database-reference.sql`, `
    missing or incorrect routes without changing production behavior. Output: one shared parity
    harness for later agents. Commit: `test: add endpoint parity harness`.
 4. Inventory every recoverable encrypted value and current cipher consumer. Record whether it must
-   be hashed or encrypted and include the `enc:` format in the contract matrix. Commit:
+   be hashed or encrypted and include the strict `enc:` format in the contract matrix. Reject
+   unprefixed values; do not record a compatibility path. Commit:
    `docs: baseline encrypted value consumers`.
 
 ## Validation

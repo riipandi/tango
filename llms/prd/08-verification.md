@@ -33,9 +33,12 @@ owner: tango-auth-porting
 - Password recovery and TOTP MFA pass all security cases.
 - Webhook signatures verify against exact delivered bytes and delivery attempts are observable.
 - Database migrations apply cleanly to a fresh Postgres instance and existing test data remains
-  consistent after cleanup migrations.
+  consistent after cleanup migrations. The acceptance database is fresh and contains only the
+  final in-scope schema.
 - Full test, lint, format, vet, and race checks pass.
 - Focused and live checks fail fast with explicit timeouts; hangs, unavailable containers, and
   stalled Yaak requests are reported as the first failure.
 - Ambiguous upstream behavior is not guessed. The agent records evidence and asks the project owner
   for confirmation before changing the dependent implementation, matrix, or Yaak request.
+- Tests must assert that unsupported legacy formats are rejected; they must not create compatibility
+  fixtures or preserve old response/database shapes.

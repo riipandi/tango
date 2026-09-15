@@ -36,6 +36,8 @@ admin, and webhook.
 7. The code remains modular, understandable, Postgres-only, and free of excluded-feature residue.
 8. Every new recoverable encrypted value uses the canonical `enc:` prefix from `pkg/crypto`,
    while hash-only values remain one-way hashes.
+9. The database contains only the final in-scope schema, with no legacy code or backward-
+   compatibility behavior.
 
 ## Non-goals
 
@@ -53,3 +55,5 @@ admin, and webhook.
 - Password, MFA, and webhook security cases pass automated tests and live checks.
 - Full project test, lint, format, and vet gates pass.
 - No new recoverable encrypted value is stored without the `enc:` prefix.
+- No legacy route, fallback reader, compatibility adapter, dual write, or transitional database
+  column remains.

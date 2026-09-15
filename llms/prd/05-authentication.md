@@ -33,6 +33,8 @@ owner: tango-auth-porting
 - Use a short-lived pending-auth state between password success and full session creation.
 - Expire and clear pending-auth state on timeout, failed completion, and sign-out.
 - Do not introduce a generic identity provider or policy framework for this feature.
+- Do not add compatibility handling for older password, session, token, or MFA storage formats.
+  Invalid or unsupported stored data fails closed.
 
 ## Response and cookie requirements
 
