@@ -5,7 +5,7 @@ package oidc
 // the allowed-groups replace.
 
 import (
-	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -182,7 +182,7 @@ func TestClientSecretsLifecycle(t *testing.T) {
 	var envelope struct {
 		Data map[string]any `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &envelope))
 	secretID, _ := envelope.Data["id"].(string)
 	rawSecret, _ := envelope.Data["secret"].(string)
 	require.NotEmpty(t, secretID)
@@ -271,7 +271,7 @@ func TestClientMetaAndPreview(t *testing.T) {
 	var meta struct {
 		Data map[string]any `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &meta))
+	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &meta))
 	assert.Equal(t, client.ID.String(), meta.Data["id"])
 	assert.Equal(t, "standard", meta.Data["client_type"])
 	assert.Equal(t, false, meta.Data["has_logo"])
@@ -302,7 +302,7 @@ func TestClientMetaAndPreview(t *testing.T) {
 			UserInfo    map[string]any `json:"user_info"`
 		} `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &preview))
+	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &preview))
 	assert.Equal(t, "https://sso.test", preview.Data.IDToken["iss"])
 	assert.Contains(t, preview.Data.IDToken["aud"], client.ID.String())
 	assert.Equal(t, client.ID.String(), preview.Data.AccessToken["client_id"])

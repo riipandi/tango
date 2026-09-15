@@ -8,7 +8,7 @@ package oidc
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,7 +29,7 @@ func metadataServer(t *testing.T, doc map[string]any) (*httptest.Server, *int) {
 	mux.HandleFunc("GET /metadata.json", func(w http.ResponseWriter, _ *http.Request) {
 		fetches++
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(doc)
+		_ = jsonv2.MarshalWrite(w, doc)
 	})
 	server := httptest.NewTLSServer(mux)
 	t.Cleanup(server.Close)
@@ -105,7 +105,7 @@ func TestCIMDClientLifecycle(t *testing.T) {
 			IsPublic    bool   `json:"is_public"`
 		} `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created))
+	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &created))
 	assert.Equal(t, "Metadata RP", created.Data.Name)
 	assert.Equal(t, "cimd", created.Data.ClientType)
 	assert.Equal(t, server.URL+"/metadata.json", created.Data.MetadataURL)

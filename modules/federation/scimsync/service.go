@@ -3,13 +3,14 @@ package scimsync
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+
+	jsonv2 "encoding/json/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -190,7 +191,7 @@ func (s *Service) request(ctx context.Context, provider ServiceProvider, method,
 
 	var body []byte
 	if payload != nil {
-		encoded, err := json.Marshal(payload)
+		encoded, err := jsonv2.Marshal(payload)
 		if err != nil {
 			return nil, fmt.Errorf("encode payload: %w", err)
 		}

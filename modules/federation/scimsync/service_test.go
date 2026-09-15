@@ -2,7 +2,7 @@ package scimsync
 
 import (
 	"context"
-	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -163,7 +163,7 @@ func (s *scimStub) decode(w http.ResponseWriter, r *http.Request, into any) bool
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return false
 	}
-	if err := json.Unmarshal([]byte(body), into); err != nil {
+	if err := jsonv2.Unmarshal([]byte(body), into); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return false
 	}
@@ -173,7 +173,7 @@ func (s *scimStub) decode(w http.ResponseWriter, r *http.Request, into any) bool
 func (s *scimStub) reply(w http.ResponseWriter, code int, payload any) {
 	w.Header().Set("Content-Type", scimContentType)
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(payload)
+	_ = jsonv2.MarshalWrite(w, payload)
 }
 
 // pathID returns the trailing path segment.

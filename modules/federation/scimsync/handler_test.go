@@ -1,13 +1,15 @@
 package scimsync
 
 import (
-	"encoding/json"
+	"encoding/json" // json.RawMessage
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -47,7 +49,7 @@ type envelope struct {
 func decodeEnvelope(t *testing.T, w *httptest.ResponseRecorder) envelope {
 	t.Helper()
 	var env envelope
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &env))
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &env))
 	return env
 }
 
@@ -68,7 +70,7 @@ func TestHandlerProviderLifecycle(t *testing.T) {
 	var view struct {
 		ID string `json:"id"`
 	}
-	require.NoError(t, json.Unmarshal(created.Data, &view))
+	require.NoError(t, jsonv2.Unmarshal(created.Data, &view))
 
 	// getByClient hides the token.
 	w = do(router, http.MethodGet, "/api/oidc/clients/"+clientFixtureID+"/scim-service-provider", "")

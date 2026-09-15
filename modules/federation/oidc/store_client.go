@@ -2,12 +2,13 @@ package oidc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path"
 	"strings"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
@@ -135,8 +136,8 @@ func (s *PostgresStore) clientSelect(id string) *sqlbuilder.SelectBuilder {
 // hash (may be empty for public clients).
 func (s *PostgresStore) CreateClient(ctx context.Context, params ClientCreateParams) (Client, error) {
 	id := NewID()
-	callbacks, _ := json.Marshal(params.CallbackURLs)
-	logoutCallbacks, _ := json.Marshal(params.LogoutCallbackURLs)
+	callbacks, _ := jsonv2.Marshal(params.CallbackURLs)
+	logoutCallbacks, _ := jsonv2.Marshal(params.LogoutCallbackURLs)
 
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(oidcClientsTable)
@@ -242,11 +243,11 @@ func (s *PostgresStore) UpdateClient(ctx context.Context, id OIDCClientID, param
 		assignments = append(assignments, ub.Assign("description", *params.Description))
 	}
 	if params.CallbackURLs != nil && !metadataOwned {
-		callbacks, _ := json.Marshal(params.CallbackURLs)
+		callbacks, _ := jsonv2.Marshal(params.CallbackURLs)
 		assignments = append(assignments, ub.Assign("callback_urls", callbacks))
 	}
 	if params.LogoutCallbackURLs != nil && !metadataOwned {
-		logoutCallbacks, _ := json.Marshal(params.LogoutCallbackURLs)
+		logoutCallbacks, _ := jsonv2.Marshal(params.LogoutCallbackURLs)
 		assignments = append(assignments, ub.Assign("logout_callback_urls", logoutCallbacks))
 	}
 	if params.LaunchURL != nil {
@@ -307,9 +308,9 @@ func (s *PostgresStore) DeleteClient(ctx context.Context, id OIDCClientID) error
 // client after a re-fetch (the refresh endpoint; admin updates may
 // never touch these — see UpdateClient's guard).
 func (s *PostgresStore) RefreshClientMetadata(ctx context.Context, id OIDCClientID, params ClientUpdateParams) error {
-	callbacks, _ := json.Marshal(params.CallbackURLs)
-	logoutCallbacks, _ := json.Marshal(params.LogoutCallbackURLs)
-	grants, _ := json.Marshal(params.MetadataGrantTypes)
+	callbacks, _ := jsonv2.Marshal(params.CallbackURLs)
+	logoutCallbacks, _ := jsonv2.Marshal(params.LogoutCallbackURLs)
+	grants, _ := jsonv2.Marshal(params.MetadataGrantTypes)
 
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(oidcClientsTable)
@@ -427,7 +428,7 @@ func (s *PostgresStore) AddClientSecret(ctx context.Context, clientID OIDCClient
 	}
 	entry.SecretHash = rawHash
 	credentials = append(credentials, entry)
-	encoded, marshalErr := json.Marshal(credentials)
+	encoded, marshalErr := jsonv2.Marshal(credentials)
 	if marshalErr != nil {
 		return fmt.Errorf("oidc store: marshal credentials: %w", marshalErr)
 	}
@@ -469,7 +470,7 @@ func (s *PostgresStore) DeleteClientSecret(ctx context.Context, clientID OIDCCli
 		}
 		kept = append(kept, entry)
 	}
-	encoded, marshalErr := json.Marshal(kept)
+	encoded, marshalErr := jsonv2.Marshal(kept)
 	if marshalErr != nil {
 		return fmt.Errorf("oidc store: marshal credentials: %w", marshalErr)
 	}
@@ -507,7 +508,7 @@ func (s *PostgresStore) credentialsJSON(ctx context.Context, clientID OIDCClient
 	}
 
 	var credentialsList []ClientSecret
-	_ = json.Unmarshal(credentials, &credentialsList)
+	_ = jsonv2.Unmarshal(credentials, &credentialsList)
 	return credentialsList, nil
 }
 
@@ -581,7 +582,7 @@ func scanClient(row scanner) (*Client, error) {
 	if secret != nil {
 		c.SecretHash = secret
 	}
-	_ = json.Unmarshal(credentials, &c.Secrets)
+	_ = jsonv2.Unmarshal(credentials, &c.Secrets)
 	if c.Secrets == nil && secret != nil {
 		// Secrets migrated before the credentials list existed show
 		// up as one synthetic legacy entry.
@@ -597,8 +598,8 @@ func scanClient(row scanner) (*Client, error) {
 	if createdByID != nil {
 		c.CreatedByID = createdByID
 	}
-	_ = json.Unmarshal(callbacks, &c.CallbackURLs)
-	_ = json.Unmarshal(logoutCBs, &c.LogoutCallbackURLs)
+	_ = jsonv2.Unmarshal(callbacks, &c.CallbackURLs)
+	_ = jsonv2.Unmarshal(logoutCBs, &c.LogoutCallbackURLs)
 	if c.CallbackURLs == nil {
 		c.CallbackURLs = []string{}
 	}
@@ -608,7 +609,7 @@ func scanClient(row scanner) (*Client, error) {
 	if c.ClientType == "" {
 		c.ClientType = "standard"
 	}
-	_ = json.Unmarshal(metadataGrants, &c.MetadataGrantTypes)
+	_ = jsonv2.Unmarshal(metadataGrants, &c.MetadataGrantTypes)
 	if metadataExpiresAt.Valid {
 		c.MetadataExpiresAt = &metadataExpiresAt.Time
 	}

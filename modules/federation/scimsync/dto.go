@@ -2,11 +2,12 @@ package scimsync
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 )
 
 // ResourceData is the common SCIM resource envelope.
@@ -119,7 +120,7 @@ func listResources[T Resource](s *Service, ctx context.Context, provider Service
 			return result, fmt.Errorf("scim list %s: status %d: %s", path, resp.StatusCode, body)
 		}
 		var pageResp ListResponse[T]
-		if err := json.NewDecoder(resp.Body).Decode(&pageResp); err != nil {
+		if err := jsonv2.UnmarshalRead(resp.Body, &pageResp); err != nil {
 			return result, fmt.Errorf("decode scim list %s: %w", path, err)
 		}
 		result.Resources = append(result.Resources, pageResp.Resources...)
@@ -145,7 +146,7 @@ func createResource[T Resource](s *Service, ctx context.Context, provider Servic
 		return zero, fmt.Errorf("scim create %s: status %d: %s", path, resp.StatusCode, body)
 	}
 	var created T
-	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+	if err := jsonv2.UnmarshalRead(resp.Body, &created); err != nil {
 		return zero, fmt.Errorf("decode scim create %s: %w", path, err)
 	}
 	return created, nil
@@ -164,7 +165,7 @@ func updateResource[T Resource](s *Service, ctx context.Context, provider Servic
 		return zero, fmt.Errorf("scim update %s: status %d: %s", path, resp.StatusCode, body)
 	}
 	var updated T
-	if err := json.NewDecoder(resp.Body).Decode(&updated); err != nil {
+	if err := jsonv2.UnmarshalRead(resp.Body, &updated); err != nil {
 		return zero, fmt.Errorf("decode scim update %s: %w", path, err)
 	}
 	return updated, nil

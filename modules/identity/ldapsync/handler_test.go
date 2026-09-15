@@ -2,7 +2,7 @@ package ldapsync
 
 import (
 	"context"
-	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -65,7 +65,7 @@ func TestSyncEndpoint(t *testing.T) {
 			UsersCreated int `json:"users_created"`
 		} `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &env))
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &env))
 	assert.Equal(t, "success", env.Status)
 	assert.Equal(t, 2, env.Data.UsersCreated)
 

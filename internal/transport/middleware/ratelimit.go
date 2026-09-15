@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -10,9 +9,10 @@ import (
 	"strconv"
 	"strings"
 
+	jsonv2 "encoding/json/v2"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -75,7 +75,7 @@ func RateLimit(store RateLimitStore, class string) func(http.Handler) http.Handl
 				Remaining int     `json:"remaining"`
 				Reset     float64 `json:"reset"`
 			}
-			if json.Unmarshal(result, &info) == nil {
+			if jsonv2.Unmarshal(result, &info) == nil {
 				w.Header().Set("X-RateLimit-Limit", strconv.Itoa(info.Limit))
 				w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(info.Remaining))
 				w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(int64(info.Reset), 10))

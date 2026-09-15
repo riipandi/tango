@@ -11,12 +11,13 @@ package oidc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 )
 
 // MetadataDocumentTTL mirrors the upstream cache window for a
@@ -70,7 +71,7 @@ func fetchMetadataDocument(ctx context.Context, fetcher DocumentFetcher, documen
 	}
 
 	var doc MetadataDocument
-	if err := json.Unmarshal(body, &doc); err != nil {
+	if err := jsonv2.Unmarshal(body, &doc); err != nil {
 		return nil, metadataError{fmt.Errorf("metadata document parse: %w", err)}
 	}
 	return &doc, nil

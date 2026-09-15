@@ -2,10 +2,11 @@ package oidc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
@@ -35,7 +36,7 @@ const (
 
 // PutSession upserts one oauth2_sessions row (kind, key) unique.
 func (s *PostgresStore) PutSession(ctx context.Context, session OAuth2Session) error {
-	requestData, err := json.Marshal(session.RequestData)
+	requestData, err := jsonv2.Marshal(session.RequestData)
 	if err != nil {
 		return fmt.Errorf("oidc store: marshal request data: %w", err)
 	}
@@ -73,7 +74,7 @@ func (s *PostgresStore) GetSession(ctx context.Context, kind, key string) (OAuth
 		}
 		return session, fmt.Errorf("oidc store: get session: %w", err)
 	}
-	if err := json.Unmarshal(requestData, &session.RequestData); err != nil {
+	if err := jsonv2.Unmarshal(requestData, &session.RequestData); err != nil {
 		return session, fmt.Errorf("oidc store: unmarshal request data: %w", err)
 	}
 	if expiresAt.Valid {

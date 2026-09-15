@@ -1,8 +1,9 @@
 package appconfig
 
 import (
-	"encoding/json"
 	"strconv"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/riipandi/tango/internal/config"
 )
@@ -48,6 +49,6 @@ func EnvDefaults(cfg *config.Config) map[string]string {
 // the merged values (JSON array; default deny when unset).
 func CIMDAllowlist(values map[string]string) []string {
 	var allowlist []string
-	_ = json.Unmarshal([]byte(values["cimd_url_allowlist"]), &allowlist)
+	_ = jsonv2.Unmarshal([]byte(values["cimd_url_allowlist"]), &allowlist)
 	return allowlist
 }

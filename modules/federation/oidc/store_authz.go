@@ -2,10 +2,11 @@ package oidc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
+
+	jsonv2 "encoding/json/v2"
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
@@ -102,7 +103,7 @@ func (s *PostgresStore) ConsumeCode(ctx context.Context, codeHash string) (Autho
 
 // UpsertAuthorizedClient remembers the scopes a user granted.
 func (s *PostgresStore) UpsertAuthorizedClient(ctx context.Context, userID, clientID string, scopes []string) error {
-	scopeJSON, err := json.Marshal(scopes)
+	scopeJSON, err := jsonv2.Marshal(scopes)
 	if err != nil {
 		return fmt.Errorf("oidc store: marshal scopes: %w", err)
 	}
@@ -123,11 +124,11 @@ func (s *PostgresStore) UpsertAuthorizedClient(ctx context.Context, userID, clie
 // CreateInteraction inserts an interaction row (state machine
 // seed).
 func (s *PostgresStore) CreateInteraction(ctx context.Context, session InteractionSession) error {
-	parameters, err := json.Marshal(session.Parameters)
+	parameters, err := jsonv2.Marshal(session.Parameters)
 	if err != nil {
 		return fmt.Errorf("oidc store: marshal parameters: %w", err)
 	}
-	scopes, _ := json.Marshal(session.Scopes)
+	scopes, _ := jsonv2.Marshal(session.Scopes)
 
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(interactionSessionsTable)
@@ -179,8 +180,8 @@ func (s *PostgresStore) GetInteraction(ctx context.Context, id InteractionSessio
 	session.ClientID = clientID
 	session.UserID = userID
 	session.RequestedAt = requestedAt.Time
-	_ = json.Unmarshal(scopes, &session.Scopes)
-	if err := json.Unmarshal(parameters, &session.Parameters); err != nil {
+	_ = jsonv2.Unmarshal(scopes, &session.Scopes)
+	if err := jsonv2.Unmarshal(parameters, &session.Parameters); err != nil {
 		session.Parameters = map[string]any{}
 	}
 	return session, nil
@@ -264,7 +265,7 @@ func scanAuthorizedClient(row scanner) (*AuthorizedClient, error) {
 	if err := row.Scan(&record.UserID, &record.ClientID, &scopeRaw, &lastUsed); err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(scopeRaw, &record.Scopes); err != nil {
+	if err := jsonv2.Unmarshal(scopeRaw, &record.Scopes); err != nil {
 		record.Scopes = []string{}
 	}
 	record.LastUsedAt = lastUsed.Time

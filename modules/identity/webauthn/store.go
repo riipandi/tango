@@ -2,18 +2,18 @@ package webauthn
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	jsonv2 "encoding/json/v2"
+
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"go.jetify.com/typeid"
-
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/user"
+	"go.jetify.com/typeid"
 )
 
 // Store persists ceremony sessions and credentials.
@@ -244,7 +244,7 @@ func scanCredential(row scanner) (*StoredCredential, error) {
 	if lastUsedAt.Valid {
 		c.LastUsedAt = &lastUsedAt.Time
 	}
-	_ = json.Unmarshal(transport, &c.Transport)
+	_ = jsonv2.Unmarshal(transport, &c.Transport)
 	if c.Transport == nil {
 		c.Transport = []string{}
 	}
@@ -256,6 +256,6 @@ func jsonOrNil(value []string) []byte {
 	if value == nil {
 		return []byte("[]")
 	}
-	encoded, _ := json.Marshal(value)
+	encoded, _ := jsonv2.Marshal(value)
 	return encoded
 }

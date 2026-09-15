@@ -6,7 +6,7 @@ package oidc
 
 import (
 	"context"
-	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -113,7 +113,7 @@ func postForm(t *testing.T, router chi.Router, target string, values url.Values,
 	router.ServeHTTP(rec, req)
 
 	var body map[string]any
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body), "body: %s", rec.Body.String())
+	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &body), "body: %s", rec.Body.String())
 	return rec.Code, body
 }
 
@@ -262,7 +262,7 @@ func TestEndToEndAuthorizeTokenUserinfo(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	var profile map[string]any
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &profile))
+	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &profile))
 	assert.Equal(t, createdUser.UUID(), profile["sub"])
 	assert.Equal(t, "abbey_"+suffix, profile["preferred_username"])
 
@@ -344,7 +344,7 @@ func TestClientCRUDLifecycle(t *testing.T) {
 	var envelope struct {
 		Data map[string]any `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &envelope))
 	clientID, _ := envelope.Data["id"].(string)
 	secret, _ := envelope.Data["client_secret"].(string)
 	require.NotEmpty(t, clientID)
@@ -357,7 +357,7 @@ func TestClientCRUDLifecycle(t *testing.T) {
 	var fetched struct {
 		Data map[string]any `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &fetched))
+	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &fetched))
 	assert.NotContains(t, fetched.Data, "client_secret")
 	assert.Equal(t, true, fetched.Data["has_secret"])
 
