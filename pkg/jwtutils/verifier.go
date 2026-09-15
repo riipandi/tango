@@ -14,18 +14,13 @@ import (
 var (
 	ErrMissingKey    = errors.New("jwtutils: signing key is required")
 	ErrMissingKeySet = errors.New("jwtutils: verification key set is empty")
-	// ErrReservedClaim is returned when a typed claim set carries a
-	// field whose JSON tag collides with a registered claim name —
-	// it would hijack claims the verifier relies on.
+	// ErrReservedClaim reports a private claim that uses a registered name.
 	ErrReservedClaim = errors.New("jwtutils: private claim collides with a registered claim")
-	// ErrWeakHMACKey is returned when an HMAC key is shorter than
-	// the RFC 7518 minimum for the algorithm.
+	// ErrWeakHMACKey reports an HMAC key shorter than the algorithm minimum.
 	ErrWeakHMACKey = errors.New("jwtutils: HMAC key too short")
 )
 
-// Verifier checks the signature and registered-claim constraints of a
-// JWT, then decodes its private claims into the typed set T. Like the
-// signer, the With* methods return modified copies.
+// Verifier checks JWTs and decodes their typed private claims.
 type Verifier[T any] struct {
 	key            jwk.Key
 	algorithm      jwa.SignatureAlgorithm
@@ -36,9 +31,7 @@ type Verifier[T any] struct {
 	requiredClaims []string
 }
 
-// NewVerifier builds a verifier over a single key with the given
-// signature algorithm. The key may be nil when verification will use
-// a key set instead (WithKeySet).
+// NewVerifier builds a verifier with a key and signature algorithm.
 func NewVerifier[T any](key jwk.Key, algorithm jwa.SignatureAlgorithm) (*Verifier[T], error) {
 	if key != nil {
 		if err := validateHMACKeySize(key, algorithm); err != nil {
@@ -48,48 +41,42 @@ func NewVerifier[T any](key jwk.Key, algorithm jwa.SignatureAlgorithm) (*Verifie
 	return &Verifier[T]{key: key, algorithm: algorithm}, nil
 }
 
-// WithKeySet switches verification to a JWKS key set: the token's kid
-// selects the key (kid is required).
+// WithKeySet configures verification with a JWKS key set.
 func (v *Verifier[T]) WithKeySet(set jwk.Set) *Verifier[T] {
 	clone := *v
 	clone.keySet = set
 	return &clone
 }
 
-// WithIssuer requires the iss claim to equal issuer when set.
+// WithIssuer requires a matching issuer claim.
 func (v *Verifier[T]) WithIssuer(issuer string) *Verifier[T] {
 	clone := *v
 	clone.issuer = issuer
 	return &clone
 }
 
-// WithAudience requires the aud claim to contain audience when set.
+// WithAudience requires a matching audience claim.
 func (v *Verifier[T]) WithAudience(audience string) *Verifier[T] {
 	clone := *v
 	clone.audience = audience
 	return &clone
 }
 
-// WithClockSkew tolerates exp/iat/nbf timestamps differing from the
-// local clock by the given duration — the norm between servers whose
-// clocks drift within NTP bounds.
+// WithClockSkew sets the allowed clock difference for time claims.
 func (v *Verifier[T]) WithClockSkew(skew time.Duration) *Verifier[T] {
 	clone := *v
 	clone.clockSkew = skew
 	return &clone
 }
 
-// WithRequiredClaims enforces the presence of the named registered
-// claims (e.g. "exp") — absent claims fail verification even though
-// the RFC leaves them optional.
+// WithRequiredClaims requires the named registered claims.
 func (v *Verifier[T]) WithRequiredClaims(names ...string) *Verifier[T] {
 	clone := *v
 	clone.requiredClaims = append(clone.requiredClaims, names...)
 	return &clone
 }
 
-// Verify checks the signature and constraints, then decodes the
-// typed private claims.
+// Verify checks the token and decodes its typed private claims.
 func (v *Verifier[T]) Verify(encoded string) (Verified[T], error) {
 	opts := []jwt.ParseOption{}
 	switch {

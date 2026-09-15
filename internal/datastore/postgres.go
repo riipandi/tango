@@ -15,8 +15,7 @@ const (
 	PgTimezone   = "UTC"
 )
 
-// Options parametrizes the Postgres backend. Pool knobs also accept
-// DSN params (pool_max_conns, ...); Options wins when set.
+// Options configures the Postgres backend. Explicit pool values override DSN values.
 type Options struct {
 	// DSN is the connection string (postgresql:// or postgres://).
 	DSN string
@@ -34,16 +33,14 @@ type Options struct {
 	MaxConnIdleTime time.Duration
 }
 
-// Postgres is the pgx/v5 pool-backed Store. Pings on construction
-// (fail fast), drains on Close.
+// Postgres is a pgx/v5 pool-backed Store.
 type Postgres struct {
 	pool *pgxpool.Pool
 }
 
 var _ Store = (*Postgres)(nil)
 
-// poolConfig parses the DSN, sets session params, fixed connect
-// timeout, and pool knobs (Options wins over DSN).
+// poolConfig parses the DSN and applies session and pool settings.
 func poolConfig(opts Options) (*pgxpool.Config, error) {
 	cfg, err := pgxpool.ParseConfig(opts.DSN)
 	if err != nil {
@@ -71,7 +68,7 @@ func poolConfig(opts Options) (*pgxpool.Config, error) {
 	return cfg, nil
 }
 
-// New builds the pool and pings once, so bad DSNs fail at startup.
+// New builds the pool and verifies the connection.
 func New(ctx context.Context, opts Options) (*Postgres, error) {
 	if opts.DSN == "" {
 		return nil, fmt.Errorf("postgres: DSN is required")
@@ -97,31 +94,27 @@ func New(ctx context.Context, opts Options) (*Postgres, error) {
 	return &Postgres{pool: pool}, nil
 }
 
-// Exec runs a no-rows statement on autocommit.
+// Exec runs a statement outside a transaction.
 func (p *Postgres) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 	return p.pool.Exec(ctx, sql, args...)
 }
 
-// Query runs a multi-row statement on autocommit.
+// Query runs a query outside a transaction.
 func (p *Postgres) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	return p.pool.Query(ctx, sql, args...)
 }
 
-// QueryRow runs a single-row statement on autocommit.
+// QueryRow runs a single-row query outside a transaction.
 func (p *Postgres) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
 	return p.pool.QueryRow(ctx, sql, args...)
 }
 
-// Pool exposes the underlying pgx pool for infrastructure that owns its
-// own transactions and long-lived connections (the task queue). Domain
-// modules use the typed Store instead.
+// Pool exposes the pool to infrastructure that needs direct access.
 func (p *Postgres) Pool() *pgxpool.Pool {
 	return p.pool
 }
 
-// WithTx runs fn in a tx: commit on nil, rollback on error/panic.
-// Rollback uses an uncanceled ctx copy so shutdown errors still
-// release the connection.
+// WithTx runs fn in a transaction and rolls back on error or panic.
 func (p *Postgres) WithTx(ctx context.Context, fn func(Executor) error) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -141,8 +134,7 @@ func (p *Postgres) WithTx(ctx context.Context, fn func(Executor) error) error {
 	return nil
 }
 
-// ConnectionInfo is a TestConnection snapshot: endpoint identity,
-// server version, latency, live pool stats.
+// ConnectionInfo contains connection details and pool stats.
 type ConnectionInfo struct {
 	Host     string
 	Port     uint16
@@ -157,8 +149,7 @@ type ConnectionInfo struct {
 	Stats *pgxpool.Stat
 }
 
-// TestConnection round-trips the server for DSN verification or
-// health endpoints.
+// TestConnection queries the server and returns connection details.
 func (p *Postgres) TestConnection(ctx context.Context) (*ConnectionInfo, error) {
 	start := time.Now()
 
@@ -179,7 +170,7 @@ func (p *Postgres) TestConnection(ctx context.Context) (*ConnectionInfo, error) 
 	return &info, nil
 }
 
-// HealthCheck pings the pool.
+// HealthCheck reports whether the pool can reach the server.
 func (p *Postgres) HealthCheck(ctx context.Context) error {
 	if err := p.pool.Ping(ctx); err != nil {
 		return fmt.Errorf("postgres: health check: %w", err)
@@ -187,7 +178,7 @@ func (p *Postgres) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-// Close drains the pool.
+// Close closes the pool.
 func (p *Postgres) Close() error {
 	p.pool.Close()
 	return nil

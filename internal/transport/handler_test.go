@@ -39,8 +39,7 @@ func TestHealthzLiveness(t *testing.T) {
 	assert.Equal(t, "healthy", body["status"])
 }
 
-// TestRootHealthzAndVersionEndpoints covers the upstream-parity
-// additions: bare 204 /healthz and the /api/version/* metadata.
+// TestRootHealthzAndVersionEndpoints checks health and version endpoints.
 func TestRootHealthzAndVersionEndpoints(t *testing.T) {
 	w := httptest.NewRecorder()
 	RootHealthzHandler(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
@@ -62,8 +61,7 @@ func TestRootHealthzAndVersionEndpoints(t *testing.T) {
 	assert.Equal(t, config.AppVersion, latest["version"])
 }
 
-// stubLatestVersionSource pins the cached release for the handler
-// contract test.
+// stubLatestVersionSource supplies a fixed cached release.
 type stubLatestVersionSource struct{ version string }
 
 func (s stubLatestVersionSource) Latest() string { return s.version }
@@ -108,12 +106,12 @@ func TestStaticAssetsHandler(t *testing.T) {
 	cfg := testConfig()
 	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger(), nil, nil)
 
-	// Missing file → JSON 404 (not the SPA fallback).
+	// Missing files return JSON 404.
 	w := httptest.NewRecorder()
 	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/static/missing.js", nil))
 	require.Equal(t, http.StatusNotFound, w.Code)
 
-	// A real file from the Vite output is served with its MIME type.
+	// Existing files are served with their MIME type.
 	if _, err := os.Stat("web/output/images/logoEmail.svg"); err == nil {
 		w = httptest.NewRecorder()
 		srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/static/images/logoEmail.svg", nil))

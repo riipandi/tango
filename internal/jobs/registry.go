@@ -13,52 +13,41 @@ import (
 	"github.com/riipandi/tango/internal/queue"
 )
 
-// Mailer is the delivery contract the email queue needs; internal/mailer
-// implements it.
+// Mailer sends transactional email.
 type Mailer interface {
 	Send(ctx context.Context, msg mailer.Message) error
 }
 
-// Job is one recurring maintenance unit: a name plus its work.
+// Job is one recurring maintenance unit.
 type Job struct {
-	// Name identifies the job in logs and in the queued payload. It
-	// must stay unique per registry, because the execution looks the
-	// job up by name.
+	// Name identifies the job and must be unique in the registry.
 	Name string
 
-	// Interval is the delay between the end of one run and the start
-	// of the next.
+	// Interval is the delay before the next run.
 	Interval time.Duration
 
-	// Run performs the work. A returned error makes the queue retry
-	// per the maintenance queue's backoff before the next schedule.
+	// Run performs the work. Errors are retried by the queue.
 	Run func(ctx context.Context) error
 }
 
-// Registry holds the process-wide queue registrations and recurring
-// jobs. Queues are registered at build time; jobs are scheduled once
-// by Start.
+// Registry holds queue registrations and recurring jobs.
 type Registry struct {
 	queue *queue.Client
 	mail  Mailer
 	log   logger.Logger
 
-	// jobs is populated at build time and read by the maintenance
-	// processor, which runs on worker goroutines.
+	// jobs is read by maintenance workers.
 	jobs map[string]Job
 	mu   sync.RWMutex
 
-	// feed backs /api/version/latest; nil until wired.
+	// feed supplies /api/version/latest.
 	feed *VersionFeed
 
-	// started guards the one-shot schedule at boot.
+	// started prevents duplicate initial schedules.
 	started sync.Once
 }
 
-// NewRegistry registers the shared queues on the client: transactional
-// email and recurring maintenance. The webhook delivery queue is
-// registered by the webhook module, which owns the payload type and the
-// processor.
+// NewRegistry registers the email and recurring maintenance queues.
 func NewRegistry(client *queue.Client, mail Mailer, log logger.Logger) *Registry {
 	r := &Registry{
 		queue: client,
@@ -77,8 +66,7 @@ func NewRegistry(client *queue.Client, mail Mailer, log logger.Logger) *Registry
 	return r
 }
 
-// AddJob registers a recurring job. Panics on a duplicate name: the
-// registry is a build-time table, so a collision is a wiring bug.
+// AddJob registers a recurring job and panics on invalid or duplicate names.
 func (r *Registry) AddJob(job Job) {
 	if job.Name == "" || job.Run == nil {
 		panic("jobs: recurring job needs a name and a run function")
@@ -107,8 +95,7 @@ func (r *Registry) Jobs() []Job {
 	return out
 }
 
-// Start schedules every recurring job. Safe to call once; later calls
-// are ignored, so a restart of the module does not double-schedule.
+// Start schedules every recurring job once.
 func (r *Registry) Start(ctx context.Context) error {
 	r.started.Do(func() {
 		for _, job := range r.Jobs() {
@@ -118,16 +105,14 @@ func (r *Registry) Start(ctx context.Context) error {
 	return nil
 }
 
-// SetVersionFeed attaches the cached newest-release lookup so the
-// transport layer can read it straight off the jobs module.
+// SetVersionFeed attaches the cached release lookup.
 func (r *Registry) SetVersionFeed(feed *VersionFeed) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.feed = feed
 }
 
-// Latest returns the cached newest release, falling back to the
-// deployed build. Implements the transport latest-version contract.
+// Latest returns the cached newest release or the deployed build.
 func (r *Registry) Latest() string {
 	r.mu.RLock()
 	feed := r.feed
@@ -139,16 +124,13 @@ func (r *Registry) Latest() string {
 	return feed.Latest()
 }
 
-// Stop implements the module lifecycle: queued work drains through the
-// queue module, so this is a no-op.
+// Stop implements the module lifecycle; queued work drains elsewhere.
 func (*Registry) Stop(context.Context) error { return nil }
 
 // Name implements the module contract.
 func (*Registry) Name() string { return "jobs" }
 
-// EnqueueEmail queues one transactional email. Errors here mean the
-// task row was not written, which is a caller-visible failure (the
-// HTTP request should surface it), unlike a later delivery failure.
+// EnqueueEmail adds one transactional email to the queue.
 func (r *Registry) EnqueueEmail(ctx context.Context, msg mailer.Message) error {
 	if r.queue == nil {
 		return fmt.Errorf("jobs: queue is not configured")
@@ -162,8 +144,7 @@ func (r *Registry) EnqueueEmail(ctx context.Context, msg mailer.Message) error {
 	return err
 }
 
-// deliverEmail renders and sends one queued message through the
-// shared mailer. A non-nil error lets the queue retry.
+// deliverEmail sends one queued message through the shared mailer.
 func (r *Registry) deliverEmail(ctx context.Context, task EmailTask) error {
 	if r.mail == nil {
 		return fmt.Errorf("jobs: mailer is not configured")
@@ -176,9 +157,7 @@ func (r *Registry) deliverEmail(ctx context.Context, task EmailTask) error {
 	})
 }
 
-// runJob executes a recurring job and schedules its next run, whether
-// the current run succeeded or not: a failing job must not silently
-// stop recurring.
+// runJob executes a job and schedules its next run even after failure.
 func (r *Registry) runJob(ctx context.Context, task RecurringTask) error {
 	r.mu.RLock()
 	job, ok := r.jobs[task.Job]
@@ -194,13 +173,12 @@ func (r *Registry) runJob(ctx context.Context, task RecurringTask) error {
 		r.log.WithError(runErr).Warn(fmt.Sprintf("jobs: recurring job %q failed", job.Name))
 	}
 
-	// Schedule the next run before returning: the failure path must
-	// keep the cadence.
+	// Keep the schedule active when the job fails.
 	r.schedule(ctx, job, jobInterval(job, task))
 	return runErr
 }
 
-// schedule enqueues one run of job after delay.
+// schedule enqueues one delayed job run.
 func (r *Registry) schedule(ctx context.Context, job Job, delay time.Duration) {
 	if r.queue == nil {
 		return
@@ -219,8 +197,7 @@ func (r *Registry) schedule(ctx context.Context, job Job, delay time.Duration) {
 	}
 }
 
-// jobInterval keeps the interval the task carried, falling back to the
-// registered value when a stale payload arrives after a config change.
+// jobInterval uses the queued interval or the registered value.
 func jobInterval(job Job, task RecurringTask) time.Duration {
 	if carried := task.Interval(); carried > 0 {
 		return carried
@@ -228,17 +205,13 @@ func jobInterval(job Job, task RecurringTask) time.Duration {
 	return job.Interval
 }
 
-// firstDelay spreads the initial runs of the whole registry so a
-// restart does not fire every job at the same instant; each job's
-// first run lands inside its own interval. Math/rand is deliberate:
-// the value only spreads scheduling load and is not a security input.
+// firstDelay spreads initial runs across each job's interval.
 func firstDelay(interval time.Duration) time.Duration {
 	jitter := jitterFor(interval)
 	return jitter + time.Duration(rand.Int64N(int64(interval/2)+1)) //nolint:gosec // scheduling jitter, not a secret
 }
 
-// jitterFor spreads recurring runs across instances without moving the
-// cadence much: half the maintenance jitter, capped by the interval.
+// jitterFor adds a small delay to spread runs across instances.
 func jitterFor(interval time.Duration) time.Duration {
 	jitter := min(MaintenanceJitter, interval/4)
 	if jitter <= 0 {

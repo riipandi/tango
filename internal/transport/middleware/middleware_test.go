@@ -37,13 +37,13 @@ func TestRequestLoggerEscalatesLevel(t *testing.T) {
 	lib := &lltest.TestLoggingLibrary{}
 	log := loglayer.New(loglayer.Config{Transport: lltest.New(lltest.Config{Library: lib})})
 
-	// 4xx escalates to warning.
+	// 4xx responses log at warning level.
 	testRouter(log, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/missing", nil))
 	assert.Equal(t, "warn", lib.GetLastLine().Level.String())
 
-	// 5xx escalates to error.
+	// 5xx responses log at error level.
 	testRouter(log, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/boom", nil))
@@ -87,7 +87,6 @@ func TestCORSPreflight(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	// Wildcard config: chi cors answers with a literal "*", not an
-	// origin echo (AllowCredentials is false).
+	// Wildcard CORS returns a literal "*" when credentials are disabled.
 	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
 }

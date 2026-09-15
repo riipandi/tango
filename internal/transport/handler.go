@@ -11,16 +11,14 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// HealthCheckHandler reports liveness. Readiness for real deps
-// (db, cache) gets dedicated checks when they land.
+// HealthCheckHandler reports application health.
 func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	responder.WriteJSON(w, http.StatusOK, map[string]string{
 		"status": "healthy",
 	})
 }
 
-// APIRootHandler is the /api index: build metadata from
-// ldflags globals, no runtime config needed.
+// APIRootHandler returns build metadata.
 func APIRootHandler(w http.ResponseWriter, r *http.Request) {
 	responder.Success(w, r, http.StatusOK, map[string]string{
 		"name":     config.AppName,
@@ -31,10 +29,7 @@ func APIRootHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// VersionHandler serves RFC 8615 /.well-known/version: the same
-// build metadata as the /api index. Identity-provider discovery
-// (openid-configuration, jwks.json) lives in the optional
-// federation module, not here.
+// VersionHandler returns build metadata at /.well-known/version.
 func VersionHandler(w http.ResponseWriter, r *http.Request) {
 	responder.WriteJSON(w, http.StatusOK, map[string]string{
 		"name":     config.AppName,
@@ -45,24 +40,19 @@ func VersionHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// RootHealthzHandler serves upstream-parity /healthz: bare 204, no
-// body. The JSON variant stays at /api/healthz (tango extension).
+// RootHealthzHandler returns an empty 204 response.
 func RootHealthzHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// VersionCurrentHandler serves GET /api/version/current (upstream
-// parity: bare build metadata object).
+// VersionCurrentHandler returns the deployed version.
 func VersionCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	responder.WriteJSON(w, http.StatusOK, map[string]string{
 		"version": config.AppVersion,
 	})
 }
 
-// VersionLatestHandler serves GET /api/version/latest. The newest
-// release is refreshed by a recurring job into a cache; the handler
-// reads the cache so a GitHub outage never blocks the endpoint. The
-// feed falls back to the deployed version until the first success.
+// VersionLatestHandler returns the cached newest release.
 func VersionLatestHandler(feed LatestVersionSource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		version := config.AppVersion
@@ -73,21 +63,15 @@ func VersionLatestHandler(feed LatestVersionSource) http.HandlerFunc {
 	}
 }
 
-// LatestVersionSource exposes the cached newest release. The jobs
-// package implements it; declared here so transport does not import
-// the job package.
+// LatestVersionSource exposes the cached newest release.
 type LatestVersionSource interface {
 	Latest() string
 }
 
-// staticRoot is where the Vite build lands (public/ files copied
-// under web/output). Served by the /static/* route in dev and when
-// the SPA is not embedded.
+// staticRoot is the Vite output directory.
 const staticRoot = "web/output"
 
-// StaticAssetsHandler serves files from the Vite output directory
-// under /static/* (e.g. /static/images/logo.png). Falls back to the
-// JSON 404 when the file does not exist.
+// StaticAssetsHandler serves files from the Vite output directory.
 func StaticAssetsHandler(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "*")
 	clean := filepath.Clean("/" + name) // forces relative, no ".."

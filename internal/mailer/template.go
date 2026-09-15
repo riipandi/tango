@@ -11,14 +11,13 @@ import (
 	"github.com/riipandi/tango/internal/config"
 )
 
-// templatePair holds one template's parsed renderers.
+// templatePair holds parsed HTML and text templates.
 type templatePair struct {
 	html *htmltemplate.Template // auto-escaping
 	text *texttemplate.Template
 }
 
-// templateStore renders from the embedded FS, caching each parse.
-// FS is immutable, entries never invalidate.
+// templateStore renders templates and caches parsed pairs.
 type templateStore struct {
 	fs    fs.FS
 	logo  string
@@ -30,7 +29,7 @@ func newTemplateStore(source fs.FS, logo string) *templateStore {
 	return &templateStore{fs: source, logo: logo, cache: make(map[string]*templatePair)}
 }
 
-// render produces HTML and text bodies for a template.
+// render produces HTML and text bodies.
 func (s *templateStore) render(name, to string, data map[string]any) (string, string, error) {
 	pair, err := s.pair(name)
 	if err != nil {
@@ -54,7 +53,7 @@ func (s *templateStore) render(name, to string, data map[string]any) (string, st
 	return htmlOut.String(), textOut.String(), nil
 }
 
-// pair returns the cached parse, parsing on first use.
+// pair returns a cached pair or parses it on first use.
 func (s *templateStore) pair(name string) (*templatePair, error) {
 	s.mu.RLock()
 	pair, ok := s.cache[name]

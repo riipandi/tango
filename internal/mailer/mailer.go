@@ -20,7 +20,7 @@ import (
 	"go.loglayer.dev/v3"
 )
 
-// smtpMailer implements Mailer over an SMTP relay.
+// smtpMailer implements Mailer with SMTP.
 type smtpMailer struct {
 	cfg         config.MailerConfig
 	source      SettingsSource
@@ -29,8 +29,7 @@ type smtpMailer struct {
 	sendTimeout time.Duration
 }
 
-// New builds a mailer from the mailer config section. Connections
-// open per send; the relay is shared infra, not per-app state.
+// New builds a mailer from SMTP settings.
 func New(cfg config.MailerConfig, opts Options) Mailer {
 	if opts.Logger == nil {
 		opts.Logger = loglayer.NewMock()
@@ -46,14 +45,12 @@ func New(cfg config.MailerConfig, opts Options) Mailer {
 	}
 }
 
-// SetSettingsSource late-binds the per-send settings resolver
-// (SettingsSourceSetter). Safe to call before or while sending.
+// SetSettingsSource sets the per-send settings resolver.
 func (m *smtpMailer) SetSettingsSource(source SettingsSource) {
 	m.source = source
 }
 
-// settings resolves the relay config for one send: the appconfig
-// source wins, static env config is the fallback on nil or error.
+// settings resolves SMTP settings for one send.
 func (m *smtpMailer) settings(ctx context.Context) config.MailerConfig {
 	if m.source == nil {
 		return m.cfg
@@ -68,7 +65,7 @@ func (m *smtpMailer) settings(ctx context.Context) config.MailerConfig {
 	return resolved
 }
 
-// Send renders the template and delivers over SMTP.
+// Send renders and delivers one message over SMTP.
 func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 	if msg.To == "" {
 		return errors.New("mailer: recipient is empty")
@@ -108,8 +105,7 @@ func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 	return nil
 }
 
-// compose builds the RFC 5322 message: headers plus
-// multipart/alternative (text first, HTML second).
+// compose builds a multipart/alternative message.
 func (m *smtpMailer) compose(from, to *mail.Address, subject, textBody, htmlBody string) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	writer := multipart.NewWriter(buf)
@@ -145,8 +141,7 @@ func (m *smtpMailer) compose(from, to *mail.Address, subject, textBody, htmlBody
 	return buf.Bytes(), nil
 }
 
-// deliver runs the SMTP transaction on the configured relay (the
-// settings resolved once per Send, shared with compose).
+// deliver runs the SMTP transaction.
 func (m *smtpMailer) deliver(ctx context.Context, cfg config.MailerConfig, from *mail.Address, to string, payload []byte) error {
 	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
 
@@ -190,8 +185,7 @@ func (m *smtpMailer) deliver(ctx context.Context, cfg config.MailerConfig, from 
 	return nil
 }
 
-// dial connects: implicit TLS when configured, else plaintext with
-// opportunistic STARTTLS before auth when supported.
+// dial connects with implicit TLS or STARTTLS.
 func (m *smtpMailer) dial(addr string, cfg config.MailerConfig) (*gosmtp.Client, error) {
 	tlsConfig := &tls.Config{ServerName: cfg.SMTPHost}
 

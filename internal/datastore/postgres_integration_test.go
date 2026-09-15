@@ -10,8 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// startStore connects to the shared testcontainers Postgres and
-// fails the test when the container (docker daemon) is unavailable.
+// startStore opens a test Postgres connection.
 func startStore(t *testing.T) *Postgres {
 	t.Helper()
 
@@ -22,8 +21,7 @@ func startStore(t *testing.T) *Postgres {
 	return store
 }
 
-// testTable derives a unique, SQL-safe table name per test so the
-// shared database needs no cross-test coordination.
+// testTable returns a unique SQL-safe table name.
 func testTable(t *testing.T) string {
 	t.Helper()
 
@@ -31,9 +29,7 @@ func testTable(t *testing.T) string {
 	return fmt.Sprintf("datastore_%s", replacer.Replace(strings.ToLower(t.Name())))
 }
 
-// TestNewFailsFastOnUnreachableHost proves the construction ping:
-// a connection to a closed loopback port must fail in New, not on
-// the first query.
+// TestNewFailsFastOnUnreachableHost checks the construction ping.
 func TestNewFailsFastOnUnreachableHost(t *testing.T) {
 	store, err := New(t.Context(), Options{
 		DSN: "postgresql://postgres:postgres@127.0.0.1:59999/postgres?sslmode=disable&connect_timeout=1",
@@ -44,8 +40,7 @@ func TestNewFailsFastOnUnreachableHost(t *testing.T) {
 	assert.Nil(t, store)
 }
 
-// TestPostgresExecutorRoundTrip exercises all three Executor
-// operations against a real server.
+// TestPostgresExecutorRoundTrip checks the Executor operations.
 func TestPostgresExecutorRoundTrip(t *testing.T) {
 	store := startStore(t)
 	ctx := t.Context()
@@ -73,8 +68,7 @@ func TestPostgresExecutorRoundTrip(t *testing.T) {
 	require.NoError(t, rows.Err())
 }
 
-// TestWithTxCommits verifies the happy path: data written through
-// the transactional Executor is visible after WithTx returns nil.
+// TestWithTxCommits checks that committed data is visible.
 func TestWithTxCommits(t *testing.T) {
 	store := startStore(t)
 	ctx := t.Context()
@@ -94,9 +88,7 @@ func TestWithTxCommits(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
-// TestWithTxRollsBackOnError verifies the atomicity contract: an
-// error inside fn rolls the whole transaction back and surfaces
-// the caller's error unchanged.
+// TestWithTxRollsBackOnError checks rollback and error propagation.
 func TestWithTxRollsBackOnError(t *testing.T) {
 	store := startStore(t)
 	ctx := t.Context()
@@ -121,9 +113,7 @@ func TestWithTxRollsBackOnError(t *testing.T) {
 	assert.Equal(t, 0, count, "rolled-back insert must not be visible")
 }
 
-// TestWithTxRollsBackOnPanic verifies the panic path: the deferred
-// rollback releases the connection (the pool stays healthy) and
-// the panic still reaches the caller.
+// TestWithTxRollsBackOnPanic checks rollback and panic propagation.
 func TestWithTxRollsBackOnPanic(t *testing.T) {
 	store := startStore(t)
 	ctx := t.Context()
@@ -148,8 +138,7 @@ func TestWithTxRollsBackOnPanic(t *testing.T) {
 	require.NoError(t, store.HealthCheck(ctx), "pool must recover from the aborted transaction")
 }
 
-// TestTestConnection verifies the diagnostic round trip: identity
-// facts come from the server session, not just the DSN.
+// TestTestConnection checks details read from the server.
 func TestTestConnection(t *testing.T) {
 	store := startStore(t)
 	ctx := t.Context()
@@ -165,8 +154,7 @@ func TestTestConnection(t *testing.T) {
 	assert.Greater(t, info.Stats.TotalConns(), int32(0))
 }
 
-// TestHealthCheckAndClose covers the Backend lifecycle: healthy
-// while the pool is live, failing after Close drains it.
+// TestHealthCheckAndClose checks health before and after Close.
 func TestHealthCheckAndClose(t *testing.T) {
 	pg := testutils.StartPostgres(t.Context(), t)
 	store, err := New(t.Context(), Options{DSN: pg.DSN})

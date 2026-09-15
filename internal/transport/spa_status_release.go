@@ -2,6 +2,5 @@
 
 package transport
 
-// spaFallbackStatus is the status for unknown page paths: release
-// serves the embedded SPA shell for every non-API path.
+// spaFallbackStatus returns the SPA fallback status in release.
 const spaFallbackStatus = 200

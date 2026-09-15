@@ -1,10 +1,4 @@
-// Package queue provides the built-in, type-safe task queue backed by
-// Postgres that runs within the application process instead of an
-// external message broker.
-//
-// The engine is owned by tango; it originated as a port of
-// github.com/mikestefanello/backlite (MIT license, see Credits in
-// README.md), adapted to Postgres and integrated with internal/datastore.
+// Package queue provides the built-in, type-safe task queue backed by Postgres.
 package queue
 
 import (
@@ -22,7 +16,7 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 )
 
-// now returns the current time in a way that tests can override.
+// now is replaceable so tests can control time.
 var now = func() time.Time {
 	return time.Now()
 }
@@ -34,7 +28,7 @@ type (
 		log    Logger
 		queues queues
 
-		// buffers reuses encoding buffers across saves.
+		// buffers reuses encoding buffers.
 		buffers sync.Pool
 
 		dispatcher Dispatcher
@@ -42,22 +36,19 @@ type (
 
 	// ClientConfig contains configuration for the Client.
 	ClientConfig struct {
-		// Store is the shared Postgres backend; the queue reads and
-		// writes through its Executor surface and WithTx.
+		// Store is the shared Postgres backend.
 		Store datastore.Store
 
-		// Logger logs task execution. Omit to disable logging.
+		// Logger logs task execution. Nil disables logging.
 		Logger Logger
 
 		// NumWorkers is the number of goroutines executing queued tasks.
 		NumWorkers int
 
-		// ReleaseAfter reclaims a claimed task that never finished executing.
-		// A fail-safe for stuck tasks; much higher than any queue Timeout.
+		// ReleaseAfter reclaims tasks that never finish.
 		ReleaseAfter time.Duration
 
-		// CleanupInterval removes expired completed tasks. If omitted,
-		// retention durations are never enforced.
+		// CleanupInterval removes expired completed tasks.
 		CleanupInterval time.Duration
 	}
 
@@ -75,8 +66,7 @@ const (
 	TaskStatusNotFound
 )
 
-// FromContext returns the Client stored in a queue processor context, so
-// processors can add additional tasks.
+// FromContext returns the Client stored in a processor context.
 func FromContext(ctx context.Context) *Client {
 	if c, ok := ctx.Value(ctxKeyClient{}).(*Client); ok {
 		return c
@@ -84,7 +74,7 @@ func FromContext(ctx context.Context) *Client {
 	return nil
 }
 
-// NewClient initializes a new Client.
+// NewClient creates a Client.
 func NewClient(cfg ClientConfig) (*Client, error) {
 	switch {
 	case cfg.Store == nil:
@@ -129,37 +119,32 @@ func (c *Client) Add(tasks ...Task) *TaskAddOp {
 	return &TaskAddOp{client: c, tasks: tasks}
 }
 
-// Start executes queued tasks in the background. Cancel the context for a
-// hard stop; call Stop for a graceful one.
+// Start executes queued tasks in the background.
 func (c *Client) Start(ctx context.Context) {
 	c.dispatcher.Start(ctx)
 }
 
-// Stop shuts down gracefully, waiting until the context is cancelled or all
-// workers finish their tasks. True when all workers completed in time.
+// Stop shuts down gracefully and reports whether workers finished in time.
 func (c *Client) Stop(ctx context.Context) bool {
 	return c.dispatcher.Stop(ctx)
 }
 
-// Notify tells the dispatcher that new tasks were added. Only needed when
-// tasks are added within a caller-managed transaction (see TaskAddOp.Executor).
+// Notify tells the dispatcher that new tasks were added in another transaction.
 func (c *Client) Notify() {
 	c.dispatcher.Notify()
 }
 
-// Flush deletes all pending (unclaimed) tasks and returns how many were
-// removed. Claimed tasks — in flight or awaiting release — are untouched.
+// Flush deletes pending, unclaimed tasks and returns the count.
 func (c *Client) Flush(ctx context.Context) (int64, error) {
 	return flushTasks(ctx, c.store)
 }
 
-// FlushCompleted deletes all completed task records and returns how many
-// were removed, bypassing retention expiry.
+// FlushCompleted deletes all completed task records and returns the count.
 func (c *Client) FlushCompleted(ctx context.Context) (int64, error) {
 	return flushCompletedTasks(ctx, c.store)
 }
 
-// save persists a task add operation and returns the task IDs.
+// save persists a task add operation.
 func (c *Client) save(op *TaskAddOp) ([]string, error) {
 	var err error
 
@@ -222,7 +207,7 @@ func (c *Client) save(op *TaskAddOp) ([]string, error) {
 // not retain completed tasks, TaskStatusNotFound is returned for completed
 // tasks instead of TaskStatusSuccess or TaskStatusFailure.
 func (c *Client) Status(ctx context.Context, taskID string) (TaskStatus, error) {
-	// Queued tasks: pending or running.
+	// Check queued tasks first.
 	running := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	running.Select("claimed_at IS NOT NULL")
 	running.From(tasksTable)
@@ -238,12 +223,12 @@ func (c *Client) Status(ctx context.Context, taskID string) (TaskStatus, error) 
 		}
 		return TaskStatusPending, nil
 	case errors.Is(err, pgx.ErrNoRows):
-		// Fall through to completed tasks.
+		// Check completed tasks next.
 	default:
 		return 0, err
 	}
 
-	// Completed tasks: success or failure.
+	// Check completed tasks.
 	succeeded := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	succeeded.Select("error IS NULL")
 	succeeded.From(completedTasksTable)

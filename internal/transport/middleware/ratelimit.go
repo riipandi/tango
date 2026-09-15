@@ -16,20 +16,18 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// RateLimitStore executes the fixed-window check function; the
-// datastore Store satisfies it directly.
+// RateLimitStore runs the fixed-window rate check.
 type RateLimitStore interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// Rate limit classes; auth endpoints use the tight class.
+// Rate limit classes.
 const (
 	RateClassDefault = "default"
 	RateClassAuth    = "auth"
 )
 
-// classLimits maps a class to (max requests, window seconds).
-// Defaults mirror the config fallbacks; env tuning overrides them.
+// classLimits maps each class to a request limit and window in seconds.
 var classLimits = map[string]struct {
 	Max    int
 	Window int
@@ -38,11 +36,7 @@ var classLimits = map[string]struct {
 	RateClassAuth:    {20, 60},
 }
 
-// RateLimit returns middleware that counts requests per client IP
-// and route class against the shared rate_limits table (multi-
-// instance safe: the check function takes an advisory lock per key).
-// Failures degrade open — an unavailable database must not take the
-// whole surface down.
+// RateLimit counts requests per client IP and route class.
 func RateLimit(store RateLimitStore, class string) func(http.Handler) http.Handler {
 	limits, ok := classLimits[class]
 	if !ok {
@@ -65,7 +59,7 @@ func RateLimit(store RateLimitStore, class string) func(http.Handler) http.Handl
 					writeRateLimited(w, r, pgErr.Detail)
 					return
 				}
-				// Degrade open on any other store failure.
+				// Allow the request when the store is unavailable.
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -85,8 +79,7 @@ func RateLimit(store RateLimitStore, class string) func(http.Handler) http.Handl
 	}
 }
 
-// rateKey builds the per-IP key; the column CHECK restricts keys to
-// lowercase alphanumerics, underscores, and colons.
+// rateKey builds the database key for a client IP and class.
 func rateKey(r *http.Request, class string) string {
 	ip := clientIP(r)
 	if ip == "" {
@@ -97,8 +90,7 @@ func rateKey(r *http.Request, class string) string {
 	return fmt.Sprintf("rl_%s_%s", class, ip)
 }
 
-// clientIP resolves the direct peer, trusting X-Forwarded-For only
-// from a loopback hop (local reverse proxy setups).
+// clientIP resolves the peer and trusts forwarded IPs from loopback only.
 func clientIP(r *http.Request) string {
 	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
 		remote := r.RemoteAddr
@@ -121,8 +113,7 @@ func isLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// writeRateLimited answers 429 with Retry-After parsed from the
-// check function's DETAIL ("Retry after: N seconds").
+// writeRateLimited writes a 429 response with Retry-After when available.
 func writeRateLimited(w http.ResponseWriter, r *http.Request, detail string) {
 	if seconds := retryAfter(detail); seconds > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(seconds))
@@ -130,8 +121,7 @@ func writeRateLimited(w http.ResponseWriter, r *http.Request, detail string) {
 	responder.Fail(w, r, http.StatusTooManyRequests, "rate limit exceeded")
 }
 
-// retryAfter extracts the seconds from a DETAIL string; 0 when
-// absent or unparseable.
+// retryAfter extracts seconds from a database detail string.
 func retryAfter(detail string) int {
 	marker := "Retry after: "
 	_, after, ok := strings.Cut(detail, marker)

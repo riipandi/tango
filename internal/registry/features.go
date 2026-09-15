@@ -44,8 +44,7 @@ import (
 	"github.com/riipandi/tango/web"
 )
 
-// Identity feature selectors, one line each in the feature list.
-// Placeholders until implemented: no routes, no storage.
+// Identity feature constructors used by the registry.
 func withLDAPSync(deps Deps, exec datastore.Executor, settingsSource *appconfigRef) *ldapsync.APIFeature {
 	service := ldapsync.NewService(exec, logger.Slog(deps.Logger))
 	settings := func(ctx context.Context) (ldapsync.LDAPSettings, error) {
@@ -58,22 +57,20 @@ func withLDAPSync(deps Deps, exec datastore.Executor, settingsSource *appconfigR
 	return ldapsync.New(service, settings)
 }
 
-// withLDAPSync callsite in newIdentityFeatures receives the ref; the
-// appconfig module attaches itself after registration below.
+// appconfigRef lets identity features read settings after registration.
 type appconfigRef struct {
 	mu     sync.RWMutex
 	module *appconfig.Module
 }
 
-// Attach wires the module once it exists.
+// Attach sets the appconfig module.
 func (r *appconfigRef) Attach(module *appconfig.Module) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.module = module
 }
 
-// values reads the merged settings; ok is false until the module
-// attached (then callers fall back to the env-only settings).
+// values returns merged settings when appconfig is attached.
 func (r *appconfigRef) values(ctx context.Context) (map[string]string, bool) {
 	r.mu.RLock()
 	module := r.module
@@ -88,8 +85,7 @@ func (r *appconfigRef) values(ctx context.Context) (map[string]string, bool) {
 	return values, true
 }
 
-// withAppImageStore builds the branding-image feature over the given
-// blob backend and seeds bundled defaults at startup.
+// withAppImageStore builds the image service and seeds bundled defaults.
 func withAppImageStore(deps Deps, store storage.Store) (*appimage.Service, error) {
 	defaults, err := appimage.SeedDefaults(context.Background(), store, web.ImagesDir)
 	if err != nil {
@@ -98,8 +94,7 @@ func withAppImageStore(deps Deps, store storage.Store) (*appimage.Service, error
 	return appimage.NewService(store, defaults), nil
 }
 
-// defaultPictureProvider adapts the appimage default to the user
-// module's fallback hook.
+// defaultPictureProvider adapts appimage defaults to the user service.
 func defaultPictureProvider(images *appimage.Service) user.DefaultPictureFunc {
 	return func(ctx context.Context) (io.ReadCloser, int64, string, bool) {
 		reader, size, mime, err := images.GetImage(ctx, appimage.ImageProfilePic)
@@ -110,8 +105,7 @@ func defaultPictureProvider(images *appimage.Service) user.DefaultPictureFunc {
 	}
 }
 
-// withAPIKeys builds the machine-credential feature: self-scoped
-// key CRUD plus the X-API-KEY verifier for the transport middleware.
+// withAPIKeys builds the API key service and verifier.
 func withAPIKeys(deps Deps, sessions *session.Service, audit *auditlog.Module) *apikey.Service {
 	return apikey.NewService(
 		apikey.NewPostgresStore(deps.DB),
@@ -120,11 +114,7 @@ func withAPIKeys(deps Deps, sessions *session.Service, audit *auditlog.Module) *
 	)
 }
 
-// withWebAuthn builds the passkey feature over the shared key
-// material: session issue via the sessions feature, app URL as the
-// relying-party identity, admin guard + self auth at mount time.
-// The error path panics only on an invalid app URL shape (boot
-// misconfiguration).
+// withWebAuthn builds the passkey feature.
 func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, adminAuth func(http.Handler) http.Handler) identity.Feature {
 	appURL := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service, err := webauthn.NewService(
@@ -144,10 +134,7 @@ func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service, 
 	return webauthn.New(service).WithAdminGuard(adminAuth).WithSelfAuth(sessions, session.CookieName)
 }
 
-// newWebhookModule builds the outbound webhook surface: endpoints,
-// signed deliveries through the shared fetcher, and the queue
-// processor that performs them. The signing secret is sealed under a
-// digest of auth.secret_key, the same derivation the JWKS halves use.
+// newWebhookModule builds the webhook service and queue processor.
 func newWebhookModule(deps Deps, guard func(http.Handler) http.Handler) *webhook.Module {
 	service := webhook.NewService(
 		webhook.NewPostgresStore(deps.DB),
@@ -163,9 +150,7 @@ func newWebhookModule(deps Deps, guard func(http.Handler) http.Handler) *webhook
 	return m
 }
 
-// secretCipher derives the AES-256 key sealing module secrets at rest
-// from auth.secret_key: SHA-256 always yields 32 bytes, so the
-// constructor cannot fail on otherwise valid configuration.
+// secretCipher derives the AES-256 key used to seal module secrets.
 func secretCipher(deps Deps) *crypto.Cipher {
 	key := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
 	sealer, err := crypto.NewCipher(key[:])
@@ -175,15 +160,12 @@ func secretCipher(deps Deps) *crypto.Cipher {
 	return sealer
 }
 
-// newVersionFeed builds the cached latest-release lookup over the
-// shared outbound client.
+// newVersionFeed builds the cached release lookup.
 func newVersionFeed(deps Deps) *jobs.VersionFeed {
 	return jobs.NewVersionFeed(deps.Fetcher, deps.Config.Public.VersionCheckURL)
 }
 
-// registerRecurringJobs wires the maintenance cadence: expired tokens,
-// delivery history, and the release feed. Webhook log pruning runs
-// through the webhook store.
+// registerRecurringJobs registers cleanup and release-feed jobs.
 func registerRecurringJobs(deps Deps, feed *jobs.VersionFeed, webhooks *webhook.Module) {
 	if deps.Jobs == nil {
 		return
@@ -194,18 +176,11 @@ func registerRecurringJobs(deps Deps, feed *jobs.VersionFeed, webhooks *webhook.
 	deps.Jobs.AddJob(jobs.VersionJob(feed, deps.Logger))
 }
 
-// newIdentityFeatures builds the mandatory user core plus the
-// selected features. The guard chain: session cookie auth wraps
-// RequireAdmin; the user core mounts its admin routes behind both.
-// Password verifies credentials headlessly; session owns the
-// sign-in/sign-out routes; account mounts self-service under the
-// same guard. Returns the sessions feature so the federation
-// surface can resolve session cookies (optional-auth /authorize).
+// newIdentityFeatures builds the user service and identity features.
 func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Recorder, ldapSettingsSource *appconfigRef) (identity.APIFeature, []identity.Feature, func(http.Handler) http.Handler, *session.Service, *apiaccess.PostgresStore, *appimage.Service) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
-	// One blob backend shared by app images, profile pictures, and
-	// client logos.
+	// Share one blob backend across images and client logos.
 	blobStore, err := storage.New(deps.Config.Storage)
 	if err != nil {
 		panic("registry: storage init: " + err.Error())
@@ -289,11 +264,7 @@ func newIdentityFeatures(deps Deps, audit *auditlog.Module, recorder identity.Re
 	return core, features, adminAuth, sessions, apiaccess.NewPostgresStore(deps.DB), images
 }
 
-// withOIDC builds the provider feature: claim readers from the
-// store, token signing via the Phase 3 key service, session-cookie
-// resolution via the identity session feature (optional-auth
-// /authorize), the audit adapter, and the admin guard for client
-// management.
+// withOIDC builds the OIDC provider feature.
 func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, adminGuard func(http.Handler) http.Handler, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore, appconfigModule *appconfig.Module) federation.Feature {
 	issuer := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service := oidc.NewService(
@@ -314,8 +285,7 @@ func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *s
 		WithSelfAuth(sessions, session.CookieName)
 }
 
-// cimdAllowlistGetter feeds the OIDC module the operator-managed CIMD
-// URL allowlist from the app config (parsing lives in appconfig).
+// cimdAllowlistGetter returns the configured CIMD URL allowlist.
 func cimdAllowlistGetter(module *appconfig.Module) func() []string {
 	return func() []string {
 		values, err := module.MergedValues(context.Background())
@@ -326,8 +296,7 @@ func cimdAllowlistGetter(module *appconfig.Module) func() []string {
 	}
 }
 
-// federationAuditAdapter adapts auditlog for federation events:
-// oidc events carry a plain action plus a payload map.
+// federationAuditAdapter adapts auditlog for federation events.
 func federationAuditAdapter(audit *auditlog.Module) func(context.Context, string, map[string]any) {
 	return func(ctx context.Context, event string, params map[string]any) {
 		entry := auditlog.Entry{
@@ -340,8 +309,7 @@ func federationAuditAdapter(audit *auditlog.Module) func(context.Context, string
 	}
 }
 
-// emailVerificationVerifier adapts the emailverification Verifier
-// contract to the user store (typed IDs at the boundary).
+// emailVerificationVerifier adapts email verification to the user store.
 type emailVerificationVerifier struct {
 	users user.Store
 }
@@ -354,13 +322,12 @@ func (a emailVerificationVerifier) MarkEmailVerified(ctx context.Context, userID
 	return a.users.MarkEmailVerified(ctx, id)
 }
 
-// emailVerificationAdapter returns the verifier adapter value.
+// emailVerificationAdapter returns the verifier adapter.
 func emailVerificationAdapter(users user.Store) emailverification.Verifier {
 	return emailVerificationVerifier{users: users}
 }
 
-// withSCIMSync builds the outbound SCIM provisioning feature: tokens
-// encrypted under the same cipher derivation as the JWKS halves.
+// withSCIMSync builds the SCIM provisioning feature.
 func withSCIMSync(deps Deps) federation.Feature {
 	cipherKey := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
 	cipher, err := crypto.NewCipher(cipherKey[:])
@@ -373,10 +340,7 @@ func withSCIMSync(deps Deps) federation.Feature {
 	return scimsync.New(service)
 }
 
-// newKeyService builds the JWKS key service (private halves
-// encrypted at rest under a digest of auth.secret_key). It is a
-// startable feature: registry startup guarantees a signing key
-// exists before the server binds.
+// newKeyService builds the JWKS key service.
 func newKeyService(deps Deps) *jwks.Service {
 	cipherKey := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
 	cipher, err := crypto.NewCipher(cipherKey[:])
@@ -386,8 +350,7 @@ func newKeyService(deps Deps) *jwks.Service {
 	return jwks.NewService(jwks.NewPostgresStore(deps.DB), cipher, jwks.RS256)
 }
 
-// withDiscovery mounts the well-known endpoints in front of the
-// TTL-cached key provider shared with token issuance.
+// withDiscovery mounts the well-known endpoints.
 func withDiscovery(deps Deps, keys *jwks.Service) federation.Feature {
 	provider := jwtutils.NewCachedKeyProvider(keys, jwks.CacheTTL)
 	return discovery.New(provider, deps.Config.Public.BaseURL)

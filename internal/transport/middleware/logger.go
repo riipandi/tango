@@ -10,8 +10,7 @@ import (
 	"go.loglayer.dev/v3"
 )
 
-// RequestLogger logs one entry per request (5xx error, 4xx warning)
-// correlated by the request ID from the RequestID middleware.
+// RequestLogger logs each request with its request ID.
 func RequestLogger(log logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,9 +1,4 @@
-// Package logger wires the LogLayer API to sinks: pretty console
-// or structured JSON (stderr, or rotating file via lumberjack).
-// Dispatch is async and non-blocking; overflow drops and counts.
-//
-// Config keys: app.log_level, app.log_transport (console|file),
-// app.log_format, app.log_file. New backends slot into New.
+// Package logger wires LogLayer to console or file sinks.
 package logger
 
 import (
@@ -12,54 +7,47 @@ import (
 	"go.loglayer.dev/v3"
 )
 
-// Logger is the app logging contract: alias over LogLayer, full
-// surface, implementation swappable here.
+// Logger is the application logging contract.
 type Logger = *loglayer.LogLayer
 
-// NewMock is a silent logger with the same API; Fatal doesn't exit.
-// For tests and optional components.
+// NewMock returns a silent logger for tests and optional components.
 func NewMock() Logger {
 	return loglayer.NewMock()
 }
 
 // Errors returned by New.
 var (
-	// ErrInvalidLevel for unknown level strings.
+	// ErrInvalidLevel reports an unknown level.
 	ErrInvalidLevel = errors.New("logger: invalid level (want trace|debug|info|warn|error|fatal|panic)")
 
-	// ErrInvalidOutput for unknown output selections.
+	// ErrInvalidOutput reports an unknown output.
 	ErrInvalidOutput = errors.New("logger: invalid output (want console|file)")
 
-	// ErrInvalidFormat for unknown format strings.
+	// ErrInvalidFormat reports an unknown format.
 	ErrInvalidFormat = errors.New("logger: invalid format (want pretty|structured)")
 
-	// ErrPrettyRequiresConsole: pretty is console-only, files stay structured.
+	// ErrPrettyRequiresConsole reports pretty output requested for a file.
 	ErrPrettyRequiresConsole = errors.New("logger: pretty format requires console output")
 
-	// ErrFileRequired when file output lacks a path.
+	// ErrFileRequired reports file output without a path.
 	ErrFileRequired = errors.New("logger: file output requires a file path")
 )
 
-// Options selects sinks and rendering for New. Mirrors app.log_*
-// keys; zero value is info, structured JSON on console.
+// Options selects the sink and format for New.
 type Options struct {
-	// Level: trace, debug, info, warn, error, fatal, panic.
-	// Empty means info.
+	// Level accepts trace, debug, info, warn, error, fatal, or panic.
 	Level string
 
 	// Output: "console" (default) or "file".
 	Output string
 
-	// Format: "structured" (default, JSON) or "pretty"
-	// (colorized, console only).
+	// Format accepts structured (JSON) or pretty (console only).
 	Format string
 
-	// NoColor forces pretty colors off. False auto-disables
-	// when stdout isn't a terminal.
+	// NoColor disables colors in pretty output.
 	NoColor bool
 
-	// File path for file output. Rotation: 100MB, 7 backups,
-	// 30 days, gzip.
+	// File is the path for file output.
 	File string
 
 	// Buffer is async queue capacity. Zero uses DefaultBufferSize.

@@ -13,7 +13,7 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// fakeAuthenticator resolves a fixed token to a fixed principal.
+// fakeAuthenticator maps one token to one principal.
 type fakeAuthenticator struct {
 	token     string
 	principal Principal
@@ -27,8 +27,7 @@ func (f fakeAuthenticator) ResolveSession(_ context.Context, token string) (Prin
 	return f.principal, f.err
 }
 
-// probe writes its view of the request context into the response
-// header, so assertions check the principal without a body protocol.
+// probe writes the context principal to a response header.
 var probe = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	p, ok := PrincipalFromContext(r.Context())
 	switch {
@@ -68,7 +67,7 @@ func TestRequireAuthRejectsAnonymous(t *testing.T) {
 	w := doReq(handler, nil)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-	// Unknown token, same status (indistinguishable).
+	// Unknown tokens use the same status.
 	w = doReq(handler, &http.Cookie{Name: "sid", Value: "wrong"})
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
@@ -79,7 +78,7 @@ func TestRequireAdmin(t *testing.T) {
 
 	guarded := RequireAdmin(probe)
 
-	// Behind RequireAuth: admin passes, member is forbidden.
+	// Admins pass; members are forbidden.
 	adminRoute := RequireAuth(admin, "sid")(guarded)
 	w := doReq(adminRoute, &http.Cookie{Name: "sid", Value: "adm"})
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -88,7 +87,7 @@ func TestRequireAdmin(t *testing.T) {
 	w = doReq(memberRoute, &http.Cookie{Name: "sid", Value: "usr"})
 	assert.Equal(t, http.StatusForbidden, w.Code)
 
-	// Without a principal (unguarded route misuse) → 401, not 403.
+	// Missing principals return 401, not 403.
 	w = doReq(guarded, nil)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
@@ -109,7 +108,7 @@ func TestRequireAPIKey(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "user:k1", w.Header().Get("X-Principal"))
 
-	// Missing and wrong keys → 401.
+	// Missing and invalid keys return 401.
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -121,7 +120,7 @@ func TestRequireAPIKey(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-// The 401 body follows the standard envelope.
+// The 401 body uses the standard envelope.
 func TestRequireAuthEnvelopeShape(t *testing.T) {
 	handler := RequireAuth(fakeAuthenticator{token: "x"}, "sid")(probe)
 

@@ -18,10 +18,7 @@ type HTTPServer struct {
 	Server *http.Server
 }
 
-// NewHTTPServer wires middleware, core routes, then registry modules.
-// The /api group runs behind the rate limiter when one is provided;
-// latest is the cached newest-release source for /api/version/latest
-// (nil keeps the deployed version).
+// NewHTTPServer wires middleware, core routes, and registry modules.
 func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Logger, limiter func(http.Handler) http.Handler, latest LatestVersionSource) *HTTPServer {
 	r := chi.NewRouter()
 
@@ -36,7 +33,7 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 
 	registry.Apply(r)
 
-	// Shared /api group; modules register inside it.
+	// Mount the shared /api group.
 	r.Route("/api", func(r chi.Router) {
 		if limiter != nil {
 			r.Use(limiter)
@@ -48,7 +45,7 @@ func NewHTTPServer(registry *kernel.Registry, cfg *config.Config, log logger.Log
 		registry.ApplyAPI(r)
 	})
 
-	// SPA fallback last; owns root 404.
+	// Mount the SPA fallback last.
 	web.SetupStatic(r)
 
 	return &HTTPServer{Router: r}
@@ -66,9 +63,7 @@ func (s *HTTPServer) ListenAndServe(addr string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
-		// No ReadTimeout/WriteTimeout: they would kill streamed
-		// bodies and SSE responses; per-request deadlines come from
-		// route-specific middleware instead.
+		// Read and write deadlines are set by route-specific middleware.
 	}
 
 	return s.Server.ListenAndServe()

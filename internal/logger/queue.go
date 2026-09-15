@@ -5,10 +5,7 @@ import (
 	"go.loglayer.dev/v3"
 )
 
-// QueueLogger adapts the application logger to the queue logger
-// interface. Params are alternating key/value pairs, mapped to log fields.
-// The dependency points from the app to the queue package, never the
-// other way around.
+// QueueLogger adapts the application logger to the queue logger interface.
 func QueueLogger(log Logger) queue.Logger {
 	return queue.LoggerFunc(func(level, message string, params ...any) {
 		fields := loglayer.Fields{}

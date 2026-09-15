@@ -22,12 +22,8 @@ import (
 	"github.com/riipandi/tango/web"
 )
 
-// TestEmailTaskSurvivesQueueRoundTripAndRenders drives the exact path a
-// real delivery takes: the task is JSON-encoded into the queue, decoded
-// back on a worker, then rendered by the real templates and sent over
-// SMTP. Template data travels as JSON, so a time.Time value arrives as
-// a string and would break any template that formats it — the reminder
-// job therefore pre-formats its date.
+// TestEmailTaskSurvivesQueueRoundTripAndRenders checks queue decoding,
+// template rendering, and SMTP delivery.
 func TestEmailTaskSurvivesQueueRoundTripAndRenders(t *testing.T) {
 	ctx := t.Context()
 	mp := testutils.StartMailpit(ctx, t)
@@ -46,7 +42,7 @@ func TestEmailTaskSurvivesQueueRoundTripAndRenders(t *testing.T) {
 		Template: "api-key-expiring-soon",
 		Data: map[string]any{
 			"Name":       "Hook User",
-			"APIKeyName": "phase7-live",
+			"APIKeyName": "test-key",
 			"ExpiresAt":  expiry,
 		},
 	}))
@@ -54,8 +50,7 @@ func TestEmailTaskSurvivesQueueRoundTripAndRenders(t *testing.T) {
 	queue.Start(ctx)
 	t.Cleanup(func() { queue.Stop(context.Background()) })
 
-	// The rendered body must carry the pre-formatted date: a .Format
-	// call on it would have failed the send and burned the retries.
+	// The rendered body must contain the pre-formatted date.
 	var found bool
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) && !found {
@@ -67,8 +62,7 @@ func TestEmailTaskSurvivesQueueRoundTripAndRenders(t *testing.T) {
 	require.True(t, found, "the queued email must arrive rendered, with the formatted expiry")
 }
 
-// mailpitHas reports whether Mailpit holds a delivered message for the
-// recipient whose body contains the expected expiry string.
+// mailpitHas reports whether Mailpit has a matching message.
 func mailpitHas(t *testing.T, mp *testutils.Mailpit, recipient, bodyFragment string) bool {
 	t.Helper()
 
@@ -99,8 +93,7 @@ func mailpitHas(t *testing.T, mp *testutils.Mailpit, recipient, bodyFragment str
 	return strings.Contains(detail.Text, bodyFragment)
 }
 
-// testMailer builds the production mailer over the embedded templates
-// and the shared Mailpit relay.
+// testMailer builds a mailer over the embedded templates and Mailpit.
 func testMailer(t *testing.T, mp *testutils.Mailpit) Mailer {
 	t.Helper()
 
@@ -122,9 +115,7 @@ func testMailer(t *testing.T, mp *testutils.Mailpit) Mailer {
 	})
 }
 
-// TestEmailTaskDataLosesTimeTypes pins why the reminder job formats its
-// date: the queue payload is JSON, and a time.Time comes back as a
-// string, which a formatting template cannot render.
+// TestEmailTaskDataLosesTimeTypes checks JSON conversion of time values.
 func TestEmailTaskDataLosesTimeTypes(t *testing.T) {
 	task := EmailTask{Data: map[string]any{
 		"ExpiresAt": time.Date(2026, 9, 21, 10, 0, 0, 0, time.UTC),

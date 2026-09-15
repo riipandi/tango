@@ -1,10 +1,4 @@
-// Package registry wires feature modules: add = import + one
-// Register line, remove = delete the line.
-//
-// The identity provider surface is isolated in
-// modules/federation. To exclude it, delete the
-// federation Register line below (plus federation_features.go) — the
-// binary keeps all internal authn/authz.
+// Package registry wires feature modules and shared dependencies.
 package registry
 
 import (
@@ -33,50 +27,40 @@ import (
 	"github.com/riipandi/tango/pkg/crypto"
 )
 
-// Deps are shared dependencies for modules. No globals;
-// constructors take what they need.
+// Deps are shared dependencies for modules.
 type Deps struct {
 	// Config is the loaded runtime configuration.
 	Config *config.Config
 
-	// Logger is shared; modules never build their own.
+	// Logger is shared by modules.
 	Logger logger.Logger
 
-	// Fetcher is the shared outbound client (pooled).
+	// Fetcher is the shared outbound client.
 	Fetcher *fetcher.Fetcher
 
 	// Mailer is the shared email client.
 	Mailer mailer.Mailer
 
-	// DB is the shared Postgres store. Modules get stores built
-	// on it, never the pool itself.
+	// DB is the shared Postgres store.
 	DB datastore.Store
 
-	// Queue is the shared task queue client, built by New from
-	// DB.Pool(). Features register their queues on it at build time;
-	// the queue module runs the dispatcher. Not set by callers.
+	// Queue is the shared task queue client built by New.
 	Queue *queue.Client
 
-	// Cipher seals secrets at rest (webhook signing secrets). Built
-	// by New from auth.secret_key; not set by callers.
+	// Cipher seals secrets at rest.
 	Cipher *crypto.Cipher
 
-	// Jobs owns the queue registrations and recurring jobs. Built by
-	// New; not set by callers.
+	// Jobs owns queue registrations and recurring jobs.
 	Jobs *jobs.Registry
 
 	// Webhooks emits application events to registered endpoints.
-	// Built by New; not set by callers.
 	Webhooks *webhook.Module
 
-	// VersionFeed caches the newest published release for
-	// /api/version/latest. Built by New; not set by callers.
+	// VersionFeed caches the newest published release.
 	VersionFeed *jobs.VersionFeed
 }
 
-// New builds the registry in registration order. Every store is
-// Postgres-backed via deps.DB; the adapter routes identity audit
-// events into auditlog, keeping the modules decoupled.
+// New builds the registry in registration order.
 func New(deps Deps) *kernel.Registry {
 	if deps.DB == nil {
 		panic("registry: nil database store")
@@ -84,8 +68,7 @@ func New(deps Deps) *kernel.Registry {
 
 	reg := kernel.NewRegistry()
 
-	// Task queue: first registered so its Stop drains last. Features
-	// register named queues via deps.Queue before the server starts.
+	// Register the queue first so it stops last.
 	queueClient, err := queue.NewClient(queue.ClientConfig{
 		Store:           deps.DB,
 		Logger:          logger.QueueLogger(deps.Logger),
@@ -99,20 +82,17 @@ func New(deps Deps) *kernel.Registry {
 	deps.Queue = queueClient
 	reg.Register(queue.New(queueClient))
 
-	// Queue consumers: transactional email plus the recurring
-	// maintenance jobs. Registered right after the dispatcher adapter
-	// so their types exist before any producer enqueues.
+	// Register email and maintenance consumers.
 	deps.Jobs = jobs.NewRegistry(queueClient, deps.Mailer, deps.Logger)
 	reg.Register(deps.Jobs)
 
 	audit := auditlog.New(auditlog.NewPostgresStore(deps.DB))
 	reg.Register(audit)
 
-	// Domain events fan out to webhooks on top of the audit row: the
-	// recorder is the single funnel identity features already use.
+	// Domain events are recorded and forwarded to webhooks.
 	events := NewEventFanout(deps.Logger)
 
-	// Internal authn/authz: user core + selected auth features.
+	// Register identity features.
 	ldapSettingsSource := &appconfigRef{}
 	core, identityFeatures, adminGuard, sessions, apiAccess, images := newIdentityFeatures(deps, audit, events.Recorder(audit), ldapSettingsSource)
 	audit.MountAdminAPI(adminGuard)
@@ -120,27 +100,22 @@ func New(deps Deps) *kernel.Registry {
 	reg.Register(identity.New(core, identityFeatures...))
 	reg.Register(images)
 
-	// Outbound webhooks: an admin-managed surface, dispatched by the
-	// queue. Not upstream — a tango extension.
+	// Register outbound webhooks.
 	webhooks := newWebhookModule(deps, adminGuard)
 	deps.Webhooks = webhooks
 	reg.Register(webhooks)
 	events.Attach(webhooks)
 
-	// Application configuration: settings CRUD (phase 9B) plus the
-	// test-email slice riding the phase 7 mail queue.
+	// Register application configuration.
 	appconfigModule := appconfig.New(deps.Jobs).
 		WithStore(appconfig.NewPostgresStore(deps.DB)).
 		WithEnvDefaults(appconfig.EnvDefaults(deps.Config))
 	appconfigModule.UseGuard(adminGuard)
 	reg.Register(appconfigModule)
-	// LDAP sync reads its settings through the appconfig surface; the
-	// ref fills in now that the module exists (identity built first).
+	// Attach appconfig so LDAP sync can read merged settings.
 	ldapSettingsSource.Attach(appconfigModule)
 
-	// Identity provider (OIDC, SCIM, discovery) — optional surface
-	// for other systems. Delete this line (and
-	// federation_features.go) to exclude the provider entirely.
+	// Register the identity provider surface.
 	keyService := newKeyService(deps)
 	reg.Register(federation.New(
 		withOIDC(deps, audit, keyService, sessions, adminGuard, apiAccess, images.BlobStore(), appconfigModule),
@@ -149,8 +124,7 @@ func New(deps Deps) *kernel.Registry {
 		withDiscovery(deps, keyService),
 	))
 
-	// Latest-release feed: a recurring job fills the cache that
-	// /api/version/latest reads.
+	// Register the release feed and its refresh job.
 	feed := newVersionFeed(deps)
 	deps.VersionFeed = feed
 	deps.Jobs.SetVersionFeed(feed)
@@ -159,9 +133,7 @@ func New(deps Deps) *kernel.Registry {
 	return reg
 }
 
-// auditAdapter converts identity audit events into auditlog entries:
-// typed-ID actors/targets map to their UUID columns, anything else
-// lands in the payload.
+// auditAdapter converts identity audit events into auditlog entries.
 func auditAdapter(audit *auditlog.Module) identity.Recorder {
 	return func(ctx context.Context, e identity.AuditEvent) {
 		entry := auditlog.Entry{
@@ -189,33 +161,26 @@ func auditAdapter(audit *auditlog.Module) identity.Recorder {
 	}
 }
 
-// eventFanout forwards application events to registered webhooks. The
-// sink is attached after the webhook module is built (identity
-// features need the recorder first, and the module needs the admin
-// guard those features produce), so the indirection breaks the cycle
-// without a global.
+// eventFanout forwards recorded events to webhooks.
 type eventFanout struct {
 	mu   sync.RWMutex
 	sink *webhook.Module
 	log  logger.Logger
 }
 
-// Attach wires the sink; the recorder starts fanning out afterwards.
+// Attach sets the webhook sink.
 func (f *eventFanout) Attach(module *webhook.Module) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sink = module
 }
 
-// NewEventFanout builds the fan-out holder with the shared logger.
+// NewEventFanout builds an event fan-out holder.
 func NewEventFanout(log logger.Logger) *eventFanout {
 	return &eventFanout{log: log}
 }
 
-// Recorder is the identity audit recorder that additionally fans the
-// event out to subscribed webhooks. Delivery never blocks or fails the
-// request: the outbox write happens on its own transaction and a
-// fan-out error is logged, not surfaced.
+// Recorder records identity events and forwards them to webhooks.
 func (f *eventFanout) Recorder(audit *auditlog.Module) identity.Recorder {
 	return func(ctx context.Context, e identity.AuditEvent) {
 		auditAdapter(audit)(ctx, e)

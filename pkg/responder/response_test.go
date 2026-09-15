@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// decodeEnvelope parses the response body into the standard envelope.
+// decodeEnvelope decodes the response body.
 func decodeEnvelope(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var body map[string]any
@@ -76,7 +76,6 @@ func TestSuccessGeneratesRequestID(t *testing.T) {
 
 	Success(w, r, http.StatusOK, nil)
 
-	// Generated request IDs are TypeIDs: request_<26-char UUIDv7 suffix>.
 	id := w.Header().Get("X-Request-Id")
 	assert.True(t, strings.HasPrefix(id, "req_"), id)
 	assert.Len(t, id, len("req_")+26)

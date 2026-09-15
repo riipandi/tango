@@ -17,15 +17,14 @@ import (
 type Algorithm string
 
 const (
-	// AlgorithmScrypt is the default: memory-hard scrypt with
-	// N=2^16, r=8, p=1 (64 MiB per hash).
+	// AlgorithmScrypt is the default password hashing algorithm.
 	AlgorithmScrypt Algorithm = "scrypt"
 
-	// AlgorithmArgon2id is the PHC winner: m=64 MiB, t=3, p=4.
+	// AlgorithmArgon2id selects Argon2id.
 	AlgorithmArgon2id Algorithm = "argon2id"
 )
 
-// Default costs; override per environment through the builder.
+// Default hashing costs.
 const (
 	defaultScryptN          = 1 << 16 // 64 MiB with r=8
 	defaultScryptR          = 8
@@ -37,10 +36,7 @@ const (
 	defaultSaltLength       = 16
 )
 
-// PasswordHasher hashes and verifies passwords with scrypt or
-// argon2id. Hashes are emitted in PHC string format so the algorithm
-// and cost travel with every value — verification reads them from the
-// hash itself, letting costs evolve without a data migration.
+// PasswordHasher hashes and verifies passwords with scrypt or Argon2id.
 type PasswordHasher struct {
 	algorithm             Algorithm
 	scryptN, scryptR      uint32
@@ -66,24 +62,21 @@ func NewPasswordHasher() *PasswordHasher {
 	}
 }
 
-// WithAlgorithm switches the hashing scheme. Unknown values fail at
-// Hash time.
+// WithAlgorithm selects the hashing scheme.
 func (h *PasswordHasher) WithAlgorithm(algorithm Algorithm) *PasswordHasher {
 	clone := *h
 	clone.algorithm = algorithm
 	return &clone
 }
 
-// WithScryptCost sets the scrypt cost: N (must be a power of two),
-// r, and p. Memory use is 128*N*r bytes.
+// WithScryptCost sets the scrypt cost parameters.
 func (h *PasswordHasher) WithScryptCost(n, r uint32, p uint8) *PasswordHasher {
 	clone := *h
 	clone.scryptN, clone.scryptR, clone.scryptP = n, r, p
 	return &clone
 }
 
-// WithArgon2Cost sets the argon2id cost: memory in KiB, passes, and
-// parallelism (lanes).
+// WithArgon2Cost sets the Argon2id memory, iteration, and lane counts.
 func (h *PasswordHasher) WithArgon2Cost(memoryKiB, iterations uint32, threads uint8) *PasswordHasher {
 	clone := *h
 	clone.argon2MemoryKiB, clone.argon2Iterations, clone.argon2Threads = memoryKiB, iterations, threads
@@ -104,9 +97,7 @@ func (h *PasswordHasher) WithSaltLength(n uint32) *PasswordHasher {
 	return &clone
 }
 
-// Hash derives the PHC-formatted hash of password using the
-// configured algorithm and cost. Every call uses a fresh random salt,
-// so equal passwords produce different hashes.
+// Hash derives a PHC-formatted password hash with a fresh random salt.
 func (h *PasswordHasher) Hash(password string) (string, error) {
 	salt := make([]byte, h.saltLength)
 	rand.Read(salt) // never returns an error per the crypto/rand contract
@@ -134,9 +125,7 @@ func (h *PasswordHasher) Hash(password string) (string, error) {
 	}
 }
 
-// Verify reports whether password matches the PHC-formatted hash.
-// The algorithm and cost come from the hash, not the hasher config;
-// malformed encodings are an error, mismatches are (false, nil).
+// Verify reports whether password matches the encoded hash.
 func (h *PasswordHasher) Verify(password, encoded string) (bool, error) {
 	cost, salt, want, err := decodePasswordHash(encoded)
 	if err != nil {
@@ -148,9 +137,6 @@ func (h *PasswordHasher) Verify(password, encoded string) (bool, error) {
 		return false, err
 	}
 
-	// Data-independent timing hardens the tag comparison on CPUs with
-	// the feature; a no-op elsewhere (Go 1.26: inherited by spawned
-	// goroutines, no more OS-thread pinning).
 	var match bool
 	subtle.WithDataIndependentTiming(func() {
 		match = subtle.ConstantTimeCompare(got, want) == 1
@@ -158,12 +144,11 @@ func (h *PasswordHasher) Verify(password, encoded string) (bool, error) {
 	return match, nil
 }
 
-// cost carries the parsed parameters of an encoded hash.
 type cost interface {
 	derive(password, salt []byte, keyLength uint32) ([]byte, error)
 }
 
-// argon2Cost implements cost for argon2id.
+// argon2Cost holds Argon2id parameters.
 type argon2Cost struct {
 	memoryKiB, iterations uint32
 	threads               uint8
@@ -173,7 +158,7 @@ func (c argon2Cost) derive(password, salt []byte, keyLength uint32) ([]byte, err
 	return argon2.IDKey(password, salt, c.iterations, c.memoryKiB, c.threads, keyLength), nil
 }
 
-// scryptCost implements cost for scrypt.
+// scryptCost holds scrypt parameters.
 type scryptCost struct {
 	n, r uint32
 	p    uint8
@@ -187,14 +172,13 @@ func (c scryptCost) derive(password, salt []byte, keyLength uint32) ([]byte, err
 	return key, nil
 }
 
-// Errors returned when decoding PHC-formatted hashes.
+// Errors returned while decoding password hashes.
 var (
 	ErrUnknownAlgorithm = errors.New("crypto: unknown algorithm")
 	ErrInvalidHash      = errors.New("crypto: invalid hash encoding")
 )
 
-// decodePasswordHash splits a PHC string into its cost parameters,
-// salt, and derived key.
+// decodePasswordHash parses a PHC string.
 func decodePasswordHash(encoded string) (cost, []byte, []byte, error) {
 	parts := strings.Split(encoded, "$")
 	if len(parts) < 5 || parts[0] != "" {
@@ -239,7 +223,7 @@ func decodePasswordHash(encoded string) (cost, []byte, []byte, error) {
 	}
 }
 
-// decodeArgon2Cost parses "m=<kib>,t=<passes>,p=<lanes>".
+// decodeArgon2Cost parses Argon2id parameters.
 func decodeArgon2Cost(s string) (argon2Cost, error) {
 	var c argon2Cost
 	for part := range strings.SplitSeq(s, ",") {
@@ -269,7 +253,7 @@ func decodeArgon2Cost(s string) (argon2Cost, error) {
 	return c, nil
 }
 
-// decodeScryptCost parses "N=<n>,r=<r>,p=<p>".
+// decodeScryptCost parses scrypt parameters.
 func decodeScryptCost(s string) (scryptCost, error) {
 	var c scryptCost
 	for part := range strings.SplitSeq(s, ",") {
@@ -299,19 +283,19 @@ func decodeScryptCost(s string) (scryptCost, error) {
 	return c, nil
 }
 
-// costValue parses a "<key>=<uint32>" cost segment.
+// costValue parses a uint32 cost value.
 func costValue(s string) (uint32, error) {
 	value, err := parseCost(s, 32)
 	return uint32(value), err //nolint:gosec // ParseUint with bitSize 32 bounds the value
 }
 
-// costUint8 parses a "<key>=<uint8>" cost segment (parallelism).
+// costUint8 parses a uint8 cost value.
 func costUint8(s string) (uint8, error) {
 	value, err := parseCost(s, 8)
 	return uint8(value), err //nolint:gosec // ParseUint with bitSize 8 bounds the value
 }
 
-// parseCost parses "<key>=<unsigned>" with the given bit size.
+// parseCost parses an unsigned cost value with the given bit size.
 func parseCost(s string, bitSize int) (uint64, error) {
 	_, raw, found := strings.Cut(s, "=")
 	if !found {

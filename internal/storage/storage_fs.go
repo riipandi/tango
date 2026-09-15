@@ -11,14 +11,13 @@ import (
 	"strings"
 )
 
-// filesystemStorage keeps every object under a fixed root via os.Root,
-// so path escapes ("..", absolute) are impossible by construction.
+// filesystemStorage keeps every object under a fixed root.
 type filesystemStorage struct {
 	root             *os.Root
 	absoluteRootPath string
 }
 
-// NewFilesystemStorage builds the disk backend rooted at rootPath.
+// NewFilesystemStorage builds a filesystem backend rooted at rootPath.
 func NewFilesystemStorage(rootPath string) (Store, error) {
 	if err := os.MkdirAll(rootPath, 0o700); err != nil {
 		return nil, fmt.Errorf("storage: create root %q: %w", rootPath, err)
@@ -42,8 +41,7 @@ func (s *filesystemStorage) Save(_ context.Context, path string, data io.Reader)
 		return fmt.Errorf("storage: mkdir for %q: %w", path, err)
 	}
 
-	// Write to a temp sibling then rename: readers never observe a
-	// partially written object.
+	// Rename a complete temp file so readers never see partial data.
 	tmp := path + ".tmp"
 	f, err := s.root.Create(tmp)
 	if err != nil {
@@ -104,7 +102,7 @@ func (s *filesystemStorage) DeleteAll(_ context.Context, prefix string) error {
 func (s *filesystemStorage) List(_ context.Context, prefix string) ([]ObjectInfo, error) {
 	prefix = strings.Trim(filepath.FromSlash(prefix), "/")
 	var objects []ObjectInfo
-	// Recursive walk so FS and S3 listings share one contract.
+	// Walk recursively to match S3 listing behavior.
 	walkErr := filepath.WalkDir(filepath.Join(s.absoluteRootPath, filepath.FromSlash(prefix)),
 		func(full string, d fs.DirEntry, err error) error {
 			if err != nil {

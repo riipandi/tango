@@ -11,8 +11,7 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 )
 
-// Table names owned by the queue schema migrations. Qualified with
-// the schema to match the project's other stores.
+// Queue table names.
 const (
 	tasksTable          = "public.queue_tasks"
 	completedTasksTable = "public.queue_tasks_completed"
@@ -30,9 +29,7 @@ type queuedTask struct {
 	claimedAt      *time.Time
 }
 
-// insertTx inserts a queued task as part of the given executor. The ID is
-// generated in the app (UUIDv7) so callers can reference the task before
-// the insert commits, and because it is time-sortable.
+// insertTx inserts a queued task and assigns an ID when needed.
 func (t *queuedTask) insertTx(ctx context.Context, exec datastore.Executor) error {
 	if len(t.id) == 0 {
 		t.id = uuid.NewV7().String()
@@ -54,7 +51,7 @@ func (t *queuedTask) insertTx(ctx context.Context, exec datastore.Executor) erro
 	return nil
 }
 
-// deleteTx deletes a queued task as part of the given executor.
+// deleteTx deletes a queued task.
 func (t *queuedTask) deleteTx(ctx context.Context, exec datastore.Executor) error {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(tasksTable)
@@ -67,8 +64,7 @@ func (t *queuedTask) deleteTx(ctx context.Context, exec datastore.Executor) erro
 	return nil
 }
 
-// fail releases a claimed task back to the queue and schedules it for
-// another execution.
+// fail releases a claimed task and schedules another attempt.
 func (t *queuedTask) fail(ctx context.Context, exec datastore.Executor, waitUntil time.Time) error {
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(tasksTable)
@@ -88,10 +84,7 @@ func (t *queuedTask) fail(ctx context.Context, exec datastore.Executor, waitUnti
 
 type queuedTasks []*queuedTask
 
-// claim marks unclaimed (or expired-claim) tasks as claimed and returns the
-// IDs actually claimed. Tasks claimed by another dispatcher within the
-// deadline are left to the winner, so contended tasks are never executed
-// twice.
+// claim marks available tasks as claimed and returns the IDs claimed here.
 func (t queuedTasks) claim(ctx context.Context, exec datastore.Executor, deadline time.Time) ([]string, error) {
 	if len(t) == 0 {
 		return nil, nil
@@ -133,7 +126,7 @@ func (t queuedTasks) claim(ctx context.Context, exec datastore.Executor, deadlin
 	return claimed, nil
 }
 
-// scanQueuedTasks loads queued tasks from the database using the given query.
+// scanQueuedTasks loads queued tasks with the given query.
 func scanQueuedTasks(ctx context.Context, exec datastore.Executor, query string, args ...any) (queuedTasks, error) {
 	rows, err := exec.Query(ctx, query, args...)
 	if err != nil {
@@ -156,15 +149,13 @@ func scanQueuedTasks(ctx context.Context, exec datastore.Executor, query string,
 	return tasks, nil
 }
 
-// getScheduledTasks loads the next tasks up for execution, ordered by
-// execution time. The deadline includes tasks whose claim expired, so the
-// dispatcher can release them again.
+// getScheduledTasks loads the next available tasks in execution order.
 func getScheduledTasks(ctx context.Context, exec datastore.Executor, deadline time.Time, limit int) (queuedTasks, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("id", "queue", "task", "attempts", "wait_until", "created_at", "last_executed_at", "NULL")
 	sb.From(tasksTable)
 	sb.Where(sb.Or("claimed_at IS NULL", sb.LT("claimed_at", deadline)))
-	// Ready tasks (NULL wait_until) must come first, ahead of scheduled ones.
+	// Ready tasks come before scheduled tasks.
 	sb.OrderBy("wait_until ASC NULLS FIRST", "id ASC")
 	sb.Limit(limit)
 
@@ -186,7 +177,7 @@ type completedTask struct {
 	err            *string
 }
 
-// insertTx inserts a completed task as part of the given executor.
+// insertTx inserts a completed task.
 func (t *completedTask) insertTx(ctx context.Context, exec datastore.Executor) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(completedTasksTable)
@@ -211,7 +202,7 @@ func (t *completedTask) insertTx(ctx context.Context, exec datastore.Executor) e
 	return nil
 }
 
-// scanCompletedTasks loads completed tasks from the database using the given query.
+// scanCompletedTasks loads completed tasks with the given query.
 func scanCompletedTasks(ctx context.Context, exec datastore.Executor, query string, args ...any) ([]*completedTask, error) {
 	rows, err := exec.Query(ctx, query, args...)
 	if err != nil {
@@ -236,7 +227,7 @@ func scanCompletedTasks(ctx context.Context, exec datastore.Executor, query stri
 	return tasks, nil
 }
 
-// deleteExpiredCompletedTasks removes completed tasks whose expiry passed.
+// deleteExpiredCompletedTasks removes completed tasks past their expiry.
 func deleteExpiredCompletedTasks(ctx context.Context, exec datastore.Executor) error {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(completedTasksTable)
@@ -249,7 +240,7 @@ func deleteExpiredCompletedTasks(ctx context.Context, exec datastore.Executor) e
 	return nil
 }
 
-// flushTasks deletes every unclaimed queued task and returns the count.
+// flushTasks deletes unclaimed queued tasks and returns the count.
 func flushTasks(ctx context.Context, exec datastore.Executor) (int64, error) {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(tasksTable)
@@ -263,7 +254,7 @@ func flushTasks(ctx context.Context, exec datastore.Executor) (int64, error) {
 	return tag.RowsAffected(), nil
 }
 
-// flushCompletedTasks deletes every completed task record and returns the count.
+// flushCompletedTasks deletes completed task records and returns the count.
 func flushCompletedTasks(ctx context.Context, exec datastore.Executor) (int64, error) {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	db.DeleteFrom(completedTasksTable)

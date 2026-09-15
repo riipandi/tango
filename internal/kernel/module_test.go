@@ -54,7 +54,7 @@ func TestRegistryDuplicateNamePanics(t *testing.T) {
 	})
 }
 
-// bareModule implements only kernel.Module — no route capability.
+// bareModule has no route or lifecycle capability.
 type bareModule struct{}
 
 func (m bareModule) Name() string { return "bare" }

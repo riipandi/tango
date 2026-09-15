@@ -138,7 +138,7 @@ func TestTaskAddOpSaveTransaction(t *testing.T) {
 
 	tk := testTask{Val: "e"}
 
-	// The caller owns the transaction: no notify until it commits.
+	// The caller owns the transaction; notify comes after commit.
 	tx, err := c.store.Pool().Begin(t.Context())
 	require.NoError(t, err)
 	_, err = c.Add(tk).Executor(tx).Save()
@@ -155,7 +155,7 @@ func TestTaskAddOpSaveEncodeFailure(t *testing.T) {
 
 	tk := testTaskEncodeFail{Val: make(chan int)}
 
-	// Caller transaction: the encode error propagates and the tx rolls back.
+	// An encode error propagates and rolls back the caller transaction.
 	tx, err := c.store.Pool().Begin(t.Context())
 	require.NoError(t, err)
 	_, err = c.Add(tk).Executor(tx).Save()
@@ -169,7 +169,7 @@ func TestTaskAddOpSaveRollback(t *testing.T) {
 	m := &mockDispatcher{}
 	c.dispatcher = m
 
-	// Encode failure inside a client-managed transaction must roll back cleanly.
+	// An encode failure rolls back the client-managed transaction.
 	_, err := c.Add(testTaskEncodeFail{Val: make(chan int)}).Save()
 	assert.Error(t, err)
 	assert.False(t, m.notified)

@@ -79,6 +79,6 @@ func TestNewFileRequiresPath(t *testing.T) {
 }
 
 func TestIsTTY(t *testing.T) {
-	// go test pipes stdout, so it is never a terminal here.
+	// Test output is not a terminal.
 	assert.False(t, isTTY(os.Stdout))
 }

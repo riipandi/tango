@@ -1,6 +1,4 @@
-// Package testutils holds shared integration-test helpers: short-
-// lived service containers spun up per test via testcontainers, so
-// tests never depend on a running compose stack.
+// Package testutils provides shared integration-test helpers.
 package testutils
 
 import (
@@ -14,8 +12,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// Mailpit is a running Mailpit container: an SMTP catch-all relay
-// with an HTTP API for verifying deliveries.
+// Mailpit is a running Mailpit container.
 type Mailpit struct {
 	// SMTPAddr is the host:port of the SMTP listener.
 	SMTPAddr string
@@ -23,14 +20,12 @@ type Mailpit struct {
 	// APIURL is the HTTP API base URL (http://host:port).
 	APIURL string
 
-	// Username and Password are the relay credentials (auth is
-	// enforced with MP_SMTP_AUTH, plaintext allowed).
+	// Username and Password are the relay credentials.
 	Username string
 	Password string
 }
 
-// mailpitImage is intentionally unpinned to match compose.yaml's
-// MAILPIT_VERSION default; pin both when pinning one.
+// mailpitImage is the Mailpit image used by integration tests.
 const mailpitImage = "axllent/mailpit:latest"
 
 var (
@@ -39,10 +34,7 @@ var (
 	sharedErr     error
 )
 
-// StartMailpit returns the process-wide shared Mailpit container:
-// the first call starts it, later calls in the same test binary
-// reuse it, and the testcontainers reaper terminates it when the
-// binary exits. Tests isolate their data with unique recipients.
+// StartMailpit returns the shared Mailpit container for the test binary.
 func StartMailpit(ctx context.Context, t testing.TB) *Mailpit {
 	t.Helper()
 

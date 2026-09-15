@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockDispatcher replaces the real dispatcher in client tests.
+// mockDispatcher replaces the dispatcher in client tests.
 type mockDispatcher struct {
 	started      bool
 	stopped      bool
@@ -119,8 +119,7 @@ func TestClientNotify(t *testing.T) {
 	assert.True(t, m.notified)
 }
 
-// TestLoggerFuncAdapter proves the LoggerFunc adapter: any log function can
-// back the queue logger without this package importing the logger.
+// TestLoggerFuncAdapter checks the LoggerFunc adapter.
 func TestLoggerFuncAdapter(t *testing.T) {
 	var (
 		infoMessage  string

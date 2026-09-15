@@ -9,35 +9,29 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// Principal and Authenticator are the kernel contracts; the middleware
-// implements Authenticator (session resolver) structurally.
+// Principal aliases the kernel principal type.
 type Principal = kernel.Principal
 
-// Authenticator resolves a session cookie token to a principal;
-// wire the verifier in the api-key phase.
+// Authenticator resolves a session token to a principal.
 type Authenticator = kernel.Authenticator
 
-// APIKeyVerifier resolves an X-API-KEY header value to a principal;
-// wired by the registry once the api key feature lands.
+// APIKeyVerifier resolves an API key to a principal.
 type APIKeyVerifier func(ctx context.Context, key string) (Principal, error)
 
 type principalContextKey struct{}
 
-// WithPrincipal attaches the principal to the context.
+// WithPrincipal stores a principal in the context.
 func WithPrincipal(ctx context.Context, p Principal) context.Context {
 	return context.WithValue(ctx, principalContextKey{}, p)
 }
 
-// PrincipalFromContext returns the request principal; ok is false
-// on unauthenticated routes.
+// PrincipalFromContext returns the request principal.
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	p, ok := ctx.Value(principalContextKey{}).(Principal)
 	return p, ok
 }
 
-// RequireAuth resolves the session cookie and rejects anonymous
-// requests with 401. The cookie name comes from the feature owning
-// it (session.CookieName), keeping this package module-free.
+// RequireAuth resolves the session cookie and rejects anonymous requests.
 func RequireAuth(auth Authenticator, cookieName string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -58,8 +52,7 @@ func RequireAuth(auth Authenticator, cookieName string) func(http.Handler) http.
 	}
 }
 
-// RequireAdmin rejects non-admin principals with 403; run it after
-// RequireAuth.
+// RequireAdmin rejects non-admin principals.
 func RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		principal, ok := PrincipalFromContext(r.Context())
@@ -75,8 +68,7 @@ func RequireAdmin(next http.Handler) http.Handler {
 	})
 }
 
-// RequireAPIKey resolves the X-API-KEY header for machine clients;
-// wire the verifier in the api-key phase.
+// RequireAPIKey resolves the X-API-KEY header for machine clients.
 func RequireAPIKey(verifier APIKeyVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

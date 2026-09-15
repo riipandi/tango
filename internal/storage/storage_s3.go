@@ -18,8 +18,7 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-// S3Config selects bucket and endpoint; a non-empty Endpoint makes the
-// client MinIO-compatible (path-style addressing).
+// S3Config selects the bucket, endpoint, and credentials.
 type S3Config struct {
 	Bucket          string
 	Region          string
@@ -36,8 +35,7 @@ type s3Storage struct {
 	prefix string
 }
 
-// NewS3Storage builds the S3 backend. Static credentials come from
-// config; no ambient provider chain.
+// NewS3Storage builds an S3 backend with static credentials.
 func NewS3Storage(cfg S3Config) (Store, error) {
 	awsCfg, err := awscfg.LoadDefaultConfig(context.Background(),
 		awscfg.WithRegion(cfg.Region),
@@ -51,7 +49,7 @@ func NewS3Storage(cfg S3Config) (Store, error) {
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
 		}
 		o.UsePathStyle = cfg.ForcePathStyle
-		// MinIO rejects the default streaming CRC payloads.
+		// Some S3-compatible servers reject streaming CRC payloads.
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	})
@@ -61,10 +59,7 @@ func NewS3Storage(cfg S3Config) (Store, error) {
 func (s *s3Storage) Type() string { return TypeS3 }
 
 func (s *s3Storage) Save(ctx context.Context, p string, data io.Reader) error {
-	// The SDK must hash (and sometimes re-read) the payload, so the
-	// body has to be seekable. Callers pass streams (multipart file
-	// handles), which are not — buffer it. Uploads are bounded by the
-	// API's 5 MiB cap, so this stays small.
+	// Buffer the stream because the SDK may read it more than once.
 	buffered, err := io.ReadAll(data)
 	if err != nil {
 		return fmt.Errorf("storage: s3 read %q: %w", p, err)

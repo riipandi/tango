@@ -13,10 +13,9 @@ import (
 	"github.com/riipandi/tango/internal/logger"
 )
 
-// VersionFeed caches the newest published release so /api/version/latest
-// answers from memory instead of calling GitHub on every request.
+// VersionFeed caches the newest published release.
 type VersionFeed struct {
-	// Fetch performs the lookup; injected so it can be stubbed in tests.
+	// Fetch performs the release lookup.
 	Fetch func(ctx context.Context) (string, error)
 
 	// CheckInterval is how often the recurring job refreshes the value.
@@ -27,12 +26,10 @@ type VersionFeed struct {
 	fetched time.Time
 }
 
-// VersionCheckInterval is the refresh cadence; upstream caches for 15
-// minutes, which is far more traffic than a release feed needs.
+// VersionCheckInterval is the release refresh interval.
 const VersionCheckInterval = 6 * time.Hour
 
-// Latest returns the cached release, falling back to the running build
-// when the feed has never succeeded: the endpoint must always answer.
+// Latest returns the cached release or the running build.
 func (v *VersionFeed) Latest() string {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -70,8 +67,7 @@ func (v *VersionFeed) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// NewVersionFeed builds the feed over the shared outbound client,
-// reading the latest release tag from GitHub.
+// NewVersionFeed builds a feed over the shared outbound client.
 func NewVersionFeed(client *fetcher.Fetcher, source string) *VersionFeed {
 	return &VersionFeed{
 		CheckInterval: VersionCheckInterval,

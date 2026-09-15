@@ -1,7 +1,6 @@
 package config
 
-// defaultConfig is the bottom Load layer: one struct, so defaults
-// can't drift from the schema.
+// defaultConfig is the base config layer and schema source for defaults.
 var defaultConfig = Config{
 	Host: "localhost",
 	Port: 3080,

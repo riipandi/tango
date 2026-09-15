@@ -12,9 +12,7 @@ import (
 	"github.com/riipandi/tango/internal/mailer"
 )
 
-// API key expiry reminders. The window is deliberately wide (a key is
-// announced once, days before it dies) and the sent marker keeps the
-// job idempotent: re-running inside the window sends nothing twice.
+// API key expiry reminder settings.
 const (
 	// APIKeyExpiryInterval is how often the reminder sweep runs.
 	APIKeyExpiryInterval = 12 * time.Hour
@@ -31,9 +29,7 @@ type expiringKey struct {
 	ExpiresAt time.Time
 }
 
-// RemindExpiringAPIKeys builds the recurring job that warns users
-// before their API keys expire. Mail is queued, never sent inline, so
-// a slow relay cannot stall the maintenance worker.
+// RemindExpiringAPIKeys builds the recurring API key reminder job.
 func RemindExpiringAPIKeys(db datastore.Store, sender MailEnqueuer, log logger.Logger) Job {
 	return Job{
 		Name:     "remind_expiring_api_keys",
@@ -60,8 +56,7 @@ func RemindExpiringAPIKeys(db datastore.Store, sender MailEnqueuer, log logger.L
 					Data: map[string]any{
 						"Name":       key.UserName,
 						"APIKeyName": key.Name,
-						// Pre-formatted: template data survives the queue
-						// as JSON, so a time.Time would arrive as a string.
+						// Format the time before it enters the JSON queue.
 						"ExpiresAt": key.ExpiresAt.Format("2006-01-02 15:04:05 MST"),
 					},
 				}
@@ -80,14 +75,12 @@ func RemindExpiringAPIKeys(db datastore.Store, sender MailEnqueuer, log logger.L
 	}
 }
 
-// MailEnqueuer queues transactional email; the jobs Registry
-// implements it.
+// MailEnqueuer queues transactional email.
 type MailEnqueuer interface {
 	EnqueueEmail(ctx context.Context, msg mailer.Message) error
 }
 
-// expiringAPIKeys returns unrevoked keys inside the reminder window
-// that have not been announced yet.
+// expiringAPIKeys returns unrevoked keys that need a reminder.
 func expiringAPIKeys(ctx context.Context, db datastore.Store) ([]expiringKey, error) {
 	reference := now()
 
@@ -126,7 +119,7 @@ func expiringAPIKeys(ctx context.Context, db datastore.Store) ([]expiringKey, er
 	return out, rows.Err()
 }
 
-// markReminderSent stamps the key so the next sweep skips it.
+// markReminderSent marks a key so later sweeps skip it.
 func markReminderSent(ctx context.Context, db datastore.Store, keyID string) error {
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update("public.api_keys")

@@ -33,13 +33,11 @@ func contextWithTimeout() context.Context {
 }
 
 func testLogger() logger.Logger {
-	// Silent mock: same API, emits nothing, Fatal does not exit.
+	// Use a silent logger for the test server.
 	return loglayer.NewMock()
 }
 
-// testServer builds the HTTP server over real Postgres-backed
-// modules (shared test container) — the same wiring the registry
-// uses in production.
+// testServer builds the HTTP server over Postgres-backed modules.
 func testServer(t *testing.T, cfg *config.Config) *HTTPServer {
 	pg := testutils.StartPostgres(t.Context(), t)
 	if _, err := database.MigrateUp(t.Context(), pg.DSN); err != nil {
@@ -88,7 +86,7 @@ func TestNewHTTPServerMountsModules(t *testing.T) {
 	cfg := testConfig()
 	srv := testServer(t, cfg)
 
-	// Unique username per run: the test container is shared.
+	// Use a unique username because the container may be shared.
 	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
 	body := fmt.Sprintf(`{"username":"transport_%s","email":"transport-%s@example.com"}`, stamp, stamp)
 
@@ -112,7 +110,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 	cfg := testConfig()
 	srv := testServer(t, cfg)
 
-	// No incoming header: the server generates one and echoes it.
+	// The server generates an ID when none is supplied.
 	w := httptest.NewRecorder()
 	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api", nil))
 	require.Equal(t, http.StatusOK, w.Code)
@@ -120,7 +118,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 	assert.NotEmpty(t, id)
 	assert.True(t, strings.HasPrefix(id, "req_"), id)
 
-	// Incoming header: echoed verbatim.
+	// A supplied ID is echoed unchanged.
 	w = httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api", nil)
 	req.Header.Set("X-Request-Id", "client-supplied-id")
@@ -132,7 +130,7 @@ func TestHTTPServerShutdown(t *testing.T) {
 	cfg := testConfig()
 	srv := NewHTTPServer(kernel.NewRegistry(), cfg, testLogger(), nil, nil)
 
-	// Server never listened: Shutdown must be a safe no-op.
+	// Shutdown is safe before the server listens.
 	assert.NoError(t, srv.Shutdown(contextWithTimeout()))
 	assert.Nil(t, srv.Server)
 }

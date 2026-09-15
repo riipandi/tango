@@ -7,10 +7,7 @@ import (
 	"go.loglayer.dev/v3"
 )
 
-// parseLevel maps a string to slog handler level and core level.
-// Slog lacks trace/fatal/panic: trace→debug, fatal/panic→error at
-// the handler; core keeps the true level (fatal exits, panic
-// panics). Empty means info.
+// parseLevel maps a string to slog and LogLayer levels.
 func parseLevel(s string) (slog.Level, loglayer.LogLevel, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "trace":

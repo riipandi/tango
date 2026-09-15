@@ -13,13 +13,13 @@ func TestSettingsFromValues(t *testing.T) {
 		SMTPHost: "env-host", SMTPPort: 1025,
 	}
 
-	// Empty values keep the env fallback per field.
+	// Empty values keep the fallback per field.
 	values := map[string]string{}
 	got := SettingsFromValues(values, fallback)
 	assert.Equal(t, "env-host", got.SMTPHost)
 	assert.Equal(t, 1025, got.SMTPPort)
 
-	// DB overrides win, port parses, secure flips.
+	// Overrides win, the port parses, and secure mode changes.
 	got = SettingsFromValues(map[string]string{
 		"smtp_host": "db-host", "smtp_port": "2525", "smtp_secure": "true",
 		"smtp_from_name": "DB Name",
@@ -29,7 +29,7 @@ func TestSettingsFromValues(t *testing.T) {
 	assert.True(t, got.SMTPSecure)
 	assert.Equal(t, "DB Name", got.FromName)
 
-	// A bad port string is ignored, not fatal.
+	// An invalid port is ignored.
 	got = SettingsFromValues(map[string]string{"smtp_port": "soon"}, fallback)
 	assert.Equal(t, 1025, got.SMTPPort)
 }

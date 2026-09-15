@@ -11,14 +11,13 @@ import (
 	"github.com/riipandi/tango/internal/config"
 )
 
-// Backend type names, also the STORAGE_BACKEND config value.
+// Backend type names.
 const (
 	TypeFilesystem = "filesystem"
 	TypeS3         = "s3"
 )
 
-// ErrNotFound maps to fs.ErrNotExist so callers can errors.Is against
-// either. Backend implementations return it for missing objects.
+// ErrNotFound reports a missing object.
 var ErrNotFound = errors.New("storage: object not found")
 
 // IsNotExist reports whether err came from a missing object.
@@ -33,8 +32,7 @@ type ObjectInfo struct {
 	ModTime os.FileInfo // nil for S3 listings without the field
 }
 
-// Store is the blob backend contract. Paths are slash-separated and
-// root-relative ("application-images/logo.png").
+// Store is the blob backend contract. Paths are root-relative and use slashes.
 type Store interface {
 	Save(ctx context.Context, path string, data io.Reader) error
 	Open(ctx context.Context, path string) (io.ReadCloser, int64, error)
@@ -44,8 +42,7 @@ type Store interface {
 	Type() string
 }
 
-// New picks the backend from config. S3 is selected when
-// storage.s3_endpoint_url is set; filesystem under DataDir otherwise.
+// New selects S3 when an endpoint is set, otherwise filesystem storage.
 func New(cfg config.StorageConfig) (Store, error) {
 	if cfg.S3EndpointURL != "" {
 		return NewS3Storage(S3Config{

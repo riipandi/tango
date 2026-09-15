@@ -1,8 +1,6 @@
 package config
 
-// Config is schema and defaults source: koanf tags name keys,
-// defaultConfig fills the bottom layer. Env maps mechanically:
-// first segment is the section (AUTH_PRIVATE_KEY -> auth.private_key).
+// Config defines runtime settings and their koanf keys.
 type Config struct {
 	Host     string         `koanf:"host"`
 	Port     int            `koanf:"port"`
@@ -16,8 +14,7 @@ type Config struct {
 	Storage  StorageConfig  `koanf:"storage"`
 }
 
-// LDAPConfig holds the directory sync settings (env LDAP_* until
-// appconfig takes over as the admin-editable source).
+// LDAPConfig holds directory connection and attribute settings.
 type LDAPConfig struct {
 	Enabled        bool   `koanf:"enabled"`
 	URL            string `koanf:"url"`

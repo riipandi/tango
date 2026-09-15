@@ -1,6 +1,4 @@
-// Package fetcher is the shared outbound HTTP client (resty):
-// sane User-Agent, request timeout, JSON helpers with non-2xx as
-// errors, one log entry per request.
+// Package fetcher provides the shared outbound HTTP client.
 package fetcher
 
 import (
@@ -9,49 +7,41 @@ import (
 	"github.com/riipandi/tango/internal/logger"
 )
 
-// DefaultTimeout bounds each request when Timeout is unset.
+// DefaultTimeout is used when Options.Timeout is unset.
 const DefaultTimeout = 10 * time.Second
 
-// DefaultRetries is retries after first attempt when Retries unset.
+// DefaultRetries is the retry count when Options.Retries is zero.
 const DefaultRetries = 2
 
-// Breaker defaults for the opt-in circuit breaker.
+// Circuit-breaker defaults.
 const (
 	DefaultBreakerThreshold = 5                // failures to open
 	DefaultBreakerSuccess   = 1                // probes to close
 	DefaultBreakerReset     = 30 * time.Second // open duration
 )
 
-// Options parametrizes New.
+// Options configures New.
 type Options struct {
-	// BaseURL prefixes requests; empty for the shared instance
-	// (callers pass absolute URLs).
+	// BaseURL prefixes requests. Empty means callers use absolute URLs.
 	BaseURL string
 
 	// Timeout bounds each request. Zero uses DefaultTimeout.
 	Timeout time.Duration
 
-	// Logger gets one entry per request (debug 2xx, warn 4xx,
-	// error 5xx/transport). Nil silences.
+	// Logger receives one entry per request. Nil disables logging.
 	Logger logger.Logger
 
 	// Debug enables resty's request/response dump.
 	Debug bool
 
-	// Retries after first attempt for idempotent requests
-	// (GET/HEAD/PUT/DELETE/OPTIONS/TRACE) on 429/5xx and transient
-	// failures, backoff with jitter. Zero uses DefaultRetries;
-	// negative disables. POST/PATCH never retry unless opted in
-	// per request.
+	// Retries is the retry count for idempotent requests. Zero uses
+	// DefaultRetries; negative disables retries.
 	Retries int
 
-	// RetryWaitTime/MaxWaitTime bound backoff. Zero uses resty
-	// defaults (100ms min, 2s max).
+	// RetryWaitTime and RetryMaxWaitTime bound retry backoff.
 	RetryWaitTime    time.Duration
 	RetryMaxWaitTime time.Duration
 
-	// CircuitBreaker enables a count-based breaker. Opt-in: on the
-	// shared client it trips all integrations at once; per-upstream
-	// breakers want dedicated Fetchers.
+	// CircuitBreaker enables a count-based breaker for this client.
 	CircuitBreaker bool
 }

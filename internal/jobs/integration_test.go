@@ -23,7 +23,7 @@ import (
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
-// testDB opens the shared container with migrations applied.
+// testDB opens Postgres with migrations applied.
 func testDB(t *testing.T) datastore.Store {
 	t.Helper()
 	ctx := t.Context()
@@ -37,7 +37,7 @@ func testDB(t *testing.T) datastore.Store {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	// The container is shared: never let this test's rows reach another.
+	// Clear queue rows before the next test.
 	t.Cleanup(func() {
 		bg := context.Background()
 		_, _ = db.Exec(bg, "DELETE FROM queue_tasks")
@@ -57,7 +57,7 @@ func testQueue(t *testing.T, db datastore.Store) *queue.Client {
 	return client
 }
 
-// queuedTasks returns the payloads sitting in one queue.
+// queuedTasks decodes payloads in one queue.
 func queuedTasks[T any](t *testing.T, db datastore.Store, queue string) []T {
 	t.Helper()
 	rows, err := db.Query(t.Context(),
@@ -77,7 +77,7 @@ func queuedTasks[T any](t *testing.T, db datastore.Store, queue string) []T {
 	return out
 }
 
-// newUserRow inserts a user for FK-bound fixtures.
+// newUserRow inserts a user for fixtures with foreign keys.
 func newUserRow(t *testing.T, db datastore.Store) user.UserID {
 	t.Helper()
 	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
@@ -96,7 +96,7 @@ func TestNewRegistryRegistersQueues(t *testing.T) {
 	registry := NewRegistry(queue, &fakeMailer{}, logger.NewMock())
 	require.NotNil(t, registry)
 
-	// The email and maintenance queues must accept their task types.
+	// Both registered queues must accept their task types.
 	require.NoError(t, registry.EnqueueEmail(t.Context(), mailer.Message{
 		To: "someone@example.com", Subject: "Hi", Template: "test-email",
 	}))
@@ -123,7 +123,7 @@ func TestRegistryModuleContract(t *testing.T) {
 func TestSetVersionFeedAndLatest(t *testing.T) {
 	registry := &Registry{jobs: map[string]Job{}, log: logger.NewMock()}
 
-	// Without a feed the registry reports the running build.
+	// Without a feed, the registry reports the running build.
 	assert.NotEmpty(t, registry.Latest())
 
 	feed := &VersionFeed{Fetch: func(context.Context) (string, error) { return "v9.9.9", nil }}
@@ -145,13 +145,13 @@ func TestStartSchedulesEveryRegisteredJob(t *testing.T) {
 	assert.Equal(t, "scheduled", scheduled[0].Job)
 	assert.EqualValues(t, 3600, scheduled[0].IntervalSeconds)
 
-	// The first run is delayed, never immediate.
+	// The first run is delayed.
 	var future int
 	require.NoError(t, db.QueryRow(t.Context(),
 		"SELECT count(*) FROM queue_tasks WHERE queue = $1 AND wait_until > CURRENT_TIMESTAMP", MaintenanceQueue).Scan(&future))
 	assert.Equal(t, 1, future, "the first run must be delayed by the jittered interval")
 
-	// Start is one-shot: a second call must not double-schedule.
+	// A second Start must not schedule another run.
 	require.NoError(t, registry.Start(t.Context()))
 	assert.Len(t, queuedTasks[RecurringTask](t, db, MaintenanceQueue), 1)
 }
@@ -170,19 +170,14 @@ func TestRunJobReschedulesAfterSuccess(t *testing.T) {
 	require.NoError(t, registry.runJob(t.Context(), RecurringTask{Job: "recurring", IntervalSeconds: 60}))
 	assert.Equal(t, 1, ran)
 
-	// The next run is enqueued even though this one returned no error.
+	// A successful run schedules the next run.
 	next := queuedTasks[RecurringTask](t, db, MaintenanceQueue)
 	require.Len(t, next, 1)
 	assert.Equal(t, "recurring", next[0].Job)
 	assert.EqualValues(t, 60, next[0].IntervalSeconds)
 }
 
-// freezeAt pins the job clock so expired rows can be produced from
-// rows that were valid when written. The DDL carries
-// CHECK (expires_at > CURRENT_TIMESTAMP) — inherited from upstream —
-// which is only evaluated at INSERT/UPDATE: a row becomes expired by
-// the clock moving on. Holding the job clock in the past reproduces
-// that state without waiting for wall time.
+// freezeAt replaces the job clock so tests can create expired rows.
 func freezeAt(t *testing.T, at time.Time) {
 	t.Helper()
 	original := now
@@ -195,9 +190,7 @@ func TestCleanupTokensRemovesExpiredRows(t *testing.T) {
 	ctx := t.Context()
 	userID := newUserRow(t, db)
 
-	// Token rows are written as valid, then the job clock moves two
-	// hours ahead: auth_tokens, signup_tokens, and sessions are all
-	// past their expiry at that point.
+	// Write valid rows, then move the job clock past their expiry.
 	inserted := time.Now().UTC()
 	expired := inserted.Add(2 * time.Hour)
 	live := inserted.Add(24 * time.Hour)
@@ -226,7 +219,7 @@ func TestCleanupTokensRemovesExpiredRows(t *testing.T) {
 	job := CleanupTokens(db, logger.NewMock())
 	require.NoError(t, job.Run(ctx))
 
-	// Every expired row is gone; the live one survives.
+	// Expired rows are gone; the live row remains.
 	for _, probe := range []struct {
 		query string
 		args  []any
@@ -265,11 +258,11 @@ func TestCleanupTokensAlsoDropsRevokedSessions(t *testing.T) {
 
 func TestCleanupTokensReportsNothingToDo(t *testing.T) {
 	db := testDB(t)
-	// No expired rows: the job still succeeds and stays quiet.
+	// An empty cleanup still succeeds without logging.
 	require.NoError(t, CleanupTokens(db, logger.NewMock()).Run(t.Context()))
 }
 
-// stubPruner records the cutoff and returns a scripted count.
+// stubPruner records the cutoff and returns a fixed count.
 type stubPruner struct {
 	cutoff  time.Time
 	removed int64
@@ -302,7 +295,7 @@ func TestRemindExpiringAPIKeysQueuesOnceAndMarksTheKey(t *testing.T) {
 	ctx := t.Context()
 	userID := newUserRow(t, db)
 
-	// Inside the reminder window, unrevoked, unannounced.
+	// This key is unrevoked, unannounced, and inside the reminder window.
 	expiresAt := time.Now().UTC().Add(24 * time.Hour)
 	_, err := db.Exec(ctx,
 		`INSERT INTO public.api_keys (user_id, name, prefix, key_hash, expires_at)
@@ -321,7 +314,7 @@ func TestRemindExpiringAPIKeysQueuesOnceAndMarksTheKey(t *testing.T) {
 	assert.Equal(t, "api-key-expiring-soon", sent[0].Template)
 	assert.Equal(t, "Expiring Key", sent[0].Data["APIKeyName"])
 
-	// The marker makes the job idempotent inside the window.
+	// The marker prevents a second reminder.
 	require.NoError(t, job.Run(ctx))
 	assert.Len(t, mail.sent(), 1, "a reminded key must not be reminded again")
 }
@@ -331,7 +324,7 @@ func TestRemindExpiringAPIKeysSkipsOutOfWindowKeys(t *testing.T) {
 	ctx := t.Context()
 	userID := newUserRow(t, db)
 
-	// Both keys expire after the 7-day reminder window.
+	// Both keys expire outside the reminder window.
 	for name, expires := range map[string]time.Time{
 		"far-key":  time.Now().UTC().Add(60 * 24 * time.Hour),
 		"near-key": time.Now().UTC().Add(40 * 24 * time.Hour),
@@ -343,8 +336,7 @@ func TestRemindExpiringAPIKeysSkipsOutOfWindowKeys(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Move the clock 36 days ahead: only the near key falls inside
-	// the window then.
+	// Move the clock so only the near key enters the window.
 	freezeAt(t, time.Now().UTC().Add(36*24*time.Hour))
 
 	mail := &fakeEnqueuer{}
@@ -409,8 +401,7 @@ func TestVersionJobSurfacesLookupFailure(t *testing.T) {
 }
 
 func TestNewVersionFeedReadsTheTagName(t *testing.T) {
-	// The feed is built over the shared fetcher; a nil client is not
-	// exercised here, only the wiring shape.
+	// The feed uses the shared fetcher.
 	feed := NewVersionFeed(nil, "https://example.test/releases/latest")
 	require.NotNil(t, feed)
 	assert.Equal(t, VersionCheckInterval, feed.CheckInterval)
@@ -418,8 +409,7 @@ func TestNewVersionFeedReadsTheTagName(t *testing.T) {
 }
 
 func TestNewVersionFeedParsesAReleaseResponse(t *testing.T) {
-	// End to end over the shared fetcher: the GitHub payload shape and
-	// the tag prefix strip must survive the real HTTP path.
+	// The HTTP path must decode the release payload and strip its tag prefix.
 	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/repos/owner/repo/releases/latest", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")

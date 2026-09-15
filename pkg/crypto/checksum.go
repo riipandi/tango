@@ -1,8 +1,5 @@
-// Package crypto provides the platform's cryptographic
-// primitives: BLAKE3 payload checksums, HMAC-SHA256 signatures,
-// AES-256-GCM encryption for secrets at rest, and configurable
-// password hashing (scrypt by default, argon2id optional) in PHC
-// format.
+// Package crypto provides hashing, signing, encryption, and password
+// hashing helpers.
 package crypto
 
 import (
@@ -26,13 +23,10 @@ const (
 	Blake3Output64 Blake3OutputLength = 64
 )
 
-// ErrInvalidBlake3OutputLength is returned when a checksum requests
-// an output length outside the supported set.
+// ErrInvalidBlake3OutputLength reports an unsupported checksum length.
 var ErrInvalidBlake3OutputLength = errors.New("crypto: invalid blake3 output length")
 
-// ChecksumBlake3 returns the BLAKE3 checksum of data with the given
-// output length. Lengths below 32 truncate the first block; 64
-// extends through BLAKE3's XOF.
+// ChecksumBlake3 returns a BLAKE3 checksum with the requested length.
 func ChecksumBlake3(data []byte, length Blake3OutputLength) ([]byte, error) {
 	if !validBlake3OutputLength(length) {
 		return nil, fmt.Errorf("%w: %d", ErrInvalidBlake3OutputLength, length)
@@ -65,16 +59,14 @@ func validBlake3OutputLength(length Blake3OutputLength) bool {
 	}
 }
 
-// SignHMAC returns the HMAC-SHA256 signature of payload under key —
-// used for webhook deliveries and other signed payloads.
+// SignHMAC returns the HMAC-SHA256 signature of payload under key.
 func SignHMAC(payload, key []byte) []byte {
 	mac := hmac.New(sha256.New, key)
 	mac.Write(payload)
 	return mac.Sum(nil)
 }
 
-// VerifyHMAC reports whether sig is the valid HMAC-SHA256 of payload
-// under key, comparing in constant time.
+// VerifyHMAC reports whether sig matches the HMAC-SHA256 of payload.
 func VerifyHMAC(payload, sig, key []byte) bool {
 	return hmac.Equal(sig, SignHMAC(payload, key))
 }

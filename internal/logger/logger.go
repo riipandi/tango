@@ -14,14 +14,14 @@ import (
 )
 
 const (
-	// DefaultBufferSize is async queue capacity when Buffer unset.
+	// DefaultBufferSize is the async queue capacity when unset.
 	DefaultBufferSize = 4096
 
-	// DefaultFlushTimeout bounds Close and close-on-fatal wait.
+	// DefaultFlushTimeout bounds shutdown and fatal-log flushing.
 	DefaultFlushTimeout = 5 * time.Second
 )
 
-// File rotation for file output.
+// File rotation defaults.
 const (
 	defaultMaxSizeMB   = 100
 	defaultMaxBackups  = 7
@@ -29,10 +29,7 @@ const (
 	defaultCompression = true
 )
 
-// New builds the logger: LogLayer API over an async transport.
-// Structured emits JSON everywhere (stderr console, lumberjack
-// file); pretty is colorized console-only. The closer drains the
-// queue; call on shutdown (and before file reads in tests).
+// New builds the logger over an asynchronous transport.
 func New(opts Options) (Logger, io.Closer, error) {
 	slogLevel, coreLevel, err := parseLevel(opts.Level)
 	if err != nil {
@@ -57,7 +54,7 @@ func New(opts Options) (Logger, io.Closer, error) {
 	return core, asyncT, nil
 }
 
-// newTransport picks the sink behind the async queue.
+// newTransport picks the sink behind the queue.
 func newTransport(opts Options, slogLevel slog.Level, coreLevel loglayer.LogLevel) (loglayer.Transport, error) {
 	format := opts.Format
 	if format == "" {
@@ -109,8 +106,7 @@ func slogTransport(h slog.Handler, coreLevel loglayer.LogLevel) loglayer.Transpo
 	})
 }
 
-// Slog adapts the shared loglayer logger to a std slog.Logger so
-// modules can use the slog API without taking a loglayer dependency.
+// Slog adapts the shared logger to slog.Logger.
 func Slog(log Logger) *slog.Logger {
 	return slog.New(&loglayerHandler{log: log})
 }

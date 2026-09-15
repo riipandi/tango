@@ -8,20 +8,15 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwk"
 )
 
-// KeyProvider supplies the active signing key (private side) and the
-// public verification key set. Implementations own key storage and
-// rotation; consumers (token issuance, discovery) only read.
+// KeyProvider supplies the signing key and public verification keys.
 type KeyProvider interface {
 	// SignKey returns the current signing key.
 	SignKey(ctx context.Context) (jwk.Key, error)
-	// VerifyKeySet returns every currently published public key,
-	// including keys still valid during a rotation overlap.
+	// VerifyKeySet returns the published public keys.
 	VerifyKeySet(ctx context.Context) (jwk.Set, error)
 }
 
-// CachedKeyProvider wraps a KeyProvider with a TTL cache. Rotation
-// becomes visible after the TTL or immediately via Invalidate; the
-// TTL doubles as the JWKS propagation delay for verifiers.
+// CachedKeyProvider caches keys for a fixed time.
 type CachedKeyProvider struct {
 	inner KeyProvider
 	ttl   time.Duration
@@ -33,8 +28,7 @@ type CachedKeyProvider struct {
 	loaded  time.Time
 }
 
-// NewCachedKeyProvider builds a cache in front of inner with the
-// given entry lifetime.
+// NewCachedKeyProvider builds a key cache with the given lifetime.
 func NewCachedKeyProvider(inner KeyProvider, ttl time.Duration) *CachedKeyProvider {
 	return &CachedKeyProvider{inner: inner, ttl: ttl, now: time.Now}
 }
@@ -45,8 +39,7 @@ func (c *CachedKeyProvider) WithClock(now func() time.Time) *CachedKeyProvider {
 	return c
 }
 
-// SignKey returns the cached signing key, refreshing it when the
-// entry is older than the TTL.
+// SignKey returns the cached signing key, refreshing it when expired.
 func (c *CachedKeyProvider) SignKey(ctx context.Context) (jwk.Key, error) {
 	c.mu.RLock()
 	fresh := c.loaded.Add(c.ttl).After(c.now()) && c.signKey != nil
@@ -86,7 +79,7 @@ func (c *CachedKeyProvider) VerifyKeySet(ctx context.Context) (jwk.Set, error) {
 	return set, nil
 }
 
-// Invalidate drops both cached entries; the next read reloads them.
+// Invalidate clears both cached entries.
 func (c *CachedKeyProvider) Invalidate() {
 	c.mu.Lock()
 	c.signKey, c.keySet, c.loaded = nil, nil, time.Time{}

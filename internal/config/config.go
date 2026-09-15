@@ -1,10 +1,9 @@
-// Package config loads runtime config by layering, later wins:
+// Package config loads runtime settings in layers; later layers win:
 //
-//	defaults → system env → --env-file → overrides
+//	defaults → --env-file → system env → overrides
 //
-// --env-file wins over system env; empty values are unset and never
-// shadow defaults. Unknown keys fail in the env file (curated) but
-// are ignored in system env (shared namespace).
+// Empty values do not shadow defaults. Unknown keys fail in the env file
+// but are ignored in the system environment.
 package config
 
 import (
@@ -22,7 +21,7 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// validKeys is every dotted key from Config's koanf tags; adding a field adds its key automatically.
+// validKeys contains every dotted key from Config's koanf tags.
 var validKeys = buildKeySet(reflect.TypeFor[Config](), "")
 
 // buildKeySet collects dotted keys of koanf-tagged leaves,
@@ -49,7 +48,7 @@ func buildKeySet(t reflect.Type, prefix string) map[string]bool {
 	return keys
 }
 
-// LoadOptions parametrizes Load.
+// LoadOptions configures Load.
 type LoadOptions struct {
 	// EnvFile is an optional dotenv file between defaults and env.
 	EnvFile string
@@ -67,8 +66,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		return nil, fmt.Errorf("load defaults: %w", err)
 	}
 
-	// Optional --env-file, above defaults, below the system env:
-	// real environment (compose, systemd) always wins over dotenv.
+	// Load the optional env file above defaults.
 	if opts.EnvFile != "" {
 		layer, err := envFileLayer(opts.EnvFile)
 		if err != nil {
@@ -81,7 +79,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		}
 	}
 
-	// System env, above the env file.
+	// The real environment wins over the env file.
 	if layer, err := envLayer(); err != nil {
 		return nil, err
 	} else if len(layer) > 0 {

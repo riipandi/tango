@@ -11,9 +11,7 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwt"
 )
 
-// Signer mints compact, signed JWTs whose private claims are the
-// typed set T. Build one per key; the With* methods return modified
-// copies, so a configured signer is safe to share.
+// Signer creates signed JWTs with typed private claims.
 type Signer[T any] struct {
 	key       jwk.Key
 	algorithm jwa.SignatureAlgorithm
@@ -22,8 +20,7 @@ type Signer[T any] struct {
 	ttl       time.Duration
 }
 
-// NewSigner builds a signer over key with the given signature
-// algorithm.
+// NewSigner builds a signer with the given key and algorithm.
 func NewSigner[T any](key jwk.Key, algorithm jwa.SignatureAlgorithm) (*Signer[T], error) {
 	if key == nil {
 		return nil, ErrMissingKey
@@ -34,8 +31,7 @@ func NewSigner[T any](key jwk.Key, algorithm jwa.SignatureAlgorithm) (*Signer[T]
 	return &Signer[T]{key: key, algorithm: algorithm}, nil
 }
 
-// minHMACKeySize maps HS* algorithms to the RFC 7518 §3.2 minimum
-// key size (the hash output length); 0 for non-HMAC algorithms.
+// minHMACKeySize returns the minimum key size for an HMAC algorithm.
 func minHMACKeySize(alg jwa.SignatureAlgorithm) int {
 	switch alg.String() {
 	case "HS256":
@@ -49,8 +45,7 @@ func minHMACKeySize(alg jwa.SignatureAlgorithm) int {
 	}
 }
 
-// validateHMACKeySize enforces the key-size floor for symmetric
-// algorithms; asymmetric keys pass through untouched.
+// validateHMACKeySize checks the minimum size of an HMAC key.
 func validateHMACKeySize(key jwk.Key, alg jwa.SignatureAlgorithm) error {
 	minimum := minHMACKeySize(alg)
 	if minimum == 0 {
@@ -67,33 +62,28 @@ func validateHMACKeySize(key jwk.Key, alg jwa.SignatureAlgorithm) error {
 	return fmt.Errorf("%w: %s requires at least %d bytes, got %d", ErrWeakHMACKey, alg, minimum, len(octets))
 }
 
-// WithIssuer sets the default iss claim, applied when Standard
-// leaves it empty.
+// WithIssuer sets the default issuer claim.
 func (s *Signer[T]) WithIssuer(issuer string) *Signer[T] {
 	clone := *s
 	clone.issuer = issuer
 	return &clone
 }
 
-// WithAudience sets the default aud claim, applied when Standard
-// leaves it empty.
+// WithAudience sets the default audience claim.
 func (s *Signer[T]) WithAudience(audience ...string) *Signer[T] {
 	clone := *s
 	clone.audience = audience
 	return &clone
 }
 
-// WithTTL sets the default token lifetime, applied when Standard
-// leaves ExpiresAt empty.
+// WithTTL sets the default token lifetime.
 func (s *Signer[T]) WithTTL(ttl time.Duration) *Signer[T] {
 	clone := *s
 	clone.ttl = ttl
 	return &clone
 }
 
-// Sign produces the compact JWT: registered claims from std (zero
-// values fall back to the signer defaults) plus the private claims
-// flattened from the typed set.
+// Sign creates a compact JWT from the registered and private claims.
 func (s *Signer[T]) Sign(claims T, std Standard) (string, error) {
 	tok := jwt.New()
 

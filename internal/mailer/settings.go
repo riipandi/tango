@@ -6,9 +6,7 @@ import (
 	"github.com/riipandi/tango/internal/config"
 )
 
-// SettingsFromValues builds the relay config from merged appconfig
-// values, falling back to the env config per field. The settings
-// source resolves through this per send.
+// SettingsFromValues merges app settings over the fallback config.
 func SettingsFromValues(values map[string]string, fallback config.MailerConfig) config.MailerConfig {
 	out := fallback
 	if v := values["smtp_from_email"]; v != "" {

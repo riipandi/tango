@@ -11,9 +11,7 @@ import (
 	"go.loglayer.dev/v3/transport"
 )
 
-// asyncTransport decouples emission from I/O: a bounded queue, one
-// worker forwarding to inner. Full queue drops and counts; emission
-// never blocks, even on a wedged sink.
+// asyncTransport sends log entries through a bounded worker queue.
 type asyncTransport struct {
 	transport.BaseTransport
 	inner loglayer.Transport
@@ -33,8 +31,7 @@ type asyncTransport struct {
 	flushTimeout time.Duration
 }
 
-// newAsync starts the drain worker. Non-positive buffer/timeout
-// take the defaults.
+// newAsync starts the drain worker and applies defaults.
 func newAsync(inner loglayer.Transport, buffer int, flushTimeout time.Duration) *asyncTransport {
 	if buffer <= 0 {
 		buffer = DefaultBufferSize
@@ -59,7 +56,7 @@ func (t *asyncTransport) work() {
 	for {
 		select {
 		case <-t.stop:
-			// Drain queued entries, then exit.
+			// Drain queued entries before exit.
 			for {
 				select {
 				case p := <-t.entries:
@@ -90,13 +87,12 @@ func (t *asyncTransport) SendToLogger(p loglayer.TransportParams) {
 	}
 }
 
-// GetLoggerInstance exposes the inner logger.
+// GetLoggerInstance returns the inner logger.
 func (t *asyncTransport) GetLoggerInstance() any {
 	return t.inner.GetLoggerInstance()
 }
 
-// Flush waits (bounded) until accepted entries reach inner.
-// Closes nothing.
+// Flush waits until accepted entries reach the inner transport.
 func (t *asyncTransport) Flush(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -110,8 +106,7 @@ func (t *asyncTransport) Flush(timeout time.Duration) error {
 	}
 }
 
-// Close drains, stops the worker, then closes inner if closable.
-// Idempotent.
+// Close drains the queue, stops the worker, and closes the inner transport.
 func (t *asyncTransport) Close() error {
 	t.closed.Store(true)
 	t.closeOnce.Do(func() { close(t.stop) })
@@ -131,7 +126,7 @@ func (t *asyncTransport) Close() error {
 	return err
 }
 
-// Dropped counts entries lost to full queue or post-close send.
+// Dropped returns the number of discarded entries.
 func (t *asyncTransport) Dropped() uint64 {
 	return t.dropped.Load()
 }

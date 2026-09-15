@@ -1,9 +1,4 @@
-// Package jobs owns the asynchronous task types that run on the built-in
-// queue: transactional email and recurring maintenance. Payload types and
-// queue tuning live here; the processors are injected by the composition
-// root, so this package never imports a domain module. The webhook
-// delivery task and its tuning live in modules/webhook, which owns the
-// payload and the processor.
+// Package jobs defines queued email and recurring maintenance tasks.
 package jobs
 
 import (
@@ -12,37 +7,31 @@ import (
 	"github.com/riipandi/tango/internal/queue"
 )
 
-// Queue names. Every task type declares exactly one; the name is the
-// registry key the queue uses, so it must stay stable across releases.
+// Queue names used by the task types.
 const (
 	EmailQueue       = "email"
 	MaintenanceQueue = "maintenance"
 )
 
-// Delivery tuning.
+// Queue tuning.
 const (
-	// EmailMaxAttempts covers relay hiccups; SMTP failures are usually
-	// permanent after a handful of tries.
+	// EmailMaxAttempts is the maximum number of delivery attempts.
 	EmailMaxAttempts = 5
-	// EmailTimeout bounds one SMTP transaction, delivery plus retry hook.
+	// EmailTimeout bounds one SMTP transaction.
 	EmailTimeout = 45 * time.Second
 	// EmailBackoff is the wait between delivery attempts.
 	EmailBackoff = time.Minute
 
-	// MaintenanceTimeout bounds a recurring job; token cleanup and log
-	// pruning are bulk deletes and may take seconds.
+	// MaintenanceTimeout bounds one recurring job.
 	MaintenanceTimeout = 10 * time.Minute
 	// MaintenanceBackoff is the wait before a failed maintenance run
 	// retries.
 	MaintenanceBackoff = time.Minute
-	// MaintenanceJitter spreads recurring jobs across instances so two
-	// deployments do not run the same prune at the same second.
+	// MaintenanceJitter spreads recurring jobs across instances.
 	MaintenanceJitter = 5 * time.Minute
 )
 
-// EmailTask delivers one transactional email. The template name
-// resolves inside internal/mailer (e.g. "email-verification"), and Data
-// fills the template's .Data tree.
+// EmailTask describes one transactional email.
 type EmailTask struct {
 	To       string         `json:"to"`
 	Subject  string         `json:"subject"`
@@ -60,11 +49,7 @@ func (EmailTask) Config() queue.QueueConfig {
 	}
 }
 
-// RecurringTask is a self re-enqueueing maintenance job: every run
-// schedules the next one at now + Interval (+ jitter). The task carries
-// no state, so a duplicate schedule only causes a redundant idempotent
-// run. The interval travels in seconds because encoding/json/v2 has no
-// representation for time.Duration.
+// RecurringTask describes one self-scheduling maintenance run.
 type RecurringTask struct {
 	Job             string `json:"job"`
 	IntervalSeconds int64  `json:"interval_seconds"`

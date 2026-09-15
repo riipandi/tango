@@ -17,9 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMailerMailpitDelivery delivers a message through the real
-// SMTP pipeline and verifies it via Mailpit's HTTP API. The relay
-// is a throwaway testcontainers container (docker daemon required).
+// TestMailerMailpitDelivery checks SMTP delivery through Mailpit.
 func TestMailerMailpitDelivery(t *testing.T) {
 	ctx := t.Context()
 	mp := testutils.StartMailpit(ctx, t)
@@ -40,7 +38,7 @@ func TestMailerMailpitDelivery(t *testing.T) {
 		Logger:    logger.NewMock(),
 	})
 
-	// Unique recipient per run: the search below can only match this run's message.
+	// Use a unique recipient so the search matches this run.
 	recipient := fmt.Sprintf("it-%d@tango.test", time.Now().UnixNano())
 	require.NoError(t, ml.Send(ctx, Message{
 		To:       recipient,
@@ -48,7 +46,7 @@ func TestMailerMailpitDelivery(t *testing.T) {
 		Template: "test-email",
 	}))
 
-	// Verify delivery through the Mailpit HTTP API.
+	// Verify delivery through Mailpit's HTTP API.
 	api := fetcher.New(fetcher.Options{BaseURL: mp.APIURL})
 	defer api.Close()
 

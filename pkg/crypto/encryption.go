@@ -9,23 +9,18 @@ import (
 	"fmt"
 )
 
-// ErrInvalidKeySize is returned when a Cipher key is not 32 bytes.
+// ErrInvalidKeySize reports a key that is not 32 bytes.
 var ErrInvalidKeySize = errors.New("crypto: AES-256 requires a 32-byte key")
 
-// ErrCiphertextTooShort is returned when a value is too short to
-// contain the nonce prefix of a sealed ciphertext.
+// ErrCiphertextTooShort reports a value shorter than the nonce prefix.
 var ErrCiphertextTooShort = errors.New("crypto: ciphertext is too short")
 
-// Cipher encrypts and decrypts secrets at rest (app settings, MFA
-// secrets, JWKS private keys) with AES-256-GCM. Wire format is
-// nonce-first, base64 encoded: base64(nonce || ciphertext || tag).
+// Cipher encrypts and decrypts values with AES-256-GCM.
 type Cipher struct {
 	aead cipher.AEAD
 }
 
-// NewCipher builds a Cipher from a 32-byte key. The key comes from
-// configuration; derive it (e.g. SHA-256 of a master secret) when the
-// source material is not exactly 32 bytes.
+// NewCipher builds a Cipher from a 32-byte key.
 func NewCipher(key []byte) (*Cipher, error) {
 	if len(key) != 32 {
 		return nil, ErrInvalidKeySize
@@ -43,8 +38,7 @@ func NewCipher(key []byte) (*Cipher, error) {
 	return &Cipher{aead: aead}, nil
 }
 
-// Encrypt seals plaintext under a fresh random nonce. Encrypted
-// values are safe to store per-column; the nonce never repeats.
+// Encrypt seals plaintext with a fresh random nonce.
 func (c *Cipher) Encrypt(plaintext string) (string, error) {
 	nonce := make([]byte, c.aead.NonceSize())
 	rand.Read(nonce) // never returns an error per the crypto/rand contract
@@ -53,8 +47,7 @@ func (c *Cipher) Encrypt(plaintext string) (string, error) {
 	return base64.RawStdEncoding.EncodeToString(sealed), nil
 }
 
-// Decrypt opens a value produced by Encrypt. Authentication failure
-// (wrong key or tampered value) surfaces as an error.
+// Decrypt opens a value produced by Encrypt.
 func (c *Cipher) Decrypt(encoded string) (string, error) {
 	data, err := base64.RawStdEncoding.DecodeString(encoded)
 	if err != nil {

@@ -33,7 +33,7 @@ func TestDispatcherNotify(t *testing.T) {
 func TestDispatcherStart(t *testing.T) {
 	d := newDispatcher(t)
 
-	// Start while already running is a no-op.
+	// Starting an active dispatcher is a no-op.
 	d.running.Store(true)
 	d.Start(context.Background())
 	assert.Nil(t, d.ctx, "ctx")
@@ -43,7 +43,7 @@ func TestDispatcherStart(t *testing.T) {
 	assert.Equal(t, 0, cap(d.availableWorkers), "available workers channel")
 	assert.True(t, d.running.Load(), "running")
 
-	// Start when not yet running.
+	// Start when stopped.
 	d.running.Store(false)
 	ctx, cancel := context.WithCancel(context.Background())
 	d.Start(ctx)
@@ -55,7 +55,7 @@ func TestDispatcherStart(t *testing.T) {
 	assert.Equal(t, d.numWorkers, len(d.availableWorkers), "available workers channel length")
 	assert.True(t, d.running.Load(), "running")
 
-	// Context cancel shuts down.
+	// Context cancellation shuts down the dispatcher.
 	cancel()
 	wait()
 	assert.False(t, d.running.Load(), "running")
@@ -65,11 +65,11 @@ func TestDispatcherStop(t *testing.T) {
 	d := newDispatcher(t)
 	ctx := context.Background()
 
-	// Not running.
+	// The dispatcher is stopped.
 	assert.True(t, d.Stop(ctx))
 	assert.False(t, d.running.Load(), "running")
 
-	// All workers are free.
+	// All workers are idle.
 	d.Start(ctx)
 	assert.True(t, d.Stop(ctx))
 	wait()
@@ -81,7 +81,7 @@ func TestDispatcherStop(t *testing.T) {
 		t.Error("shutdown context was not cancelled")
 	}
 
-	// One worker is not free.
+	// One worker is busy.
 	d.Start(ctx)
 	<-d.availableWorkers
 	stopCtx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
@@ -108,7 +108,7 @@ func TestDispatcherTriggerer(t *testing.T) {
 	waitForChan(t, d.trigger)
 	d.triggered.Store(false)
 
-	// Multiple ready signals still produce a single trigger.
+	// Multiple ready signals coalesce into one trigger.
 	d.ready <- struct{}{}
 	d.ready <- struct{}{}
 	d.ready <- struct{}{}
@@ -117,13 +117,13 @@ func TestDispatcherTriggerer(t *testing.T) {
 	<-d.trigger
 	d.triggered.Store(false)
 
-	// Main context cancelled: nothing more is triggered.
+	// A canceled main context produces no trigger.
 	cancel()
 	d.ready <- struct{}{}
 	wait()
 	assert.Len(t, d.trigger, 0, "trigger")
 
-	// Graceful shutdown context cancelled: nothing more is triggered.
+	// A canceled shutdown context produces no trigger.
 	ctx, cancel = context.WithCancel(context.Background())
 	d = &dispatcher{
 		ready:       make(chan struct{}, 5),
@@ -155,7 +155,7 @@ func TestDispatcherCleaner(t *testing.T) {
 		lastExecutedAt: time.Now(),
 	}
 
-	// Disabled: expired tasks are kept.
+	// Cleanup disabled: expired tasks remain.
 	d.Start(context.Background())
 	task.id = nextTaskID()
 	task.expiresAt = pointer(time.Now())
@@ -165,7 +165,7 @@ func TestDispatcherCleaner(t *testing.T) {
 	d.Stop(context.Background())
 	wait()
 
-	// Enabled: expired tasks are deleted.
+	// Cleanup enabled: expired tasks are deleted.
 	d.cleanupInterval = 2 * time.Millisecond
 	d.Start(context.Background())
 	wait()
@@ -173,7 +173,7 @@ func TestDispatcherCleaner(t *testing.T) {
 	d.Stop(context.Background())
 	wait()
 
-	// Different expiration conditions.
+	// Check different expiration conditions.
 	task.id = nextTaskID()
 	task.expiresAt = nil
 	insertCompleted(t, store, task)
@@ -209,7 +209,7 @@ func TestDispatcherProcessTaskContext(t *testing.T) {
 		called = true
 		innerCtx = ctx
 
-		// The deadline just started counting real time: a full second remains.
+		// The deadline starts here; a full second remains.
 		deadline, ok := ctx.Deadline()
 		require.True(t, ok, "deadline set")
 		assert.Equal(t, d.client, FromContext(ctx), "client")
@@ -470,7 +470,7 @@ func TestDispatcherProcessTaskFailure(t *testing.T) {
 	}
 	insertTask(t, d.client.store, tk)
 
-	// First attempt: released back to the queue.
+	// First attempt is released back to the queue.
 	d.processTask(d.ctx, d.ready, tk)
 	assert.True(t, called, "called")
 	waitForChan(t, d.ready)
@@ -482,7 +482,7 @@ func TestDispatcherProcessTaskFailure(t *testing.T) {
 	require.NotNil(t, got[0].waitUntil)
 	assert.Equal(t, now().Add(5*time.Millisecond).UnixMilli(), got[0].waitUntil.UnixMilli(), "wait until")
 
-	// Final attempt: moved to completed with the error.
+	// Final attempt moves to completed with the error.
 	called = false
 	tk.attempts++
 	d.processTask(d.ctx, d.ready, tk)
@@ -510,8 +510,7 @@ func TestDispatcherProcessTaskUnregisteredQueue(t *testing.T) {
 	d.ready = make(chan struct{}, 1)
 	d.ctx = context.Background()
 
-	// The queue was never registered: the worker must survive and the task
-	// must be discarded instead of being re-claimed forever.
+	// An unknown queue must not crash the worker or retain the task.
 	tk := &queuedTask{
 		id:        nextTaskID(),
 		queue:     "missing",
@@ -551,7 +550,7 @@ func TestDispatcherFetcher(t *testing.T) {
 	}
 
 	d.client.Register(NewQueue(func(_ context.Context, _ testTask) error {
-		// Hold so we can test that the tasks were claimed.
+		// Hold until the tasks are claimed.
 		<-hold
 		return nil
 	}))
@@ -567,7 +566,7 @@ func TestDispatcherFetcher(t *testing.T) {
 
 	d.fetch(ctx, d.tasks, d.ticker, d.ready, d.trigger)
 
-	// The first three tasks were claimed for the three workers; the rest untouched.
+	// The first three tasks were claimed; the rest were untouched.
 	rows, err := d.client.store.Query(context.Background(), "SELECT id, claimed_at FROM "+tasksTable)
 	require.NoError(t, err)
 	defer rows.Close()
@@ -588,7 +587,7 @@ func TestDispatcherFetcher(t *testing.T) {
 	require.NoError(t, rows.Err())
 	assert.Equal(t, 5, rowCount, "rows")
 
-	// Release the processing and wait for the workers to finish.
+	// Release processing and wait for the workers.
 	for range d.numWorkers {
 		hold <- struct{}{}
 	}
@@ -600,15 +599,15 @@ func TestDispatcherFetcher(t *testing.T) {
 	taskIDsExist(t, d.client.store, ids[3:5])
 	completedTaskIDsExist(t, d.client.store, ids[0:3])
 
-	// The attempt count was incremented on the completed tasks.
+	// Completed tasks have an incremented attempt count.
 	for _, task := range getCompletedTasks(t, d.client.store) {
 		assert.Equal(t, 1, task.attempts, "attempts")
 	}
 
-	// The ready signal was sent because the next up task is ready.
+	// A ready signal was sent for the next task.
 	waitForChan(t, d.ready)
 
-	// A scheduled task resets the ticker to its wait time.
+	// A scheduled task resets the ticker.
 	deleteTasks(t, d.client.store)
 	scheduledID := nextTaskID()
 	insertTask(t, d.client.store, &queuedTask{
@@ -629,7 +628,7 @@ func TestDispatcherFetcher(t *testing.T) {
 	}
 }
 
-// newDispatcher builds a dispatcher around a fresh client.
+// newDispatcher builds a dispatcher around a new client.
 func newDispatcher(t *testing.T) *dispatcher {
 	t.Helper()
 	return &dispatcher{

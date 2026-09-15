@@ -15,9 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// testDeps builds Deps over the shared test Postgres with all
-// migrations applied. Each call gets a fresh pool over the shared
-// container; schema state is shared (goose tracks versions).
+// testDeps builds Deps over migrated test Postgres.
 func testDeps(t *testing.T) Deps {
 	t.Helper()
 	ctx := t.Context()
@@ -46,7 +44,7 @@ func TestNewRegistersAllModules(t *testing.T) {
 	modules := reg.Modules()
 	assert.Len(t, modules, 8)
 
-	// Queue first: its Stop drains last on shutdown.
+	// Register the queue first so it stops last.
 	wantOrder := []string{"queue", "jobs", "auditlog", "identity", "appimage", "webhook", "appconfig", "federation"}
 	for i, want := range wantOrder {
 		assert.Equal(t, want, modules[i].Name())
@@ -65,7 +63,7 @@ func TestUserCorePersistsInPostgres(t *testing.T) {
 	deps := testDeps(t)
 	New(deps) // wiring builds without panics against the real database
 
-	// Unique per run: the test container may be shared.
+	// Use a unique value because the container may be shared.
 	unique := strconv.FormatInt(time.Now().UnixNano(), 10)
 
 	svc := user.NewService(user.NewPostgresStore(deps.DB), nil)

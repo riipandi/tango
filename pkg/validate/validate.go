@@ -1,7 +1,4 @@
-// Package validate standardizes request-body decoding and validation:
-// JSON decode via encoding/json/v2 followed by the payload's own
-// Validate() rules (ozzo-validation, code-first). Errors map to a
-// stable field-error shape for the responder envelope.
+// Package validate decodes and validates request bodies.
 package validate
 
 import (
@@ -19,15 +16,12 @@ type FieldError struct {
 	Message string `json:"message"`
 }
 
-// validatable is the contract every request payload may implement:
-// ozzo-validation's code-first rules.
+// validatable is implemented by payloads with validation rules.
 type validatable interface {
 	Validate() error
 }
 
-// Request decodes the JSON body into dst and runs dst's Validate()
-// when implemented. Malformed JSON and failed rules both come back
-// as the returned error; use FieldErrors to split them apart.
+// Request decodes the JSON body and runs validation when supported.
 func Request(r io.Reader, dst any) error {
 	if err := jsonv2.UnmarshalRead(r, dst); err != nil {
 		return err
@@ -38,17 +32,13 @@ func Request(r io.Reader, dst any) error {
 	return nil
 }
 
-// IsValidationError reports whether err carries rule violations
-// (validation.Errors) rather than a JSON decode failure, so
-// handlers can answer 422 instead of 400.
+// IsValidationError reports whether err contains validation failures.
 func IsValidationError(err error) bool {
 	var errs validation.Errors
 	return errors.As(err, &errs)
 }
 
-// FieldErrors flattens a validation error into per-field entries.
-// A non-validation error yields a single anonymous entry, keeping
-// the envelope shape uniform.
+// FieldErrors converts an error into field-level response entries.
 func FieldErrors(err error) []FieldError {
 	if err == nil {
 		return nil

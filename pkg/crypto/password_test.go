@@ -35,7 +35,6 @@ func TestPasswordHasherVerifyScrypt(t *testing.T) {
 }
 
 func TestPasswordHasherVerifyArgon2id(t *testing.T) {
-	// Low cost keeps the test fast; real defaults live in the builder.
 	hasher := NewPasswordHasher().
 		WithAlgorithm(AlgorithmArgon2id).
 		WithArgon2Cost(8192, 2, 2)
@@ -55,8 +54,6 @@ func TestPasswordHasherVerifyArgon2id(t *testing.T) {
 }
 
 func TestPasswordHasherVerifyAcrossAlgorithms(t *testing.T) {
-	// Verification reads algorithm and cost from the hash itself, so a
-	// differently-configured hasher verifies legacy hashes.
 	scryptHash, err := NewPasswordHasher().WithScryptCost(1024, 8, 1).Hash("legacy")
 	require.NoError(t, err)
 
@@ -86,11 +83,6 @@ func TestPasswordHasherSaltsAreUnique(t *testing.T) {
 }
 
 func TestPasswordHasherDeterministicWithSeededRandom(t *testing.T) {
-	// Go 1.26 testing/cryptotest: pin the crypto/rand stream so the
-	// whole hashing pipeline becomes deterministic for this test —
-	// the random salt must be the ONLY source of divergence. The
-	// stream is continuous, so reset the seed before each hash to
-	// replay the same salt.
 	hasher := NewPasswordHasher().WithScryptCost(1024, 8, 1)
 
 	cryptotest.SetGlobalRandom(t, 42)
@@ -134,7 +126,6 @@ func TestPasswordHasherBuilderIsImmutable(t *testing.T) {
 
 	derived := base.WithAlgorithm(AlgorithmArgon2id)
 
-	// The base hasher must keep its scrypt configuration.
 	hash, err := base.Hash("x")
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(hash, "$scrypt$"), hash)

@@ -1,7 +1,4 @@
-// Integration tests for the queue. Every test that touches the
-// database runs against the shared testcontainer Postgres (real pgx pool,
-// real migrations) — no in-memory or fake store involved. Tests that only
-// exercise in-process logic (queue decoding, adapters) stay pure.
+// Queue integration tests use the shared Postgres test container.
 
 package queue
 
@@ -26,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMain freezes the clock so tests can assert exact times.
+// TestMain fixes the clock for deterministic time assertions.
 func TestMain(m *testing.M) {
 	n := time.Now().Round(time.Millisecond)
 	now = func() time.Time { return n }
@@ -35,12 +32,12 @@ func TestMain(m *testing.M) {
 
 var taskIDSeq atomic.Int64
 
-// nextTaskID returns a fixed-shape, unique-per-call task ID for tests.
+// nextTaskID returns a unique test ID.
 func nextTaskID() string {
 	return fmt.Sprintf("00000000-0000-0000-0000-%012d", taskIDSeq.Add(1))
 }
 
-// newPool opens the shared testcontainer Postgres with migrations applied.
+// newPool opens Postgres with migrations applied.
 func newPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := t.Context()
@@ -54,8 +51,7 @@ func newPool(t *testing.T) *pgxpool.Pool {
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 
-	// The container is shared: drop all queue rows after each test so tests
-	// never see each other's data.
+	// Clear queue rows after each test.
 	t.Cleanup(func() {
 		bg := context.Background()
 		_, _ = pool.Exec(bg, "DELETE FROM queue_tasks")
@@ -65,8 +61,7 @@ func newPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// poolStore adapts a testcontainer pool to datastore.Store so tests
-// exercise the same WithTx path the production client uses.
+// poolStore adapts a test pool to datastore.Store.
 type poolStore struct{ pool *pgxpool.Pool }
 
 func (p poolStore) HealthCheck(ctx context.Context) error { return p.pool.Ping(ctx) }
@@ -102,13 +97,13 @@ func (p poolStore) WithTx(ctx context.Context, fn func(datastore.Executor) error
 	return tx.Commit(ctx)
 }
 
-// newStore wraps the shared testcontainer pool in a datastore.Store.
+// newStore wraps the test pool in a datastore.Store.
 func newStore(t *testing.T) datastore.Store {
 	t.Helper()
 	return poolStore{pool: newPool(t)}
 }
 
-// mustNewClient builds a client backed by the testcontainer database.
+// mustNewClient builds a client backed by test Postgres.
 func mustNewClient(t *testing.T) *Client {
 	t.Helper()
 	client, err := NewClient(ClientConfig{
@@ -121,7 +116,7 @@ func mustNewClient(t *testing.T) *Client {
 	return client
 }
 
-// encode serializes a value the same way the client does.
+// encode serializes a value like the client.
 func encode(t *testing.T, v any) []byte {
 	t.Helper()
 	b, err := jsonv2.Marshal(v)
@@ -134,7 +129,7 @@ func pointer[T any](v T) *T {
 	return &v
 }
 
-// getTasks loads all queued tasks ordered by ID.
+// getTasks loads queued tasks ordered by ID.
 func getTasks(t *testing.T, exec datastore.Executor) queuedTasks {
 	t.Helper()
 	tasks, err := scanQueuedTasks(context.Background(), exec,
@@ -144,20 +139,20 @@ func getTasks(t *testing.T, exec datastore.Executor) queuedTasks {
 	return tasks
 }
 
-// insertTask inserts a queued task directly.
+// insertTask inserts a queued task.
 func insertTask(t *testing.T, exec datastore.Executor, task *queuedTask) {
 	t.Helper()
 	require.NoError(t, task.insertTx(context.Background(), exec))
 }
 
-// deleteTasks removes all queued tasks.
+// deleteTasks removes queued tasks.
 func deleteTasks(t *testing.T, exec datastore.Executor) {
 	t.Helper()
 	_, err := exec.Exec(context.Background(), "DELETE FROM "+tasksTable)
 	require.NoError(t, err)
 }
 
-// getCompletedTasks loads all completed tasks ordered by ID.
+// getCompletedTasks loads completed tasks ordered by ID.
 func getCompletedTasks(t *testing.T, exec datastore.Executor) []*completedTask {
 	t.Helper()
 	tasks, err := scanCompletedTasks(context.Background(), exec,
@@ -167,20 +162,20 @@ func getCompletedTasks(t *testing.T, exec datastore.Executor) []*completedTask {
 	return tasks
 }
 
-// insertCompleted inserts a completed task directly.
+// insertCompleted inserts a completed task.
 func insertCompleted(t *testing.T, exec datastore.Executor, task completedTask) {
 	t.Helper()
 	require.NoError(t, task.insertTx(context.Background(), exec))
 }
 
-// deleteCompletedTasks removes all completed tasks.
+// deleteCompletedTasks removes completed tasks.
 func deleteCompletedTasks(t *testing.T, exec datastore.Executor) {
 	t.Helper()
 	_, err := exec.Exec(context.Background(), "DELETE FROM "+completedTasksTable)
 	require.NoError(t, err)
 }
 
-// taskIDsExist asserts the given task IDs exist in the queued table.
+// taskIDsExist checks that IDs exist in the queue.
 func taskIDsExist(t *testing.T, exec datastore.Executor, ids []string) {
 	t.Helper()
 	idMap := make(map[string]struct{}, len(ids))
@@ -193,7 +188,7 @@ func taskIDsExist(t *testing.T, exec datastore.Executor, ids []string) {
 	assert.Empty(t, idMap, "ids do not exist")
 }
 
-// completedTaskIDsExist asserts the given IDs exist in the completed table.
+// completedTaskIDsExist checks that IDs exist in completed tasks.
 func completedTaskIDsExist(t *testing.T, exec datastore.Executor, ids []string) {
 	t.Helper()
 	idMap := make(map[string]struct{}, len(ids))
@@ -206,7 +201,7 @@ func completedTaskIDsExist(t *testing.T, exec datastore.Executor, ids []string) 
 	assert.Empty(t, idMap, "ids do not exist")
 }
 
-// isTask asserts a scanned queued task matches the expected values.
+// isTask compares a scanned task with expected values.
 func isTask(t *testing.T, expected, got queuedTask) {
 	t.Helper()
 	assert.Equal(t, expected.queue, got.queue, "queue")
@@ -230,12 +225,12 @@ func assertOptionalTime(t *testing.T, name string, expected, got *time.Time) {
 	}
 }
 
-// wait sleeps briefly to let background goroutines make progress.
+// wait gives background goroutines time to run.
 func wait() {
 	time.Sleep(100 * time.Millisecond)
 }
 
-// waitForChan asserts a signal arrives on the channel in time.
+// waitForChan waits for a signal with a timeout.
 func waitForChan[T any](t *testing.T, signal chan T) {
 	t.Helper()
 	select {

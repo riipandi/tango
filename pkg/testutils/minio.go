@@ -11,8 +11,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// MinIO is a running MinIO container: an S3-compatible server used to
-// exercise the storage package's S3 backend.
+// MinIO is a running MinIO container.
 type MinIO struct {
 	// Endpoint is the S3 API address (http://host:port).
 	Endpoint string
@@ -22,7 +21,7 @@ type MinIO struct {
 	Secret    string
 }
 
-// minioImage is intentionally unpinned to match the compose stack.
+// minioImage is the MinIO image used by integration tests.
 const minioImage = "minio/minio:latest"
 
 var (
@@ -31,10 +30,7 @@ var (
 	minioErr    error
 )
 
-// StartMinIO returns the process-wide shared MinIO container: the
-// first call starts it, later calls in the same test binary reuse it,
-// and the testcontainers reaper terminates it when the binary exits.
-// Tests isolate their data with unique buckets.
+// StartMinIO returns the shared MinIO container for the test binary.
 func StartMinIO(ctx context.Context, t testing.TB) *MinIO {
 	t.Helper()
 

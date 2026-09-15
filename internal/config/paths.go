@@ -2,8 +2,7 @@ package config
 
 import "path/filepath"
 
-// Runtime files (logs, backups, keys) live under App.DataDir;
-// one setting relocates all state.
+// Runtime files live under App.DataDir.
 const (
 	dataLogsDir    = "logs"
 	dataBackupDir  = "backup"
@@ -13,7 +12,7 @@ const (
 	dataPublicKey  = "public_key.pem"
 )
 
-// DataDir returns the data root (default fills when unset).
+// DataDir returns the configured data root.
 func (c *Config) DataDir() string {
 	if c.App.DataDir != "" {
 		return c.App.DataDir
@@ -21,27 +20,27 @@ func (c *Config) DataDir() string {
 	return defaultConfig.App.DataDir
 }
 
-// LogFile is the file-sink path under the data root.
+// LogFile returns the application log path.
 func (c *Config) LogFile() string {
 	return filepath.Join(c.DataDir(), dataLogsDir, dataLogFile)
 }
 
-// BackupDir is the dump/export dir under the data root.
+// BackupDir returns the backup directory.
 func (c *Config) BackupDir() string {
 	return filepath.Join(c.DataDir(), dataBackupDir)
 }
 
-// KeysDir is the generated-keys dir under the data root.
+// KeysDir returns the generated key directory.
 func (c *Config) KeysDir() string {
 	return filepath.Join(c.DataDir(), dataKeysDir)
 }
 
-// PrivateKeyPath is the generated private-key PEM path.
+// PrivateKeyPath returns the private key path.
 func (c *Config) PrivateKeyPath() string {
 	return filepath.Join(c.KeysDir(), dataPrivateKey)
 }
 
-// PublicKeyPath is the generated public-key PEM path.
+// PublicKeyPath returns the public key path.
 func (c *Config) PublicKeyPath() string {
 	return filepath.Join(c.KeysDir(), dataPublicKey)
 }

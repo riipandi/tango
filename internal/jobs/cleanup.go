@@ -9,34 +9,25 @@ import (
 	"github.com/riipandi/tango/internal/logger"
 )
 
-// Retention windows for the recurring cleanups. Transactions that
-// already expired never resolve again, so the expired rows are dead
-// weight in the token tables.
+// Retention settings for recurring cleanup jobs.
 const (
 	// TokenCleanupInterval is how often expired tokens are swept.
 	TokenCleanupInterval = 6 * time.Hour
-	// TokenGrace keeps expired rows briefly so a clock-skewed verify
-	// can still distinguish "expired" from "unknown".
+	// TokenGrace keeps expired rows briefly for clock-skewed verification.
 	TokenGrace = time.Hour
 
-	// WebhookLogCleanupInterval matches the queue's own retention for
-	// completed delivery tasks, so both views age out together.
+	// WebhookLogCleanupInterval controls delivery log cleanup.
 	WebhookLogCleanupInterval = 12 * time.Hour
 	// WebhookLogRetention bounds the delivery history.
 	WebhookLogRetention = 30 * 24 * time.Hour
 )
 
-// LogPruner deletes delivery logs recorded before the cutoff;
-// implemented by the webhook store.
+// LogPruner deletes delivery logs before a cutoff.
 type LogPruner interface {
 	PruneLogs(ctx context.Context, before time.Time) (int64, error)
 }
 
-// CleanupTokens builds the recurring job that sweeps expired
-// single-use tokens and sessions: auth_tokens (one-time access, email
-// verification, reauthentication), signup_tokens, and expired or
-// revoked sessions. Rows are deleted in one transaction so a partial
-// sweep cannot leave a session without its token.
+// CleanupTokens builds the recurring job that removes expired tokens and sessions.
 func CleanupTokens(db datastore.Store, log logger.Logger) Job {
 	return Job{
 		Name:     "cleanup_tokens",
@@ -75,8 +66,7 @@ func CleanupTokens(db datastore.Store, log logger.Logger) Job {
 	}
 }
 
-// CleanupWebhookLogs builds the recurring job that prunes delivery
-// history past the retention window.
+// CleanupWebhookLogs builds the recurring delivery-log cleanup job.
 func CleanupWebhookLogs(pruner LogPruner, log logger.Logger) Job {
 	return Job{
 		Name:     "cleanup_webhook_logs",

@@ -13,19 +13,17 @@ import (
 	tcre "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	// Registers the "pgx" database/sql driver used by wait.ForSQL.
+	// Register the pgx database/sql driver used by wait.ForSQL.
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // Postgres is a running Postgres container for integration tests.
 type Postgres struct {
-	// DSN is the connection string of the shared instance
-	// (sslmode=disable, password auth only on loopback).
+	// DSN is the connection string of the shared instance.
 	DSN string
 }
 
-// postgresImage intentionally matches compose.yaml's pgsql service;
-// pin both when pinning one.
+// postgresImage is the Postgres image used by integration tests.
 const postgresImage = "postgres:18-alpine"
 
 var (
@@ -34,10 +32,7 @@ var (
 	sharedPGErr    error
 )
 
-// StartPostgres returns the process-wide shared Postgres container:
-// the first call starts it, later calls in the same test binary
-// reuse it, and the testcontainers reaper terminates it when the
-// binary exits. Tests isolate their data with unique table names.
+// StartPostgres returns the shared Postgres container for the test binary.
 func StartPostgres(ctx context.Context, t testing.TB) *Postgres {
 	t.Helper()
 
@@ -49,8 +44,7 @@ func StartPostgres(ctx context.Context, t testing.TB) *Postgres {
 	return sharedPostgres
 }
 
-// startPostgres boots the container and blocks until the server
-// answers a real SQL connection, not just a listening port.
+// startPostgres starts the container and waits for a SQL connection.
 func startPostgres(ctx context.Context) (*Postgres, error) {
 	container, err := tcre.Run(ctx, postgresImage,
 		tcre.WithEnv(map[string]string{

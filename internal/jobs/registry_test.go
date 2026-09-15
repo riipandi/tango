@@ -16,7 +16,7 @@ import (
 	"github.com/riipandi/tango/internal/mailer"
 )
 
-// fakeMailer records the messages handed to it and can fail on demand.
+// fakeMailer records messages and can return an error.
 type fakeMailer struct {
 	mu       sync.Mutex
 	messages []mailer.Message
@@ -36,8 +36,7 @@ func (m *fakeMailer) sent() []mailer.Message {
 	return append([]mailer.Message(nil), m.messages...)
 }
 
-// fakeEnqueuer records the messages queued for delivery; the API key
-// reminder job takes the queueing contract, not the sending one.
+// fakeEnqueuer records queued messages.
 type fakeEnqueuer struct {
 	mu       sync.Mutex
 	messages []mailer.Message
@@ -141,7 +140,7 @@ func TestVersionFeedRefreshRejectsEmptyTag(t *testing.T) {
 	feed := &VersionFeed{Fetch: func(context.Context) (string, error) { return "", nil }}
 	assert.ErrorContains(t, feed.Refresh(context.Background()), "empty tag")
 
-	// The failed refresh leaves the previous value untouched.
+	// A failed refresh keeps the previous value.
 	feed.latest = "1.0.0"
 	assert.Error(t, feed.Refresh(context.Background()))
 	assert.Equal(t, "1.0.0", feed.Latest())
@@ -152,8 +151,7 @@ func TestVersionFeedRefreshPropagatesLookupError(t *testing.T) {
 	assert.ErrorContains(t, feed.Refresh(context.Background()), "github down")
 }
 
-// feedLatestFallback mirrors what Latest reports with no cached value,
-// read through the exported API so the test does not hardcode the build.
+// feedLatestFallback returns the fallback reported by Latest.
 func feedLatestFallback() string {
 	empty := &VersionFeed{}
 	return empty.Latest()
@@ -169,8 +167,7 @@ func TestFirstDelayStaysInsideTheInterval(t *testing.T) {
 }
 
 func TestJitterForCapsAtQuarterInterval(t *testing.T) {
-	// A short interval caps the jitter at a quarter of itself, so the
-	// first run still lands inside the interval.
+	// A short interval caps jitter at one quarter of itself.
 	for range 20 {
 		assert.LessOrEqual(t, jitterFor(time.Second), time.Second/4)
 	}
@@ -190,8 +187,7 @@ func TestScheduleWithoutQueueIsANoop(t *testing.T) {
 func TestStartSchedulesOnce(t *testing.T) {
 	job := Job{Name: "once", Interval: time.Hour, Run: func(context.Context) error { return nil }}
 
-	// Start with no queue: schedule is a no-op, but the started guard
-	// must still flip so a restart cannot double-schedule later.
+	// The started guard must work even when no queue is configured.
 	registry := &Registry{jobs: map[string]Job{"once": job}, log: logger.NewMock()}
 	require.NoError(t, registry.Start(context.Background()))
 	require.NoError(t, registry.Start(context.Background()))
@@ -227,9 +223,7 @@ func TestJobIntervalPrefersTheTaskValue(t *testing.T) {
 }
 
 func TestRecurringTaskRoundTripsThroughJSON(t *testing.T) {
-	// The queue encodes task payloads with encoding/json/v2, which has
-	// no representation for time.Duration: the interval must survive as
-	// a plain number.
+	// Store the interval as seconds because JSON does not encode durations.
 	task := RecurringTask{Job: "cleanup_tokens", IntervalSeconds: int64((6 * time.Hour).Seconds())}
 	encoded, err := jsonv2.Marshal(task)
 	require.NoError(t, err)

@@ -14,40 +14,37 @@ type (
 	Queue interface {
 		Config() *QueueConfig
 
-		// Process executes a task payload.
+		// Process executes a payload.
 		Process(ctx context.Context, payload []byte) error
 	}
 
 	// QueueConfig holds the configuration options for a queue.
 	QueueConfig struct {
-		// Name is unique per queue.
+		// Name identifies the queue.
 		Name string
 
-		// MaxAttempts is the maximum number of execution attempts before the
-		// task is marked as completed.
+		// MaxAttempts is the maximum number of execution attempts.
 		MaxAttempts int
 
-		// Timeout bounds the context of a task execution.
+		// Timeout bounds task execution.
 		Timeout time.Duration
 
-		// Backoff is how long a failed task waits before retry.
+		// Backoff is the delay before retrying a failed task.
 		Backoff time.Duration
 
-		// Retention dictates if and how completed tasks are retained. If nil,
-		// no completed tasks are retained.
+		// Retention controls completed task records. Nil disables retention.
 		Retention *Retention
 	}
 
 	// Retention is the policy for retaining completed tasks.
 	Retention struct {
-		// Duration is how long a completed task is retained. If omitted,
-		// the task is retained forever.
+		// Duration is how long a completed task is retained. Zero means forever.
 		Duration time.Duration
 
 		// OnlyFailed retains only failed tasks.
 		OnlyFailed bool
 
-		// Data retains task payload data. If nil, no payload data is retained.
+		// Data controls payload retention. Nil retains no payload.
 		Data *RetainData
 	}
 
@@ -72,7 +69,7 @@ type (
 	}
 )
 
-// NewQueue creates a new type-safe Queue for the given task type.
+// NewQueue creates a Queue for the given task type.
 func NewQueue[T Task](processor QueueProcessor[T]) Queue {
 	var task T
 	cfg := task.Config()

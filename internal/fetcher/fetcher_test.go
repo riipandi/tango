@@ -94,7 +94,7 @@ func TestBaseURLPrefixesRequests(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// A dedicated Fetcher for one upstream: call sites send paths.
+	// A base URL lets callers send paths.
 	f := New(Options{BaseURL: server.URL})
 	defer f.Close()
 
@@ -116,8 +116,7 @@ func TestTimeoutBoundsRequest(t *testing.T) {
 	require.Error(t, err, "request must be bounded by the timeout")
 }
 
-// newLoggedFetcher builds a fetcher whose entries are captured by
-// the LogLayer testing transport.
+// newLoggedFetcher captures fetcher logs for assertions.
 func newLoggedFetcher(t *testing.T, opts Options) (*Fetcher, *lltest.TestLoggingLibrary) {
 	t.Helper()
 	lib := &lltest.TestLoggingLibrary{}
@@ -187,8 +186,7 @@ func TestResponseMiddlewareLogsTransportFailure(t *testing.T) {
 	_, err := f.GetJSON(t.Context(), url, &out)
 	require.Error(t, err)
 
-	// Transport failures never reach the response middleware; the
-	// OnError hook logs them.
+	// Transport failures are logged by the error hook.
 	line := lib.GetLastLine()
 	require.NotNil(t, line, "transport failure must be logged")
 	assert.Equal(t, "error", line.Level.String())
@@ -234,8 +232,7 @@ func TestRetriesIdempotentRequests(t *testing.T) {
 	assert.Equal(t, int32(3), attempts.Load())
 	assert.Equal(t, 3, resp.Request.Attempt)
 
-	// Retry hooks logged the two failed attempts (the final
-	// response is logged separately by the response middleware).
+	// The retry hook logs failed attempts; the final response has its own log.
 	var retryLines int
 	require.Eventually(t, func() bool {
 		retryLines = 0
@@ -289,12 +286,12 @@ func TestCircuitBreakerOpensFast(t *testing.T) {
 	}
 	require.Equal(t, int32(DefaultBreakerThreshold), attempts.Load())
 
-	// The open breaker rejects before any network call.
+	// An open breaker rejects before any network call.
 	_, err := f.GetJSON(t.Context(), server.URL, nil)
 	require.ErrorIs(t, err, resty.ErrCircuitBreakerOpen)
 	assert.Equal(t, int32(DefaultBreakerThreshold), attempts.Load())
 
-	// State transitions and triggers are observable in the log.
+	// The log records breaker triggers and state changes.
 	var foundTrigger, foundStateChange bool
 	for _, line := range lib.Lines() {
 		switch line.Messages[0] {

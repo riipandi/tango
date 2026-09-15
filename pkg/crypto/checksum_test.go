@@ -9,7 +9,6 @@ import (
 )
 
 func TestChecksumBlake3(t *testing.T) {
-	// Official BLAKE3 vector: hash of the empty input.
 	checksum, err := ChecksumBlake3(nil, Blake3Output32)
 
 	require.NoError(t, err)
@@ -25,8 +24,6 @@ func TestChecksumBlake3ExtendsAndTruncates(t *testing.T) {
 	base, err := ChecksumBlake3Hex(data, Blake3Output32)
 	require.NoError(t, err)
 
-	// Lengths 8 and 16 are prefixes of the 32-byte digest; 64 starts
-	// with the same 32 bytes (BLAKE3's streamable output).
 	short8, err := ChecksumBlake3Hex(data, Blake3Output8)
 	require.NoError(t, err)
 	assert.Equal(t, base[:16], short8)

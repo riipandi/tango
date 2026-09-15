@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// writeEnvFile writes a dotenv file for the env-file layer tests.
+// writeEnvFile creates a temporary dotenv file.
 func writeEnvFile(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), ".env.test")
@@ -72,7 +72,7 @@ func TestLoadEnvFileLayer(t *testing.T) {
 }
 
 func TestLoadSystemEnvOverridesEnvFile(t *testing.T) {
-	// 12-factor layering: a real environment (compose, systemd) beats the dotenv file.
+	// The system environment overrides the dotenv file.
 	t.Setenv("PORT", "7777")
 	path := writeEnvFile(t, "PORT=1234\nAPP_LOG_LEVEL=debug\n")
 
@@ -162,14 +162,14 @@ func TestValidateProductionRequiresSecrets(t *testing.T) {
 		"public.healthcheck_url": "https://upstream.test",
 	}}
 
-	// Defaults leave the secrets empty: production must refuse.
+	// Production must reject missing secrets.
 	_, err := Load(base)
 	require.Error(t, err)
 	for _, key := range []string{"app.secret_key", "auth.secret_key", "auth.private_key", "auth.public_key"} {
 		assert.Contains(t, err.Error(), key)
 	}
 
-	// With all four secrets set it validates cleanly.
+	// Supplying all four secrets makes the config valid.
 	base.Overrides["app.secret_key"] = "s3cret"
 	base.Overrides["auth.secret_key"] = "s3cret"
 	base.Overrides["auth.private_key"] = "priv"
@@ -230,9 +230,7 @@ func TestValidateRejectsInvalidValues(t *testing.T) {
 }
 
 func TestDefaultsAreComplete(t *testing.T) {
-	// Every leaf without an intentional default must be non-zero in
-	// defaultConfig — the struct literal is the single source of
-	// truth, this locks it.
+	// Every leaf without an intentional default must be set.
 	intentionallyEmpty := map[string]bool{
 		"app.secret_key":                         true,
 		"auth.private_key":                       true,
@@ -284,7 +282,7 @@ func TestDefaultsAreComplete(t *testing.T) {
 				continue
 			}
 			if intentionallyEmpty[path] || field.Type.Kind() == reflect.Bool {
-				// Bool false is a legitimate default.
+				// false is a valid boolean default.
 				continue
 			}
 			assert.False(t, fieldValue.IsZero(), "defaultConfig.%s must have a default value", path)
@@ -294,8 +292,7 @@ func TestDefaultsAreComplete(t *testing.T) {
 }
 
 func TestEnvExampleInSync(t *testing.T) {
-	// .env.example documents every bound key; this test fails when
-	// the struct and the example drift apart, in either direction.
+	// Keep .env.example in sync with the config schema.
 	data, err := os.ReadFile("../../.env.example")
 	require.NoError(t, err)
 

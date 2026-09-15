@@ -41,9 +41,7 @@ func (r *recordingTransport) Close() error {
 	return nil
 }
 
-// blockingTransport parks the worker inside SendToLogger on the
-// first call until released, letting tests fill the queue
-// deterministically.
+// blockingTransport pauses the worker on its first call.
 type blockingTransport struct {
 	transport.BaseTransport
 	entered chan struct{}
@@ -80,16 +78,16 @@ func TestAsyncDropsWhenFull(t *testing.T) {
 	}
 	tr := newAsync(inner, 1, time.Second)
 
-	// Worker parks inside the inner transport; entry A is in flight.
+	// The worker is blocked; entry A is in flight.
 	tr.SendToLogger(loglayer.TransportParams{})
 	<-inner.entered
 
-	// B fills the single buffer slot, C has nowhere to go.
+	// B fills the buffer; C is dropped.
 	tr.SendToLogger(loglayer.TransportParams{})
 	tr.SendToLogger(loglayer.TransportParams{})
 	assert.Equal(t, uint64(1), tr.Dropped())
 
-	// Release the worker, then drain: A and B must both arrive.
+	// Release the worker; A and B must both arrive.
 	inner.release <- struct{}{}
 	require.NoError(t, tr.Close())
 
@@ -136,7 +134,7 @@ func TestAsyncFlushTimeout(t *testing.T) {
 	tr := newAsync(inner, 1, time.Second)
 
 	tr.SendToLogger(loglayer.TransportParams{})
-	<-inner.entered // worker parked; queue drains nothing
+	<-inner.entered // The worker is blocked, so the queue cannot drain.
 
 	assert.Error(t, tr.Flush(50*time.Millisecond))
 

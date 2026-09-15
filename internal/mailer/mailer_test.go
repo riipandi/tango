@@ -40,7 +40,7 @@ func TestRenderBuildsBothBodies(t *testing.T) {
 	assert.Contains(t, text, "Hello Alice <script>alert(1)</script>, welcome to "+config.AppName)
 	assert.Contains(t, text, "https://app.test/verify?token=abc")
 
-	// HTML output is context-escaped: user data cannot inject markup.
+	// HTML output escapes user data.
 	assert.Contains(t, html, "Hello Alice &lt;script&gt;")
 	assert.NotContains(t, html, "<script>alert(1)</script>")
 	assert.Contains(t, html, "http://localhost:3000/logo.png")
@@ -65,7 +65,7 @@ func TestTemplateCacheParsesOnce(t *testing.T) {
 	}
 }
 
-// captureBackend is a fake SMTP relay recording received messages.
+// captureBackend is a fake SMTP relay.
 type captureBackend struct {
 	mu       sync.Mutex
 	messages []capturedMessage
@@ -116,9 +116,7 @@ func (s *captureSession) Data(raw io.Reader) error {
 func (s *captureSession) Reset()        {}
 func (s *captureSession) Logout() error { return nil }
 
-// newTestMailer spins up an in-process SMTP relay and a mailer
-// pointed at it. The relay port returns too, for tests that play
-// with the settings source.
+// newTestMailer starts an in-process SMTP relay and mailer.
 func newTestMailer(t *testing.T) (Mailer, *captureBackend, int) {
 	t.Helper()
 
@@ -130,9 +128,7 @@ func newTestMailer(t *testing.T) (Mailer, *captureBackend, int) {
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()
 
-	// Shutdown order matters: close the listener first so Serve's
-	// Accept unblocks, then stop the server, then drain the
-	// goroutine — any other order deadlocks the cleanup.
+	// Close the listener first so Serve can exit before stopping the server.
 	t.Cleanup(func() {
 		listener.Close()
 		server.Close()
@@ -205,9 +201,7 @@ func TestSendRejectsInvalidInput(t *testing.T) {
 	assert.Empty(t, backend.messages)
 }
 
-// TestSettingsSourceOverridesPerSend verifies the late-bound source:
-// the from identity resolves from it on every send, a failing source
-// falls back to the static env config.
+// TestSettingsSourceOverridesPerSend checks per-send settings and fallback.
 func TestSettingsSourceOverridesPerSend(t *testing.T) {
 	mailer, backend, relayPort := newTestMailer(t)
 	setter, ok := mailer.(SettingsSourceSetter)
@@ -232,7 +226,7 @@ func TestSettingsSourceOverridesPerSend(t *testing.T) {
 	assert.Contains(t, string(backend.messages[0].content), `From: "Switched" <switched@tango.test>`)
 	assert.Equal(t, 1, calls, "source resolves per send")
 
-	// A failing source falls back to the env config identity.
+	// A failing source falls back to the static config.
 	setter.SetSettingsSource(func(ctx context.Context) (config.MailerConfig, error) {
 		return config.MailerConfig{}, errors.New("appconfig down")
 	})
@@ -253,9 +247,7 @@ func TestSendUnknownTemplateFails(t *testing.T) {
 	assert.Empty(t, backend.messages)
 }
 
-// TestRealEmbeddedTemplatesRender parses and executes every template
-// embedded by the build — catching drift between the React Email
-// compilation and this package's rendering.
+// TestRealEmbeddedTemplatesRender executes every embedded template.
 func TestRealEmbeddedTemplatesRender(t *testing.T) {
 	templates, err := fs.Sub(web.EmailTemplates, "email")
 	require.NoError(t, err)
@@ -294,8 +286,7 @@ func TestRealEmbeddedTemplatesRender(t *testing.T) {
 	}
 }
 
-// newSMTPListener reserves a loopback port; closing it belongs to
-// the caller's cleanup.
+// newSMTPListener reserves a loopback port.
 func newSMTPListener(t *testing.T) net.Listener {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

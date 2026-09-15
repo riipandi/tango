@@ -19,7 +19,7 @@ import (
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
-// roundTrip exercises the Store contract against any backend.
+// roundTrip checks the Store contract against any backend.
 func roundTrip(t *testing.T, store Store) {
 	t.Helper()
 	ctx := t.Context()
@@ -34,14 +34,14 @@ func roundTrip(t *testing.T, store Store) {
 	assert.Equal(t, "logo-data", string(contents))
 	assert.Equal(t, int64(len(contents)), size)
 
-	// Overwrite is allowed and atomic.
+	// Overwrites are allowed and atomic.
 	require.NoError(t, store.Save(ctx, "images/logo.png", bytes.NewBufferString("v2")))
 	reader, _, _ = store.Open(ctx, "images/logo.png")
 	contents, _ = io.ReadAll(reader)
 	reader.Close()
 	assert.Equal(t, "v2", string(contents))
 
-	// Nested save and flat listing.
+	// Nested saves appear in a flat listing.
 	require.NoError(t, store.Save(ctx, "images/nested/child.txt", bytes.NewBufferString("child")))
 	files, err := store.List(ctx, "images")
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func roundTrip(t *testing.T, store Store) {
 	}
 	assert.ElementsMatch(t, []string{"images/logo.png", "images/nested/child.txt"}, paths)
 
-	// Single-object delete.
+	// Delete one object.
 	require.NoError(t, store.Delete(ctx, "images/nested/child.txt"))
 	_, _, err = store.Open(ctx, "images/nested/child.txt")
 	assert.True(t, IsNotExist(err), "deleted object should be gone, got %v", err)
@@ -60,11 +60,11 @@ func roundTrip(t *testing.T, store Store) {
 	require.Error(t, err)
 	assert.True(t, IsNotExist(err), "expected not-exist, got %v", err)
 
-	// Deleting a missing object is not an error (idempotent).
+	// Deleting a missing object is safe.
 	assert.NoError(t, store.Delete(ctx, "images/nested/child.txt"))
 
 	require.NoError(t, store.DeleteAll(ctx, "images"))
-	// FS reports the missing prefix as not-exist; S3 as an empty page.
+	// Backends may report a missing prefix or an empty page.
 	files, err = store.List(ctx, "images")
 	if err != nil {
 		assert.True(t, IsNotExist(err), "prefix should be gone, got %v", err)
@@ -89,13 +89,13 @@ func TestFilesystemRejectsEscape(t *testing.T) {
 }
 
 func TestFilesystemErrorBranches(t *testing.T) {
-	// Root creation fails when the parent is a file.
+	// A file cannot contain the storage root.
 	file := t.TempDir() + "/file"
 	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
 	_, err := NewFilesystemStorage(file + "/root")
 	assert.Error(t, err, "a file cannot host the storage root")
 
-	// Saving under a path that already exists as a file errors out.
+	// A file cannot become a directory.
 	store, err := NewFilesystemStorage(t.TempDir())
 	require.NoError(t, err)
 	ctx := t.Context()
@@ -103,7 +103,7 @@ func TestFilesystemErrorBranches(t *testing.T) {
 	err = store.Save(ctx, "conflict/child", strings.NewReader("under a file"))
 	assert.Error(t, err, "a file cannot become a directory")
 
-	// The original file survived the failed save.
+	// The original file survives the failed save.
 	reader, size, err := store.Open(ctx, "conflict")
 	require.NoError(t, err)
 	contents, err := io.ReadAll(reader)
@@ -112,8 +112,7 @@ func TestFilesystemErrorBranches(t *testing.T) {
 	assert.Equal(t, "file", string(contents))
 	assert.Equal(t, int64(4), size)
 
-	// A reader that fails mid-stream aborts the save and leaves no
-	// temp file or object behind.
+	// A failed reader leaves no object behind.
 	assert.Error(t, store.Save(ctx, "doomed", failingReader{}))
 	_, _, err = store.Open(ctx, "doomed")
 	assert.True(t, IsNotExist(err), "a failed save must not leave an object")
@@ -139,8 +138,7 @@ func listPaths(t *testing.T, store Store, prefix string) []string {
 	return paths
 }
 
-// TestS3StorageContract runs the full Store contract against MinIO
-// (docker daemon required).
+// TestS3StorageContract checks the Store contract against MinIO.
 func TestS3StorageContract(t *testing.T) {
 	ctx := t.Context()
 	minio := testutils.StartMinIO(ctx, t)
@@ -172,7 +170,7 @@ func TestS3StorageContract(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, TypeS3, store.Type())
 
-	// The root prefix must not leak into the contract paths.
+	// The root prefix must not appear in contract paths.
 	roundTrip(t, store)
 }
 
@@ -189,14 +187,14 @@ func TestS3ObjectKey(t *testing.T) {
 }
 
 func TestPicker(t *testing.T) {
-	// No endpoint → filesystem under a temp dir.
+	// No endpoint selects filesystem storage.
 	fsCfg := newStorageConfig(false)
 	fsCfg.DataDir = t.TempDir()
 	store, err := New(fsCfg)
 	require.NoError(t, err)
 	assert.Equal(t, TypeFilesystem, store.Type())
 
-	// Endpoint set → S3 backend (no network at construction).
+	// An endpoint selects S3 without connecting during construction.
 	store, err = New(newStorageConfig(true))
 	require.NoError(t, err)
 	assert.Equal(t, TypeS3, store.Type())

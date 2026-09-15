@@ -15,8 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// stubProvider returns canned answers and counts loads, so tests
-// can observe cache behavior without a real backend.
 type stubProvider struct {
 	signKey jwk.Key
 	keySet  jwk.Set

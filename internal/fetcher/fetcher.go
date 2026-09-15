@@ -12,14 +12,12 @@ import (
 	"resty.dev/v3"
 )
 
-// Fetcher is the shared outbound client. Create once per app (or
-// per integration) and reuse; resty pools connections.
+// Fetcher is the shared outbound HTTP client.
 type Fetcher struct {
 	client *resty.Client
 }
 
-// New builds the client: honest User-Agent, hard timeout (resty
-// has none by default), one log entry per request.
+// New builds a client with timeout, logging, and retry settings.
 func New(opts Options) *Fetcher {
 	timeout := opts.Timeout
 	if timeout <= 0 {
@@ -42,7 +40,7 @@ func New(opts Options) *Fetcher {
 	}
 	applyResilience(client, opts, log)
 
-	// Route resty's debug dump to shared slog when available.
+	// Send resty's debug output to the shared logger when available.
 	if slogLgr, ok := log.GetLoggerInstance("slog").(*slog.Logger); ok && slogLgr != nil {
 		client.SetLogger(slogLoggerAdapter{lgr: slogLgr})
 	}
@@ -50,7 +48,7 @@ func New(opts Options) *Fetcher {
 	return &Fetcher{client: client}
 }
 
-// applyResilience layers retry and breaker policies.
+// applyResilience adds retry and circuit-breaker policies.
 func applyResilience(c *resty.Client, opts Options, log logger.Logger) {
 	retries := opts.Retries
 	if retries == 0 {
@@ -93,7 +91,7 @@ func applyResilience(c *resty.Client, opts Options, log logger.Logger) {
 	}
 }
 
-// retryHook logs each retry attempt.
+// retryHook logs retry attempts.
 func retryHook(log logger.Logger) func(*resty.Response, error) {
 	return func(resp *resty.Response, err error) {
 		entry := log.WithMetadata(loglayer.M{
@@ -109,8 +107,7 @@ func retryHook(log logger.Logger) func(*resty.Response, error) {
 	}
 }
 
-// slogLoggerAdapter bridges resty's printf Logger to shared slog,
-// so its debug dump lands in the same sinks.
+// slogLoggerAdapter adapts resty's logger to slog.
 type slogLoggerAdapter struct {
 	lgr *slog.Logger
 }
@@ -127,8 +124,7 @@ func (a slogLoggerAdapter) Debugf(format string, v ...any) {
 	a.lgr.Debug(fmt.Sprintf(format, v...))
 }
 
-// GetJSON GETs and decodes JSON into out. Non-2xx is an error;
-// response still returned for status/body inspection.
+// GetJSON sends a GET and decodes its JSON response into out.
 func (f *Fetcher) GetJSON(ctx context.Context, url string, out any) (*resty.Response, error) {
 	resp, err := f.client.R().
 		SetContext(ctx).
@@ -143,8 +139,7 @@ func (f *Fetcher) GetJSON(ctx context.Context, url string, out any) (*resty.Resp
 	return resp, nil
 }
 
-// PostJSON POSTs JSON and decodes the response into out.
-// Non-2xx is an error.
+// PostJSON sends JSON and decodes the response into out.
 func (f *Fetcher) PostJSON(ctx context.Context, url string, body, out any) (*resty.Response, error) {
 	resp, err := f.client.R().
 		SetContext(ctx).
@@ -161,11 +156,8 @@ func (f *Fetcher) PostJSON(ctx context.Context, url string, body, out any) (*res
 	return resp, nil
 }
 
-// SendRaw performs one request with an explicit method, headers, and body,
-// and returns the response status plus body regardless of status code.
-// Use for deliveries that must inspect the receiver's answer themselves
-// (webhooks) instead of treating non-2xx as an error. The body is a
-// caller-owned byte slice, sent as-is.
+// SendRaw sends one request and returns its status and body without
+// treating non-2xx responses as errors.
 func (f *Fetcher) SendRaw(ctx context.Context, method, url string, headers map[string]string, body []byte) (int, []byte, error) {
 	req := f.client.R().SetContext(ctx).SetBody(body)
 	for name, value := range headers {
@@ -179,13 +171,12 @@ func (f *Fetcher) SendRaw(ctx context.Context, method, url string, headers map[s
 	return resp.StatusCode(), resp.Bytes(), nil
 }
 
-// Close releases client connections.
+// Close releases client resources.
 func (f *Fetcher) Close() error {
 	return f.client.Close()
 }
 
-// logResponse logs one entry per answered request: debug 2xx,
-// warning 4xx, error 5xx.
+// logResponse logs the result of each answered request.
 func logResponse(log logger.Logger) resty.ResponseMiddleware {
 	return func(_ *resty.Client, resp *resty.Response) error {
 		entry := log.WithMetadata(loglayer.M{
@@ -207,8 +198,7 @@ func logResponse(log logger.Logger) resty.ResponseMiddleware {
 	}
 }
 
-// transportFailure logs requests with no response (refused,
-// timeout, TLS); the response middleware never sees them.
+// transportFailure logs requests that receive no response.
 func transportFailure(log logger.Logger) resty.ErrorHook {
 	return func(req *resty.Request, err error) {
 		if err == nil {
@@ -221,8 +211,7 @@ func transportFailure(log logger.Logger) resty.ErrorHook {
 	}
 }
 
-// userAgent is product/version from build metadata; static values
-// only, nothing user-controlled.
+// userAgent returns the product and version from build metadata.
 func userAgent() string {
 	return fmt.Sprintf("%s/%s", config.AppName, config.AppVersion)
 }

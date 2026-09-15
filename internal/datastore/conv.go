@@ -11,8 +11,7 @@ import (
 	"go.jetify.com/typeid"
 )
 
-// Conversion and error-mapping helpers shared by module stores. They
-// exist so each module does not re-declare the same pgx glue.
+// Shared conversion and database error helpers for module stores.
 
 // UserUUID converts a typed ID string (or bare UUID) to the UUID
 // column form. Stores decoupled from the identity packages use this
@@ -24,7 +23,7 @@ func UserUUID(raw string) string {
 	return raw
 }
 
-// TimePtr flattens a timestamptz (invalid → nil).
+// TimePtr converts an invalid timestamptz to nil.
 func TimePtr(t pgtype.Timestamptz) *time.Time {
 	if !t.Valid {
 		return nil
@@ -32,7 +31,7 @@ func TimePtr(t pgtype.Timestamptz) *time.Time {
 	return &t.Time
 }
 
-// TextPtr flattens a text column (invalid → nil).
+// TextPtr converts invalid text to nil.
 func TextPtr(t pgtype.Text) *string {
 	if !t.Valid {
 		return nil
@@ -40,11 +39,10 @@ func TextPtr(t pgtype.Text) *string {
 	return &t.String
 }
 
+// Ptr returns a pointer to v.
 func Ptr[T any](v T) *T { return &v }
 
-// Deref flattens an optional value to its zero type (nil → zero).
-
-// Deref flattens an optional value to its zero type (nil → zero).
+// Deref returns the pointed value or its zero value when p is nil.
 func Deref[T any](p *T) T {
 	if p == nil {
 		var zero T
@@ -53,9 +51,7 @@ func Deref[T any](p *T) T {
 	return *p
 }
 
-// MapErr folds driver errors onto module sentinels: pgx.ErrNoRows →
-// notFound, unique_violation (23505) → duplicate (pass nil to keep
-// the wrap), everything else wraps with the store prefix.
+// MapErr maps common PostgreSQL errors to module sentinels.
 func MapErr(err error, store string, notFound, duplicate error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return notFound
@@ -67,8 +63,7 @@ func MapErr(err error, store string, notFound, duplicate error) error {
 	return fmt.Errorf("%s: %w", store, err)
 }
 
-// Wrap adds operation context ("store: op: err") without re-mapping
-// sentinels — callers that pre-mapped keep their error.
+// Wrap adds store and operation context without changing the error type.
 func Wrap(store, op string, err error) error {
 	return fmt.Errorf("%s: %s: %w", store, op, err)
 }

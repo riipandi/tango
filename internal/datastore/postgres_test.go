@@ -10,8 +10,7 @@ import (
 
 const testDSN = "postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 
-// TestNewRequiresDSN fails fast on an empty DSN — a silent default
-// would point the pool at an unintended local server.
+// TestNewRequiresDSN rejects an empty DSN.
 func TestNewRequiresDSN(t *testing.T) {
 	store, err := New(t.Context(), Options{DSN: ""})
 
@@ -20,8 +19,7 @@ func TestNewRequiresDSN(t *testing.T) {
 	assert.Nil(t, store)
 }
 
-// TestPoolConfigRejectsMalformedDSN surfaces DSN syntax errors as
-// construction failures, not as query-time surprises.
+// TestPoolConfigRejectsMalformedDSN rejects malformed DSNs.
 func TestPoolConfigRejectsMalformedDSN(t *testing.T) {
 	_, err := poolConfig(Options{DSN: "://not-a-dsn"})
 
@@ -29,8 +27,7 @@ func TestPoolConfigRejectsMalformedDSN(t *testing.T) {
 	assert.ErrorContains(t, err, "parse DSN")
 }
 
-// TestPoolConfigSessionSettings locks in the session-wide runtime
-// parameters and the fixed connect timeout.
+// TestPoolConfigSessionSettings checks session settings and timeout.
 func TestPoolConfigSessionSettings(t *testing.T) {
 	cfg, err := poolConfig(Options{DSN: testDSN})
 
@@ -40,8 +37,7 @@ func TestPoolConfigSessionSettings(t *testing.T) {
 	assert.Equal(t, 10*time.Second, cfg.ConnConfig.ConnectTimeout)
 }
 
-// TestPoolConfigDefaultsFromDSN keeps the pgx path intact: with all
-// Options knobs unset, pool sizing follows the DSN parameters.
+// TestPoolConfigDefaultsFromDSN preserves pool settings from the DSN.
 func TestPoolConfigDefaultsFromDSN(t *testing.T) {
 	cfg, err := poolConfig(Options{
 		DSN: testDSN + "&pool_max_conns=3&pool_min_conns=1",
@@ -54,8 +50,7 @@ func TestPoolConfigDefaultsFromDSN(t *testing.T) {
 	assert.Greater(t, cfg.MaxConnIdleTime, time.Duration(0), "pgx default idle time preserved")
 }
 
-// TestPoolConfigOptionsOverrideDSN gives the explicit knobs
-// precedence over the DSN parameters.
+// TestPoolConfigOptionsOverrideDSN checks explicit pool settings.
 func TestPoolConfigOptionsOverrideDSN(t *testing.T) {
 	cfg, err := poolConfig(Options{
 		DSN:             testDSN + "&pool_max_conns=3&pool_min_conns=1",

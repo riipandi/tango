@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-// PaginationAll requests every record in a single result set.
+// PaginationAll requests all records.
 const PaginationAll = -1
 
-// Page size defaults; parsing caps the client-supplied limit at MaxPageSize.
+// Default and maximum page sizes.
 const (
 	DefaultPageSize = 25
 	MaxPageSize     = 100
@@ -29,8 +29,7 @@ const (
 // pagination query parameters.
 var ErrInvalidPagination = errors.New("invalid pagination parameters")
 
-// PaginationParams mirrors the pagination query parameters.
-// Page and Limit accept -1 to return all records.
+// PaginationParams holds pagination query parameters.
 type PaginationParams struct {
 	Page      int
 	Limit     int
@@ -43,7 +42,7 @@ func (p PaginationParams) All() bool {
 	return p.Page == PaginationAll || p.Limit == PaginationAll
 }
 
-// Offset computes the SQL offset for the current page (0 when All).
+// Offset returns the SQL offset for the current page.
 func (p PaginationParams) Offset() int {
 	if p.All() || p.Page < 1 || p.Limit < 1 {
 		return 0
@@ -51,14 +50,12 @@ func (p PaginationParams) Offset() int {
 	return (p.Page - 1) * p.Limit
 }
 
-// ParsePagination reads pagination params from the request query string
-// with default page size, capped at MaxPageSize.
+// ParsePagination reads pagination parameters from the request.
 func ParsePagination(r *http.Request) (PaginationParams, error) {
 	return ParsePaginationSized(r, DefaultPageSize, MaxPageSize)
 }
 
-// ParsePaginationSized reads pagination params with a custom default and
-// maximum page size. Empty query values fall back to the defaults.
+// ParsePaginationSized reads pagination parameters with custom limits.
 func ParsePaginationSized(r *http.Request, defaultLimit, maxLimit int) (PaginationParams, error) {
 	q := r.URL.Query()
 	params := PaginationParams{Page: 1, Limit: defaultLimit, SortOrder: SortAscending}
@@ -96,8 +93,7 @@ func ParsePaginationSized(r *http.Request, defaultLimit, maxLimit int) (Paginati
 	return params, nil
 }
 
-// Pagination describes the current page within a result set. Pointer
-// fields stay unset (absent in JSON) when unknown or not applicable.
+// Pagination describes a page within a result set.
 type Pagination struct {
 	Page           *int
 	Limit          *int
@@ -107,9 +103,7 @@ type Pagination struct {
 	LastItemIndex  *int
 }
 
-// NewPagination computes page metadata for totalItems records using the
-// given params. For all-records queries (page or limit == -1) the page
-// and limit fields stay unset and the item range covers everything.
+// NewPagination computes page metadata for totalItems records.
 func NewPagination(params PaginationParams, totalItems int) Pagination {
 	p := Pagination{}
 	if totalItems < 0 {

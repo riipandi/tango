@@ -1,6 +1,4 @@
-// Package responder writes the standard API envelope defined in
-// docs/response.md: success and error responses share the same shape with
-// metadata (request id, trace id, rate limit, pagination) and HATEOAS links.
+// Package responder writes the standard API response envelope.
 package responder
 
 import (
@@ -35,27 +33,23 @@ type RequestID = typeid.TypeID[requestPrefix]
 // requestIDContextKey scopes the request ID inside a request context.
 type requestIDContextKey struct{}
 
-// NewRequestID generates a fresh request ID: a TypeID whose UUIDv7
-// suffix is K-sortable, so log entries order by request start time.
+// NewRequestID generates a fresh request ID.
 func NewRequestID() string {
 	return typeid.Must(typeid.New[RequestID]()).String()
 }
 
-// WithRequestID attaches a request ID to the context; middleware
-// resolves it once and responders/loggers read it back.
+// WithRequestID attaches a request ID to a context.
 func WithRequestID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, requestIDContextKey{}, id)
 }
 
-// RequestIDFromContext returns the context request ID, empty when
-// absent.
+// RequestIDFromContext returns the request ID in ctx, if present.
 func RequestIDFromContext(ctx context.Context) string {
 	id, _ := ctx.Value(requestIDContextKey{}).(string)
 	return id
 }
 
-// Envelope is the standard API response wrapper. Success responses carry
-// Data, error responses carry Error; Message and Links are optional on both.
+// Envelope is the standard API response wrapper.
 type Envelope struct {
 	Status   string   `json:"status"`
 	Message  string   `json:"message,omitempty"`
@@ -65,8 +59,7 @@ type Envelope struct {
 	Links    Links    `json:"links,omitzero"`
 }
 
-// Metadata carries request context for both success and error envelopes.
-// Pagination fields are spread directly into the object (HATEOAS-first).
+// Metadata carries request and pagination data.
 type Metadata struct {
 	StatusCode int        `json:"status_code"`
 	RequestID  string     `json:"request_id"`
@@ -88,9 +81,7 @@ type RateLimit struct {
 	Reset     int64 `json:"reset"` // unix timestamp when the window resets
 }
 
-// Links is a HATEOAS-friendly link map keyed by link relation ("self",
-// "next", "prev", "first", "last", or any custom rel). A nil entry
-// marshals as null.
+// Links maps link relations to URLs. A nil entry marshals as null.
 type Links map[string]*string
 
 // Option customizes the envelope built by Success and Fail.
@@ -111,13 +102,12 @@ func WithPagination(p Pagination) Option {
 	return func(e *Envelope) { e.Metadata.applyPagination(p) }
 }
 
-// WithPaginationFrom computes pagination metadata from the request
-// params and the total item count.
+// WithPaginationFrom computes pagination metadata from params and totalItems.
 func WithPaginationFrom(params PaginationParams, totalItems int) Option {
 	return WithPagination(NewPagination(params, totalItems))
 }
 
-// WithRateLimit embeds rate limit metadata, overriding header detection.
+// WithRateLimit embeds rate limit metadata.
 func WithRateLimit(rl RateLimit) Option {
 	return func(e *Envelope) { e.Metadata.RateLimit = &rl }
 }
@@ -149,9 +139,7 @@ func Fail(w http.ResponseWriter, r *http.Request, status int, message string, op
 	writeEnvelope(w, env, opts)
 }
 
-// WriteJSON serializes v with encoding/json/v2 (faster unmarshal
-// path, stricter defaults) directly into the response writer.
-// Bypasses the envelope for non-API endpoints (health probes, discovery).
+// WriteJSON writes v as JSON without an envelope.
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -193,9 +181,7 @@ func newMetadata(w http.ResponseWriter, r *http.Request, status int) Metadata {
 	return m
 }
 
-// requestID prefers the context value set by the request-ID
-// middleware, then the incoming X-Request-Id header (echoed back as
-// a response header), and generates one when both are absent.
+// requestID gets the request ID from context, headers, or a new value.
 func requestID(w http.ResponseWriter, r *http.Request) string {
 	if id := RequestIDFromContext(r.Context()); id != "" {
 		w.Header().Set(requestIDHeader, id)
@@ -210,8 +196,7 @@ func requestID(w http.ResponseWriter, r *http.Request) string {
 	return id
 }
 
-// rateLimitFromHeaders reads standard X-RateLimit-* headers (set by the
-// rate-limit middleware earlier in the chain), nil when absent.
+// rateLimitFromHeaders reads rate-limit headers, if complete.
 func rateLimitFromHeaders(h http.Header) *RateLimit {
 	limit, err1 := strconv.Atoi(h.Get("X-RateLimit-Limit"))
 	remaining, err2 := strconv.Atoi(h.Get("X-RateLimit-Remaining"))

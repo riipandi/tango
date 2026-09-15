@@ -8,13 +8,13 @@ import (
 )
 
 type (
-	// Task is placed in a queue for execution.
+	// Task is a queued unit of work.
 	Task interface {
-		// Config returns the configuration of the queue this task belongs to.
+		// Config returns the task's queue configuration.
 		Config() QueueConfig
 	}
 
-	// TaskAddOp adds tasks to queues.
+	// TaskAddOp builds a task add operation.
 	TaskAddOp struct {
 		client *Client
 		ctx    context.Context
@@ -24,29 +24,26 @@ type (
 	}
 )
 
-// Ctx sets the context for the operation.
+// Ctx sets the operation context.
 func (t *TaskAddOp) Ctx(ctx context.Context) *TaskAddOp {
 	t.ctx = ctx
 	return t
 }
 
-// At sets the earliest time the task may be executed.
+// At sets the earliest execution time.
 func (t *TaskAddOp) At(processAt time.Time) *TaskAddOp {
 	t.wait = &processAt
 	return t
 }
 
-// Wait delays execution by the given duration.
+// Wait delays execution by duration.
 func (t *TaskAddOp) Wait(duration time.Duration) *TaskAddOp {
 	t.At(now().Add(duration))
 	return t
 }
 
-// Executor adds the tasks through the given executor — typically an
-// open transaction (pgx.Tx from Pool().Begin, or the datastore WithTx
-// callback) so the enqueue joins the caller's transaction. The caller
-// owns the transaction and must commit it, then call Client.Notify —
-// the dispatcher cannot know when a transaction commits without polling.
+// Executor adds tasks through an existing transaction. The caller must
+// commit it and call Client.Notify afterward.
 func (t *TaskAddOp) Executor(exec datastore.Executor) *TaskAddOp {
 	t.exec = exec
 	return t

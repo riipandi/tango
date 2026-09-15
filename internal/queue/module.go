@@ -5,9 +5,7 @@ import (
 	"fmt"
 )
 
-// Module is the kernel lifecycle adapter: Start runs the dispatcher,
-// Stop waits for workers to drain. Queue registration happens at build
-// time via registry.Deps.
+// Module adapts the queue client to the kernel lifecycle.
 type Module struct {
 	client *Client
 }
@@ -28,8 +26,7 @@ func (m *Module) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop drains running tasks. A false result means workers were still
-// busy when the context deadline hit.
+// Stop drains running tasks.
 func (m *Module) Stop(ctx context.Context) error {
 	if !m.client.Stop(ctx) {
 		return fmt.Errorf("queue: workers still running after stop deadline")

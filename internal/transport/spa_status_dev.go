@@ -2,6 +2,5 @@
 
 package transport
 
-// spaFallbackStatus is the status for unknown page paths: dev has
-// no embedded shell, so the fallback is a plain 404.
+// spaFallbackStatus returns 404 in development.
 const spaFallbackStatus = 404

@@ -1,6 +1,4 @@
-// Package mailer sends transactional email: React Email templates
-// (embedded) rendered dual HTML/text, delivered over SMTP with
-// SASL auth. Parsed templates cache in memory; FS is immutable.
+// Package mailer renders templates and sends transactional email over SMTP.
 package mailer
 
 import (
@@ -17,43 +15,38 @@ type Mailer interface {
 	Send(ctx context.Context, msg Message) error
 }
 
-// SettingsSource resolves the relay settings per send: the appconfig
-// surface owns the SMTP keys once wired (env values are its default
-// layer). Returning an error falls back to the static config.
+// SettingsSource resolves SMTP settings for one send.
 type SettingsSource func(ctx context.Context) (config.MailerConfig, error)
 
-// SettingsSourceSetter is implemented by mailers that accept a
-// late-bound settings source (the appconfig module exists after the
-// mailer is constructed).
+// SettingsSourceSetter is implemented by mailers that accept a settings source.
 type SettingsSourceSetter interface {
 	SetSettingsSource(source SettingsSource)
 }
 
-// Message is a render-and-send request.
+// Message is a message to render and send.
 type Message struct {
 	// To is the recipient address.
 	To string
 
-	// Subject is the plain subject (non-ASCII encoded).
+	// Subject is the message subject.
 	Subject string
 
-	// Template name, e.g. "email-verification" resolves to
-	// <name>_html.tmpl and <name>_text.tmpl.
+	// Template names resolve to matching HTML and text templates.
 	Template string
 
 	// Data feeds the template's .Data tree.
 	Data map[string]any
 }
 
-// Options parametrizes New.
+// Options configures New.
 type Options struct {
-	// Templates source of *.tmpl files. Required.
+	// Templates is the source of template files.
 	Templates fs.FS
 
-	// LogoURL feeds templates' .LogoURL header.
+	// LogoURL is available to templates.
 	LogoURL string
 
-	// Logger gets send attempts/failures. Nil silences.
+	// Logger receives send attempts and failures. Nil disables logging.
 	Logger logger.Logger
 
 	// SendTimeout bounds one SMTP transaction when ctx has no

@@ -46,7 +46,6 @@ func TestCipherRejectsTampering(t *testing.T) {
 	encrypted, err := cipher.Encrypt("integrity matters")
 	require.NoError(t, err)
 
-	// Flip one ciphertext byte: GCM authentication must fail.
 	raw := []byte(encrypted)
 	raw[len(raw)-1] ^= 0x01
 

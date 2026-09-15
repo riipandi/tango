@@ -8,9 +8,7 @@ import (
 	"strings"
 )
 
-// Validate checks what defaults can't express: enums, ranges, URL
-// shapes, production secrets. Runs at end of Load so every command
-// fails fast instead of deep in a request.
+// Validate checks values that defaults cannot express, then reports all errors.
 func (c *Config) Validate() error {
 	errs := []error{
 		validateRange("port", c.Port, 1, 65535),

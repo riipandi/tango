@@ -21,7 +21,7 @@ func TestQueuedTaskInsertScanRoundtrip(t *testing.T) {
 	}
 	insertTask(t, store, task)
 
-	// Generated UUIDv7 ID and defaulted creation time.
+	// The ID and creation time are filled in.
 	_, err := uuid.Parse(task.id)
 	require.NoError(t, err)
 	assert.Equal(t, now(), task.createdAt)
@@ -43,7 +43,7 @@ func TestQueuedTaskClaim(t *testing.T) {
 		insertTask(t, store, task)
 	}
 
-	// Claiming an empty set is a no-op.
+	// Claiming an empty set does nothing.
 	claimed, err := queuedTasks{}.claim(ctx, store, now())
 	require.NoError(t, err)
 	assert.Empty(t, claimed)
@@ -71,13 +71,13 @@ func TestQueuedTaskClaimContention(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, claimed, 1)
 
-	// A competing dispatcher with a non-expired deadline loses: no double claim.
+	// A competing dispatcher cannot claim it again.
 	stale := &queuedTask{id: task.id, queue: "test", task: []byte("x")}
 	claimed, err = (queuedTasks{stale}).claim(ctx, store, now().Add(-time.Second))
 	require.NoError(t, err)
 	assert.Empty(t, claimed)
 
-	// Once the claim expires, the task is reclaimed and attempts increment again.
+	// An expired claim can be reclaimed.
 	claimed, err = (queuedTasks{stale}).claim(ctx, store, now().Add(time.Hour))
 	require.NoError(t, err)
 	require.Len(t, claimed, 1)
@@ -115,7 +115,7 @@ func TestGetScheduledTasks(t *testing.T) {
 	got, err := getScheduledTasks(context.Background(), store, now().Add(-time.Second), 10)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
-	// Ready tasks (NULL wait_until) come first.
+	// Ready tasks come first.
 	assert.Equal(t, ready.id, got[0].id)
 	assert.Equal(t, waited.id, got[1].id)
 }
