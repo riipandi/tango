@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_JdxrQT2WuM
 createdAt: 2026-09-13T16:08:43.616852
-updatedAt: 2026-09-14T09:46:55.930283
+updatedAt: 2026-09-15T10:21:35.608684
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -17,9 +17,13 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users/:id/webauthn-credentials
 urlParameters:
 - enabled: true
-  name: ':id'
-  value: 'dummy'
+  name: :id
+  value: dummy
   id: calsrirvcl
+- enabled: true
+  name: ''
+  value: ''
+  id: FuQQC5Usku
 settingSendCookies:
   enabled: false
   value: true

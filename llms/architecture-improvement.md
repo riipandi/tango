@@ -26,7 +26,7 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
 | 3     | [arch-phase-03-kernel-guards.md](./arch-phase-03-kernel-guards.md)       | `kernel.Guard` + `kernel.Authenticator`, remove guard option duplicates | done    | 2026-09-15 |
 | 4     | [arch-phase-04-module-layout.md](./arch-phase-04-module-layout.md)       | Standard module layout, settings mapping back into modules, slim registry | done    | 2026-09-15 |
 | 5     | [arch-phase-05-token-store.md](./arch-phase-05-token-store.md)           | Consolidate duplicated `auth_tokens` stores into one token package      | done    | 2026-09-15 |
-| 6     | [arch-phase-06-oidc-split.md](./arch-phase-06-oidc-split.md)             | Decompose the 4k-LOC `federation/oidc` package per bounded context      | planned | 2026-09-15 |
+| 6     | [arch-phase-06-oidc-split.md](./arch-phase-06-oidc-split.md)             | Decompose the 4k-LOC `federation/oidc` package per bounded context      | done    | 2026-09-15 |
 
 ## Expected Outcome
 
@@ -58,3 +58,8 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
   single-use consume, `NewRaw`/`Hash`); the two duplicated per-module token stores are deleted.
   Live: mint/exchange + email verification round-trips pass, single-use enforced, old-format
   rows still verify.
+- 2026-09-15 Phase 6 done (recorded deviation): no subpackages — `Service` is one stateful type
+  and the flows are already one file each; `store.go` split per entity instead (store_client /
+  store_authz / store_token / store_identity, 1291 → ~110 LOC core). Byte-compat vs HEAD
+  verified on a shared scratch DB for all `.well-known` + token/introspect/userinfo/end-session
+  surfaces. Architecture plan complete (6/6).
