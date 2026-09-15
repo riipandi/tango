@@ -240,10 +240,7 @@ func firstDelay(interval time.Duration) time.Duration {
 // jitterFor spreads recurring runs across instances without moving the
 // cadence much: half the maintenance jitter, capped by the interval.
 func jitterFor(interval time.Duration) time.Duration {
-	jitter := MaintenanceJitter
-	if jitter > interval/4 {
-		jitter = interval / 4
-	}
+	jitter := min(MaintenanceJitter, interval/4)
 	if jitter <= 0 {
 		return 0
 	}

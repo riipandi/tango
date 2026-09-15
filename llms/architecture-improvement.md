@@ -27,6 +27,7 @@ changes. Read `AGENTS.md` and `llms/tango-deviations.md` first.
 | 4     | [arch-phase-04-module-layout.md](./arch-phase-04-module-layout.md)       | Standard module layout, settings mapping back into modules, slim registry | done    | 2026-09-15 |
 | 5     | [arch-phase-05-token-store.md](./arch-phase-05-token-store.md)           | Consolidate duplicated `auth_tokens` stores into one token package      | done    | 2026-09-15 |
 | 6     | [arch-phase-06-oidc-split.md](./arch-phase-06-oidc-split.md)             | Decompose the 4k-LOC `federation/oidc` package per bounded context      | done    | 2026-09-15 |
+| 7     | [arch-phase-07-queue-built-in.md](./arch-phase-07-queue-built-in.md)     | Promote the queue to a built-in `internal/queue` subsystem (datastore-integrated) | planned | 2026-09-15 |
 
 ## Expected Outcome
 
