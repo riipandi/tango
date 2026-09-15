@@ -28,20 +28,14 @@ const (
 	colorReset = "\033[0m"
 )
 
-// CLI is the command-line grammar. Subcommands receive it via
-// kong's type-based binding (ctx.Run(cli)).
+// CLI is Kong's command-line grammar.
 type CLI struct {
-	// EnvFile loads a dotenv file, below the system environment.
-	// Empty defaults to .env.local when it exists.
-	EnvFile string `help:"Load environment variables from a dotenv file (default: .env.local when present)"`
-
-	// DataDir is the single root for logs, backups, keys.
-	// Wins over APP_DATA_DIR and the env file.
-	DataDir string `name:"data-dir" help:"Application data directory for on-disk runtime state"`
-
-	// Version prints the "version" variable and exits.
+	// Global CLi args
+	EnvFile string           `help:"Load environment variables from a dotenv file (default: .env.local when present)"`
+	DataDir string           `name:"data-dir" help:"Application data directory for on-disk runtime state"`
 	Version kong.VersionFlag `short:"V" help:"Show the application version"`
 
+	// CLI subcommands
 	Serve   ServeCmd   `cmd:"" help:"Start the application server"`
 	DB      DBCmd      `cmd:"" help:"Database backup, restore, and migration commands"`
 	Secrets SecretsCmd `cmd:"" help:"Generate application secrets"`
@@ -49,15 +43,7 @@ type CLI struct {
 	Health  HealthCmd  `cmd:"" help:"Check application health" aliases:"hc"`
 }
 
-// versionVars builds the kong vars for --version.
-func versionVars() kong.Vars {
-	return kong.Vars{
-		"version": fmt.Sprintf("%s %s %s (%s %s)", config.AppName, config.AppVersion, config.Platform, config.BuildHash, config.BuildDate),
-	}
-}
-
-// globalOverrides maps global flags to config keys.
-// --data-dir wins over every other layer.
+// globalOverrides gives --data-dir highest precedence.
 func globalOverrides(cli *CLI) map[string]any {
 	overrides := map[string]any{}
 	if cli.DataDir != "" {
@@ -66,11 +52,8 @@ func globalOverrides(cli *CLI) map[string]any {
 	return overrides
 }
 
-// loadConfig loads layered config: global flags (--data-dir,
-// --env-file) plus command overrides. Global flags win. With no
-// --env-file, .env.local is loaded when present so plain
-// `tango <cmd>` sees the same DSNs as the task runner; compose and
-// systemd users set real env vars instead.
+// loadConfig layers global flags, command overrides, env file, and environment.
+// Global flags win. An empty --env-file uses .env.local when present.
 func loadConfig(cli *CLI, extra map[string]any) (*config.Config, error) {
 	envFile := cli.EnvFile
 	if envFile == "" {
@@ -92,14 +75,12 @@ func loadConfig(cli *CLI, extra map[string]any) (*config.Config, error) {
 // stdinReader feeds confirmation prompts; tests override it.
 var stdinReader io.Reader = os.Stdin
 
-// stdinIsInteractive is false for pipes and /dev/null.
 var stdinIsInteractive = func() bool {
 	fi, err := os.Stdin.Stat()
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
-// confirmDestructive prompts unless --force; refuses in
-// non-interactive sessions where nobody can answer.
+// confirmDestructive requires --force in non-interactive sessions.
 func confirmDestructive(force bool) error {
 	if force {
 		return nil
@@ -120,13 +101,12 @@ func confirmDestructive(force bool) error {
 	return fmt.Errorf("aborted")
 }
 
-// HealthCmd checks application health.
+// HealthCmd checks static health or probes a live server.
 type HealthCmd struct {
 	Addr string `help:"Server health endpoint URL (default: from config)"`
 	Live bool   `help:"Check live server via HTTP"`
 }
 
-// Run prints binary info, or probes a live server.
 func (h *HealthCmd) Run(cli *CLI) error {
 	addr := h.Addr
 	if h.Live {
@@ -143,7 +123,6 @@ func (h *HealthCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// checkStatic prints build and runtime information.
 func checkStatic() {
 	exe, _ := os.Executable()
 	info, err := os.Stat(exe)
@@ -186,15 +165,20 @@ func formatSize(bytes int64) string {
 	return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
 }
 
-// RunCLI parses args and runs the selected command. The db surface
-// is wired per-variant (db_migrate_debug/release.go).
+func versionVars() kong.Vars {
+	return kong.Vars{
+		"version": fmt.Sprintf("%s %s %s (%s %s)", config.AppName, config.AppVersion, config.Platform, config.BuildHash, config.BuildDate),
+	}
+}
+
+// RunCLI parses args and runs the selected command, including variant-specific db commands.
 func RunCLI(args []string, opts ...kong.Option) error {
 	cli := &CLI{}
 	base := []kong.Option{
 		kong.Name(config.AppName),
 		kong.Description("A fullstack web application built with Go, Chi, and React."),
+		kong.ConfigureHelp(kong.HelpOptions{Compact: true, FlagsLast: true}),
 		kong.UsageOnError(),
-		kong.ConfigureHelp(kong.HelpOptions{Compact: true}),
 		versionVars(),
 	}
 	parser, err := kong.New(cli, append(base, opts...)...)

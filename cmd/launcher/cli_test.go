@@ -153,7 +153,6 @@ func TestHealthLiveOK(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	// runCommand already captures command output.
 	out := runCommand(t, "hc", "--live", "--addr", upstream.URL)
 	assert.Contains(t, out, "ok")
 }

@@ -7,15 +7,13 @@ import (
 	"github.com/riipandi/tango/database"
 )
 
-// dump, restore, export, import in both variants. Writes land under
-// <data-dir>/backup. Restore/import are gated by --force/--dry-run.
+// DB manage commands write backups under <data-dir>/backup.
+// Restore and import require --force unless --dry-run.
 
-// DBDumpCmd creates a binary-format backup.
 type DBDumpCmd struct {
 	Mode string `arg:"" help:"Dump scope: all (schema & data) or data"`
 }
 
-// Run writes a custom-format dump to the backup dir.
 func (c *DBDumpCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -31,7 +29,6 @@ func (c *DBDumpCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// DBRestoreCmd restores from a binary-format dump.
 type DBRestoreCmd struct {
 	Mode   string `arg:"" help:"Restore scope: all, data, or schema"`
 	File   string `arg:"" help:"Path to the .dump file"`
@@ -39,7 +36,6 @@ type DBRestoreCmd struct {
 	DryRun bool   `help:"Print the pg_restore command without running it"`
 }
 
-// Run restores from a dump after confirmation.
 func (c *DBRestoreCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -60,12 +56,10 @@ func (c *DBRestoreCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// DBExportCmd creates a plain-SQL backup.
 type DBExportCmd struct {
 	Mode string `arg:"" help:"Export scope: all (schema & data) or data"`
 }
 
-// Run writes a SQL export to the backup dir.
 func (c *DBExportCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -81,14 +75,12 @@ func (c *DBExportCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// DBImportCmd imports a plain SQL file.
 type DBImportCmd struct {
 	File   string `arg:"" help:"Path to the .sql file"`
 	Force  bool   `help:"Skip the confirmation prompt"`
 	DryRun bool   `help:"Print the psql command without running it"`
 }
 
-// Run imports a SQL file after confirmation.
 func (c *DBImportCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -114,7 +106,6 @@ func (c *DBImportCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// dbRestoreDryRun prints the restore invocation without running it.
 func dbRestoreDryRun(ctx context.Context, dsn, mode, file string) error {
 	cmd, err := database.RestoreCommand(dsn, mode, file)
 	if err != nil {

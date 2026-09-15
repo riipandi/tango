@@ -20,12 +20,11 @@ import (
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport"
-	tmiddleware "github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/appconfig"
 	"github.com/riipandi/tango/web"
 )
 
-// ServeCmd starts the application server.
 type ServeCmd struct {
 	Host string `help:"Host to bind to"`
 	Port string `help:"Port to bind to"`
@@ -49,12 +48,10 @@ func flagOverrides(host, port string) (map[string]any, error) {
 	return overrides, nil
 }
 
-// Run loads config, starts modules, serves until signal.
-// Every failure returns so deferred closes always run.
 // rateLimiter adapts the datastore pool to the transport limiter
 // contract; a nil return degrades to an unthrottled server (tests).
 func rateLimiter(db *datastore.Postgres) func(http.Handler) http.Handler {
-	return tmiddleware.RateLimit(db, tmiddleware.RateClassDefault)
+	return middleware.RateLimit(db, middleware.RateClassDefault)
 }
 
 // latestVersion exposes the cached release feed from the jobs module
@@ -67,6 +64,7 @@ func latestVersion(reg *kernel.Registry) transport.LatestVersionSource {
 	return source
 }
 
+// Run starts the server and shuts it down on signal.
 func (s *ServeCmd) Run(cli *CLI) error {
 	overrides, err := flagOverrides(s.Host, s.Port)
 	if err != nil {
@@ -77,7 +75,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		return err
 	}
 
-	// Logger built once, injected everywhere. Close drains queue.
+	// Logger is shared by all modules; close drains its queue.
 	lg, logCloser, err := logger.New(logger.Options{
 		Level:  cfg.App.LogLevel,
 		Output: cfg.App.LogTransport,
@@ -89,20 +87,19 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	}
 	defer logCloser.Close()
 
-	// Shared outbound client; closed last.
+	// Fetcher is shared and closed after the server.
 	fch := fetcher.New(fetcher.Options{Logger: lg})
 	defer fch.Close()
 
-	// Postgres pool, fail-fast ping. Closed before fetcher/logger.
+	// Database is pinged at startup and closed before fetcher and logger.
 	db, err := datastore.New(context.Background(), datastore.Options{DSN: cfg.Database.URL})
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
 	}
 	defer db.Close()
 
-	// Schema version check: warn (don't fail) when the database is
-	// behind the compiled-in migration target; operators run
-	// `tango db migrate:up` explicitly.
+	// Schema version check: warn (don't fail) when the database is behind the compiled-in
+	// migration target; operators run `tango db migrate:up` explicitly.
 	checkCtx, checkCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	current, target, err := database.MigrateVersion(checkCtx, cfg.Database.URL)
 	checkCancel()
@@ -115,7 +112,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 			current, target, config.AppName))
 	}
 
-	// Transactional email from embedded React Email templates.
+	// Mount embedded React Email templates.
 	templates, err := fs.Sub(web.EmailTemplates, "email")
 	if err != nil {
 		return fmt.Errorf("mount email templates: %w", err)
@@ -158,7 +155,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		}
 	}()
 
-	// Context carries the received signal as its cause.
+	// Preserve the received signal as the context cause.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	<-ctx.Done()

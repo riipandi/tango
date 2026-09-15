@@ -9,7 +9,7 @@ import (
 	"github.com/riipandi/tango/database"
 )
 
-// Debug DBCmd: manage plus dev-only create/fix/validate/reset.
+// DBCmd adds development-only migration commands to the shared manage surface.
 type DBCmd struct {
 	MigrateUp      MigrateUpCmd       `cmd:"" name:"migrate:up" help:"Run database migrations"`
 	MigrateDown    MigrateDownCmd     `cmd:"" name:"migrate:down" help:"Rollback the most recent migration"`
@@ -25,10 +25,8 @@ type DBCmd struct {
 	Restore        DBRestoreCmd       `cmd:"" help:"Restore from a dump file (custom format)"`
 }
 
-// MigrateFixCmd reorders migration files.
 type MigrateFixCmd struct{}
 
-// Run reorders migration files sequentially.
 func (c *MigrateFixCmd) Run(cli *CLI) error {
 	if err := database.Fix(); err != nil {
 		return fmt.Errorf("db migrate:fix: %w", err)
@@ -37,10 +35,8 @@ func (c *MigrateFixCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// MigrateValidateCmd checks migration files.
 type MigrateValidateCmd struct{}
 
-// Run validates naming and annotations.
 func (c *MigrateValidateCmd) Run(cli *CLI) error {
 	if err := database.Validate(); err != nil {
 		return fmt.Errorf("db migrate:validate: %w", err)
@@ -49,13 +45,11 @@ func (c *MigrateValidateCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// MigrateCreateCmd scaffolds a new migration file.
 type MigrateCreateCmd struct {
 	// Name is snake-cased by goose with the next version prefix.
 	Name string `arg:"" help:"Migration name, e.g. add_users_table"`
 }
 
-// Run scaffolds into the on-disk migrations directory.
 func (c *MigrateCreateCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -69,14 +63,12 @@ func (c *MigrateCreateCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// MigrateResetCmd rolls the schema back to its initial state.
 type MigrateResetCmd struct {
 	Force  bool `help:"Skip the confirmation prompt"`
 	DryRun bool `help:"Print what would be rolled back without changing anything"`
 	Up     bool `help:"Re-apply all migrations after the rollback (fresh schema)"`
 }
 
-// Run rolls back every migration after confirmation.
 func (c *MigrateResetCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -114,8 +106,7 @@ func (c *MigrateResetCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// migrateResetDryRun lists what reset would roll back, read-only;
-// with re-apply it also reports how many would come back.
+// migrateResetDryRun reports rollback targets and optional re-apply count.
 func migrateResetDryRun(ctx context.Context, dsn string, reapply bool) error {
 	statuses, err := database.MigrateStatus(ctx, dsn)
 	if err != nil {

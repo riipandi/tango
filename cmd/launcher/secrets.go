@@ -16,16 +16,14 @@ import (
 	"github.com/riipandi/tango/internal/config"
 )
 
-// SecretsCmd generates application secrets.
 type SecretsCmd struct {
-	// Out is the --apply target; distinct from global --env-file (input).
+	// Apply writes to this env file; it is distinct from global --env-file.
 	Apply   bool   `help:"Update the env file with new secrets"`
 	RSA     bool   `help:"Generate JWT keys using RSA algorithm (2048-bit)"`
 	MLDSA   bool   `help:"Generate post-quantum ML-DSA-87 JWT keys (FIPS 204)"`
 	OutFile string `name:"out" default:".env.local" help:"Env file to update when using --apply"`
 }
 
-// Help shows usage examples.
 func (s *SecretsCmd) Help() string {
 	return fmt.Sprintf("\nExamples:\n"+
 		"  %[1]s secrets\n"+
@@ -35,7 +33,6 @@ func (s *SecretsCmd) Help() string {
 		"  %[1]s secrets --mldsa\n", config.AppName)
 }
 
-// Run generates keys, then prints or applies them.
 func (s *SecretsCmd) Run(cli *CLI) error {
 	outFile, err := sanitizeOutputPath(s.OutFile, "env file")
 	if err != nil {
@@ -98,7 +95,6 @@ func generateSecrets(keysDir string, useRSA, useMLDSA bool) (secretsBundle, erro
 	return secretsBundle{display: rows, env: rows}, nil
 }
 
-// printSecrets renders the bundle to stdout.
 func printSecrets(keys secretsBundle) {
 	fmt.Printf("%sApplication Secrets:%s\n", colorBold, colorReset)
 	for _, kv := range keys.display {
@@ -119,7 +115,6 @@ func sanitizeOutputPath(path, label string) (string, error) {
 	return cleaned, nil
 }
 
-// applySecrets writes the bundle into the env file.
 func applySecrets(outFile string, keys secretsBundle) error {
 	fmt.Printf("%sUpdating %s file...%s\n\n", colorBold, outFile, colorReset)
 	for _, kv := range keys.env {
@@ -159,13 +154,10 @@ func upsertEnvFile(envFile, key, value string) error {
 	return os.WriteFile(envFile, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 }
 
-// loadSecretsConfig loads config for secrets; only the data root
-// matters. --data-dir wins.
 func loadSecretsConfig(cli *CLI) (*config.Config, error) {
 	return loadConfig(cli, nil)
 }
 
-// randomBase64Key returns 48 secure random bytes, base64-encoded.
 func randomBase64Key() (string, error) {
 	buf := make([]byte, 48)
 	if _, err := rand.Read(buf); err != nil {
@@ -189,7 +181,6 @@ func generateJWTKeyPair(outDir string, useRSA, useMLDSA bool) (string, string, e
 		nil
 }
 
-// marshalKeyPair generates the pair, returns DER halves.
 func marshalKeyPair(useRSA, useMLDSA bool) (derPrivate, derPublic []byte, err error) {
 	switch {
 	case useMLDSA:
@@ -235,7 +226,7 @@ func marshalKeyPair(useRSA, useMLDSA bool) (derPrivate, derPublic []byte, err er
 	return derPrivate, derPublic, nil
 }
 
-// writeKeyPair stores PEM files: private 0600, public 0644.
+// writeKeyPair stores both PEM files with secret-safe permissions.
 func writeKeyPair(outDir string, derPrivate, derPublic []byte) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("create keys dir: %w", err)

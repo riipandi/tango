@@ -13,8 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// parseOnlyDebug resolves the selected command path without
-// running it.
 func parseOnlyDebug(t *testing.T, args ...string) string {
 	t.Helper()
 

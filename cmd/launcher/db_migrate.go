@@ -14,24 +14,20 @@ import (
 // the wait; pg tools finish their current statement.
 const dbTimeout = 5 * time.Minute
 
-// dbContext returns a timeout-bounded context for db commands.
 func dbContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), dbTimeout)
 }
 
-// migrateConfig loads config for db commands.
-// --data-dir wins over env and env-file layers.
+// migrateConfig loads config with --data-dir at highest precedence.
 func migrateConfig(cli *CLI) (*config.Config, error) {
 	return loadConfig(cli, nil)
 }
 
-// MigrateUpCmd applies all pending migrations.
 type MigrateUpCmd struct {
 	// To applies up to this version (inclusive); 0 means all.
 	To int64 `help:"Apply migrations only up to this version (default: all)"`
 }
 
-// Run applies pending migrations.
 func (c *MigrateUpCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -60,7 +56,6 @@ func (c *MigrateUpCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// MigrateDownCmd rolls back the most recent migration.
 type MigrateDownCmd struct {
 	// Count rolls back this many migrations (default 1).
 	Count  int  `help:"Number of migrations to roll back (default: 1)"`
@@ -68,7 +63,6 @@ type MigrateDownCmd struct {
 	DryRun bool `help:"Print what would be rolled back without changing anything"`
 }
 
-// Run rolls back after confirmation.
 func (c *MigrateDownCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -95,10 +89,8 @@ func (c *MigrateDownCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// MigrateStatusCmd prints the migration status table.
 type MigrateStatusCmd struct{}
 
-// Run prints the migration status table.
 func (c *MigrateStatusCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -122,10 +114,8 @@ func (c *MigrateStatusCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// MigrateVersionCmd prints the current migration version.
 type MigrateVersionCmd struct{}
 
-// Run prints applied and target versions.
 func (c *MigrateVersionCmd) Run(cli *CLI) error {
 	cfg, err := migrateConfig(cli)
 	if err != nil {
@@ -141,9 +131,7 @@ func (c *MigrateVersionCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// migrateDownDryRun lists what down would roll back, read-only.
-// The default single-step case reads the target straight from
-// MigrateDownTarget; larger counts derive the list from status.
+// migrateDownDryRun reports targets without changing the database.
 func migrateDownDryRun(ctx context.Context, dsn string, count int) error {
 	if count < 1 {
 		count = 1
@@ -181,7 +169,6 @@ func migrateDownDryRun(ctx context.Context, dsn string, count int) error {
 	return nil
 }
 
-// migrateDownN rolls back Count migrations via DownTo.
 func migrateDownN(ctx context.Context, dsn string, count int) ([]database.MigrationOutcome, error) {
 	if count < 1 {
 		count = 1
@@ -201,7 +188,6 @@ func migrateDownN(ctx context.Context, dsn string, count int) ([]database.Migrat
 	return database.MigrateDownTo(ctx, dsn, targets[count-1].Version-1)
 }
 
-// appliedDescending sorts applied migrations newest-first.
 func appliedDescending(statuses []database.MigrationStatus) []database.MigrationStatus {
 	var applied []database.MigrationStatus
 	for _, entry := range statuses {

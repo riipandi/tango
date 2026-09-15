@@ -16,18 +16,13 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 )
 
-// SetupCmd bootstraps the first admin account. Only valid on a fresh
-// database (no users yet); refused otherwise.
+// SetupCmd bootstraps the first admin account. Only valid on a fresh database (no users yet); refused otherwise.
 type SetupCmd struct {
-	// AdminEmail is the --admin-email account address.
-	AdminEmail string `help:"Email address for the admin account"`
-	// AdminPassword is the --admin-password value; prompted when empty.
+	AdminEmail    string `help:"Email address for the admin account"`
 	AdminPassword string `help:"Password for the admin account (omit to be prompted, hidden input)"`
-	// Username overrides the default "admin" account name.
-	Username string `default:"admin" help:"Username for the admin account"`
+	Username      string `default:"admin" help:"Username for the admin account"`
 }
 
-// Help shows usage examples.
 func (c *SetupCmd) Help() string {
 	return fmt.Sprintf("\nExamples:\n"+
 		"  %[1]s setup --admin-email admin@example.com --admin-password 'S3cret!'\n"+
@@ -36,7 +31,6 @@ func (c *SetupCmd) Help() string {
 		"The command refuses to run when any user already exists.\n", config.AppName)
 }
 
-// Run performs the fresh-database admin bootstrap.
 func (c *SetupCmd) Run(cli *CLI) error {
 	cfg, err := loadConfig(cli, nil)
 	if err != nil {
@@ -90,7 +84,6 @@ func (c *SetupCmd) Run(cli *CLI) error {
 	return nil
 }
 
-// promptLine reads one line from stdin.
 func promptLine(label string) (string, error) {
 	fmt.Print(label)
 	reader := bufio.NewReader(os.Stdin)
@@ -101,7 +94,6 @@ func promptLine(label string) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
-// promptSecret reads hidden terminal input.
 func promptSecret(label string) (string, error) {
 	fmt.Print(label)
 	if !term.IsTerminal(int(syscall.Stdin)) {

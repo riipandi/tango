@@ -2,8 +2,7 @@
 
 package launcher
 
-// Release DBCmd: manage plus up/down/status/version over embedded
-// migrations. create/fix/validate/reset are debug-only.
+// DBCmd exposes the release manage surface; migration maintenance commands are debug-only.
 type DBCmd struct {
 	MigrateUp      MigrateUpCmd      `cmd:"" name:"migrate:up" help:"Run database migrations"`
 	MigrateDown    MigrateDownCmd    `cmd:"" name:"migrate:down" help:"Rollback the most recent migration"`
