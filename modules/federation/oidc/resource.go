@@ -2,6 +2,7 @@ package oidc
 
 import (
 	"context"
+	"slices"
 	"strings"
 )
 
@@ -84,10 +85,5 @@ func isStandardScope(scope string) bool {
 }
 
 func contains(list []string, value string) bool {
-	for _, item := range list {
-		if item == value {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, value)
 }

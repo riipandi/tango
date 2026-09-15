@@ -3,9 +3,8 @@ package mailer
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/riipandi/tango/internal/config"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSettingsFromValues(t *testing.T) {

@@ -71,10 +71,6 @@ func (f Feature) APIRoutes(r chi.Router) {
 	}
 }
 
-// ----------------------------------------------------------------------------
-// Ceremony handlers
-// ----------------------------------------------------------------------------
-
 // handleBeginRegistration serves POST /webauthn/register/begin:
 // returns the creation options + ceremony session id.
 func (s *Service) handleBeginRegistration(w http.ResponseWriter, r *http.Request) {
@@ -160,10 +156,6 @@ func (s *Service) handleFinishLogin(w http.ResponseWriter, r *http.Request) {
 	responder.Success(w, r, http.StatusOK, u)
 }
 
-// ----------------------------------------------------------------------------
-// Credential CRUD (admin)
-// ----------------------------------------------------------------------------
-
 // renameCredentialRequest is the PUT credential payload.
 type renameCredentialRequest struct {
 	Name string `json:"name"`
@@ -245,10 +237,6 @@ func (s *Service) handleRenameCredential(w http.ResponseWriter, r *http.Request)
 	}
 	responder.Success(w, r, http.StatusOK, credentialView(*credential))
 }
-
-// ----------------------------------------------------------------------------
-// Shared helpers
-// ----------------------------------------------------------------------------
 
 // writeCeremonyError maps ceremony failures to statuses.
 func (s *Service) writeCeremonyError(w http.ResponseWriter, r *http.Request, err error) {

@@ -199,10 +199,6 @@ func (r allowedGroupsRequest) Validate() error {
 	return nil
 }
 
-// ----------------------------------------------------------------------------
-// Client secrets (multi)
-// ----------------------------------------------------------------------------
-
 // createSecretRequest is the POST /clients/{id}/secrets payload.
 type createSecretRequest struct {
 	Secret    string     `json:"secret,omitzero"`

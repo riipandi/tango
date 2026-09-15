@@ -161,11 +161,11 @@ func (f *Fetcher) PostJSON(ctx context.Context, url string, body, out any) (*res
 	return resp, nil
 }
 
-// SendRaw performs one request with an explicit method, headers, and
-// body, and returns the response status plus body regardless of status
-// code. Use for deliveries that must inspect the receiver's answer
-// themselves (webhooks) instead of treating non-2xx as an error.
-// The body is a caller-owned byte slice, sent as-is.
+// SendRaw performs one request with an explicit method, headers, and body,
+// and returns the response status plus body regardless of status code.
+// Use for deliveries that must inspect the receiver's answer themselves
+// (webhooks) instead of treating non-2xx as an error. The body is a
+// caller-owned byte slice, sent as-is.
 func (f *Fetcher) SendRaw(ctx context.Context, method, url string, headers map[string]string, body []byte) (int, []byte, error) {
 	req := f.client.R().SetContext(ctx).SetBody(body)
 	for name, value := range headers {

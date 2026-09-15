@@ -141,10 +141,6 @@ func (f Feature) APIRoutes(r chi.Router) {
 	admin.Post("/users/{id}/one-time-access-email", f.service.handleAdminSendEmail)
 }
 
-// ----------------------------------------------------------------------------
-// Handlers
-// ----------------------------------------------------------------------------
-
 // handleAdminMintToken serves POST /users/{id}/one-time-access-token
 // (admin): returns the raw token once.
 func (s *Service) handleAdminMintToken(w http.ResponseWriter, r *http.Request) {
@@ -233,10 +229,6 @@ func (s *Service) handleExchange(w http.ResponseWriter, r *http.Request, cookieN
 	setSessionCookie(w, cookieName, token, cookieSecure)
 	responder.Success(w, r, http.StatusOK, u)
 }
-
-// ----------------------------------------------------------------------------
-// Shared helpers
-// ----------------------------------------------------------------------------
 
 // mint creates a fresh single-use token for the user and returns
 // the raw value.

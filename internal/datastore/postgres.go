@@ -97,17 +97,17 @@ func New(ctx context.Context, opts Options) (*Postgres, error) {
 	return &Postgres{pool: pool}, nil
 }
 
-// Exec runs a no-rows statement (autocommit).
+// Exec runs a no-rows statement on autocommit.
 func (p *Postgres) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 	return p.pool.Exec(ctx, sql, args...)
 }
 
-// Query runs a multi-row statement (autocommit).
+// Query runs a multi-row statement on autocommit.
 func (p *Postgres) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	return p.pool.Query(ctx, sql, args...)
 }
 
-// QueryRow runs a single-row statement (autocommit).
+// QueryRow runs a single-row statement on autocommit.
 func (p *Postgres) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
 	return p.pool.QueryRow(ctx, sql, args...)
 }

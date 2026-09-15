@@ -21,8 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// --- template store -------------------------------------------------
-
 func testFS() fstest.MapFS {
 	return fstest.MapFS{
 		"welcome_html.tmpl": &fstest.MapFile{Data: []byte(`{{define "root"}}<img src="{{.LogoURL}}"/><p>Hello {{.Data.UserFullName}}, welcome to {{.AppName}} <a href="{{.Data.Link}}">go</a></p>{{end}}`)},
@@ -66,8 +64,6 @@ func TestTemplateCacheParsesOnce(t *testing.T) {
 		assert.Same(t, first, second, "cached pair must be reused")
 	}
 }
-
-// --- SMTP delivery over an in-process server ------------------------
 
 // captureBackend is a fake SMTP relay recording received messages.
 type captureBackend struct {
@@ -297,8 +293,6 @@ func TestRealEmbeddedTemplatesRender(t *testing.T) {
 		assert.NotEmpty(t, text, "template %s", name)
 	}
 }
-
-// --- helpers ---------------------------------------------------------
 
 // newSMTPListener reserves a loopback port; closing it belongs to
 // the caller's cleanup.

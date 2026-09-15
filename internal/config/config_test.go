@@ -72,8 +72,7 @@ func TestLoadEnvFileLayer(t *testing.T) {
 }
 
 func TestLoadSystemEnvOverridesEnvFile(t *testing.T) {
-	// 12-factor layering: a real environment (compose, systemd)
-	// beats the dotenv file.
+	// 12-factor layering: a real environment (compose, systemd) beats the dotenv file.
 	t.Setenv("PORT", "7777")
 	path := writeEnvFile(t, "PORT=1234\nAPP_LOG_LEVEL=debug\n")
 

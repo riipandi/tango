@@ -55,8 +55,8 @@ type User struct {
 	UpdatedAt       *time.Time `json:"updated_at,omitzero"`
 	LastLoginAt     *time.Time `json:"last_login_at,omitzero"`
 
-	// ProfilePicturePath is the blob-store path of the custom
-	// picture (phase 9C); nil falls back to the bundled default.
+	// ProfilePicturePath is the blob-store path of the custom picture;
+	// nil falls back to the bundled default.
 	// Internal: never serialized (the .png route serves bytes).
 	ProfilePicturePath *string `json:"-"`
 }
@@ -77,8 +77,7 @@ type Store interface {
 	GetByID(ctx context.Context, id UserID) (User, error)
 	UpdateAdmin(ctx context.Context, id UserID, params AdminUpdateParams) (User, error)
 	UpdateProfile(ctx context.Context, id UserID, params UpdateProfileParams) (User, error)
-	// SetProfilePicturePath stores or clears (nil) the blob path of
-	// the user's profile picture (phase 9C).
+	// SetProfilePicturePath stores or clears (nil) the blob path of the user's profile picture.
 	SetProfilePicturePath(ctx context.Context, id UserID, path *string) error
 	MarkLogin(ctx context.Context, id UserID) error
 	MarkEmailVerified(ctx context.Context, id UserID) error

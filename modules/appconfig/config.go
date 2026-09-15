@@ -9,6 +9,7 @@ package appconfig
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -47,7 +48,6 @@ type configKey struct {
 // configKeys is the full catalog; keep Default in sync with
 // internal/config + .env.example.
 var configKeys = []configKey{
-	// General
 	{Key: "app_name", Type: typeString, Public: true, Default: "tango"},
 	{Key: "session_duration", Type: typeInt, Default: "43200"}, // minutes; 30 days
 	{Key: "home_page_url", Type: typeString, Public: true, Default: "/"},
@@ -99,12 +99,10 @@ var configKeys = []configKey{
 	{Key: "ldap_admin_group_name", Type: typeString},
 	{Key: "ldap_soft_delete_users", Type: typeBool},
 
-	// WebAuthn ceremony tuning
 	{Key: "webauthn_user_verification", Type: typeString, Default: "preferred", OneOf: webauthnVerifications},
 	{Key: "webauthn_allow_synced_passkeys", Type: typeBool, Default: "true"},
 	{Key: "webauthn_authenticator_attachment", Type: typeString, Default: "any", OneOf: webauthnAttachments},
 
-	// OIDC
 	{Key: "cimd_url_allowlist", Type: typeString},
 }
 
@@ -140,12 +138,7 @@ func validateValue(entry configKey, value string) error {
 }
 
 func slicesContains(list []string, want string) bool {
-	for _, item := range list {
-		if item == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, want)
 }
 
 // variable is the wire shape of one setting (snake_case; upstream

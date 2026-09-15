@@ -98,10 +98,6 @@ const (
 	userinfoAPIPath = "/oidc/userinfo"
 )
 
-// ----------------------------------------------------------------------------
-// Client CRUD (admin)
-// ----------------------------------------------------------------------------
-
 // clientRequest is the POST/PUT /api/oidc/clients payload.
 type clientRequest struct {
 	Name                        string   `json:"name"`
@@ -299,10 +295,6 @@ func (s *Service) handleListAuthorizedClients(w http.ResponseWriter, r *http.Req
 	responder.Success(w, r, http.StatusOK, records)
 }
 
-// ----------------------------------------------------------------------------
-// Token + userinfo (thin HTTP shells; logic in token.go / userinfo.go)
-// ----------------------------------------------------------------------------
-
 // handleToken implements POST /api/oidc/token (form-encoded).
 func (s *Service) handleToken(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -348,10 +340,6 @@ func (s *Service) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 
 	responder.WriteJSON(w, http.StatusOK, profileClaimsMap(scope, claims))
 }
-
-// ----------------------------------------------------------------------------
-// Interaction bridge (SPA)
-// ----------------------------------------------------------------------------
 
 // handleGetInteraction returns the interaction state for the SPA
 // (client name, requested scopes, resume parameters).

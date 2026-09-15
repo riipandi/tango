@@ -40,8 +40,9 @@ func TextPtr(t pgtype.Text) *string {
 	return &t.String
 }
 
-// Ptr returns a pointer to v.
 func Ptr[T any](v T) *T { return &v }
+
+// Deref flattens an optional value to its zero type (nil → zero).
 
 // Deref flattens an optional value to its zero type (nil → zero).
 func Deref[T any](p *T) T {
