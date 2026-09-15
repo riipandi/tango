@@ -2,15 +2,15 @@ type: folder
 model: folder
 id: fl_FRoYxGubpu
 createdAt: 2026-09-14T09:41:01.492031
-updatedAt: 2026-09-14T09:41:01.492032
+updatedAt: 2026-09-15T09:26:36.790242
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
 description: 'Tango-only: /api/webhooks* and /api/webhook-logs outbound webhook surface'
 headers: []
-name: Webhooks
-sortPriority: 1800.0
+name: '[Tango] Webhooks'
+sortPriority: 2000.0
 settingSendCookies:
   enabled: false
   value: true

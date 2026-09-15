@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_KrdFQbM5oF
 createdAt: 2026-09-14T09:51:14.013260
-updatedAt: 2026-09-14T09:51:14.013261
+updatedAt: 2026-09-15T09:35:45.457077
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_hQjdk2nbAg
 authentication: {}
@@ -17,9 +17,13 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/user-groups/:userGroupId
 urlParameters:
 - enabled: true
-  name: ':userGroupId'
-  value: 'dummy'
-  id: tnzwkb2qll
+  name: :userGroupId
+  value: ${[ response.body.path(request='rq_es4pqQuHAK', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC5kYXRhWzBdLmlk') ]}
+  id: 0dHig6pHKG
+- enabled: true
+  name: ''
+  value: ''
+  id: CCrKigq3Q5
 settingSendCookies:
   enabled: false
   value: true

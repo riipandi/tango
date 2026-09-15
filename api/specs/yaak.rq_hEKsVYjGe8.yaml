@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_hEKsVYjGe8
 createdAt: 2026-09-13T19:22:23.343632
-updatedAt: 2026-09-14T10:14:18.241765
+updatedAt: 2026-09-15T09:26:54.227113
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
@@ -13,7 +13,7 @@ description: 'Get a paginated list of API keys belonging to the current user (ta
 headers: []
 method: GET
 name: List API keys
-sortPriority: 0.0
+sortPriority: 3000.0
 url: ${[ apiBaseURL ]}/api/api-keys
 urlParameters:
 - enabled: true

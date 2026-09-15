@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_tw8Gigobcd
 createdAt: 2026-09-14T00:53:28.690067
-updatedAt: 2026-09-14T09:41:16.148236
+updatedAt: 2026-09-15T09:26:36.791250
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: 'Application configuration endpoints (phase 8): public/all config, sync-ldap, test-email'
 headers: []
 name: Application Configuration
-sortPriority: 300.0
+sortPriority: 6000.0
 settingSendCookies:
   enabled: false
   value: true

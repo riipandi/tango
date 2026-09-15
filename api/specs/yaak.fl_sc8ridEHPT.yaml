@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_sc8ridEHPT
 createdAt: 2026-09-13T05:45:23.469011
-updatedAt: 2026-09-14T09:41:24.744841
+updatedAt: 2026-09-15T09:26:36.791994
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: 'Upstream tag: Custom Claims — /api/custom-claims/{user,user-group}/*'
 headers: []
 name: Custom Claims
-sortPriority: 600.0
+sortPriority: 9000.0
 settingSendCookies:
   enabled: false
   value: true

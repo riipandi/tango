@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_RukPJ5xRuk
 createdAt: 2026-09-13T19:22:36.805633
-updatedAt: 2026-09-14T10:19:53.285932
+updatedAt: 2026-09-15T09:26:54.227539
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
@@ -18,12 +18,12 @@ description: Renew an existing API key by ID (only for an expired key)
 headers: []
 method: POST
 name: Renew API key
-sortPriority: 0.0
+sortPriority: 4000.0
 url: ${[ apiBaseURL ]}/api/api-keys/:apiKeyId/renew
 urlParameters:
 - enabled: true
-  name: ':apiKeyId'
-  value: 'dummy'
+  name: :apiKeyId
+  value: dummy
   id: k9CPT67w0p
 settingSendCookies:
   enabled: false

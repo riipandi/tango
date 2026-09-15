@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_owstPiB2PV
 createdAt: 2026-09-14T09:40:54.965689
-updatedAt: 2026-09-14T09:40:54.965690
+updatedAt: 2026-09-15T09:26:36.793598
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: 'Upstream tag: WebAuthn — passkey registration and discoverable login ceremonies'
 headers: []
 name: WebAuthn
-sortPriority: 1400.0
+sortPriority: 16000.0
 settingSendCookies:
   enabled: false
   value: true

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_AusuLWFcuA
 createdAt: 2026-09-13T19:22:49.469085
-updatedAt: 2026-09-14T09:44:29.970312
+updatedAt: 2026-09-15T09:26:54.226263
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
@@ -17,8 +17,8 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/api-keys/:apiKeyId
 urlParameters:
 - enabled: true
-  name: ':apiKeyId'
-  value: 'dummy'
+  name: :apiKeyId
+  value: dummy
   id: 4y9z65mb4x
 settingSendCookies:
   enabled: false

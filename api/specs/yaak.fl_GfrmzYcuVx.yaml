@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_GfrmzYcuVx
 createdAt: 2026-09-13T07:27:50.911246
-updatedAt: 2026-09-14T09:41:34.346707
+updatedAt: 2026-09-15T09:26:36.792614
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: OIDC client management (admin) + consent records (phase 4)
 headers: []
 name: OIDC
-sortPriority: 900.0
+sortPriority: 11000.0
 settingSendCookies:
   enabled: false
   value: true

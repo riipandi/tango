@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_3VCPmqfLP6
 createdAt: 2026-09-14T00:53:40.958213
-updatedAt: 2026-09-14T09:41:18.889212
+updatedAt: 2026-09-15T09:26:36.791522
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: 'Application image endpoints (phase 8): logo/email/background/favicon/default-profile-picture'
 headers: []
 name: Application Images
-sortPriority: 400.0
+sortPriority: 7000.0
 settingSendCookies:
   enabled: false
   value: true

@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_hQjdk2nbAg
 createdAt: 2026-09-14T09:40:50.920292
-updatedAt: 2026-09-14T09:40:50.920297
+updatedAt: 2026-09-15T09:26:36.793185
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: 'Upstream tag: User Groups — group CRUD, members, per-user group assignment'
 headers: []
 name: User Groups
-sortPriority: 1200.0
+sortPriority: 14000.0
 settingSendCookies:
   enabled: false
   value: true
