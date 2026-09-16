@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -50,6 +52,8 @@ func sessionCookie(t *testing.T, w *httptest.ResponseRecorder) string {
 	require.Equal(t, CookieName, cookie.Name)
 	assert.True(t, cookie.HttpOnly)
 	assert.Equal(t, http.SameSiteLaxMode, cookie.SameSite)
+	assert.Equal(t, "/", cookie.Path, "the session cookie must span the app")
+	assert.False(t, cookie.Expires.IsZero(), "the session cookie carries its expiry")
 	return cookie.Value
 }
 
@@ -115,6 +119,44 @@ func TestSignInRejectsBadCredentials(t *testing.T) {
 	// Unknown identity, same response (no account enumeration).
 	w = signIn(t, r, "ghost", "whatever")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// A disabled account answers the same generic failure: the
+	// secret may be correct but nothing leaks.
+	_, err := users.UpdateAdmin(t.Context(), u.ID, user.AdminUpdateParams{Disabled: boolPtr(true)})
+	require.NoError(t, err)
+	w = signIn(t, r, u.Username, "s3cret-p@ss")
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.NotContains(t, w.Body.String(), "disabled")
+	assert.Empty(t, w.Result().Cookies())
+}
+
+// boolPtr sugar for admin patches.
+func boolPtr(v bool) *bool { return &v }
+
+// recorderFunc adapts a function to the audit Recorder contract.
+type recorderFunc func(ctx context.Context, e identity.AuditEvent, exec datastore.Executor)
+
+func (f recorderFunc) Record(ctx context.Context, e identity.AuditEvent, exec datastore.Executor) {
+	f(ctx, e, exec)
+}
+
+// TestSignInAuditsEvents pins the audit trail: a successful sign-in
+// records user.signed_in with the session as target.
+func TestSignInAuditsEvents(t *testing.T) {
+	var events []identity.AuditEvent
+	recorder := recorderFunc(func(ctx context.Context, e identity.AuditEvent, exec datastore.Executor) {
+		events = append(events, e)
+	})
+
+	r, _, passwords, users := newTestRouter(t, WithRecorder(recorder))
+	u := newUser(t, users, passwords, "audit")
+
+	w := signIn(t, r, u.Username, "s3cret-p@ss")
+	require.Equal(t, http.StatusOK, w.Code)
+
+	require.Len(t, events, 1)
+	assert.Equal(t, "user.signed_in", events[0].Action)
+	assert.Equal(t, u.ID.String(), events[0].Actor)
 }
 
 func TestSignInValidatesPayload(t *testing.T) {

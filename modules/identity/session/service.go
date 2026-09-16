@@ -43,6 +43,11 @@ const defaultLifetime = 30 * 24 * time.Hour
 // ServiceOption configures the session service.
 type ServiceOption func(*Service)
 
+// WithRecorder overrides the audit recorder (tests).
+func WithRecorder(recorder identity.Recorder) ServiceOption {
+	return func(s *Service) { s.recorder = recorder }
+}
+
 // WithLifetime sets the session lifetime and the sliding-refresh
 // threshold (half the lifetime).
 func WithLifetime(d time.Duration) ServiceOption {
