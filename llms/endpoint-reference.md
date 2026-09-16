@@ -15,9 +15,9 @@ upstream handlers.
 | Method | Endpoint                   | Summary / Yaak Title | Status | Evidence |
 | ------ | -------------------------- | -------------------- | ------ | -------- |
 | GET    | `/api/api-keys`            | List API keys        | done   | `modules/admin/apikey.TestKeyPagination` |
-| POST   | `/api/api-keys`            | Create API key       | done   | `modules/admin/apikey.TestKeyLifecycle` |
+| POST   | `/api/api-keys`            | Create API key       | done — session auth only, API keys cannot create | `modules/admin/apikey.TestKeyRoutesAreSessionGuarded`, `modules/admin/apikey.TestKeyLifecycle` |
 | DELETE | `/api/api-keys/{id}`       | Revoke API key       | done   | `modules/admin/apikey.TestKeyLifecycle` |
-| POST   | `/api/api-keys/{id}/renew` | Renew API key        | done   | `modules/admin/apikey.TestKeyLifecycle` |
+| POST   | `/api/api-keys/{id}/renew` | Renew API key        | done — session auth only, API keys cannot renew | `modules/admin/apikey.TestKeyRoutesAreSessionGuarded`, `modules/admin/apikey.TestKeyLifecycle` |
 
 ## APIs
 

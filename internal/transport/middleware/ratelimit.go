@@ -36,14 +36,13 @@ var classLimits = map[string]struct {
 	RateClassAuth:    {20, 60},
 }
 
-// RateLimit counts requests per client IP and route class.
-func RateLimit(store RateLimitStore, class string) func(http.Handler) http.Handler {
-	limits, ok := classLimits[class]
-	if !ok {
-		limits = classLimits[RateClassDefault]
-	}
+// RateLimit counts requests per client IP; the class comes from the
+// request path, so sensitive auth routes get the tighter budget.
+func RateLimit(store RateLimitStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			class := ClassForPath(r.URL.Path)
+			limits := classLimits[class]
 			key := rateKey(r, class)
 			if key == "" {
 				next.ServeHTTP(w, r)
@@ -77,6 +76,33 @@ func RateLimit(store RateLimitStore, class string) func(http.Handler) http.Handl
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// ClassForPath maps a request path to its rate-limit class. Sensitive
+// authentication surfaces share the tight auth budget; everything
+// else rides the default budget.
+func ClassForPath(path string) string {
+	for _, prefix := range authPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return RateClassAuth
+		}
+	}
+	return RateClassDefault
+}
+
+// authPrefixes lists the paths the tight auth budget protects: the
+// sign-in surfaces plus every token-minting or token-exchanging
+// endpoint.
+var authPrefixes = []string{
+	"/api/auth/",
+	"/api/oidc/token",
+	"/api/signup",
+	"/api/one-time-access-email",
+	"/api/one-time-access-token/",
+	"/api/device-login/",
+	"/api/webauthn/",
+	"/api/users/me/send-email-verification",
+	"/api/users/me/verify-email",
 }
 
 // rateKey builds the database key for a client IP and class.

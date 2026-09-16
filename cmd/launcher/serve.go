@@ -50,7 +50,7 @@ func flagOverrides(host, port string) (map[string]any, error) {
 // rateLimiter adapts the datastore pool to the transport limiter
 // contract; a nil return degrades to an unthrottled server (tests).
 func rateLimiter(db *datastore.Postgres) func(http.Handler) http.Handler {
-	return middleware.RateLimit(db, middleware.RateClassDefault)
+	return middleware.RateLimit(db)
 }
 
 // latestVersion exposes the cached release feed from the jobs module

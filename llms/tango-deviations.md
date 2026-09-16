@@ -35,6 +35,13 @@ match the upstream endpoint contract.
 - `POST /api/signup` requires `email` (upstream leaves it optional); addresses stay NOT NULL in
   the tango schema, so token signups without an email are rejected with 422.
 
+## Rate limiting
+
+- Two budgets replace upstream's twelve per-route token buckets: the default budget
+  (100 requests / 900s) and a tight auth budget (20 requests / 60s) applied by path — sign-in
+  surfaces, token minting/exchange, signup, one-time access, device login, passkey ceremonies,
+  and email verification. The check is a fixed-window SQL function keyed by client IP and class.
+
 ## Passkey ceremony shape
 
 - Ceremony begins answer `{publicKey: <options>, session_id}` — upstream's bare `{publicKey}`
