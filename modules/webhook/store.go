@@ -16,11 +16,12 @@ import (
 
 // Tables owned by this module.
 const (
-	eventsTable = "public.webhook_events"
-	logsTable   = "public.webhook_logs"
+	endpointsTable  = "public.webhook_endpoints"
+	deliveriesTable = "public.webhook_deliveries"
+	attemptsTable   = "public.webhook_delivery_attempts"
 )
 
-// PostgresStore persists endpoints and delivery logs.
+// PostgresStore persists endpoints, deliveries, and attempts.
 type PostgresStore struct {
 	exec datastore.Executor
 }
@@ -39,18 +40,20 @@ var webhookColumns = []string{
 	"enabled", "event_types", "created_at", "updated_at",
 }
 
-// logColumns is the SELECT list for delivery logs; keep in sync with
-// scanLog.
-var logColumns = []string{
-	"id", "webhook_id", "event", "http_status", "request", "response",
-	"attempts", "succeeded", "error", "created_at", "updated_at",
+// deliveryColumns is the delivery SELECT list; the attempt columns
+// ride along from the latest attempt row. Keep in sync with
+// scanDelivery.
+var deliveryColumns = []string{
+	"d.id", "d.webhook_id", "d.event", "d.attempt_count", "d.status",
+	"d.created_at", "d.delivered_at",
+	"a.response_status", "a.error", "a.response",
 }
 
 // List pages the endpoints, newest first.
 func (s *PostgresStore) List(ctx context.Context, params ListParams) ([]Webhook, int, error) {
 	count := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	count.Select("count(*)")
-	count.From(eventsTable)
+	count.From(endpointsTable)
 	applyEndpointFilters(count, params)
 
 	countQuery, countArgs := count.Build()
@@ -61,7 +64,7 @@ func (s *PostgresStore) List(ctx context.Context, params ListParams) ([]Webhook,
 
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select(webhookColumns...)
-	sb.From(eventsTable)
+	sb.From(endpointsTable)
 	applyEndpointFilters(sb, params)
 	sb.OrderBy("created_at DESC", "id DESC")
 	if !params.All() && params.Limit > 0 {
@@ -90,7 +93,7 @@ func (s *PostgresStore) List(ctx context.Context, params ListParams) ([]Webhook,
 func (s *PostgresStore) Get(ctx context.Context, id WebhookID) (Webhook, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select(webhookColumns...)
-	sb.From(eventsTable)
+	sb.From(endpointsTable)
 	sb.Where(sb.E("id", id.UUID()))
 
 	query, args := sb.Build()
@@ -110,8 +113,8 @@ func (s *PostgresStore) Create(ctx context.Context, params CreateParams, encrypt
 	events := normalizeEventTypes(params.EventTypes)
 
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
-	ib.InsertInto(eventsTable)
-	ib.Cols("name", "description", "endpoint", "method", "headers", "enabled", "event_types", "secret")
+	ib.InsertInto(endpointsTable)
+	ib.Cols("name", "description", "endpoint", "method", "headers", "enabled", "event_types", "secret_enc")
 	ib.Values(params.Name, params.Description, params.Endpoint, method, nullableHeaders(params.Headers), enabled, events, encryptedSecret)
 	ib.Returning(webhookColumns...)
 
@@ -126,7 +129,7 @@ func (s *PostgresStore) Create(ctx context.Context, params CreateParams, encrypt
 // Update patches the endpoint; nil params fields keep current values.
 func (s *PostgresStore) Update(ctx context.Context, id WebhookID, params UpdateParams) (Webhook, error) {
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
-	ub.Update(eventsTable)
+	ub.Update(endpointsTable)
 
 	assignments := []string{}
 	if params.Name != nil {
@@ -170,7 +173,7 @@ func (s *PostgresStore) Update(ctx context.Context, id WebhookID, params UpdateP
 // webhook_id to NULL) so the audit trail survives.
 func (s *PostgresStore) Delete(ctx context.Context, id WebhookID) error {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
-	db.DeleteFrom(eventsTable)
+	db.DeleteFrom(endpointsTable)
 	db.Where(db.E("id", id.UUID()))
 
 	query, args := db.Build()
@@ -187,8 +190,8 @@ func (s *PostgresStore) Delete(ctx context.Context, id WebhookID) error {
 // SetSecret rotates the stored ciphertext.
 func (s *PostgresStore) SetSecret(ctx context.Context, id WebhookID, encryptedSecret string) error {
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
-	ub.Update(eventsTable)
-	ub.Set(ub.Assign("secret", encryptedSecret))
+	ub.Update(endpointsTable)
+	ub.Set(ub.Assign("secret_enc", encryptedSecret))
 	ub.Where(ub.E("id", id.UUID()))
 
 	query, args := ub.Build()
@@ -209,7 +212,7 @@ func (s *PostgresStore) SetSecret(ctx context.Context, id WebhookID, encryptedSe
 func (s *PostgresStore) Subscribers(ctx context.Context, event string) ([]Webhook, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select(webhookColumns...)
-	sb.From(eventsTable)
+	sb.From(endpointsTable)
 	sb.Where(
 		sb.E("enabled", true),
 		sb.Or(
@@ -240,8 +243,8 @@ func (s *PostgresStore) Subscribers(ctx context.Context, event string) ([]Webhoo
 // Secret returns the stored ciphertext for one endpoint.
 func (s *PostgresStore) Secret(ctx context.Context, id WebhookID) (string, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select("secret")
-	sb.From(eventsTable)
+	sb.Select("secret_enc")
+	sb.From(endpointsTable)
 	sb.Where(sb.E("id", id.UUID()))
 
 	query, args := sb.Build()
@@ -258,12 +261,14 @@ func (s *PostgresStore) Secret(ctx context.Context, id WebhookID) (string, error
 	return *secret, nil
 }
 
-// InsertLog writes the outbox record through exec (pool or caller tx).
-func (s *PostgresStore) InsertLog(ctx context.Context, exec Executor, log *DeliveryLog) error {
+// InsertDelivery writes the outbox record through exec (pool or
+// caller tx). The canonical body bytes are stored verbatim: every
+// attempt signs and sends exactly these bytes.
+func (s *PostgresStore) InsertDelivery(ctx context.Context, exec Executor, delivery *Delivery, body []byte) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
-	ib.InsertInto(logsTable)
-	ib.Cols("webhook_id", "event", "request")
-	ib.Values(uuidOrNull(log.WebhookID), log.Event, nullableObject(log.Request))
+	ib.InsertInto(deliveriesTable)
+	ib.Cols("webhook_id", "event", "body")
+	ib.Values(uuidOrNull(delivery.WebhookID), delivery.Event, body)
 	ib.Returning("id", "created_at")
 
 	query, args := ib.Build()
@@ -272,43 +277,86 @@ func (s *PostgresStore) InsertLog(ctx context.Context, exec Executor, log *Deliv
 		created pgtype.Timestamptz
 	)
 	if err := exec.QueryRow(ctx, query, args...).Scan(&id, &created); err != nil {
-		return fmt.Errorf("webhook store: insert log: %w", err)
+		return fmt.Errorf("webhook store: insert delivery: %w", err)
 	}
 
-	log.ID = mustLogID(id)
-	log.CreatedAt = created.Time
+	delivery.ID = mustDeliveryID(id)
+	delivery.CreatedAt = created.Time
 	return nil
 }
 
-// RecordAttempt stores the latest delivery outcome on the log row,
-// including the rendered request, so the operator can audit exactly
-// what was sent and whether the signature verifies.
-func (s *PostgresStore) RecordAttempt(ctx context.Context, id DeliveryLogID, result AttemptResult) error {
+// RecordAttempt appends one attempt row (response status, error,
+// duration, redacted response) and folds the outcome into the
+// delivery row.
+func (s *PostgresStore) RecordAttempt(ctx context.Context, id DeliveryID, result AttemptResult) error {
+	var current int
+	if err := s.exec.QueryRow(ctx,
+		"SELECT attempt_count FROM "+deliveriesTable+" WHERE id = $1", id.UUID(),
+	).Scan(&current); err != nil {
+		return fmt.Errorf("webhook store: read attempt count: %w", err)
+	}
+
+	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+	ib.InsertInto(attemptsTable)
+	ib.Cols("delivery_id", "attempt_number", "response_status", "error", "duration_ms", "response")
+	ib.Values(id.UUID(), current+1, nullableInt(result.HTTPStatus), nullableError(result.Err),
+		nullableDuration(result.Duration), nullableObject(result.Response))
+
+	query, args := ib.Build()
+	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("webhook store: insert attempt: %w", err)
+	}
+
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
-	ub.Update(logsTable)
-	ub.Set(
-		"attempts = attempts + 1",
-		ub.Assign("succeeded", result.Succeeded),
-		ub.Assign("http_status", nullableInt(result.HTTPStatus)),
-		ub.Assign("request", nullableObject(result.Request)),
-		ub.Assign("response", nullableObject(result.Response)),
-		ub.Assign("error", nullableError(result.Err)),
-	)
+	ub.Update(deliveriesTable)
+	if result.Succeeded {
+		ub.Set(
+			"attempt_count = attempt_count + 1",
+			ub.Assign("status", "succeeded"),
+			"delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)",
+		)
+	} else {
+		ub.Set(
+			"attempt_count = attempt_count + 1",
+			ub.Assign("status", "failed"),
+		)
+	}
 	ub.Where(ub.E("id", id.UUID()))
 
-	query, args := ub.Build()
+	query, args = ub.Build()
 	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
 		return fmt.Errorf("webhook store: record attempt: %w", err)
 	}
 	return nil
 }
 
-// ListLogs pages the delivery logs, newest first, optionally scoped
+// DeliveryForSend loads the immutable delivery bytes and event name
+// for one attempt. The body is returned exactly as committed.
+func (s *PostgresStore) DeliveryForSend(ctx context.Context, id DeliveryID) (PendingDelivery, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("event", "body")
+	sb.From(deliveriesTable)
+	sb.Where(sb.E("id", id.UUID()))
+
+	query, args := sb.Build()
+	var event string
+	var body []byte
+	err := s.exec.QueryRow(ctx, query, args...).Scan(&event, &body)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return PendingDelivery{}, ErrNotFound
+		}
+		return PendingDelivery{}, fmt.Errorf("webhook store: delivery for send: %w", err)
+	}
+	return PendingDelivery{ID: id, Event: event, Body: body}, nil
+}
+
+// ListDeliveries pages the delivery logs, newest first, optionally scoped
 // to one endpoint.
-func (s *PostgresStore) ListLogs(ctx context.Context, params ListParams, webhookID *WebhookID) ([]DeliveryLog, int, error) {
+func (s *PostgresStore) ListDeliveries(ctx context.Context, params ListParams, webhookID *WebhookID) ([]Delivery, int, error) {
 	count := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	count.Select("count(*)")
-	count.From(logsTable)
+	count.From(deliveriesTable)
 	if webhookID != nil {
 		count.Where(count.E("webhook_id", webhookID.UUID()))
 	}
@@ -316,19 +364,22 @@ func (s *PostgresStore) ListLogs(ctx context.Context, params ListParams, webhook
 	countQuery, countArgs := count.Build()
 	var total int
 	if err := s.exec.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("webhook store: count logs: %w", err)
+		return nil, 0, fmt.Errorf("webhook store: count deliveries: %w", err)
 	}
 
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select(logColumns...)
-	sb.From(logsTable)
+	sb.Select(deliveryColumns...)
+	sb.From(deliveriesTable + " d")
+	// The latest attempt rides along for the listing view; a pending
+	// delivery has no attempt row yet.
+	sb.JoinWithOption(sqlbuilder.LeftJoin, attemptsTable+" a", "a.delivery_id = d.id AND a.attempt_number = d.attempt_count")
 	if webhookID != nil {
-		sb.Where(sb.E("webhook_id", webhookID.UUID()))
+		sb.Where(sb.E("d.webhook_id", webhookID.UUID()))
 	}
 	if params.Event != "" {
-		sb.Where(sb.E("event", params.Event))
+		sb.Where(sb.E("d.event", params.Event))
 	}
-	sb.OrderBy("created_at DESC", "id DESC")
+	sb.OrderBy("d.created_at DESC", "d.id DESC")
 	if !params.All() && params.Limit > 0 {
 		sb.Limit(params.Limit).Offset(params.Offset())
 	}
@@ -336,13 +387,13 @@ func (s *PostgresStore) ListLogs(ctx context.Context, params ListParams, webhook
 	query, args := sb.Build()
 	rows, err := s.exec.Query(ctx, query, args...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("webhook store: list logs: %w", err)
+		return nil, 0, fmt.Errorf("webhook store: list deliveries: %w", err)
 	}
 	defer rows.Close()
 
-	out := []DeliveryLog{}
+	out := []Delivery{}
 	for rows.Next() {
-		entry, scanErr := scanLog(rows)
+		entry, scanErr := scanDelivery(rows)
 		if scanErr != nil {
 			return nil, 0, scanErr
 		}
@@ -351,16 +402,17 @@ func (s *PostgresStore) ListLogs(ctx context.Context, params ListParams, webhook
 	return out, total, rows.Err()
 }
 
-// PruneLogs deletes delivery logs recorded before the cutoff.
-func (s *PostgresStore) PruneLogs(ctx context.Context, before time.Time) (int64, error) {
+// PruneDeliveries deletes deliveries recorded before the cutoff;
+// their attempt rows cascade.
+func (s *PostgresStore) PruneDeliveries(ctx context.Context, before time.Time) (int64, error) {
 	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
-	db.DeleteFrom(logsTable)
+	db.DeleteFrom(deliveriesTable)
 	db.Where(db.LT("created_at", before))
 
 	query, args := db.Build()
 	tag, err := s.exec.Exec(ctx, query, args...)
 	if err != nil {
-		return 0, fmt.Errorf("webhook store: prune logs: %w", err)
+		return 0, fmt.Errorf("webhook store: prune deliveries: %w", err)
 	}
 	return tag.RowsAffected(), nil
 }
@@ -428,50 +480,49 @@ func scanWebhook(row scanner) (Webhook, error) {
 	return hook, nil
 }
 
-// scanLog scans one delivery log row; order follows logColumns.
-func scanLog(row scanner) (DeliveryLog, error) {
+// scanDelivery scans one delivery row joined with its latest attempt;
+// order follows deliveryColumns.
+func scanDelivery(row scanner) (Delivery, error) {
 	var (
-		id        string
-		webhookID *string
-		entry     DeliveryLog
-		event     *string
-		status    pgtype.Int4
-		request   map[string]any
-		response  map[string]any
-		attempts  int
-		errorText *string
-		created   pgtype.Timestamptz
-		updated   pgtype.Timestamptz
-		succeeded bool
+		id          string
+		webhookID   *string
+		entry       Delivery
+		event       *string
+		attempts    int
+		state       string
+		created     pgtype.Timestamptz
+		delivered   pgtype.Timestamptz
+		respStatus  pgtype.Int4
+		errorText   *string
+		respObject  map[string]any
 	)
-	err := row.Scan(&id, &webhookID, &event, &status, &request, &response,
-		&attempts, &succeeded, &errorText, &created, &updated)
+	err := row.Scan(&id, &webhookID, &event, &attempts, &state, &created, &delivered,
+		&respStatus, &errorText, &respObject)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return DeliveryLog{}, ErrNotFound
+			return Delivery{}, ErrNotFound
 		}
-		return DeliveryLog{}, fmt.Errorf("webhook store: scan log: %w", err)
+		return Delivery{}, fmt.Errorf("webhook store: scan delivery: %w", err)
 	}
 
-	entry.ID = mustLogID(id)
+	entry.ID = mustDeliveryID(id)
 	if webhookID != nil {
 		parsed := mustWebhookID(*webhookID)
 		entry.WebhookID = &parsed
 	}
 	entry.Event = event
-	if status.Valid {
-		value := int(status.Int32)
+	entry.Attempts = attempts
+	entry.Succeeded = state == "succeeded"
+	entry.CreatedAt = created.Time
+	if delivered.Valid {
+		entry.DeliveredAt = &delivered.Time
+	}
+	if respStatus.Valid {
+		value := int(respStatus.Int32)
 		entry.HTTPStatus = &value
 	}
-	entry.Request = request
-	entry.Response = response
-	entry.Attempts = attempts
-	entry.Succeeded = succeeded
 	entry.Error = errorText
-	entry.CreatedAt = created.Time
-	if updated.Valid {
-		entry.UpdatedAt = &updated.Time
-	}
+	entry.Response = respObject
 	return entry, nil
 }
 
@@ -483,10 +534,10 @@ func mustWebhookID(uuidText string) WebhookID {
 	return id
 }
 
-func mustLogID(uuidText string) DeliveryLogID {
-	id, err := typeid.FromUUID[DeliveryLogID](uuidText)
+func mustDeliveryID(uuidText string) DeliveryID {
+	id, err := typeid.FromUUID[DeliveryID](uuidText)
 	if err != nil {
-		panic(fmt.Sprintf("webhook: stored log id %q is not a UUID: %v", uuidText, err))
+		panic(fmt.Sprintf("webhook: stored delivery id %q is not a UUID: %v", uuidText, err))
 	}
 	return id
 }
@@ -511,11 +562,22 @@ func nullableHeaders(headers map[string]string) any {
 	return headers
 }
 
+// nullableObject returns nil for an empty map so the column stays
+// NULL instead of an empty JSON object.
 func nullableObject(value map[string]any) any {
 	if len(value) == 0 {
 		return nil
 	}
 	return value
+}
+
+// nullableDuration renders a duration as whole milliseconds; a
+// non-positive or unset duration stays NULL.
+func nullableDuration(d time.Duration) any {
+	if d <= 0 {
+		return nil
+	}
+	return int(d.Milliseconds())
 }
 
 func nullableText(value string) any {

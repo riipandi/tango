@@ -111,7 +111,7 @@ func newVersionFeed(deps Deps) *jobs.VersionFeed {
 // registerRecurringJobs registers cleanup and release-feed jobs.
 func registerRecurringJobs(deps Deps, reg *jobs.Registry, feed *jobs.VersionFeed, webhooks *webhook.Module) {
 	reg.AddJob(jobs.CleanupTokens(deps.DB, deps.Logger))
-	reg.AddJob(jobs.CleanupWebhookLogs(webhooks.Store(), deps.Logger))
+	reg.AddJob(jobs.CleanupWebhookDeliveries(webhooks.Store(), deps.Logger))
 	reg.AddJob(jobs.RemindExpiringAPIKeys(deps.DB, reg, deps.Logger))
 	reg.AddJob(jobs.VersionJob(feed, deps.Logger))
 }

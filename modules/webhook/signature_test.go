@@ -15,10 +15,11 @@ import (
 var fixedTime = time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
 
 func TestSignProducesVerifiableDelivery(t *testing.T) {
-	payload := map[string]any{"event": "user.created", "user_id": "user_01m2"}
+	body, err := CanonicalPayload(map[string]any{"event": "user.created", "user_id": "user_01m2"})
+	require.NoError(t, err)
 
-	delivery, err := Sign("https://example.test/hook", "POST",
-		map[string]string{"X-Custom": "1"}, "user.created", payload, "s3cret", fixedTime)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST",
+		map[string]string{"X-Custom": "1"}, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 
 	assert.Equal(t, "https://example.test/hook", delivery.URL)
@@ -40,12 +41,22 @@ func TestSignSignatureVector(t *testing.T) {
 	// Pinned vector: timestamp + canonical body + HMAC-SHA256.
 	// Recomputing this value by hand must reproduce it, which is what
 	// a third-party receiver verifier asserts against.
-	delivery, err := Sign("https://example.test/hook", "POST", nil, "user.created",
-		map[string]any{"event": "user.created"}, "s3cret", fixedTime)
+	body, err := CanonicalPayload(map[string]any{"event": "user.created"})
+	require.NoError(t, err)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", nil, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 
 	assert.Equal(t, `{"event":"user.created"}`, string(delivery.Body))
 	assert.Regexp(t, `^t=1789387200,v1=[0-9a-f]{64}$`, delivery.Headers[SignatureHeader])
+}
+
+func TestSignSignsTheExactBytes(t *testing.T) {
+	// The signature must cover the bytes as given, not a
+	// re-serialization of them.
+	body := []byte(`{"event":"user.created"}`)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", nil, body, "s3cret", fixedTime)
+	require.NoError(t, err)
+	require.NoError(t, VerifySignature(delivery.Headers[SignatureHeader], body, "s3cret", fixedTime))
 }
 
 func TestSignCanonicalPayloadStableAcrossCalls(t *testing.T) {
@@ -60,8 +71,9 @@ func TestSignCanonicalPayloadStableAcrossCalls(t *testing.T) {
 }
 
 func TestVerifySignatureRejectsTamperedBody(t *testing.T) {
-	delivery, err := Sign("https://example.test/hook", "POST", nil, "user.created",
-		map[string]any{"event": "user.created"}, "s3cret", fixedTime)
+	body, err := CanonicalPayload(map[string]any{"event": "user.created"})
+	require.NoError(t, err)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", nil, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 
 	tampered := append([]byte{}, delivery.Body...)
@@ -72,8 +84,9 @@ func TestVerifySignatureRejectsTamperedBody(t *testing.T) {
 }
 
 func TestVerifySignatureRejectsWrongSecret(t *testing.T) {
-	delivery, err := Sign("https://example.test/hook", "POST", nil, "user.created",
-		map[string]any{"event": "user.created"}, "s3cret", fixedTime)
+	body, err := CanonicalPayload(map[string]any{"event": "user.created"})
+	require.NoError(t, err)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", nil, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 
 	err = VerifySignature(delivery.Headers[SignatureHeader], delivery.Body, "other", fixedTime)
@@ -81,8 +94,9 @@ func TestVerifySignatureRejectsWrongSecret(t *testing.T) {
 }
 
 func TestVerifySignatureRejectsStaleTimestamp(t *testing.T) {
-	delivery, err := Sign("https://example.test/hook", "POST", nil, "user.created",
-		map[string]any{"event": "user.created"}, "s3cret", fixedTime)
+	body, err := CanonicalPayload(map[string]any{"event": "user.created"})
+	require.NoError(t, err)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", nil, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 
 	// Replay beyond the tolerance window fails even with a valid MAC.

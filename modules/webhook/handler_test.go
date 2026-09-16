@@ -98,7 +98,7 @@ func TestRoutesNotMountedWithoutAGuard(t *testing.T) {
 	r := chi.NewRouter()
 	r.Route("/api", module.APIRoutes)
 
-	for _, path := range []string{"/api/webhooks", "/api/webhook-logs"} {
+	for _, path := range []string{"/api/webhooks", "/api/webhook-deliveries"} {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
 		assert.Equal(t, http.StatusNotFound, w.Code, path)
@@ -265,12 +265,12 @@ func TestTestEndpointAcceptsAndQueues(t *testing.T) {
 
 	env := decodeEnvelope(t, w)
 	var payload struct {
-		LogID string `json:"log_id"`
-		Event string `json:"event"`
+		DeliveryID string `json:"delivery_id"`
+		Event      string `json:"event"`
 	}
 	require.NoError(t, jsonv2.Unmarshal(env.Data, &payload))
 	assert.Equal(t, defaultTestEvent, payload.Event)
-	assert.Equal(t, "webhook_log", mustLogIDFromString(t, payload.LogID).Prefix())
+	assert.Equal(t, "webhook_delivery", mustDeliveryIDFromString(t, payload.DeliveryID).Prefix())
 
 	// Unknown endpoint: 404.
 	w = do(t, router, http.MethodPost, "/api/webhooks/not-a-typeid/test", "")
@@ -281,33 +281,33 @@ func TestTestEndpointAcceptsAndQueues(t *testing.T) {
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 }
 
-func TestLogsEndpointsListScopedAndGlobal(t *testing.T) {
+func TestDeliveriesEndpointsListScopedAndGlobal(t *testing.T) {
 	stack := newTestStack(t, okSender())
 	router := mountRouter(t, stack)
 
-	created := mustCreateViaAPI(t, router, "logs-http", "https://example.test/hook")
+	created := mustCreateViaAPI(t, router, "deliveries-http", "https://example.test/hook")
 	_, err := stack.Service.DeliverTo(t.Context(), created.ID, "user.created", map[string]any{"event": "user.created"})
 	require.NoError(t, err)
 
 	// Per endpoint.
-	w := do(t, router, http.MethodGet, "/api/webhooks/"+created.ID.String()+"/logs", "")
+	w := do(t, router, http.MethodGet, "/api/webhooks/"+created.ID.String()+"/deliveries", "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	env := decodeEnvelope(t, w)
-	var scoped []DeliveryLog
+	var scoped []Delivery
 	require.NoError(t, jsonv2.Unmarshal(env.Data, &scoped))
 	require.Len(t, scoped, 1)
 	assert.Equal(t, created.ID.String(), scoped[0].WebhookID.String())
 
 	// Global.
-	w = do(t, router, http.MethodGet, "/api/webhook-logs", "")
+	w = do(t, router, http.MethodGet, "/api/webhook-deliveries", "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	env = decodeEnvelope(t, w)
-	var all []DeliveryLog
+	var all []Delivery
 	require.NoError(t, jsonv2.Unmarshal(env.Data, &all))
 	assert.Len(t, all, 1)
 
 	// Unknown endpoint for the scoped listing.
-	w = do(t, router, http.MethodGet, "/api/webhooks/not-a-typeid/logs", "")
+	w = do(t, router, http.MethodGet, "/api/webhooks/not-a-typeid/deliveries", "")
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
@@ -321,7 +321,7 @@ func TestListRejectsMalformedQuery(t *testing.T) {
 	w = do(t, router, http.MethodGet, "/api/webhooks?enabled=perhaps", "")
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 
-	w = do(t, router, http.MethodGet, "/api/webhook-logs?limit=-5", "")
+	w = do(t, router, http.MethodGet, "/api/webhook-deliveries?limit=-5", "")
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
@@ -375,7 +375,7 @@ func TestEmitThroughModuleSink(t *testing.T) {
 	stack.create(t, "sink-target", "https://example.test/hook", AllEvents)
 	require.NoError(t, module.Emit(ctx, "user.created", map[string]any{"event": "user.created"}))
 
-	_, total, err := stack.Store.ListLogs(ctx, ListParams{}, nil)
+	_, total, err := stack.Store.ListDeliveries(ctx, ListParams{}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
 }
@@ -395,9 +395,9 @@ func mustCreateViaAPI(t *testing.T, router chi.Router, name, endpoint string) We
 	return created
 }
 
-func mustLogIDFromString(t *testing.T, raw string) DeliveryLogID {
+func mustDeliveryIDFromString(t *testing.T, raw string) DeliveryID {
 	t.Helper()
-	id, err := parseDeliveryLogID(raw)
+	id, err := parseDeliveryID(raw)
 	require.NoError(t, err)
 	return id
 }

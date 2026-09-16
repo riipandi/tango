@@ -22,7 +22,7 @@ func NewFetcherSender(f *fetcher.Fetcher) Sender {
 // returns the receiver's status and body. A non-2xx status is data for
 // the caller, not a transport error: the retry decision belongs to the
 // queue, which knows the attempt budget.
-func (s fetcherSender) Send(ctx context.Context, delivery Delivery) (int, []byte, error) {
+func (s fetcherSender) Send(ctx context.Context, delivery OutboundDelivery) (int, []byte, error) {
 	status, body, err := s.fetcher.SendRaw(ctx, delivery.Method, delivery.URL, delivery.Headers, delivery.Body)
 	if err != nil {
 		return 0, nil, fmt.Errorf("webhook: deliver: %w", err)

@@ -40,27 +40,21 @@ const (
 	// WebhookBackoff is the wait between delivery attempts.
 	WebhookBackoff = 30 * time.Second
 	// WebhookRetention keeps completed delivery tasks for a week so
-	// failed payloads stay inspectable; the webhook_logs row is the
+	// failed payloads stay inspectable; the delivery row is the
 	// primary record and is pruned separately.
 	WebhookRetention = 7 * 24 * time.Hour
 )
 
-// WebhookDeliveryTask delivers one recorded event to one endpoint. The
-// log row is the outbox record: it is written in the same transaction
-// that enqueues the delivery, so a rolled back event never delivers.
+// WebhookDeliveryTask delivers one recorded delivery to one endpoint.
+// The delivery row is the outbox record: it is written in the same
+// transaction that enqueues the task, and it holds the immutable body
+// bytes every attempt (including retries) signs and sends.
 type WebhookDeliveryTask struct {
-	// LogID identifies the webhook_logs row updated per attempt.
-	LogID string `json:"log_id"`
+	// DeliveryID identifies the webhook_deliveries row to update.
+	DeliveryID string `json:"delivery_id"`
 
 	// WebhookID identifies the endpoint row.
 	WebhookID string `json:"webhook_id"`
-
-	// Event is the event name the endpoint subscribed to.
-	Event string `json:"event"`
-
-	// Payload is the event body; the delivery signs its canonical JSON
-	// encoding byte for byte.
-	Payload map[string]any `json:"payload,omitzero"`
 }
 
 // Config defines the queue settings.
@@ -83,23 +77,23 @@ func (WebhookDeliveryTask) Config() queue.QueueConfig {
 type (
 	webhookPrefix struct{}
 
-	// WebhookID identifies a webhook_events row (the endpoint).
+	// WebhookID identifies a webhook_endpoints row (the endpoint).
 	WebhookID = typeid.TypeID[webhookPrefix]
 
-	webhookLogPrefix struct{}
+	deliveryPrefix struct{}
 
-	// DeliveryLogID identifies a webhook_logs row (one delivery).
-	DeliveryLogID = typeid.TypeID[webhookLogPrefix]
+	// DeliveryID identifies a webhook_deliveries row (one delivery).
+	DeliveryID = typeid.TypeID[deliveryPrefix]
 )
 
-func (webhookPrefix) Prefix() string    { return "webhook" }
-func (webhookLogPrefix) Prefix() string { return "webhook_log" }
+func (webhookPrefix) Prefix() string  { return "webhook" }
+func (deliveryPrefix) Prefix() string { return "webhook_delivery" }
 
 // Subscription wildcard: accepting it means "every event".
 const AllEvents = "*"
 
 // namePattern mirrors the database CHECK constraint on
-// webhook_events.name.
+// webhook_endpoints.name.
 var namePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,100}$`)
 
 // HTTP methods allowed for webhook endpoints.
@@ -252,34 +246,45 @@ type ListParams struct {
 	Page
 }
 
-// DeliveryLog is one webhook_logs row: the outbox record plus the
-// outcome of the last attempt.
-type DeliveryLog struct {
-	ID         DeliveryLogID  `json:"id"`
+// Delivery is one webhook_deliveries row: the immutable canonical
+// body plus the delivery state. The latest attempt's outcome (status,
+// error, redacted response) rides along for the listing view.
+type Delivery struct {
+	ID         DeliveryID     `json:"id"`
 	WebhookID  *WebhookID     `json:"webhook_id,omitzero"`
 	Event      *string        `json:"event,omitzero"`
 	HTTPStatus *int           `json:"http_status,omitzero"`
-	Request    map[string]any `json:"request,omitzero"`
 	Response   map[string]any `json:"response,omitzero"`
 	Attempts   int            `json:"attempts"`
 	Succeeded  bool           `json:"succeeded"`
 	Error      *string        `json:"error,omitzero"`
 	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  *time.Time     `json:"updated_at,omitzero"`
+	DeliveredAt *time.Time    `json:"delivered_at,omitzero"`
 }
 
-// AttemptResult carries one delivery outcome back into the log row:
-// what was sent (Request) and what came back (Response).
+// PendingDelivery is the send-ready view of one delivery row: the
+// committed event name and the exact canonical body bytes.
+type PendingDelivery struct {
+	ID    DeliveryID
+	Event string
+	Body  []byte
+}
+
+// AttemptResult carries one delivery outcome back into the delivery
+// row and its attempt record: what was sent (Request) and what came
+// back (Response).
 type AttemptResult struct {
 	HTTPStatus int
 	Request    map[string]any
 	Response   map[string]any
+	Duration   time.Duration
 	Err        error
 	Succeeded  bool
 }
 
-// Store persists endpoints and delivery logs in
-// public.webhook_events / public.webhook_logs.
+// Store persists endpoints, deliveries, and attempts in
+// public.webhook_endpoints / public.webhook_deliveries /
+// public.webhook_delivery_attempts.
 type Store interface {
 	List(ctx context.Context, params ListParams) ([]Webhook, int, error)
 	Get(ctx context.Context, id WebhookID) (Webhook, error)
@@ -294,13 +299,17 @@ type Store interface {
 	// Secret returns the stored ciphertext for one endpoint.
 	Secret(ctx context.Context, id WebhookID) (string, error)
 
-	// InsertLog writes the outbox record (pending delivery).
-	InsertLog(ctx context.Context, exec Executor, log *DeliveryLog) error
-	// RecordAttempt updates one delivery with its latest outcome.
-	RecordAttempt(ctx context.Context, id DeliveryLogID, result AttemptResult) error
-	ListLogs(ctx context.Context, params ListParams, webhookID *WebhookID) ([]DeliveryLog, int, error)
-	// PruneLogs deletes delivery logs older than the cutoff.
-	PruneLogs(ctx context.Context, before time.Time) (int64, error)
+	// InsertDelivery writes the outbox record (pending delivery).
+	InsertDelivery(ctx context.Context, exec Executor, delivery *Delivery, body []byte) error
+	// DeliveryForSend loads the immutable body bytes and event name
+	// for one attempt.
+	DeliveryForSend(ctx context.Context, id DeliveryID) (PendingDelivery, error)
+	// RecordAttempt appends one attempt row and folds its outcome
+	// into the delivery.
+	RecordAttempt(ctx context.Context, id DeliveryID, result AttemptResult) error
+	ListDeliveries(ctx context.Context, params ListParams, webhookID *WebhookID) ([]Delivery, int, error)
+	// PruneDeliveries deletes deliveries recorded before the cutoff.
+	PruneDeliveries(ctx context.Context, before time.Time) (int64, error)
 }
 
 // Executor is the query surface accepted for outbox writes: the pool

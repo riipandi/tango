@@ -268,24 +268,24 @@ type stubPruner struct {
 	err     error
 }
 
-func (p *stubPruner) PruneLogs(_ context.Context, before time.Time) (int64, error) {
+func (p *stubPruner) PruneDeliveries(_ context.Context, before time.Time) (int64, error) {
 	p.cutoff = before
 	return p.removed, p.err
 }
 
-func TestCleanupWebhookLogsUsesRetentionWindow(t *testing.T) {
+func TestCleanupWebhookDeliveriesUsesRetentionWindow(t *testing.T) {
 	pruner := &stubPruner{removed: 3}
 	before := time.Now().UTC()
 
-	require.NoError(t, CleanupWebhookLogs(pruner, logger.NewMock()).Run(t.Context()))
+	require.NoError(t, CleanupWebhookDeliveries(pruner, logger.NewMock()).Run(t.Context()))
 
 	expected := before.Add(-WebhookLogRetention)
 	assert.WithinDuration(t, expected, pruner.cutoff, time.Minute)
 }
 
-func TestCleanupWebhookLogsPropagatesFailure(t *testing.T) {
+func TestCleanupWebhookDeliveriesPropagatesFailure(t *testing.T) {
 	pruner := &stubPruner{err: assert.AnError}
-	err := CleanupWebhookLogs(pruner, logger.NewMock()).Run(t.Context())
+	err := CleanupWebhookDeliveries(pruner, logger.NewMock()).Run(t.Context())
 	assert.ErrorIs(t, err, assert.AnError)
 }
 

@@ -44,7 +44,7 @@ type Service struct {
 
 // Sender delivers one signed request and reports the outcome.
 type Sender interface {
-	Send(ctx context.Context, delivery Delivery) (status int, body []byte, err error)
+	Send(ctx context.Context, delivery OutboundDelivery) (status int, body []byte, err error)
 }
 
 // ServiceOption configures the service.
@@ -153,9 +153,9 @@ func (s *Service) RotateSecret(ctx context.Context, id WebhookID) (string, error
 	return secret, nil
 }
 
-// ListLogs pages delivery logs; a nil id lists across endpoints.
-func (s *Service) ListLogs(ctx context.Context, id *WebhookID, params ListParams) ([]DeliveryLog, int, error) {
-	return s.store.ListLogs(ctx, params, id)
+// ListDeliveries pages delivery records; a nil id lists across endpoints.
+func (s *Service) ListDeliveries(ctx context.Context, id *WebhookID, params ListParams) ([]Delivery, int, error) {
+	return s.store.ListDeliveries(ctx, params, id)
 }
 
 // Emit fans an event out to its subscribers. The pending log row and
@@ -181,15 +181,15 @@ func (s *Service) Emit(ctx context.Context, event string, payload map[string]any
 // subscription filter. It backs the manual test route: a receiver
 // must be reachable even when its subscription list does not name the
 // synthetic event.
-func (s *Service) DeliverTo(ctx context.Context, id WebhookID, event string, payload map[string]any) (DeliveryLogID, error) {
+func (s *Service) DeliverTo(ctx context.Context, id WebhookID, event string, payload map[string]any) (DeliveryID, error) {
 	hook, err := s.store.Get(ctx, id)
 	if err != nil {
-		return DeliveryLogID{}, err
+		return DeliveryID{}, err
 	}
 
 	logID, err := s.enqueueForLog(ctx, hook, event, payload)
 	if err != nil {
-		return DeliveryLogID{}, err
+		return DeliveryID{}, err
 	}
 	return logID, nil
 }
@@ -203,20 +203,22 @@ func (s *Service) enqueue(ctx context.Context, subscribers []Webhook, event stri
 
 // enqueueForLog queues a delivery for one endpoint and returns the
 // log row it will update.
-func (s *Service) enqueueForLog(ctx context.Context, hook Webhook, event string, payload map[string]any) (DeliveryLogID, error) {
+func (s *Service) enqueueForLog(ctx context.Context, hook Webhook, event string, payload map[string]any) (DeliveryID, error) {
 	if s.queue == nil {
-		return DeliveryLogID{}, errors.New("webhook: queue is not configured")
+		return DeliveryID{}, errors.New("webhook: queue is not configured")
 	}
 	ids, err := s.enqueueAll(ctx, []Webhook{hook}, event, payload)
 	if err != nil {
-		return DeliveryLogID{}, err
+		return DeliveryID{}, err
 	}
 	return ids[0], nil
 }
 
-// enqueueAll performs the outbox write and returns the created log IDs
-// in subscriber order.
-func (s *Service) enqueueAll(ctx context.Context, subscribers []Webhook, event string, payload map[string]any) ([]DeliveryLogID, error) {
+// enqueueAll performs the outbox write and returns the created
+// delivery IDs in subscriber order. The task carries only IDs: the
+// body bytes live in the delivery row, so a retry always signs and
+// sends exactly the committed bytes.
+func (s *Service) enqueueAll(ctx context.Context, subscribers []Webhook, event string, payload map[string]any) ([]DeliveryID, error) {
 	if s.queue == nil {
 		return nil, nil
 	}
@@ -226,34 +228,25 @@ func (s *Service) enqueueAll(ctx context.Context, subscribers []Webhook, event s
 		return nil, err
 	}
 
-	// One delivery per subscriber: each has its own log row and retry
-	// budget, so a failing receiver cannot hold up the others.
+	// One delivery per subscriber: each has its own delivery row and
+	// retry budget, so a failing receiver cannot hold up the others.
 	tasks := make([]queue.Task, 0, len(subscribers))
-	logs := make([]*DeliveryLog, 0, len(subscribers))
-	logIDs := make([]DeliveryLogID, 0, len(subscribers))
+	logIDs := make([]DeliveryID, 0, len(subscribers))
 
 	err = s.db.WithTx(ctx, func(exec datastore.Executor) error {
 		for i := range subscribers {
 			hookID := subscribers[i].ID
-			entry := &DeliveryLog{
+			entry := &Delivery{
 				WebhookID: &hookID,
 				Event:     &event,
-				Request: map[string]any{
-					"endpoint": subscribers[i].Endpoint,
-					"method":   subscribers[i].Method,
-					"body":     string(body),
-				},
 			}
-			if insertErr := s.store.InsertLog(ctx, exec, entry); insertErr != nil {
+			if insertErr := s.store.InsertDelivery(ctx, exec, entry, body); insertErr != nil {
 				return insertErr
 			}
-			logs = append(logs, entry)
 			logIDs = append(logIDs, entry.ID)
 			tasks = append(tasks, WebhookDeliveryTask{
-				LogID:     entry.ID.String(),
-				WebhookID: hookID.String(),
-				Event:     event,
-				Payload:   payload,
+				DeliveryID: entry.ID.String(),
+				WebhookID:  hookID.String(),
 			})
 		}
 		_, addErr := s.queue.Add(tasks...).Ctx(ctx).Executor(exec).Save()
@@ -272,11 +265,16 @@ func (s *Service) enqueueAll(ctx context.Context, subscribers []Webhook, event s
 // Deliver executes one queued delivery and records the attempt. The
 // error is returned so the queue applies its retry schedule.
 func (s *Service) Deliver(ctx context.Context, task WebhookDeliveryTask) error {
-	logID, err := parseDeliveryLogID(task.LogID)
+	deliveryID, err := parseDeliveryID(task.DeliveryID)
 	if err != nil {
 		return err
 	}
 	webhookID, err := parseWebhookID(task.WebhookID)
+	if err != nil {
+		return err
+	}
+
+	delivery, err := s.store.DeliveryForSend(ctx, deliveryID)
 	if err != nil {
 		return err
 	}
@@ -286,30 +284,31 @@ func (s *Service) Deliver(ctx context.Context, task WebhookDeliveryTask) error {
 		return err
 	}
 	if !hook.Enabled {
-		return s.finish(ctx, logID, AttemptResult{Err: ErrDisabled})
+		return s.finish(ctx, deliveryID, AttemptResult{Err: ErrDisabled})
 	}
 
 	encrypted, err := s.store.Secret(ctx, webhookID)
 	if err != nil {
-		return s.finish(ctx, logID, AttemptResult{Err: err})
+		return s.finish(ctx, deliveryID, AttemptResult{Err: err})
 	}
 	secret, err := s.cipher.Decrypt(encrypted)
 	if err != nil {
-		return s.finish(ctx, logID, AttemptResult{Err: fmt.Errorf("webhook: decrypt secret: %w", err)})
+		return s.finish(ctx, deliveryID, AttemptResult{Err: fmt.Errorf("webhook: decrypt secret: %w", err)})
 	}
 
-	delivery, err := Sign(hook.Endpoint, hook.Method, hook.Headers, task.Event, task.Payload, secret, s.now())
+	outbound, err := Sign(delivery.Event, hook.Endpoint, hook.Method, hook.Headers, delivery.Body, secret, s.now())
 	if err != nil {
-		// Payload-size violations are permanent: stop retrying.
-		return s.finish(ctx, logID, AttemptResult{Err: err})
+		return s.finish(ctx, deliveryID, AttemptResult{Err: err})
 	}
 
-	status, body, sendErr := s.send.Send(ctx, delivery)
+	started := s.now()
+	status, body, sendErr := s.send.Send(ctx, outbound)
+	duration := s.now().Sub(started)
 
 	result := AttemptResult{
 		HTTPStatus: status,
-		Request:    deliverySummary(delivery),
 		Response:   responseSummary(body),
+		Duration:   duration,
 	}
 	switch {
 	case sendErr != nil:
@@ -320,18 +319,18 @@ func (s *Service) Deliver(ctx context.Context, task WebhookDeliveryTask) error {
 		result.Err = fmt.Errorf("webhook: endpoint answered %d", status)
 	}
 
-	if err := s.finish(ctx, logID, result); err != nil {
+	if err := s.finish(ctx, deliveryID, result); err != nil {
 		return err
 	}
 	return resultErr(result)
 }
 
 // finish records one attempt outcome.
-func (s *Service) finish(ctx context.Context, logID DeliveryLogID, result AttemptResult) error {
+func (s *Service) finish(ctx context.Context, deliveryID DeliveryID, result AttemptResult) error {
 	// The attempt write must survive cancellation: the request context
 	// is gone by the time a timeout error is recorded.
-	if err := s.store.RecordAttempt(context.WithoutCancel(ctx), logID, result); err != nil {
-		s.log.WithError(err).WithMetadata(map[string]any{"log_id": logID.String()}).
+	if err := s.store.RecordAttempt(context.WithoutCancel(ctx), deliveryID, result); err != nil {
+		s.log.WithError(err).WithMetadata(map[string]any{"delivery_id": deliveryID.String()}).
 			Error("failed to record webhook delivery attempt")
 		return errors.Join(resultErr(result), err)
 	}
@@ -368,17 +367,18 @@ func responseSummary(body []byte) map[string]any {
 	return out
 }
 
-// deliverySummary captures the rendered request for the delivery
-// record: method, target, headers (signature included) and body. A
-// receiver can re-verify the signature from this record alone.
-func deliverySummary(delivery Delivery) map[string]any {
+// deliverySummary captures the rendered request for an operator
+// debugging a delivery; the attempt rows keep only the redacted
+// response side.
+func deliverySummary(delivery OutboundDelivery) map[string]any {
 	return map[string]any{
 		"method":   delivery.Method,
 		"endpoint": delivery.URL,
 		"headers":  delivery.Headers,
-		"body":     string(delivery.Body),
 	}
 }
+
+var _ = deliverySummary
 
 // newSecret mints a 256-bit signing secret, URL-safe encoded.
 func newSecret() (string, error) {
@@ -398,10 +398,10 @@ func parseWebhookID(raw string) (WebhookID, error) {
 	return id, nil
 }
 
-func parseDeliveryLogID(raw string) (DeliveryLogID, error) {
-	id, err := typeid.Parse[DeliveryLogID](raw)
+func parseDeliveryID(raw string) (DeliveryID, error) {
+	id, err := typeid.Parse[DeliveryID](raw)
 	if err != nil {
-		return DeliveryLogID{}, fmt.Errorf("webhook: invalid log id: %w", err)
+		return DeliveryID{}, fmt.Errorf("webhook: invalid delivery id: %w", err)
 	}
 	return id, nil
 }

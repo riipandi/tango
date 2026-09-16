@@ -30,7 +30,7 @@ const (
 )
 
 // Delivery is one signed webhook request, already rendered.
-type Delivery struct {
+type OutboundDelivery struct {
 	// URL is the registered endpoint.
 	URL string
 	// Method is the registered HTTP verb.
@@ -41,15 +41,9 @@ type Delivery struct {
 	Body []byte
 }
 
-// Sign renders a delivery for one event: the body is the canonical
-// JSON encoding of payload, and the signature covers a timestamp
-// prefix concatenated with that exact body.
-func Sign(endpoint, method string, custom map[string]string, event string, payload map[string]any, secret string, at time.Time) (Delivery, error) {
-	body, err := CanonicalPayload(payload)
-	if err != nil {
-		return Delivery{}, err
-	}
-
+// Sign renders one outbound request: the signature covers a timestamp
+// prefix concatenated with the exact committed body bytes.
+func Sign(event, endpoint, method string, custom map[string]string, body []byte, secret string, at time.Time) (OutboundDelivery, error) {
 	timestamp := strconv.FormatInt(at.Unix(), 10)
 	headers := make(map[string]string, len(custom)+4)
 	for name, value := range custom {
@@ -59,7 +53,7 @@ func Sign(endpoint, method string, custom map[string]string, event string, paylo
 	headers[EventHeader] = event
 	headers[SignatureHeader] = SignatureHeaderValue(timestamp, body, secret)
 
-	return Delivery{URL: endpoint, Method: method, Headers: headers, Body: body}, nil
+	return OutboundDelivery{URL: endpoint, Method: method, Headers: headers, Body: body}, nil
 }
 
 // CanonicalPayload encodes an event payload for signing. Deterministic

@@ -94,8 +94,8 @@ func (m *Module) APIRoutes(r chi.Router) {
 		admin.Delete("/webhooks/{id}", m.remove)
 		admin.Post("/webhooks/{id}/rotate-secret", m.rotateSecret)
 		admin.Post("/webhooks/{id}/test", m.test)
-		admin.Get("/webhooks/{id}/logs", m.listLogs)
-		admin.Get("/webhook-logs", m.listAllLogs)
+		admin.Get("/webhooks/{id}/deliveries", m.listDeliveries)
+		admin.Get("/webhook-deliveries", m.listAllDeliveries)
 	})
 }
 
@@ -250,37 +250,37 @@ func (m *Module) test(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	responder.Success(w, r, http.StatusAccepted, map[string]any{
-		"log_id": logID.String(),
-		"event":  defaultTestEvent,
+		"delivery_id": logID.String(),
+		"event":       defaultTestEvent,
 	})
 }
 
-func (m *Module) listLogs(w http.ResponseWriter, r *http.Request) {
+func (m *Module) listDeliveries(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseIDParam(r)
 	if !ok {
 		responder.NotFoundJSON(w, r)
 		return
 	}
-	m.writeLogs(w, r, &id)
+	m.writeDeliveries(w, r, &id)
 }
 
-func (m *Module) listAllLogs(w http.ResponseWriter, r *http.Request) {
-	m.writeLogs(w, r, nil)
+func (m *Module) listAllDeliveries(w http.ResponseWriter, r *http.Request) {
+	m.writeDeliveries(w, r, nil)
 }
 
-func (m *Module) writeLogs(w http.ResponseWriter, r *http.Request, id *WebhookID) {
+func (m *Module) writeDeliveries(w http.ResponseWriter, r *http.Request, id *WebhookID) {
 	params, err := responder.ParsePagination(r)
 	if err != nil {
 		responder.BadRequestJSON(w, r, responder.ErrInvalidPagination.Error())
 		return
 	}
 
-	logs, total, err := m.service.ListLogs(r.Context(), id, ListParams{Page: Page{Page: params.Page, Limit: params.Limit}})
+	deliveries, total, err := m.service.ListDeliveries(r.Context(), id, ListParams{Page: Page{Page: params.Page, Limit: params.Limit}})
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	responder.Success(w, r, http.StatusOK, logs, responder.WithPaginationFrom(params, total))
+	responder.Success(w, r, http.StatusOK, deliveries, responder.WithPaginationFrom(params, total))
 }
 
 // parseIDParam resolves the {id} path segment into a typed ID.

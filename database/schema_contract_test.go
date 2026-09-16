@@ -71,10 +71,10 @@ func TestSecretEncConstraints(t *testing.T) {
 
 	// Unprefixed secrets violate the marker constraint.
 	mustFail(t, ctx, pg.DSN,
-		`INSERT INTO public.webhook_events (name, endpoint, method, secret) VALUES ('hook-a', 'https://x.example', 'POST', 'plain')`,
+		`INSERT INTO public.webhook_endpoints (name, endpoint, method, secret_enc) VALUES ('hook-a', 'https://x.example', 'POST', 'plain')`,
 		"chk_webhook_secret_enc")
 	mustExec(t, ctx, pg.DSN,
-		`INSERT INTO public.webhook_events (name, endpoint, method, secret) VALUES ('hook-a', 'https://x.example', 'POST', 'enc:c2VhbGVk')`)
+		`INSERT INTO public.webhook_endpoints (name, endpoint, method, secret_enc) VALUES ('hook-a', 'https://x.example', 'POST', 'enc:c2VhbGVk')`)
 
 	mustFail(t, ctx, pg.DSN,
 		`INSERT INTO public.scim_service_providers (endpoint, token, oidc_client_id) VALUES ('https://scim.example', 'plain', 'rp')`,
@@ -128,18 +128,18 @@ func TestOutboxAtomicity(t *testing.T) {
 	// all: a rollback inside the transaction removes the delivery
 	// row with it.
 	_, err = tx.Exec(ctx,
-		`INSERT INTO public.webhook_logs (webhook_id, request) SELECT id, '{"event":"user.created"}'::jsonb FROM public.webhook_events WHERE name = 'hook-a'`)
+		`INSERT INTO public.webhook_deliveries (webhook_id, event, body) SELECT id, 'user.created', convert_to('{"event":"user.created"}', 'UTF8') FROM public.webhook_endpoints WHERE name = 'hook-a'`)
 	require.NoError(t, err)
 
 	var deliveries int
 	require.NoError(t, tx.QueryRow(ctx,
-		"SELECT count(*) FROM public.webhook_logs").Scan(&deliveries))
+		"SELECT count(*) FROM public.webhook_deliveries").Scan(&deliveries))
 	assert.Equal(t, 1, deliveries, "delivery row visible inside the transaction")
 
 	require.NoError(t, tx.Rollback(ctx))
 
 	require.NoError(t, conn.QueryRow(ctx,
-		"SELECT count(*) FROM public.webhook_logs").Scan(&deliveries))
+		"SELECT count(*) FROM public.webhook_deliveries").Scan(&deliveries))
 	assert.Zero(t, deliveries, "rollback removes the outbox row")
 }
 

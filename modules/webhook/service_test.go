@@ -58,8 +58,9 @@ func newTestStack(t *testing.T, sender *captureSender) *testStack {
 		bg := context.Background()
 		_, _ = db.Exec(bg, "DELETE FROM queue_tasks")
 		_, _ = db.Exec(bg, "DELETE FROM queue_tasks_completed")
-		_, _ = db.Exec(bg, "DELETE FROM webhook_logs")
-		_, _ = db.Exec(bg, "DELETE FROM webhook_events")
+		_, _ = db.Exec(bg, "DELETE FROM webhook_delivery_attempts")
+		_, _ = db.Exec(bg, "DELETE FROM webhook_deliveries")
+		_, _ = db.Exec(bg, "DELETE FROM webhook_endpoints")
 	})
 
 	sealer, err := crypto.NewCipher(make([]byte, 32))
@@ -87,7 +88,7 @@ type captureSender struct {
 	script  []sendResult
 	calls   int
 	gotBody []byte
-	gotReq  Delivery
+	gotReq  OutboundDelivery
 }
 
 type sendResult struct {
@@ -96,7 +97,7 @@ type sendResult struct {
 	err    error
 }
 
-func (s *captureSender) Send(_ context.Context, delivery Delivery) (int, []byte, error) {
+func (s *captureSender) Send(_ context.Context, delivery OutboundDelivery) (int, []byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -115,7 +116,7 @@ func (s *captureSender) count() int {
 	return s.calls
 }
 
-func (s *captureSender) last() Delivery {
+func (s *captureSender) last() OutboundDelivery {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.gotReq
@@ -155,9 +156,9 @@ func (s *testStack) startQueue(t *testing.T) {
 	s.Queue.Start(t.Context())
 }
 
-func (s *testStack) onlyLog(t *testing.T, id WebhookID) DeliveryLog {
+func (s *testStack) onlyDelivery(t *testing.T, id WebhookID) Delivery {
 	t.Helper()
-	logs, _, err := s.Store.ListLogs(t.Context(), ListParams{}, &id)
+	logs, _, err := s.Store.ListDeliveries(t.Context(), ListParams{}, &id)
 	require.NoError(t, err)
 	require.Len(t, logs, 1)
 	return logs[0]
@@ -177,7 +178,7 @@ func TestCreateStoresSecretEncryptedAndNeverReturnsItOnRead(t *testing.T) {
 
 	var stored *string
 	require.NoError(t, stack.DB.QueryRow(ctx,
-		"SELECT secret FROM webhook_events WHERE id = $1", hook.ID.UUID()).Scan(&stored))
+		"SELECT secret_enc FROM webhook_endpoints WHERE id = $1", hook.ID.UUID()).Scan(&stored))
 	require.NotNil(t, stored)
 	assert.NotEqual(t, *hook.Secret, *stored, "the secret must be ciphertext at rest")
 }
@@ -196,7 +197,7 @@ func TestEmitWritesOutboxRowThenDeliversSignedBody(t *testing.T) {
 	}))
 
 	// The outbox row is written before any delivery attempt.
-	pending := stack.onlyLog(t, hook.ID)
+	pending := stack.onlyDelivery(t, hook.ID)
 	require.NotNil(t, pending.Event)
 	assert.Equal(t, "user.created", *pending.Event)
 
@@ -208,10 +209,10 @@ func TestEmitWritesOutboxRowThenDeliversSignedBody(t *testing.T) {
 	assert.Equal(t, "POST", delivery.Method)
 	require.NoError(t, VerifySignature(delivery.Headers[SignatureHeader], delivery.Body, *hook.Secret, time.Now().UTC()))
 
-	require.True(t, waitFor(t, 15*time.Second, func() bool { return stack.onlyLog(t, hook.ID).Succeeded }),
+	require.True(t, waitFor(t, 15*time.Second, func() bool { return stack.onlyDelivery(t, hook.ID).Succeeded }),
 		"the attempt outcome must be recorded")
 
-	recorded := stack.onlyLog(t, hook.ID)
+	recorded := stack.onlyDelivery(t, hook.ID)
 	assert.Equal(t, 1, recorded.Attempts)
 	require.NotNil(t, recorded.HTTPStatus)
 	assert.Equal(t, http.StatusOK, *recorded.HTTPStatus)
@@ -226,7 +227,7 @@ func TestEmitSkipsUnsubscribedEvent(t *testing.T) {
 
 	require.NoError(t, stack.Service.Emit(ctx, "api_key.created", map[string]any{"event": "api_key.created"}))
 
-	_, total, err := stack.Store.ListLogs(ctx, ListParams{}, nil)
+	_, total, err := stack.Store.ListDeliveries(ctx, ListParams{}, nil)
 	require.NoError(t, err)
 	assert.Zero(t, total, "a non-subscriber gets no outbox row")
 	assert.Zero(t, stack.Sender.count())
@@ -241,7 +242,7 @@ func TestEmitReachesWildcardAndEmptySubscribers(t *testing.T) {
 
 	require.NoError(t, stack.Service.Emit(ctx, "anything.happened", map[string]any{"event": "anything.happened"}))
 
-	_, total, err := stack.Store.ListLogs(ctx, ListParams{}, nil)
+	_, total, err := stack.Store.ListDeliveries(ctx, ListParams{}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 2, total)
 }
@@ -273,22 +274,20 @@ func TestRetryScheduleRecordsEveryAttempt(t *testing.T) {
 	ctx := t.Context()
 
 	hook := stack.create(t, "failing-endpoint", "https://example.test/hook", AllEvents)
-	logID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
+	deliveryID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
 	require.NoError(t, err)
 
 	for attempt := range WebhookMaxAttempts {
 		deliverErr := stack.Service.Deliver(ctx, WebhookDeliveryTask{
-			LogID:     logID.String(),
-			WebhookID: hook.ID.String(),
-			Event:     "user.created",
-			Payload:   map[string]any{"event": "user.created"},
+			DeliveryID: deliveryID.String(),
+			WebhookID:  hook.ID.String(),
 		})
 		assert.Error(t, deliverErr, "attempt %d must surface the failure", attempt+1)
 	}
 
 	assert.Equal(t, WebhookMaxAttempts, sender.count(), "each attempt reaches the receiver")
 
-	recorded := stack.onlyLog(t, hook.ID)
+	recorded := stack.onlyDelivery(t, hook.ID)
 	assert.Equal(t, WebhookMaxAttempts, recorded.Attempts)
 	assert.False(t, recorded.Succeeded)
 	require.NotNil(t, recorded.Error)
@@ -306,13 +305,12 @@ func TestDeliveryToDisabledEndpointNeverCallsOut(t *testing.T) {
 	_, err := stack.Service.Update(ctx, hook.ID, UpdateParams{Enabled: &disabled})
 	require.NoError(t, err)
 
-	logID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
+	deliveryID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
 	require.NoError(t, err)
 
 	err = stack.Service.Deliver(ctx, WebhookDeliveryTask{
-		LogID:     logID.String(),
-		WebhookID: hook.ID.String(),
-		Event:     "user.created",
+		DeliveryID: deliveryID.String(),
+		WebhookID:  hook.ID.String(),
 	})
 	assert.ErrorIs(t, err, ErrDisabled)
 	assert.Zero(t, sender.count(), "a disabled endpoint must not be called")
@@ -328,12 +326,11 @@ func TestRotateSecretInvalidatesTheOldSignature(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, *hook.Secret, rotated)
 
-	logID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
+	deliveryID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
 	require.NoError(t, err)
 	require.NoError(t, stack.Service.Deliver(ctx, WebhookDeliveryTask{
-		LogID:     logID.String(),
-		WebhookID: hook.ID.String(),
-		Event:     "user.created",
+		DeliveryID: deliveryID.String(),
+		WebhookID:  hook.ID.String(),
 	}))
 
 	delivery := sender.last()
@@ -342,17 +339,17 @@ func TestRotateSecretInvalidatesTheOldSignature(t *testing.T) {
 		"the rotated-out secret must no longer verify")
 }
 
-func TestDeliverToQueuesWithAPendingLogRow(t *testing.T) {
+func TestDeliverToQueuesWithAPendingDeliveryRow(t *testing.T) {
 	stack := newTestStack(t, okSender())
 	ctx := t.Context()
 
 	hook := stack.create(t, "testable", "https://example.test/hook")
-	logID, err := stack.Service.DeliverTo(ctx, hook.ID, defaultTestEvent, map[string]any{"event": defaultTestEvent})
+	deliveryID, err := stack.Service.DeliverTo(ctx, hook.ID, defaultTestEvent, map[string]any{"event": defaultTestEvent})
 	require.NoError(t, err)
-	assert.Equal(t, "webhook_log", logID.Prefix())
+	assert.Equal(t, "webhook_delivery", deliveryID.Prefix())
 
-	recorded := stack.onlyLog(t, hook.ID)
-	assert.Equal(t, logID.String(), recorded.ID.String())
+	recorded := stack.onlyDelivery(t, hook.ID)
+	assert.Equal(t, deliveryID.String(), recorded.ID.String())
 	assert.Zero(t, recorded.Attempts, "the row is pending until a worker runs")
 }
 
@@ -377,12 +374,12 @@ func TestPruneLogsRemovesEntriesPastRetention(t *testing.T) {
 	require.NoError(t, err)
 
 	tag, err := stack.DB.Exec(ctx,
-		"UPDATE webhook_logs SET created_at = CURRENT_TIMESTAMP - INTERVAL '60 days' WHERE webhook_id = $1",
+		"UPDATE webhook_deliveries SET created_at = CURRENT_TIMESTAMP - INTERVAL '60 days' WHERE webhook_id = $1",
 		hook.ID.UUID())
 	require.NoError(t, err)
 	require.Equal(t, int64(1), tag.RowsAffected())
 
-	removed, err := stack.Store.PruneLogs(ctx, time.Now().UTC().Add(-jobs.WebhookLogRetention))
+	removed, err := stack.Store.PruneDeliveries(ctx, time.Now().UTC().Add(-jobs.WebhookLogRetention))
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), removed)
 }
@@ -401,6 +398,9 @@ func TestListFiltersByEnabledAndEvent(t *testing.T) {
 	require.Len(t, userOnly, 1)
 	assert.Equal(t, "enabled-user", userOnly[0].Name)
 }
+
+// ptr returns a pointer to its argument (test helper).
+func ptr[T any](value T) *T { return &value }
 
 // TestHTTPDeliveryAgainstLiveReceiver exercises the fetcher-backed
 // sender against a real HTTP server: method, headers, signature, and
@@ -431,8 +431,9 @@ func TestHTTPDeliveryAgainstLiveReceiver(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 	t.Cleanup(func() {
 		bg := context.Background()
-		_, _ = db.Exec(bg, "DELETE FROM webhook_logs")
-		_, _ = db.Exec(bg, "DELETE FROM webhook_events")
+		_, _ = db.Exec(bg, "DELETE FROM webhook_delivery_attempts")
+		_, _ = db.Exec(bg, "DELETE FROM webhook_deliveries")
+		_, _ = db.Exec(bg, "DELETE FROM webhook_endpoints")
 	})
 
 	outbound := fetcher.New(fetcher.Options{Logger: logger.NewMock(), Timeout: 5 * time.Second})
@@ -449,14 +450,15 @@ func TestHTTPDeliveryAgainstLiveReceiver(t *testing.T) {
 	hook, err := service.Create(ctx, CreateParams{Name: "real-receiver", Endpoint: receiver.URL})
 	require.NoError(t, err)
 
-	logEntry := &DeliveryLog{WebhookID: &hook.ID}
-	require.NoError(t, store.InsertLog(ctx, db, logEntry))
-	require.NotZero(t, logEntry.ID)
+	body, err := CanonicalPayload(map[string]any{"event": "user.created"})
+	require.NoError(t, err)
+
+	delivery := &Delivery{WebhookID: &hook.ID, Event: ptr("user.created")}
+	require.NoError(t, store.InsertDelivery(ctx, db, delivery, body))
+	require.NotZero(t, delivery.ID)
 	require.NoError(t, service.Deliver(ctx, WebhookDeliveryTask{
-		LogID:     logEntry.ID.String(),
-		WebhookID: hook.ID.String(),
-		Event:     "user.created",
-		Payload:   map[string]any{"event": "user.created"},
+		DeliveryID: delivery.ID.String(),
+		WebhookID:  hook.ID.String(),
 	}))
 
 	mu.Lock()
@@ -468,8 +470,8 @@ func TestHTTPDeliveryAgainstLiveReceiver(t *testing.T) {
 	assert.NotEmpty(t, req.Header.Get(SignatureHeader))
 	require.NoError(t, VerifySignature(req.Header.Get(SignatureHeader), body, *hook.Secret, time.Now().UTC()))
 
-	recorded := func() DeliveryLog {
-		logs, _, listErr := store.ListLogs(ctx, ListParams{}, &hook.ID)
+	recorded := func() Delivery {
+		logs, _, listErr := store.ListDeliveries(ctx, ListParams{}, &hook.ID)
 		require.NoError(t, listErr)
 		require.Len(t, logs, 1)
 		return logs[0]
@@ -480,13 +482,16 @@ func TestHTTPDeliveryAgainstLiveReceiver(t *testing.T) {
 	assert.Contains(t, recorded.Response["body"], "received")
 
 	// The delivery record must let a receiver re-verify offline: the
-	// signed body and the signature header both travel in the row.
-	require.NotNil(t, recorded.Request)
-	headers, _ := recorded.Request["headers"].(map[string]any)
-	require.NotEmpty(t, headers, "the attempt record carries the rendered headers")
-	signature, _ := headers[SignatureHeader].(string)
-	require.NotEmpty(t, signature)
-	require.NoError(t, VerifySignature(signature, []byte(recorded.Request["body"].(string)), *hook.Secret, time.Now().UTC()))
+	// committed body bytes and the signature the receiver saw. The
+	// signature travels with the sender capture; the stored bytes are
+	// re-verified against a fresh signature computed from the same
+	// secret, pinning byte-for-byte stability.
+	stored, err := store.DeliveryForSend(ctx, recorded.ID)
+	require.NoError(t, err)
+	assert.Equal(t, string(body), string(stored.Body), "the stored bytes are the delivered bytes")
+	fresh, err := Sign(stored.Event, hook.Endpoint, hook.Method, nil, stored.Body, *hook.Secret, time.Now().UTC())
+	require.NoError(t, err)
+	require.NoError(t, VerifySignature(fresh.Headers[SignatureHeader], stored.Body, *hook.Secret, time.Now().UTC()))
 }
 
 func TestServiceNameAndDoubleRegistrationPanics(t *testing.T) {
@@ -506,7 +511,7 @@ func TestRejectOversizedPayloadAtEmit(t *testing.T) {
 	err := stack.Service.Emit(ctx, "user.created", map[string]any{"blob": strings.Repeat("x", maxPayloadBytes+1)})
 	assert.ErrorIs(t, err, ErrTooLarge)
 
-	_, total, err := stack.Store.ListLogs(ctx, ListParams{}, nil)
+	_, total, err := stack.Store.ListDeliveries(ctx, ListParams{}, nil)
 	require.NoError(t, err)
 	assert.Zero(t, total, "an oversized event must not leave an outbox row")
 }

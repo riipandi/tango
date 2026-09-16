@@ -22,9 +22,9 @@ const (
 	WebhookLogRetention = 30 * 24 * time.Hour
 )
 
-// LogPruner deletes delivery logs before a cutoff.
+// LogPruner deletes delivery records before a cutoff.
 type LogPruner interface {
-	PruneLogs(ctx context.Context, before time.Time) (int64, error)
+	PruneDeliveries(ctx context.Context, before time.Time) (int64, error)
 }
 
 // CleanupTokens builds the recurring job that removes expired tokens and sessions.
@@ -66,19 +66,19 @@ func CleanupTokens(db datastore.Store, log logger.Logger) Job {
 	}
 }
 
-// CleanupWebhookLogs builds the recurring delivery-log cleanup job.
-func CleanupWebhookLogs(pruner LogPruner, log logger.Logger) Job {
+// CleanupWebhookDeliveries builds the recurring delivery cleanup job.
+func CleanupWebhookDeliveries(pruner LogPruner, log logger.Logger) Job {
 	return Job{
-		Name:     "cleanup_webhook_logs",
+		Name:     "cleanup_webhook_deliveries",
 		Interval: WebhookLogCleanupInterval,
 		Run: func(ctx context.Context) error {
 			cutoff := now().Add(-WebhookLogRetention)
-			removed, err := pruner.PruneLogs(ctx, cutoff)
+			removed, err := pruner.PruneDeliveries(ctx, cutoff)
 			if err != nil {
 				return err
 			}
 			if removed > 0 {
-				log.Info(fmt.Sprintf("jobs: webhook log cleanup removed %d rows", removed))
+				log.Info(fmt.Sprintf("jobs: webhook delivery cleanup removed %d rows", removed))
 			}
 			return nil
 		},

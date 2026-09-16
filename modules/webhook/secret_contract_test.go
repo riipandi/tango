@@ -27,7 +27,7 @@ func TestStoredSecretCarriesEncPrefix(t *testing.T) {
 
 	var stored string
 	require.NoError(t, stack.DB.QueryRow(t.Context(),
-		"SELECT secret FROM public.webhook_events WHERE id = $1", created.ID.UUID()).Scan(&stored))
+		"SELECT secret_enc FROM public.webhook_endpoints WHERE id = $1", created.ID.UUID()).Scan(&stored))
 	require.True(t, strings.HasPrefix(stored, crypto.EncPrefix), "stored secret must carry the enc: prefix")
 
 	// The service round-trips the value for signing.
@@ -40,7 +40,7 @@ func TestUnprefixedSecretIsRejected(t *testing.T) {
 	stack := newTestStack(t, okSender())
 
 	_, err := stack.DB.Exec(t.Context(),
-		`INSERT INTO public.webhook_events (name, endpoint, method, secret, event_types) VALUES ('unprefixed', 'https://x.example', 'POST', 'plain-secret', '{}')`)
+		`INSERT INTO public.webhook_endpoints (name, endpoint, method, secret_enc, event_types) VALUES ('unprefixed', 'https://x.example', 'POST', 'plain-secret', '{}')`)
 	require.Error(t, err, "the database must reject an unprefixed secret")
 	assert.Contains(t, err.Error(), "chk_webhook_secret_enc")
 }
