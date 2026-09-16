@@ -30,7 +30,7 @@ func TestMigrationsLifecycle(t *testing.T) {
 
 	applied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, applied, 21)
+	require.Len(t, applied, 22)
 	assert.Equal(t, int64(1), applied[0].Version)
 	assert.Contains(t, applied[0].Path, "initialize_schema")
 	assert.Equal(t, int64(4), applied[3].Version)
@@ -60,6 +60,8 @@ func TestMigrationsLifecycle(t *testing.T) {
 	assert.Contains(t, applied[19].Path, "secret_enc_checks")
 	assert.Equal(t, int64(35), applied[20].Version)
 	assert.Contains(t, applied[20].Path, "password_reset_purpose")
+	assert.Equal(t, int64(36), applied[21].Version)
+	assert.Contains(t, applied[21].Path, "create_mfa_tables")
 
 	db, err := sql.Open("pgx", pg.DSN)
 	require.NoError(t, err)
@@ -124,24 +126,24 @@ func TestMigrationsLifecycle(t *testing.T) {
 	target, err := MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
-	assert.Equal(t, int64(35), target.Version)
+	assert.Equal(t, int64(36), target.Version)
 	assert.Equal(t, "applied", target.State)
 
 	// Roll back the most recent migration, verify the state flipped to pending, then re-apply.
 	outcome, err := MigrateDown(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, outcome)
-	assert.Equal(t, int64(35), outcome.Version)
+	assert.Equal(t, int64(36), outcome.Version)
 
 	target, err = MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
-	assert.Equal(t, int64(34), target.Version, "next down target follows the rollback")
+	assert.Equal(t, int64(35), target.Version, "next down target follows the rollback")
 
 	statuses, err := MigrateStatus(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, statuses, 21)
-	assert.Equal(t, "pending", statuses[20].State)
+	require.Len(t, statuses, 22)
+	assert.Equal(t, "pending", statuses[21].State)
 
 	reapplied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)
