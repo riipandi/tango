@@ -72,8 +72,11 @@ func (s *Service) handleBeginRegistration(w http.ResponseWriter, r *http.Request
 		responder.Fail(w, r, http.StatusInternalServerError, "failed to start passkey registration")
 		return
 	}
+	// The browser-facing shape is upstream's bare {publicKey}
+	// document; the ceremony id rides in the body because tango
+	// tracks ceremonies statelessly instead of by cookie.
 	responder.WriteJSON(w, http.StatusOK, map[string]any{
-		"options":    options,
+		"publicKey":  options,
 		"session_id": sessionID,
 	})
 }
@@ -114,7 +117,7 @@ func (s *Service) handleBeginLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	responder.WriteJSON(w, http.StatusOK, map[string]any{
-		"options":    options,
+		"publicKey":  options,
 		"session_id": sessionID,
 	})
 }

@@ -178,18 +178,18 @@ The protocol endpoints (root router, bare OAuth documents) are verified by the s
 | PUT    | `/api/users/{id}/profile-picture`                     | Update user profile picture                   | done                                                   | `modules/identity/user.TestProfilePictureSurface` |
 | GET    | `/api/users/{id}/profile-picture.png`                 | Get user profile picture                      | done — bare bytes, default fallback                    | `modules/identity/user.TestProfilePictureDefaultFallback` |
 | PUT    | `/api/users/{id}/user-groups`                         | Update user groups                            | done — replaces the set atomically                     | `modules/identity/usergroup.TestReplaceUserGroupsForUser` |
-| GET    | `/api/users/{id}/webauthn-credentials`                | List user passkeys                            | done                                                   | `modules/identity/webauthn` (parity tests pending) |
-| PUT    | `/api/users/{id}/webauthn-credentials/{credentialId}` | Rename user passkey                           | done                                                   | `modules/identity/webauthn` (parity tests pending) |
-| DELETE | `/api/users/{id}/webauthn-credentials/{credentialId}` | Delete user passkey                           | done                                                   | `modules/identity/webauthn` (parity tests pending) |
+| GET    | `/api/users/{id}/webauthn-credentials`                | List user passkeys                            | done — key material never leaves the store             | `modules/identity/webauthn.TestCredentialAdminCRUD` |
+| PUT    | `/api/users/{id}/webauthn-credentials/{credentialId}` | Rename user passkey                           | done                                                   | `modules/identity/webauthn.TestCredentialAdminCRUD` |
+| DELETE | `/api/users/{id}/webauthn-credentials/{credentialId}` | Delete user passkey                           | done                                                   | `modules/identity/webauthn.TestCredentialAdminCRUD` |
 
 ## WebAuthn
 
 | Method | Endpoint                        | Summary / Yaak Title              | Status | Evidence |
 | ------ | ------------------------------- | --------------------------------- | ------ | -------- |
-| POST   | `/api/webauthn/register/begin`  | Begin passkey registration        | done   | `modules/identity/webauthn` (parity tests pending) |
-| POST   | `/api/webauthn/register/finish` | Finish passkey registration       | done   | `modules/identity/webauthn` (parity tests pending) |
-| POST   | `/api/webauthn/login/begin`     | Begin discoverable passkey login  | done   | `modules/identity/webauthn` (parity tests pending) |
-| POST   | `/api/webauthn/login/finish`    | Finish discoverable passkey login | done   | `modules/identity/webauthn` (parity tests pending) |
+| POST   | `/api/webauthn/register/begin`  | Begin passkey registration        | done — bare `publicKey` options plus an explicit ceremony id | `modules/identity/webauthn.TestRegisterBeginReturnsOptions` |
+| POST   | `/api/webauthn/register/finish` | Finish passkey registration       | done   | `modules/identity/webauthn.TestRegisterBeginReturnsOptions` |
+| POST   | `/api/webauthn/login/begin`     | Begin discoverable passkey login  | done — bare `publicKey` options plus an explicit ceremony id | `modules/identity/webauthn.TestLoginBeginAnonymousAndFinishValidation` |
+| POST   | `/api/webauthn/login/finish`    | Finish discoverable passkey login | done — fail closed on unknown ceremony sessions | `modules/identity/webauthn.TestLoginBeginAnonymousAndFinishValidation` |
 
 ## Version
 

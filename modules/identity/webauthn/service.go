@@ -253,7 +253,8 @@ func (s *Service) saveSession(ctx context.Context, userID *user.UserID, session 
 		ExpiresAt:    time.Now().UTC().Add(ChallengeSessionTTL),
 	}
 	if userID != nil {
-		owner := userID.String()
+		// The column is a bare UUID; the TypeID form is wire-only.
+		owner := userID.UUID()
 		row.UserID = &owner
 	}
 

@@ -35,6 +35,20 @@ match the upstream endpoint contract.
 - `POST /api/signup` requires `email` (upstream leaves it optional); addresses stay NOT NULL in
   the tango schema, so token signups without an email are rejected with 422.
 
+## Passkey ceremony shape
+
+- Ceremony begins answer `{publicKey: <options>, session_id}` — upstream's bare `{publicKey}`
+  document plus an explicit ceremony id instead of the upstream session cookie, so clients stay
+  stateless across begin/finish.
+- Ceremony finishes use `POST` bodies and, for registration, a `session_id` query parameter
+  (upstream: `GET /webauthn/*/start` with the ceremony id in a cookie). Responses for a completed
+  registration use 201 with the credential view; login sets the session cookie.
+- Passkey management is admin-side per user (`/api/users/{id}/webauthn-credentials`,
+  `GET`/`PUT`/`DELETE`) instead of upstream's self-service `/api/webauthn/credentials`;
+  rename uses `PUT` with `{name}` rather than `PATCH`. Upstream's `/webauthn/logout` is not
+  mounted — sign-out runs through the session surface; the reauthentication token purpose
+  exists in the token feature without a dedicated webauthn route.
+
 ## Encrypted and hashed value inventory
 
 Recoverable values are sealed by `pkg/crypto` in the canonical `enc:<ciphertext>` form
