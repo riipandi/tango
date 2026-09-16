@@ -30,7 +30,6 @@ require (
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.44.0
-	github.com/zeebo/blake3 v0.2.4
 	go.jetify.com/typeid v1.3.0
 	go.loglayer.dev/transports/pretty/v3 v3.0.0
 	go.loglayer.dev/transports/slog/v3 v3.0.0
@@ -93,7 +92,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/klauspost/compress v1.20.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/knadh/koanf/maps v0.1.3 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
 	github.com/lestrrat-go/dsig v1.4.0 // indirect

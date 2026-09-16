@@ -100,22 +100,15 @@ func TestSuccessWithTraceIDAndRateLimitHeaders(t *testing.T) {
 	assert.Equal(t, float64(1700000000), meta["rate_limit"].(map[string]any)["reset"])
 }
 
-func TestSuccessWithOptions(t *testing.T) {
+func TestSuccessWithPagination(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/api/users", nil)
 
 	Success(w, r, http.StatusCreated, nil,
-		WithMessage("user created"),
-		WithLinks(Links{"self": new("/api/users/1"), "next": nil}),
 		WithPagination(NewPagination(PaginationParams{Page: 2, Limit: 10}, 35)),
 	)
 
 	body := decodeEnvelope(t, w)
-	assert.Equal(t, "user created", body["message"])
-
-	links := body["links"].(map[string]any)
-	assert.Equal(t, "/api/users/1", links["self"])
-	assert.Nil(t, links["next"])
 
 	meta := body["metadata"].(map[string]any)
 	assert.Equal(t, float64(2), meta["page"])
@@ -124,20 +117,6 @@ func TestSuccessWithOptions(t *testing.T) {
 	assert.Equal(t, float64(35), meta["total_items"])
 	assert.Equal(t, float64(10), meta["first_item_index"])
 	assert.Equal(t, float64(19), meta["last_item_index"])
-}
-
-func TestWithLinkAppends(t *testing.T) {
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/api/users", nil)
-
-	Success(w, r, http.StatusCreated, nil,
-		WithLink("self", "/api/users/1"),
-		WithLink("related", "/api/users/1/profile"),
-	)
-
-	links := decodeEnvelope(t, w)["links"].(map[string]any)
-	assert.Len(t, links, 2)
-	assert.Equal(t, "/api/users/1", links["self"])
 }
 
 func TestFailEnvelope(t *testing.T) {

@@ -87,11 +87,6 @@ type Links map[string]*string
 // Option customizes the envelope built by Success and Fail.
 type Option func(*Envelope)
 
-// WithMessage sets the envelope message.
-func WithMessage(message string) Option {
-	return func(e *Envelope) { e.Message = message }
-}
-
 // WithError attaches structured error details (an object or array).
 func WithError(detail any) Option {
 	return func(e *Envelope) { e.Error = detail }
@@ -105,26 +100,6 @@ func WithPagination(p Pagination) Option {
 // WithPaginationFrom computes pagination metadata from params and totalItems.
 func WithPaginationFrom(params PaginationParams, totalItems int) Option {
 	return WithPagination(NewPagination(params, totalItems))
-}
-
-// WithRateLimit embeds rate limit metadata.
-func WithRateLimit(rl RateLimit) Option {
-	return func(e *Envelope) { e.Metadata.RateLimit = &rl }
-}
-
-// WithLinks sets the whole link map.
-func WithLinks(links Links) Option {
-	return func(e *Envelope) { e.Links = links }
-}
-
-// WithLink sets a single link relation.
-func WithLink(rel, url string) Option {
-	return func(e *Envelope) {
-		if e.Links == nil {
-			e.Links = Links{}
-		}
-		e.Links[rel] = new(url)
-	}
 }
 
 // Success writes a success envelope with an optional data payload.
