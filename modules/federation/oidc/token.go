@@ -289,7 +289,7 @@ func (s *Service) mintTokens(ctx context.Context, client Client, userID, scope, 
 		return nil, err
 	}
 
-	idToken, err := s.signIDToken(ctx, signKey, client, claims, nonce, family.authTime, accessTTL)
+	idToken, err := s.signIDToken(ctx, signKey, client, claims, nonce, family.authTime, accessTTL, accessJTI)
 	if err != nil {
 		return nil, err
 	}
@@ -371,8 +371,10 @@ func (s *Service) signToken(ctx context.Context, key jwk.Key, private map[string
 }
 
 // signIDToken mints the OIDC ID token (aud, azp, nonce, sid,
-// auth_time, profile claims, groups, custom claims).
-func (s *Service) signIDToken(ctx context.Context, key jwk.Key, client Client, claims UserClaims, nonce string, authTime time.Time, ttl time.Duration) (string, error) {
+// auth_time, profile claims, groups, custom claims). The jti
+// mirrors the access token's, giving the end-session hint a path
+// back to the token family.
+func (s *Service) signIDToken(ctx context.Context, key jwk.Key, client Client, claims UserClaims, nonce string, authTime time.Time, ttl time.Duration, jti string) (string, error) {
 	signer, err := jwtutils.NewSigner[map[string]any](key, jwa.RS256())
 	if err != nil {
 		return "", err
@@ -404,6 +406,7 @@ func (s *Service) signIDToken(ctx context.Context, key jwk.Key, client Client, c
 		Issuer:    s.issuer,
 		Subject:   claims.Subject,
 		Audience:  []string{client.ID.String()},
+		JWTID:     jti,
 		IssuedAt:  now,
 		ExpiresAt: now.Add(ttl),
 	}

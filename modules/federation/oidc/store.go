@@ -50,6 +50,9 @@ type Store interface {
 
 	// Consent memory: scopes the user already granted a client.
 	UpsertAuthorizedClient(ctx context.Context, userID, clientID string, scopes []string) error
+	// HasAuthorizedClient reports whether the user ever granted the
+	// client; the end-session contract requires an existing grant.
+	HasAuthorizedClient(ctx context.Context, userID, clientID string) (bool, error)
 
 	// Interaction bridge for the SPA flow.
 	CreateInteraction(ctx context.Context, session InteractionSession) error

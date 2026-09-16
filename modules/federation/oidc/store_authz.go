@@ -121,6 +121,22 @@ func (s *PostgresStore) UpsertAuthorizedClient(ctx context.Context, userID, clie
 	return nil
 }
 
+// HasAuthorizedClient reports whether the user ever granted the
+// client.
+func (s *PostgresStore) HasAuthorizedClient(ctx context.Context, userID, clientID string) (bool, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("count(*)")
+	sb.From(userAuthorizedClientsTable)
+	sb.Where(sb.E("user_id", datastore.UserUUID(userID)), sb.E("client_id", clientID))
+
+	query, args := sb.Build()
+	var granted int
+	if err := s.exec.QueryRow(ctx, query, args...).Scan(&granted); err != nil {
+		return false, fmt.Errorf("oidc store: has authorized client: %w", err)
+	}
+	return granted > 0, nil
+}
+
 // CreateInteraction inserts an interaction row (state machine
 // seed).
 func (s *PostgresStore) CreateInteraction(ctx context.Context, session InteractionSession) error {

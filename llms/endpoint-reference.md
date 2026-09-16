@@ -126,6 +126,12 @@ upstream handlers.
 
 The protocol endpoints (root router, bare OAuth documents) are verified by the same suite:
 `/authorize` → `modules/federation/oidc.TestEndToEndAuthorizeTokenUserinfo` and friends;
+`/api/oidc/end-session` (RP-initiated logout) → `modules/federation/oidc.TestEndSessionRevokesFamilyAndRedirects`:
+the `id_token_hint` must verify (issuer, audience, subject, jti), the `client_id` must match the
+hint's audience, and the user must have granted the client — every failure redirects to the
+instance logout page without explaining why. Ending the session deactivates the grant's whole
+token family (the ID token carries the access token's `jti`), replays are idempotent, and an
+unregistered `post_logout_redirect_uri` is never followed;
 `/.well-known/*` and JWKS → `modules/federation/discovery` and `modules/federation/jwks`.
 
 ## SCIM

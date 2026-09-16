@@ -1,12 +1,10 @@
 package oidc
 
 // handler_surfaces.go hosts token introspection, client listings,
-// client secret management, and the end-session stub.
+// client secret management, and the end-session surface.
 
 import (
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -52,10 +50,18 @@ func (s *Service) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleEndSession serves GET/POST /api/oidc/end-session: clears
-// the sign-in cookie and redirects to the client's logout callback
-// when one is registered.
+// handleEndSession serves GET/POST /api/oidc/end-session: verifies
+// the ID-token hint, revokes the grant's token family, clears the
+// sign-in cookie, and redirects to the registered logout callback —
+// or the instance logout page when the contract fails.
 func (s *Service) handleEndSession(w http.ResponseWriter, r *http.Request) {
+	hint := r.FormValue("id_token_hint")
+	clientID := r.FormValue("client_id")
+	redirectURI := r.FormValue("post_logout_redirect_uri")
+	state := r.FormValue("state")
+
+	callback, err := s.EndSession(r.Context(), hint, clientID, redirectURI)
+
 	// Clear the sign-in cookie; Secure mirrors the session module.
 	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- session cookie parity (SameSite=Lax, Secure off in dev)
 		Name:     s.cookieName,
@@ -66,23 +72,13 @@ func (s *Service) handleEndSession(w http.ResponseWriter, r *http.Request) {
 		Secure:   s.cookieSecure,
 	})
 
-	if clientID := r.URL.Query().Get("client_id"); clientID != "" {
-		if id, err := OIDCParseClientID(clientID); err == nil {
-			if client, getErr := s.store.GetClient(r.Context(), id); getErr == nil && len(client.LogoutCallbackURLs) > 0 {
-				target := client.LogoutCallbackURLs[0]
-				if state := r.URL.Query().Get("state"); state != "" {
-					sep := "?"
-					if strings.Contains(target, "?") {
-						sep = "&"
-					}
-					target += sep + "state=" + url.QueryEscape(state)
-				}
-				http.Redirect(w, r, target, http.StatusFound) // #nosec G710 -- registered logout callback
-				return
-			}
-		}
+	if err != nil || callback == "" {
+		// Upstream falls back to the logout page instead of
+		// reporting why the hint or callback failed.
+		http.Redirect(w, r, s.issuer+"/logout", http.StatusFound) // #nosec G710 -- fixed relative target
+		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	http.Redirect(w, r, appendStateToURL(callback, state), http.StatusFound) // #nosec G710 -- registered logout callback
 }
 
 // handleAccessibleClients serves GET /api/oidc/users/me/clients:
