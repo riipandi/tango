@@ -277,4 +277,3 @@ func textOrNull(s string) any {
 	}
 	return s
 }
-
