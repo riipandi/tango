@@ -18,6 +18,14 @@ match the upstream endpoint contract.
   directly.
 - **SQLite and MySQL** — Postgres is the only supported database.
 
+## Additions beyond upstream
+
+- **`/api/healthz`** — an envelope-form health probe inside the API group for deploy tooling
+  that cannot reach the root router; the upstream-parity `GET /healthz` (204, no body) stays
+  mounted at the root.
+- **`/.well-known/version`** — a bare version document under `.well-known` for instance
+  fingerprinting; the upstream-parity version endpoints stay under `/api/version/*`.
+
 ## Encrypted and hashed value inventory
 
 Recoverable values are sealed by `pkg/crypto` in the canonical `enc:<ciphertext>` form

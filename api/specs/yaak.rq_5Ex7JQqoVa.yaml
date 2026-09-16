@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_5Ex7JQqoVa
+createdAt: 2026-09-16T11:15:42.596956
+updatedAt: 2026-09-16T11:15:42.596956
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_7yyoTNTox5
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: text/plain
+description: Get latest available version — public; Cache-Control 300/900; data.latest_version
+headers: []
+method: GET
+name: Get latest version
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/version/latest
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/web"
@@ -22,6 +23,9 @@ type HTTPServer struct {
 type RouteSet struct {
 	MountRoot func(chi.Router)
 	MountAPI  func(chi.Router)
+	// RequireSession protects metadata endpoints that upstream serves
+	// to any signed-in user; nil leaves those routes unmounted.
+	RequireSession kernel.Guard
 }
 
 // NewHTTPServer wires middleware, core routes, and runtime routes.
@@ -48,7 +52,9 @@ func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limit
 		}
 		r.Get("/", APIRootHandler)
 		r.Get("/healthz", HealthCheckHandler)
-		r.Get("/version/current", VersionCurrentHandler)
+		if routes.RequireSession != nil {
+			r.Get("/version/current", routes.RequireSession(http.HandlerFunc(VersionCurrentHandler)).ServeHTTP)
+		}
 		r.Get("/version/latest", VersionLatestHandler(latest))
 		if routes.MountAPI != nil {
 			routes.MountAPI(r)

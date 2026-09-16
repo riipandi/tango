@@ -47,8 +47,8 @@ func RootHealthzHandler(w http.ResponseWriter, r *http.Request) {
 
 // VersionCurrentHandler returns the deployed version.
 func VersionCurrentHandler(w http.ResponseWriter, r *http.Request) {
-	responder.WriteJSON(w, http.StatusOK, map[string]string{
-		"version": config.AppVersion,
+	responder.Success(w, r, http.StatusOK, map[string]string{
+		"current_version": config.AppVersion,
 	})
 }
 
@@ -59,7 +59,10 @@ func VersionLatestHandler(feed LatestVersionSource) http.HandlerFunc {
 		if feed != nil {
 			version = feed.Latest()
 		}
-		responder.WriteJSON(w, http.StatusOK, map[string]string{"version": version})
+		// The release feed is polled on a fixed delay, so clients may
+		// cache the answer instead of re-fetching per request.
+		w.Header().Set("Cache-Control", "public, max-age=300, stale-while-revalidate=900")
+		responder.Success(w, r, http.StatusOK, map[string]string{"latest_version": version})
 	}
 }
 

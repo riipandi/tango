@@ -15,6 +15,7 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/jobs"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
@@ -135,6 +136,12 @@ func New(deps Deps) (*Runtime, error) {
 // discovery) in registration order.
 func (rt *Runtime) MountRoot(r chi.Router) {
 	rt.Federation.Routes(r)
+}
+
+// SessionGuard returns the identity session guard for transport
+// routes upstream serves to any signed-in user.
+func (rt *Runtime) SessionGuard() kernel.Guard {
+	return rt.identityGroups.Self
 }
 
 // MountAPI mounts API routes in registration order.

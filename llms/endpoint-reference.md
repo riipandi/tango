@@ -96,7 +96,6 @@ upstream handlers.
 | Method | Endpoint   | Summary / Yaak Title     | Status | Evidence |
 | ------ | ---------- | ------------------------ | ------ | -------- |
 | GET    | `/healthz` | Responds to healthchecks | done   | `internal/transport.TestNewHTTPServerRoutes` |
-
 ## OIDC
 
 | Method | Endpoint                                           | Summary / Yaak Title                          | Status                                      | Evidence |
@@ -195,8 +194,8 @@ The protocol endpoints (root router, bare OAuth documents) are verified by the s
 
 | Method | Endpoint               | Summary / Yaak Title                      | Status | Evidence |
 | ------ | ---------------------- | ----------------------------------------- | ------ | -------- |
-| GET    | `/api/version/current` | Get current deployed version of Pocket ID | done   | `internal/transport.TestNewHTTPServerRoutes` |
-| GET    | `/api/version/latest`  | Get latest available version of Pocket ID | done — falls back to the deployed build when the feed never answered | `internal/transport.TestNewHTTPServerRoutes` |
+| GET    | `/api/version/current` | Get current deployed version of Pocket ID | done — session required | `internal/transport.TestVersionContracts` |
+| GET    | `/api/version/latest`  | Get latest available version of Pocket ID | done — falls back to the deployed build when the feed never answered | `internal/transport.TestVersionContracts` |
 
 ## Well Known
 

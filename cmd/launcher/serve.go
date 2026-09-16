@@ -142,7 +142,7 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		return fmt.Errorf("start modules: %w", err)
 	}
 
-	srv := transport.NewHTTPServer(transport.RouteSet{MountRoot: rt.MountRoot, MountAPI: rt.MountAPI}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs))
+	srv := transport.NewHTTPServer(transport.RouteSet{MountRoot: rt.MountRoot, MountAPI: rt.MountAPI, RequireSession: rt.SessionGuard()}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs))
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	serveErr := make(chan error, 1)
 	go func() {

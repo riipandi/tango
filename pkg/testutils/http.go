@@ -55,9 +55,11 @@ func DoForm(t testing.TB, r http.Handler, method, path string, values url.Values
 	return w
 }
 
-// WithCookie attaches the session cookie to a request.
+// WithCookie attaches the session cookie to a request. Cookie
+// attributes govern storage on the server response side and are
+// meaningless for an outgoing client header.
 func WithCookie(req *http.Request, name, token string) *http.Request {
-	req.AddCookie(&http.Cookie{Name: name, Value: token})
+	req.AddCookie(&http.Cookie{Name: name, Value: token}) //nolint:gosec // G124: response-only attributes are irrelevant here
 	return req
 }
 

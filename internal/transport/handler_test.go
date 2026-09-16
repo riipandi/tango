@@ -48,16 +48,12 @@ func TestRootHealthzAndVersionEndpoints(t *testing.T) {
 	w = httptest.NewRecorder()
 	VersionCurrentHandler(w, httptest.NewRequest(http.MethodGet, "/api/version/current", nil))
 	require.Equal(t, http.StatusOK, w.Code)
-	var current map[string]string
-	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &current))
-	assert.Equal(t, config.AppVersion, current["version"])
+	assert.Equal(t, config.AppVersion, versionData(t, w).CurrentVersion)
 
 	w = httptest.NewRecorder()
 	VersionLatestHandler(nil)(w, httptest.NewRequest(http.MethodGet, "/api/version/latest", nil))
 	require.Equal(t, http.StatusOK, w.Code)
-	var latest map[string]string
-	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &latest))
-	assert.Equal(t, config.AppVersion, latest["version"])
+	assert.Equal(t, config.AppVersion, versionData(t, w).LatestVersion)
 }
 
 // stubLatestVersionSource supplies a fixed cached release.
@@ -69,10 +65,23 @@ func TestVersionLatestUsesFeed(t *testing.T) {
 	w := httptest.NewRecorder()
 	VersionLatestHandler(stubLatestVersionSource{version: "9.9.9"})(w, httptest.NewRequest(http.MethodGet, "/api/version/latest", nil))
 	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "9.9.9", versionData(t, w).LatestVersion)
+}
 
-	var latest map[string]string
-	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &latest))
-	assert.Equal(t, "9.9.9", latest["version"])
+// versionData decodes the envelope data of a version response.
+func versionData(t *testing.T, w *httptest.ResponseRecorder) struct {
+	CurrentVersion string `json:"current_version"`
+	LatestVersion  string `json:"latest_version"`
+} {
+	t.Helper()
+	var payload struct {
+		Data struct {
+			CurrentVersion string `json:"current_version"`
+			LatestVersion  string `json:"latest_version"`
+		} `json:"data"`
+	}
+	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &payload))
+	return payload.Data
 }
 
 func TestAPIRootHandler(t *testing.T) {
