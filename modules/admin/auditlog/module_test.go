@@ -144,6 +144,10 @@ func TestListEndpointEnvelopeAndPagination(t *testing.T) {
 	for range 3 {
 		require.NoError(t, mod.Record(t.Context(), &Entry{Event: "user.created"}))
 	}
+	// One row with a recognizable user agent; the device summary is
+	// derived at read time.
+	agent := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+	require.NoError(t, mod.Record(t.Context(), &Entry{Event: "user.signed_in", UserAgent: &agent}))
 	router := mountWithGuards(t, mod)
 
 	// Admin listing with pagination.
@@ -161,13 +165,19 @@ func TestListEndpointEnvelopeAndPagination(t *testing.T) {
 			TotalItems *int `json:"total_items"`
 		} `json:"metadata"`
 		Data []struct {
-			Event string `json:"event"`
+			Event  string `json:"event"`
+			Device string `json:"device"`
 		} `json:"data"`
 	}
 	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
 	assert.Equal(t, "success", body.Status)
 	require.Len(t, body.Data, 3)
-	assert.Equal(t, "user.created", body.Data[0].Event)
+	// Newest first: the signed-in entry leads with its device summary,
+	// the seeded rows without an agent carry no device.
+	assert.Equal(t, "user.signed_in", body.Data[0].Event)
+	assert.Equal(t, "Chrome on Mac OS X 10.15.7", body.Data[0].Device)
+	assert.Equal(t, "user.created", body.Data[1].Event)
+	assert.Empty(t, body.Data[1].Device)
 	assert.NotNil(t, body.Metadata.TotalItems)
 	assert.GreaterOrEqual(t, *body.Metadata.TotalItems, 3)
 	assert.Equal(t, 3, *body.Metadata.Limit)

@@ -233,6 +233,7 @@ func scanEntry(row scanner) (Entry, error) {
 		UserID:       userID,
 		IPAddress:    ipAddress,
 		UserAgent:    userAgent,
+		Device:       deviceFromUserAgent(userAgent),
 		CreatedAt:    createdAt.Time,
 	}, nil
 }

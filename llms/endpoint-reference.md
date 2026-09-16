@@ -70,7 +70,7 @@ upstream handlers.
 | Method | Endpoint                               | Summary / Yaak Title | Status                             | Evidence |
 | ------ | -------------------------------------- | -------------------- | ---------------------------------- | -------- |
 | GET    | `/api/audit-logs`                      | List audit logs      | done — self listing (session auth) | `modules/admin/auditlog.TestSelfListingScopesToCurrentUser` |
-| GET    | `/api/audit-logs/all`                  | List all audit logs  | done — admin listing               | `modules/admin/auditlog.TestListEndpointEnvelopeAndPagination` |
+| GET    | `/api/audit-logs/all`                  | List all audit logs  | done — admin listing; device summary parsed from the user agent | `modules/admin/auditlog.TestListEndpointEnvelopeAndPagination` |
 | GET    | `/api/audit-logs/filters/client-names` | List client names    | done — admin only                  | `modules/admin/auditlog.TestListFiltersByUserAndEvent` |
 | GET    | `/api/audit-logs/filters/users`        | List users with IDs  | done — admin only                  | `modules/admin/auditlog.TestListFiltersByUserAndEvent` |
 
@@ -78,7 +78,7 @@ upstream handlers.
 
 | Method | Endpoint                                      | Summary / Yaak Title                  | Status | Evidence |
 | ------ | --------------------------------------------- | ------------------------------------- | ------ | -------- |
-| GET    | `/api/custom-claims/suggestions`              | Get custom claim suggestions          | done   | `modules/admin/customclaim.TestClaimEndpointsAdminGated` |
+| GET    | `/api/custom-claims/suggestions`              | Get custom claim suggestions          | done — keys ordered by usage count | `modules/admin/customclaim.TestClaimsForUserAndGroup` |
 | PUT    | `/api/custom-claims/user-group/{userGroupId}` | Update custom claims for a user group | done   | `modules/admin/customclaim.TestClaimEndpointsAdminGated` |
 | PUT    | `/api/custom-claims/user/{userId}`            | Update custom claims for a user       | done   | `modules/admin/customclaim.TestClaimEndpointsAdminGated` |
 

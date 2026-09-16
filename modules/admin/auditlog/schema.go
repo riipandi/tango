@@ -3,8 +3,11 @@ package auditlog
 
 import (
 	"context"
+	"strings"
+	"sync"
 	"time"
 
+	"github.com/ua-parser/uap-go/uaparser"
 	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/datastore"
@@ -56,7 +59,41 @@ type Entry struct {
 	IPAddress    *string `json:"ip_address,omitzero"`
 	UserAgent    *string `json:"user_agent,omitzero"`
 
-	CreatedAt time.Time `json:"created_at"`
+// Device is the human-readable client summary parsed from the
+// user agent at read time ("<browser> on <os> <version>").
+Device string `json:"device,omitzero"`
+
+CreatedAt time.Time `json:"created_at"`
+}
+
+// uaParser compiles the UA regexes once; every entry render reuses it.
+var uaParser = sync.OnceValue(func() *uaparser.Parser {
+	return uaparser.NewFromSaved()
+})
+
+// deviceFromUserAgent renders the upstream device summary ("<agent
+// family> on <os family> <version>"); unknown agents degrade to
+// their family names, empty agents to an empty summary.
+func deviceFromUserAgent(userAgent *string) string {
+	if userAgent == nil || *userAgent == "" {
+		return ""
+	}
+	ua := uaParser().Parse(*userAgent)
+	osVersion := strings.Trim(strings.Join([]string{ua.Os.Major, ua.Os.Minor, ua.Os.Patch}, "."), ".")
+	osVersion = strings.TrimSuffix(osVersion, "..")
+
+	name := strings.TrimPrefix(ua.UserAgent.Family, "Other")
+	os := strings.TrimPrefix(ua.Os.Family, "Other")
+	switch {
+	case name == "" && os == "":
+		return ""
+	case os == "":
+		return name
+	case name == "":
+		return os + " " + osVersion
+	default:
+		return name + " on " + os + " " + osVersion
+	}
 }
 
 // ListFilters narrows the listing. UserID is a raw UUID string
