@@ -61,7 +61,7 @@ func (s *Service) handleCreate(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  created.ExpiresAt,
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   s.cookieSecure,
 	})
 	responder.Success(w, r, http.StatusCreated, created)
 }

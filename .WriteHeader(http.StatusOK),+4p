@@ -150,7 +150,7 @@ func (f *APIFeature) sync(w http.ResponseWriter, r *http.Request) {
 			responder.WithError(err.Error()))
 		return
 	}
-	responder.Success(w, r, http.StatusOK, toResponse(provider, false))
+	w.WriteHeader(http.StatusOK)
 }
 
 func respondStoreError(w http.ResponseWriter, r *http.Request, err error) {
