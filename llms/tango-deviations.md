@@ -44,6 +44,9 @@ match the upstream endpoint contract.
 - Audit-log entries render `device` from the user agent with `ua-parser/uap-go` (upstream's
   `mileusna/useragent` equivalent format: "<agent family> on <os family> <version>"); geo
   fields (`country`, `city`) are not collected.
+- The public configuration payload lists catalog keys only. Upstream appends synthetic
+  `uiConfigDisabled` and `tracingEnabled` entries for its SPA; tango has neither a UI-config
+  toggle nor OpenTelemetry frontend tracing.
 
 ## Passkey ceremony shape
 
