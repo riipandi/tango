@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_gte6St5Smi
 createdAt: 2026-09-16T12:54:31.859203
-updatedAt: 2026-09-16T12:54:31.859204
+updatedAt: 2026-09-16T13:00:52.712087
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
@@ -13,7 +13,7 @@ body:
     {
       "identity": "user@example.com"
     }
-bodyType: null
+bodyType: application/json
 description: Request a password reset — anonymous, always 204, queues recovery email
 headers: []
 method: POST

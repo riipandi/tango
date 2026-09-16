@@ -6,6 +6,8 @@ package recovery
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -59,7 +61,7 @@ func linkToken(t *testing.T, message mailer.Message) string {
 	return raw
 }
 
-func newTestRouter(t *testing.T, record func(context.Context, identity.AuditEvent, datastore.Executor)) (chi.Router, *password.Service, user.Store, *stubMail) {
+func newTestRouter(t *testing.T, record func(context.Context, identity.AuditEvent, datastore.Executor)) (chi.Router, *password.Service, user.Store, *token.PostgresStore, *stubMail) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -81,8 +83,9 @@ func newTestRouter(t *testing.T, record func(context.Context, identity.AuditEven
 		recorder = recorderFunc(record)
 	}
 	mail := &stubMail{}
+	tokens := token.NewStore(ds, token.PurposePasswordReset)
 	recoverySvc := New(
-		token.NewStore(ds, token.PurposePasswordReset),
+		tokens,
 		users,
 		password.NewPostgresStore(ds),
 		sessions,
@@ -96,7 +99,7 @@ func newTestRouter(t *testing.T, record func(context.Context, identity.AuditEven
 		sessions.APIRoutes(r, identity.RouteGroups{})
 		NewFeature(recoverySvc).WithCookie(session.CookieName, false).APIRoutes(r, identity.RouteGroups{})
 	})
-	return r, passwords, users, mail
+	return r, passwords, users, tokens, mail
 }
 
 func provisionUser(t *testing.T, users user.Store, passwords *password.Service) user.User {
@@ -146,7 +149,7 @@ func signIn(t *testing.T, r chi.Router, identity, secret string) string {
 }
 
 func TestForgotIsAlwaysGeneric(t *testing.T) {
-	r, passwords, users, mail := newTestRouter(t, nil)
+	r, passwords, users, _, mail := newTestRouter(t, nil)
 
 	// An unknown address and a malformed body behave like anything
 	// else: no enumeration, no mail.
@@ -169,7 +172,7 @@ func TestForgotIsAlwaysGeneric(t *testing.T) {
 
 func TestResetLifecycle(t *testing.T) {
 	var events []identity.AuditEvent
-	r, passwords, users, mail := newTestRouter(t, func(ctx context.Context, e identity.AuditEvent, exec datastore.Executor) {
+	r, passwords, users, _, mail := newTestRouter(t, func(ctx context.Context, e identity.AuditEvent, exec datastore.Executor) {
 		events = append(events, e)
 	})
 	u := provisionUser(t, users, passwords)
@@ -212,8 +215,51 @@ func TestResetLifecycle(t *testing.T) {
 }
 
 func TestResetUnknownToken(t *testing.T) {
-	r, _, _, _ := newTestRouter(t, nil)
+	r, _, _, _, _ := newTestRouter(t, nil)
 
 	w := postJSON(t, r, "/api/auth/reset-password", `{"token":"deadbeef","new_password":"whatever123"}`)
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestResetExpiredToken(t *testing.T) {
+	r, passwords, users, tokens, _ := newTestRouter(t, nil)
+	u := provisionUser(t, users, passwords)
+
+	// The column CHECK forbids inserting an already-expired token, so
+	// mint one living for a second and outwait it.
+	sum := sha256.Sum256([]byte("short-lived-token"))
+	require.NoError(t, tokens.Upsert(t.Context(), &token.Token{
+		UserID:    u.ID.UUID(),
+		TokenHash: base64.RawURLEncoding.EncodeToString(sum[:]),
+		ExpiresAt: time.Now().UTC().Add(time.Second),
+	}))
+	time.Sleep(1100 * time.Millisecond)
+
+	w := postJSON(t, r, "/api/auth/reset-password", `{"token":"short-lived-token","new_password":"new-s3cret-p@ss"}`)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestConcurrentResetSingleUse(t *testing.T) {
+	r, passwords, users, _, mail := newTestRouter(t, nil)
+	u := provisionUser(t, users, passwords)
+
+	require.Equal(t, http.StatusNoContent,
+		postJSON(t, r, "/api/auth/forgot-password", `{"identity":"`+u.Email+`"}`).Code)
+	require.Len(t, mail.messages, 1)
+	resetToken := linkToken(t, mail.messages[0])
+
+	// Two simultaneous resets race for one token: exactly one wins,
+	// and the loser sees the same not-found as a replay.
+	type outcome struct{ code int }
+	results := make(chan outcome, 2)
+	for range 2 {
+		go func() {
+			w := postJSON(t, r, "/api/auth/reset-password",
+				`{"token":"`+resetToken+`","new_password":"new-s3cret-p@ss"}`)
+			results <- outcome{code: w.Code}
+		}()
+	}
+	codes := []int{(<-results).code, (<-results).code}
+	assert.Contains(t, codes, http.StatusOK)
+	assert.Contains(t, codes, http.StatusNotFound)
 }
