@@ -46,6 +46,7 @@ type Module struct {
 	signup    APIFeature
 	apiaccess APIFeature
 	apikeys   APIFeature
+	recovery  APIFeature
 }
 
 // New wires the identity surface. The user core is mandatory; a nil
@@ -64,6 +65,7 @@ func New(
 	signup APIFeature,
 	apiaccess APIFeature,
 	apikeys APIFeature,
+	recovery APIFeature,
 ) *Module {
 	if core == nil {
 		panic("identity: nil user core")
@@ -81,6 +83,7 @@ func New(
 		signup:    signup,
 		apiaccess: apiaccess,
 		apikeys:   apikeys,
+		recovery:  recovery,
 	}
 }
 
@@ -120,5 +123,8 @@ func (m *Module) APIRoutes(r chi.Router, g RouteGroups) {
 	}
 	if m.apikeys != nil {
 		m.apikeys.APIRoutes(r, g)
+	}
+	if m.recovery != nil {
+		m.recovery.APIRoutes(r, g)
 	}
 }

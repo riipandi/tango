@@ -1,0 +1,41 @@
+type: http_request
+model: http_request
+id: rq_gte6St5Smi
+createdAt: 2026-09-16T12:54:31.859203
+updatedAt: 2026-09-16T12:54:31.859204
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_t3sGoeSaUF
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "identity": "user@example.com"
+    }
+bodyType: null
+description: Request a password reset — anonymous, always 204, queues recovery email
+headers: []
+method: POST
+name: Request password reset
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/auth/forgot-password
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

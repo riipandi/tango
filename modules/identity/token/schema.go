@@ -20,9 +20,10 @@ const (
 	PurposeEmailVerification Purpose = "email_verification"
 	// PurposeOneTimeAccess covers one-time access sign-in tokens.
 	PurposeOneTimeAccess Purpose = "one_time_access"
-	// PurposeReauthentication exists in the DB CHECK but has no
-	// consumer yet.
+	// PurposeReauthentication exists in the DB CHECK but has no consumer yet.
 	PurposeReauthentication Purpose = "reauthentication"
+	// PurposePasswordReset covers forgot/reset password tokens.
+	PurposePasswordReset Purpose = "password_reset"
 )
 
 // ErrNotFound is returned by Consume for unknown, expired, or

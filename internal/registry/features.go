@@ -30,6 +30,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/emailverification"
 	"github.com/riipandi/tango/modules/identity/onetimeaccess"
 	"github.com/riipandi/tango/modules/identity/password"
+	"github.com/riipandi/tango/modules/identity/recovery"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/signup"
 	"github.com/riipandi/tango/modules/identity/token"
@@ -201,6 +202,15 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), recorder),
 		apiKeys,
+		recovery.NewFeature(recovery.New(
+			token.NewStore(deps.DB, token.PurposePasswordReset),
+			user.NewPostgresStore(deps.DB),
+			password.NewPostgresStore(deps.DB),
+			sessions,
+			hasher,
+			recorder,
+			recovery.WithMail(jobsReg, deps.Config.Public.BaseURL),
+		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 	)
 
 	return module, groups, sessions, audit, apiaccess.NewPostgresStore(deps.DB), blobStore, nil

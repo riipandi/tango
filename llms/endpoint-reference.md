@@ -23,8 +23,8 @@ only. Contracts below define the full password lifecycle.
 | PUT    | `/api/account/password`         | Change own password         | done — current secret required; other sessions revoked | `modules/identity/account.TestChangePasswordRevokesOtherSessions` |
 | GET    | `/api/account/sessions`         | List own sessions           | done   | `modules/identity/account.TestSessionListAndRevoke` |
 | DELETE | `/api/account/sessions/{id}`    | Revoke one own session      | done   | `modules/identity/account.TestSessionListAndRevoke` |
-| POST   | `/api/auth/forgot-password`     | Request a password reset    | planned — anonymous; always 204; queues recovery email | — |
-| POST   | `/api/auth/reset-password`      | Reset with a reset token    | planned — hashed single-use token; revokes sessions; rotates cookies | — |
+| POST   | `/api/auth/forgot-password`     | Request a password reset    | done — anonymous; always 204; queues recovery email | `modules/identity/recovery.TestForgotIsAlwaysGeneric` |
+| POST   | `/api/auth/reset-password`      | Reset with a reset token    | done — hashed single-use token; revokes sessions; rotates cookies | `modules/identity/recovery.TestResetLifecycle` |
 
 Shared rules: both endpoints ride the tight auth rate budget; recovery responses never reveal
 whether the address exists; reset tokens are SHA-256 hashed with purpose-prefixed keys and

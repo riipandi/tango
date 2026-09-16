@@ -58,6 +58,12 @@ func validateSecret(secret string) error {
 	return nil
 }
 
+// ValidateSecret exposes the single password policy for sibling
+// features (recovery) so the rules never live in two places.
+func ValidateSecret(secret string) error {
+	return validateSecret(secret)
+}
+
 // SetPassword assigns (or rotates) the credential for the user.
 func (s *Service) SetPassword(ctx context.Context, userID user.UserID, secret string) error {
 	if err := validateSecret(secret); err != nil {
