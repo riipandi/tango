@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_NahKTpTNJ2
 createdAt: 2026-09-16T20:01:31.374735
-updatedAt: 2026-09-16T20:01:31.374736
+updatedAt: 2026-09-16T20:05:09.624349
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
@@ -18,7 +18,7 @@ description: Disable TOTP — requires the current password; drops all MFA state
 headers: []
 method: DELETE
 name: Disable TOTP
-sortPriority: 0.0
+sortPriority: 9000.0
 url: ${[ apiBaseURL ]}/api/mfa/totp
 urlParameters: []
 settingSendCookies:

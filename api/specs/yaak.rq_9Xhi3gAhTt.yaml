@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_9Xhi3gAhTt
 createdAt: 2026-09-12T06:54:52.147940
-updatedAt: 2026-09-14T09:46:31.389212
+updatedAt: 2026-09-16T20:05:09.621707
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
@@ -13,7 +13,7 @@ description: 'Tango extension: ends the current session and clears the tango_ses
 headers: []
 method: POST
 name: Sign out
-sortPriority: 0.0
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/api/auth/sign-out
 urlParameters: []
 settingSendCookies:

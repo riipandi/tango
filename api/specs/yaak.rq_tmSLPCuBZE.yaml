@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_tmSLPCuBZE
 createdAt: 2026-09-16T19:59:13.196881
-updatedAt: 2026-09-16T19:59:13.196881
+updatedAt: 2026-09-16T20:05:25.441800
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
@@ -15,7 +15,7 @@ description: Start TOTP enrollment — self; returns the raw secret and otpauth 
 headers: []
 method: POST
 name: Enroll TOTP
-sortPriority: 0.0
+sortPriority: 3666.6666666666665
 url: ${[ apiBaseURL ]}/api/mfa/totp/enroll
 urlParameters: []
 settingSendCookies:

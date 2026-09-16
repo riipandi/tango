@@ -40,12 +40,12 @@ Upstream Pocket ID has no TOTP; this surface is tango-only and follows the datab
 
 | Method | Endpoint                        | Summary / Yaak Title         | Status | Evidence |
 | ------ | ------------------------------- | ---------------------------- | ------ | -------- |
-| POST   | `/api/mfa/totp/enroll`          | Start TOTP enrollment        | planned — self; returns the raw secret + otpauth URI exactly once; re-enroll replaces an unconfirmed row | — |
-| POST   | `/api/mfa/totp/confirm`         | Confirm and enable TOTP      | planned — verifies one code; sets `confirmed_at`; returns recovery codes exactly once | — |
-| GET    | `/api/mfa/totp/status`          | TOTP status                  | planned — confirmed flag + remaining recovery-code count | — |
-| POST   | `/api/mfa/totp/verify`          | Complete a pending sign-in   | planned — pending-auth cookie; accepts a TOTP code or a recovery code; issues the full session | — |
-| POST   | `/api/mfa/totp/recovery-codes`  | Rotate recovery codes        | planned — requires a valid TOTP code; returns the new codes exactly once | — |
-| DELETE | `/api/mfa/totp`                 | Disable TOTP                 | planned — requires the current password; drops all MFA state | — |
+| POST   | `/api/mfa/totp/enroll`          | Start TOTP enrollment        | done — self; returns the raw secret + otpauth URI exactly once; re-enroll replaces an unconfirmed row | `modules/identity/totp.TestTOTPLifecycle` |
+| POST   | `/api/mfa/totp/confirm`         | Confirm and enable TOTP      | done — verifies one code; sets `confirmed_at`; returns recovery codes exactly once | `modules/identity/totp.TestTOTPLifecycle` |
+| GET    | `/api/mfa/totp/status`          | TOTP status                  | done — confirmed flag + remaining recovery-code count | `modules/identity/totp.TestTOTPLifecycle` |
+| POST   | `/api/mfa/totp/verify`          | Complete a pending sign-in   | done — pending-auth cookie; accepts a TOTP code or a recovery code; issues the full session | `modules/identity/totp.TestTOTPLifecycle` |
+| POST   | `/api/mfa/totp/recovery-codes`  | Rotate recovery codes        | done — requires a valid TOTP code; returns the new codes exactly once | `modules/identity/totp.TestTOTPLifecycle` |
+| DELETE | `/api/mfa/totp`                 | Disable TOTP                 | done — requires the current password; drops all MFA state | `modules/identity/totp.TestTOTPLifecycle` |
 
 Fixed parameters: issuer = the configured app name, 6 digits, 30-second period, SHA-1,
 ±1 step bounded skew. Sign-in composition: a confirmed TOTP enrollment turns a successful

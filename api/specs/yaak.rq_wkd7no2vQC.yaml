@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_wkd7no2vQC
 createdAt: 2026-09-16T12:54:38.441037
-updatedAt: 2026-09-16T12:54:38.441037
+updatedAt: 2026-09-16T20:05:09.622370
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
@@ -19,7 +19,7 @@ description: Reset with a reset token — hashed single-use token; revokes sessi
 headers: []
 method: POST
 name: Reset password
-sortPriority: 0.0
+sortPriority: 3000.0
 url: ${[ apiBaseURL ]}/api/auth/reset-password
 urlParameters: []
 settingSendCookies:

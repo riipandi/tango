@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_f5tKpWWR9L
 createdAt: 2026-09-12T06:54:37.488500
-updatedAt: 2026-09-14T09:46:34.606451
+updatedAt: 2026-09-16T20:05:14.786411
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
@@ -13,7 +13,7 @@ description: 'Tango extension: returns the current session principal'
 headers: []
 method: GET
 name: Get current session
-sortPriority: 0.0
+sortPriority: 333.3333333333333
 url: ${[ apiBaseURL ]}/api/auth/session
 urlParameters: []
 settingSendCookies:

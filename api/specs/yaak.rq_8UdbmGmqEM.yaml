@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_8UdbmGmqEM
 createdAt: 2026-09-16T20:02:25.772089
-updatedAt: 2026-09-16T20:02:25.772089
+updatedAt: 2026-09-16T20:05:09.624550
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
@@ -13,7 +13,7 @@ description: TOTP status — confirmed flag plus remaining recovery-code count (
 headers: []
 method: GET
 name: Get TOTP status
-sortPriority: 0.0
+sortPriority: 10000.0
 url: ${[ apiBaseURL ]}/api/mfa/totp/status
 urlParameters: []
 settingSendCookies:

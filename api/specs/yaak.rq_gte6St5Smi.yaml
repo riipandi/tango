@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_gte6St5Smi
 createdAt: 2026-09-16T12:54:31.859203
-updatedAt: 2026-09-16T13:00:52.712087
+updatedAt: 2026-09-16T20:05:18.406826
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
@@ -18,7 +18,7 @@ description: Request a password reset — anonymous, always 204, queues recovery
 headers: []
 method: POST
 name: Request password reset
-sortPriority: 0.0
+sortPriority: 1666.6666666666663
 url: ${[ apiBaseURL ]}/api/auth/forgot-password
 urlParameters: []
 settingSendCookies:

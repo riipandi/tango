@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_kp5C5Ug5ia
 createdAt: 2026-09-16T20:01:05.705585
-updatedAt: 2026-09-16T20:01:05.705586
+updatedAt: 2026-09-16T20:05:09.624160
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_t3sGoeSaUF
 authentication: {}
@@ -18,7 +18,7 @@ description: Rotate recovery codes — requires a valid TOTP code; returns the n
 headers: []
 method: POST
 name: Rotate TOTP recovery codes
-sortPriority: 0.0
+sortPriority: 8000.0
 url: ${[ apiBaseURL ]}/api/mfa/totp/recovery-codes
 urlParameters: []
 settingSendCookies:
