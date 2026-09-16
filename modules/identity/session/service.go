@@ -29,6 +29,9 @@ type Service struct {
 	now func() time.Time
 
 	recorder identity.Recorder
+	// mfa is the optional second-factor port: a confirmed enrollment
+	// turns a password sign-in into a pending authentication.
+	mfa identity.MFAPendingIssuer
 }
 
 // Verifier checks an identity + secret pair. Implemented by the
@@ -46,6 +49,13 @@ type ServiceOption func(*Service)
 // WithRecorder overrides the audit recorder (tests).
 func WithRecorder(recorder identity.Recorder) ServiceOption {
 	return func(s *Service) { s.recorder = recorder }
+}
+
+// WithMFAPort wires the second-factor port; a confirmed enrollment
+// makes password sign-in (and every other non-MFA provider) land in
+// a pending authentication instead of a full session.
+func WithMFAPort(port identity.MFAPendingIssuer) ServiceOption {
+	return func(s *Service) { s.mfa = port }
 }
 
 // WithLifetime sets the session lifetime and the sliding-refresh
@@ -90,23 +100,65 @@ var ErrInvalidCredentials = errors.New("session: invalid credentials")
 // SignIn verifies the identity + secret pair and issues a session
 // token. The token goes to the client once (cookie); only its hash
 // is stored.
-func (s *Service) SignIn(ctx context.Context, identityText, secret string, meta Meta) (string, user.User, Session, error) {
+// SignInWithPendingResult carries either a full session or the
+// pending-auth bridge that only MFA verification can upgrade.
+type SignInWithPendingResult struct {
+	Pending      bool
+	Token        string // pending token when Pending, else the session token
+	User         user.User
+	Session      Session
+}
+
+// SignInWithPending verifies the credentials and lands in a full
+// session — or in the pending-auth bridge when a confirmed second
+// factor requires it. The pending token goes to the pending cookie,
+// never to the session cookie.
+func (s *Service) SignInWithPending(ctx context.Context, identityText, secret string, meta Meta) (SignInWithPendingResult, error) {
 	u, err := s.verifier.VerifyIdentity(ctx, identityText, secret)
 	if err != nil {
-		return "", user.User{}, Session{}, ErrInvalidCredentials
+		return SignInWithPendingResult{}, ErrInvalidCredentials
+	}
+
+	if s.mfa != nil {
+		required, requiredErr := s.mfa.RequiresPending(ctx, u.ID.String())
+		if requiredErr != nil {
+			return SignInWithPendingResult{}, requiredErr
+		}
+		if required {
+			pendingToken, pendingErr := s.mfa.CreatePending(ctx, u.ID.String())
+			if pendingErr != nil {
+				return SignInWithPendingResult{}, pendingErr
+			}
+			if s.recorder != nil {
+				s.recorder.Record(ctx, identity.AuditEvent{Action: "mfa.pending_started", Actor: u.ID.String()}, nil)
+			}
+			return SignInWithPendingResult{Pending: true, Token: pendingToken, User: u}, nil
+		}
 	}
 
 	token, se, err := s.issueSession(ctx, u, "password", meta)
 	if err != nil {
+		return SignInWithPendingResult{}, err
+	}
+	return SignInWithPendingResult{Token: token, User: u, Session: se}, nil
+}
+
+// SignIn verifies the credentials and issues a full session; callers
+// that compose with the second factor use SignInWithPending.
+func (s *Service) SignIn(ctx context.Context, identityText, secret string, meta Meta) (string, user.User, Session, error) {
+	result, err := s.SignInWithPending(ctx, identityText, secret, meta)
+	if err != nil {
 		return "", user.User{}, Session{}, err
 	}
-	return token, u, se, nil
+	return result.Token, result.User, result.Session, nil
 }
 
 // IssueForUser mints a session for an already-authenticated
 // identity — the alternative sign-in providers (passkeys, device
 // login, one-time access) call this after verifying their own
-// ceremony.
+// ceremony. A confirmed second factor fails these flows closed: the
+// pending bridge belongs to the password sign-in path only, so no
+// provider can bypass MFA.
 func (s *Service) IssueForUser(ctx context.Context, userID user.UserID, provider string, meta Meta) (string, error) {
 	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {
@@ -114,6 +166,15 @@ func (s *Service) IssueForUser(ctx context.Context, userID user.UserID, provider
 	}
 	if u.Disabled {
 		return "", fmt.Errorf("session: %w: user is disabled", ErrInvalidCredentials)
+	}
+	if s.mfa != nil && provider != "totp" {
+		required, requiredErr := s.mfa.RequiresPending(ctx, u.ID.String())
+		if requiredErr != nil {
+			return "", requiredErr
+		}
+		if required {
+			return "", fmt.Errorf("session: %w: second factor required", ErrInvalidCredentials)
+		}
 	}
 
 	token, _, err := s.issueSession(ctx, u, provider, meta)

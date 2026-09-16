@@ -33,6 +33,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/recovery"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/signup"
+	"github.com/riipandi/tango/modules/identity/totp"
 	"github.com/riipandi/tango/modules/identity/token"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/usergroup"
@@ -133,6 +134,21 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 	}
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, recorder)
+
+	// The TOTP feature binds sessions after construction: the session
+	// service needs the MFA port, and verification needs the session
+	// issuer.
+	totpService := totp.NewService(
+		totp.NewPostgresStore(deps.DB),
+		user.NewPostgresStore(deps.DB),
+		nil,
+		passwords,
+		secretCipher(deps),
+		// The issuer mirrors the app_name catalog default; a live
+		// rename of the instance does not rewrite enrolled links.
+		"tango",
+		recorder,
+	)
 	sessions := session.NewService(
 		session.NewPostgresStore(deps.DB),
 		passwords,
@@ -140,7 +156,9 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		recorder,
 		session.WithLifetime(time.Duration(deps.Config.Auth.SessionLifetime)*time.Second),
 		session.WithCookieSecure(deps.Config.App.Mode != "development"),
+		session.WithMFAPort(totpService),
 	)
+	totpService.BindSessions(sessions)
 
 	auth := middleware.RequireAuth(sessions, session.CookieName)
 	adminAuth := func(next http.Handler) http.Handler {

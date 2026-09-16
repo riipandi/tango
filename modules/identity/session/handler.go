@@ -61,22 +61,32 @@ func (s *Service) signIn(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 		IPAddress: RequestIP(r),
 	}
-	token, u, se, err := s.SignIn(r.Context(), req.Identity, req.Secret, meta)
+	result, err := s.SignInWithPending(r.Context(), req.Identity, req.Secret, meta)
 	if err != nil {
 		responder.Fail(w, r, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
-	WriteCookie(w, token, se.ExpiresAt, s.cookieSecure)
+	if result.Pending {
+		WritePendingCookie(w, result.Token, s.cookieSecure)
+		responder.Success(w, r, http.StatusOK, map[string]any{
+			"pending": true,
+			"user":    result.User,
+		})
+		return
+	}
+
+	WriteCookie(w, result.Token, result.Session.ExpiresAt, s.cookieSecure)
 	responder.Success(w, r, http.StatusOK, signInResponse{
-		User:      u,
-		SessionID: se.ID,
-		Provider:  se.Provider,
-		ExpiresAt: se.ExpiresAt,
+		User:      result.User,
+		SessionID: result.Session.ID,
+		Provider:  result.Session.Provider,
+		ExpiresAt: result.Session.ExpiresAt,
 	})
 }
 
-// signOut revokes the caller's session and clears the cookie.
+// signOut revokes the caller's session and clears the cookie; any
+// pending second-factor bridge dies with it.
 func (s *Service) signOut(w http.ResponseWriter, r *http.Request) {
 	if token := cookieToken(r); token != "" {
 		if err := s.RevokeCurrent(r.Context(), token); err != nil {
@@ -84,7 +94,11 @@ func (s *Service) signOut(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if principal, ok := middleware.PrincipalFromContext(r.Context()); ok && s.mfa != nil {
+		_ = s.mfa.ClearPending(r.Context(), principal.UserID)
+	}
 	ClearCookie(w, s.cookieSecure)
+	clearPendingCookie(w, s.cookieSecure)
 	responder.Success(w, r, http.StatusOK, map[string]any{"signed_out": true})
 }
 

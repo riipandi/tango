@@ -4,6 +4,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/riipandi/tango/modules/identity"
 )
 
 // CookieName is the browser session cookie.
@@ -21,6 +23,33 @@ func WriteCookie(w http.ResponseWriter, token string, expires time.Time, secure 
 		Value:    token,
 		Path:     "/",
 		Expires:  expires,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// WritePendingCookie sets the short-lived pending-auth cookie: the
+// bridge token for MFA verification, never a session token.
+func WritePendingCookie(w http.ResponseWriter, token string, secure bool) {
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- Secure mirrors the run mode (SameSite=Lax)
+		Name:     identity.PendingCookieName,
+		Value:    token,
+		Path:     "/",
+		Expires:  time.Now().Add(identity.PendingCookieTTL),
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// clearPendingCookie expires the pending-auth cookie.
+func clearPendingCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- Secure mirrors the run mode (SameSite=Lax)
+		Name:     identity.PendingCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,

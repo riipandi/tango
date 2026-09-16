@@ -16,6 +16,7 @@ import (
 
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
+	"github.com/riipandi/tango/modules/identity/token"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/crypto"
 )
@@ -26,12 +27,8 @@ const (
 	recoveryCodeBytes = 4 // 8 hex characters per code
 )
 
-// PendingTTL bounds the pending-auth bridge.
-const PendingTTL = 5 * time.Minute
-
-// PendingCookieName is the browser cookie carrying the pending-auth
-// token; the raw value lives only in the cookie.
-const PendingCookieName = "tango_mfa_pending"
+// PendingTTL bounds the pending-auth bridge; the shared TTL lives
+// in the identity package (PendingCookieTTL).
 
 // Errors surfaced to handlers.
 var (
@@ -93,6 +90,13 @@ func NewService(store Store, users user.Store, sessions Sessions, password Passw
 		opt(s)
 	}
 	return s
+}
+
+// BindSessions wires the session issuer after construction; the
+// session service needs the MFA port, so the composition root binds
+// the two in both directions.
+func (s *Service) BindSessions(sessions Sessions) {
+	s.sessions = sessions
 }
 
 // Name names the feature for logs.
@@ -228,10 +232,46 @@ func (s *Service) Disable(ctx context.Context, u user.User, currentPassword stri
 	return nil
 }
 
-// ClearPending drops the pending-auth bridge (sign-out, expiry
-// hygiene).
-func (s *Service) ClearPending(ctx context.Context, u user.User) error {
-	return s.store.DeletePendingForUser(ctx, u.ID)
+// RequiresPending implements the identity.MFAPendingIssuer port: a
+// confirmed enrollment forces the second factor.
+func (s *Service) RequiresPending(ctx context.Context, userID string) (bool, error) {
+	parsed, err := identity.ParseID[user.UserID](userID)
+	if err != nil {
+		return false, nil
+	}
+	enrollment, err := s.store.State(ctx, parsed)
+	if err != nil {
+		return false, nil
+	}
+	return enrollment.Confirmed(), nil
+}
+
+// CreatePending implements the identity.MFAPendingIssuer port: it
+// replaces the single bridge row and returns the raw token for the
+// pending cookie only.
+func (s *Service) CreatePending(ctx context.Context, userID string) (string, error) {
+	parsed, err := identity.ParseID[user.UserID](userID)
+	if err != nil {
+		return "", err
+	}
+	raw, err := token.NewRaw()
+	if err != nil {
+		return "", err
+	}
+	if err := s.store.PutPending(ctx, parsed, hashToken(raw), identity.PendingCookieTTL); err != nil {
+		return "", err
+	}
+	return raw, nil
+}
+
+// ClearPending drops the bridge for the wire-form user ID
+// (sign-out); it implements the identity.MFAPendingIssuer port.
+func (s *Service) ClearPending(ctx context.Context, userID string) error {
+	parsed, err := identity.ParseID[user.UserID](userID)
+	if err != nil {
+		return nil
+	}
+	return s.store.DeletePendingForUser(ctx, parsed)
 }
 
 // complete issues the only full session for the verified user.

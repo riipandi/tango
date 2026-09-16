@@ -15,6 +15,7 @@ import (
 
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/crypto"
@@ -164,7 +165,7 @@ func TestLifecycleOverPostgres(t *testing.T) {
 
 	// The pending bridge resolves to the user once, then never again.
 	pendingRaw := "pending-bridge-token"
-	require.NoError(t, store.PutPending(ctx, created.ID, hashToken(pendingRaw), PendingTTL))
+	require.NoError(t, store.PutPending(ctx, created.ID, hashToken(pendingRaw), identity.PendingCookieTTL))
 	resolved, err := store.ConsumePending(ctx, hashToken(pendingRaw))
 	require.NoError(t, err)
 	assert.Equal(t, created.ID, resolved)

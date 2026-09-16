@@ -108,8 +108,56 @@ func TestSignInSessionSignOutRoundTrip(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestSignInRejectsBadCredentials(t *testing.T) {
-	r, _, passwords, users := newTestRouter(t)
+// stubMFAPort forces the pending path for every account.
+type stubMFAPort struct{ created []string }
+
+func (s *stubMFAPort) RequiresPending(ctx context.Context, userID string) (bool, error) {
+	return true, nil
+}
+
+func (s *stubMFAPort) CreatePending(ctx context.Context, userID string) (string, error) {
+	token := "pending-" + userID
+	s.created = append(s.created, token)
+	return token, nil
+}
+
+func (s *stubMFAPort) ClearPending(ctx context.Context, userID string) error { return nil }
+
+// TestSignInWithPendingAuth pins the second-factor composition: a
+// confirmed enrollment turns sign-in into a pending authentication —
+// the pending cookie carries the bridge, the session cookie stays
+// unset, and the session endpoint rejects the pending cookie.
+func TestSignInWithPendingAuth(t *testing.T) {
+	port := &stubMFAPort{}
+	r, _, passwords, users := newTestRouter(t, WithMFAPort(port))
+	u := newUser(t, users, passwords, "pending")
+
+	w := signIn(t, r, u.Username, "s3cret-p@ss")
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var body struct {
+		Data struct {
+			Pending bool `json:"pending"`
+		} `json:"data"`
+	}
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
+	assert.True(t, body.Data.Pending, "the sign-in must land in the pending state")
+
+	cookies := w.Result().Cookies()
+	require.Len(t, cookies, 1)
+	assert.Equal(t, identity.PendingCookieName, cookies[0].Name, "only the pending cookie is set")
+	assert.NotEmpty(t, port.created, "the port must have minted the bridge")
+
+	// The pending cookie is not a session: the session endpoint
+	// rejects it.
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	req.AddCookie(&http.Cookie{Name: cookies[0].Name, Value: cookies[0].Value})
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestSignInRejectsBadCredentials(t *testing.T) {	r, _, passwords, users := newTestRouter(t)
 	u := newUser(t, users, passwords, "bad")
 
 	w := signIn(t, r, u.Username, "wrong-secret")
