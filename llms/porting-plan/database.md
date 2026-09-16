@@ -53,8 +53,84 @@ Live tables map to one owner each; obsolete tables are removal targets for the c
 | infrastructure | queue_tasks, queue_tasks_completed, rate_limits (via fn_check_rate_limit) |
 
 Obsolete (zero live references): app_settings (duplicate legacy shape), user_phones,
-invitations, mfa_keys, oauth_connections, oidc_device_codes, file_stores. Session drift:
-`totp_pending`, `oauth_groups`, and `oauth_name` columns on sessions have no live readers.
+invitations, mfa_keys, oauth_connections, oidc_device_codes, file_stores, refresh_tokens
+(sessions use sliding expiry via `refreshed_at`, not separate refresh-token rows). Session
+drift: `totp_pending`, `oauth_groups`, `oauth_name`, and `oauth_sub` columns on sessions have
+no live readers. The `refresh_token` TypeID prefix is also dead.
+
+## Final schema contracts
+
+These contracts drive the cleanup and feature migrations; each section lists the deltas from
+the current shape, not a full re-declaration of unchanged columns.
+
+### Identity (delta)
+
+- `users`: nothing to drop beyond the removed `ldap_id` (00032). Keep CITEXT username,
+  normalized unique username/email, and metadata JSONB for flexible profile data only.
+- `sessions`: convert `id` from TEXT to UUID with `uuidv7()` (TypeID is a store-edge
+  conversion, not a storage format); drop `totp_pending`, `oauth_groups`, `oauth_name`,
+  `oauth_sub`; keep `token_hash` UNIQUE and `provider`. Pending MFA state lives in the MFA
+  tables, never as a session flag.
+- `auth_tokens`: keep the purpose CHECK (`email_verification`, `one_time_access`,
+  `reauthentication`), SHA-256 token hashes, expiry CHECK, and `last_sent_at`.
+- `signup_tokens` + `signup_tokens_user_groups`: unchanged shape; keep the group FKs and
+  usage/limit columns.
+- `webauthn_credentials` / `webauthn_sessions`: unchanged shape; ceremony sessions expire and
+  are cleaned up by the token cleanup job.
+- `device_login_requests`: unchanged shape; expiry + status columns drive cleanup.
+
+### MFA (new tables, task 5)
+
+- `user_mfa_totp` (identity-owned): `id UUID PK uuidv7()`, `user_id UUID NOT NULL UNIQUE
+  REFERENCES users(id) ON DELETE CASCADE`, `secret_enc TEXT NOT NULL CHECK (secret_enc LIKE
+  'enc:%')`, `digits SMALLINT NOT NULL CHECK (digits IN (6, 8))`, `period SMALLINT NOT NULL
+  CHECK (period BETWEEN 15 AND 120)`, `algorithm TEXT NOT NULL DEFAULT 'SHA1' CHECK (algorithm
+  IN ('SHA1', 'SHA256', 'SHA512'))`, `confirmed_at TIMESTAMPTZ`, `last_used_step BIGINT` —
+  one row per user (UNIQUE user_id); unconfirmed rows are replaced on re-enroll.
+- `user_mfa_recovery_codes` (identity-owned): `id UUID PK uuidv7()`, `user_id UUID NOT NULL
+  REFERENCES users(id) ON DELETE CASCADE`, `code_hash TEXT NOT NULL UNIQUE`, `used_at
+  TIMESTAMPTZ` — one row per code, hashed, single-use; indexed on `(user_id)` and
+  `(user_id, used_at)` for the remaining-code check.
+
+### Federation (delta)
+
+- `oidc_clients`: move redirect URIs to a child table `oidc_client_redirect_uris` (`id UUID
+  PK`, `client_id UUID NOT NULL REFERENCES oidc_clients(id) ON DELETE CASCADE`, `uri TEXT NOT
+  NULL UNIQUE`, `created_at`); drop the delimited URI column.
+- `jwks`: keep public key material in plain columns and the private PEM as `enc:<ciphertext>`;
+  never encrypt public data.
+- `oidc_authorization_codes`, `oidc_refresh_tokens`, and `oauth2_sessions`/`oauth2_jtis`: keep
+  expiry/revocation semantics; `oauth2_sessions.kind` CHECK covers `authorize_code`,
+  `access_token`, `refresh_token`.
+- `scim_service_providers`: token stays `enc:<ciphertext>`.
+
+### Admin (delta)
+
+- `app_config`: the one final settings table (one row per key); drop `app_settings` and its
+  trigger, indexes, and seed rows.
+- `audit_logs`: append-only; `user_id` stays a plain UUID reference without `ON DELETE
+  CASCADE` so history survives user deletion.
+- `api_keys`, `apis`, `api_permissions`, `custom_claims`: unchanged shape.
+
+### Webhook (restructure)
+
+- `webhook_endpoints` (renamed from `webhook_events`): endpoint configuration — name, URL,
+  event subscriptions, `secret_enc TEXT CHECK (secret_enc LIKE 'enc:%')`, timestamps.
+- `webhook_deliveries` (replaces `webhook_logs`): one row per endpoint per event — `id`,
+  `webhook_id FK`, `event`, `body BYTEA NOT NULL` (the exact canonical bytes; retries sign and
+  deliver these bytes), `status`, `attempt_count`, `created_at`, `delivered_at`.
+- `webhook_delivery_attempts` (new): one row per attempt — `delivery_id FK`, `attempt_number`,
+  `response_status`, `error`, `duration_ms`, `created_at`; redacted response metadata only.
+- The outbox write (delivery row + queue task) stays in the domain transaction; the queue is
+  notified only after commit.
+
+### Cleanup migration
+
+One new migration drops: `app_settings`, `user_phones`, `invitations`, `mfa_keys`,
+`oauth_connections`, `oidc_device_codes`, `file_stores`, `refresh_tokens`, the dead `sessions`
+columns (`totp_pending`, `oauth_groups`, `oauth_name`, `oauth_sub`), and converts `sessions.id`
+to UUID where the live code allows. The webhook restructure (rename + new tables + data
+migration) lands in the same or a following migration — never by editing an applied migration.
 
 Cross-module references use foreign keys to UUIDs and consumer-side interfaces in Go. A table must
 not be read or written directly by a non-owner module.
