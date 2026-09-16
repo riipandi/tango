@@ -41,6 +41,7 @@ func (f Feature) WithCookie(name string, secure bool) Feature {
 
 // APIRoutes mounts the signup endpoints relative to the /api group.
 func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
+	r.Get("/signup/setup", f.service.handleSetupAvailable)
 	r.Post("/signup", f.service.handleSignUp)
 	r.Post("/signup/setup", f.service.handleSetup)
 
@@ -99,10 +100,23 @@ func (s *Service) handleSignUp(w http.ResponseWriter, r *http.Request) {
 	responder.Success(w, r, http.StatusCreated, result.User)
 }
 
+// handleSetupAvailable serves GET /signup/setup: 204 while the
+// initial-admin setup can still run, 404 once any user exists.
+func (s *Service) handleSetupAvailable(w http.ResponseWriter, r *http.Request) {
+	available, err := s.SetupAvailable(r.Context())
+	if err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if !available {
+		responder.Fail(w, r, http.StatusNotFound, "setup not available")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // handleSetup serves POST /signup/setup: first-admin bootstrap —
-// only valid while no admin exists (enforced by the caller in the
-// bootstrap flow; repeated setup is rejected by the user duplicate
-// rules).
+// rejected with 409 once any user exists.
 func (s *Service) handleSetup(w http.ResponseWriter, r *http.Request) {
 	var req signUpRequest
 	if verr := validate.Request(r.Body, &req); verr != nil {
@@ -212,6 +226,8 @@ func (s *Service) writeError(w http.ResponseWriter, r *http.Request, err error) 
 	switch err {
 	case ErrNotFound:
 		responder.Fail(w, r, http.StatusNotFound, err.Error())
+	case ErrSetupCompleted:
+		responder.Fail(w, r, http.StatusConflict, err.Error())
 	case ErrExhausted, ErrInvalidIDs:
 		responder.Fail(w, r, http.StatusUnprocessableEntity, err.Error())
 	default:

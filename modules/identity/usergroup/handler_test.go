@@ -87,8 +87,78 @@ func signInToken(t *testing.T, r chi.Router, u user.User) string {
 	return cookies[0].Value
 }
 
-func TestGroupEndpointsAdminGated(t *testing.T) {
-	r, users, _, passwords, _ := newTestRouter(t)
+// TestReplaceUserGroupsForUser drives PUT /users/{id}/user-groups:
+// the payload replaces the user's group set, unknown group IDs are
+// rejected, and the response lists the assigned groups.
+func TestReplaceUserGroupsForUser(t *testing.T) {
+	r, users, groups, passwords, _ := newTestRouter(t)
+	admin := newAdminUser(t, users, passwords, "ugadm")
+	cookie := signInToken(t, r, admin)
+
+	member := newAdminUser(t, users, passwords, "member")
+	ugSvc := NewService(groups, nil)
+
+	create := func(name string) string {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/user-groups",
+			strings.NewReader(`{"name":"`+name+`","display_name":"`+name+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+		var created struct {
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &created))
+		return created.Data.ID
+	}
+	engineering := create("engineering_" + strconv.FormatInt(time.Now().UnixNano(), 10))
+	ops := create("ops_" + strconv.FormatInt(time.Now().UnixNano(), 10))
+
+	// Assign both groups; the response mirrors the new set.
+	req := httptest.NewRequest(http.MethodPut, "/api/users/"+member.ID.String()+"/user-groups",
+		strings.NewReader(`{"user_group_ids":["`+engineering+`","`+ops+`"]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	memberships, err := ugSvc.GroupsForUser(t.Context(), member.ID)
+	require.NoError(t, err)
+	assert.Len(t, memberships, 2)
+
+	// Replacing with one group drops the other.
+	req = httptest.NewRequest(http.MethodPut, "/api/users/"+member.ID.String()+"/user-groups",
+		strings.NewReader(`{"user_group_ids":["`+ops+`"]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	memberships, err = ugSvc.GroupsForUser(t.Context(), member.ID)
+	require.NoError(t, err)
+	assert.Len(t, memberships, 1)
+
+	// An unknown group ID is a 422, not a partial write.
+	req = httptest.NewRequest(http.MethodPut, "/api/users/"+member.ID.String()+"/user-groups",
+		strings.NewReader(`{"user_group_ids":["user_group_01zzzzzzzzzzzzzzzzzzzzzz"]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+
+	memberships, err = ugSvc.GroupsForUser(t.Context(), member.ID)
+	require.NoError(t, err)
+	assert.Len(t, memberships, 1, "a failed replace must not change the set")
+}
+
+func TestGroupEndpointsAdminGated(t *testing.T) {	r, users, _, passwords, _ := newTestRouter(t)
 	admin := newAdminUser(t, users, passwords, "gadm")
 	token := signInToken(t, r, admin)
 

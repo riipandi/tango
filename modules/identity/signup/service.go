@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -66,11 +67,32 @@ type Result struct {
 	Token string
 }
 
+// ErrSetupCompleted rejects a second initial-admin setup.
+var ErrSetupCompleted = errors.New("initial setup has already been completed")
+
+// SetupAvailable reports whether the initial-admin setup can run:
+// upstream counts every existing user, not only admins.
+func (s *Service) SetupAvailable(ctx context.Context) (bool, error) {
+	exists, err := s.users.HasAnyUser(ctx)
+	if err != nil {
+		return false, err
+	}
+	return !exists, nil
+}
+
 // SignUp creates the account behind a signup token (when the policy
 // requires one) and issues the session. Setup (first admin) runs
-// without a token.
+// without a token and only before the first user exists.
 func (s *Service) SignUp(ctx context.Context, req SignUpRequest, isSetup bool) (*Result, error) {
-	if !isSetup {
+	if isSetup {
+		exists, err := s.users.HasAnyUser(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, ErrSetupCompleted
+		}
+	} else {
 		if err := s.consumeToken(ctx, req.Token); err != nil {
 			return nil, err
 		}

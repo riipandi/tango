@@ -26,6 +26,15 @@ match the upstream endpoint contract.
 - **`/.well-known/version`** — a bare version document under `.well-known` for instance
   fingerprinting; the upstream-parity version endpoints stay under `/api/version/*`.
 
+## Signup and setup contract
+
+- The setup contract counts **every** existing user, matching upstream: `GET /api/signup/setup`
+  answers 204 while no user exists and 404 afterwards; a repeated `POST /api/signup/setup`
+  conflicts with 409. Migrations never seed users — fresh installs provision the first admin
+  through `tango setup` or the setup endpoint.
+- `POST /api/signup` requires `email` (upstream leaves it optional); addresses stay NOT NULL in
+  the tango schema, so token signups without an email are rejected with 422.
+
 ## Encrypted and hashed value inventory
 
 Recoverable values are sealed by `pkg/crypto` in the canonical `enc:<ciphertext>` form

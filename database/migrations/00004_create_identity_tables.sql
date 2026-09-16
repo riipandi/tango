@@ -47,22 +47,6 @@ CREATE INDEX IF NOT EXISTS idx_users_last_login_at ON public.users (last_login_a
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_normalized_username ON public.users (LOWER(username));
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_ldap_id ON public.users USING btree (ldap_id);
 
--- Insert a default admin user for testing purposes
-INSERT INTO public.users (id, first_name, last_name, display_name, email, username, avatar_url, is_admin, email_verified_at, created_at)
-VALUES (
-    uuidv7(),
-    'Admin',
-    'Sistem',
-    'Admin Sistem',
-    'admin@example.com',
-    'admin',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin+Sistem',
-    TRUE,
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-)
-ON CONFLICT (username) DO NOTHING;
-
 -- --------------------------------------------------------
 -- Table: public.user_passwords (junction table)
 -- --------------------------------------------------------

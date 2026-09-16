@@ -39,6 +39,20 @@ var userColumns = []string{
 	"profile_picture_path",
 }
 
+// HasAnyUser reports whether any account row exists. The initial
+// setup contract counts every user, not only admins.
+func (s *PostgresStore) HasAnyUser(ctx context.Context) (bool, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("exists(SELECT 1 FROM " + usersTable + ")")
+	query, args := sb.Build()
+
+	var exists bool
+	if err := s.exec.QueryRow(ctx, query, args...).Scan(&exists); err != nil {
+		return false, fmt.Errorf("user store: has any user: %w", err)
+	}
+	return exists, nil
+}
+
 // List returns matching users newest first plus the total count.
 // Query matches username, email, or display name (case-insensitive).
 func (s *PostgresStore) List(ctx context.Context, params ListParams) ([]User, int, error) {

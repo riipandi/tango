@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_bA3zUDn9oo
+createdAt: 2026-09-16T11:28:42.097808
+updatedAt: 2026-09-16T11:28:42.097809
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_vxX8pv5Ccb
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: text/plain
+description: Check initial admin setup availability — 204 while no user exists, 404 after
+headers: []
+method: GET
+name: Check setup availability
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/signup/setup
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

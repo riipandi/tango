@@ -89,6 +89,9 @@ type ListParams struct {
 // and timestamps.
 type Store interface {
 	List(ctx context.Context, params ListParams) ([]User, int, error)
+	// HasAnyUser reports whether any account exists; the setup
+	// contract counts every user, not only admins.
+	HasAnyUser(ctx context.Context) (bool, error)
 	Create(ctx context.Context, params CreateParams) (User, error)
 	GetByID(ctx context.Context, id UserID) (User, error)
 	UpdateAdmin(ctx context.Context, id UserID, params AdminUpdateParams) (User, error)
