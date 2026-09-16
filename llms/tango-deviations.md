@@ -25,6 +25,9 @@ match the upstream endpoint contract.
   self-service account endpoints. The full contract lives in the endpoint reference
   ("Authentication (tango-only)"): generic enumeration-safe failures, SHA-256 hashed single-use
   reset tokens (15-minute TTL), session invalidation on reset, and the tight auth rate budget.
+- **TOTP MFA surface** — `/api/mfa/totp/*` (enroll, confirm, status, verify, recovery-code
+  rotation, disablement) per the endpoint reference's MFA contract: `enc:`-sealed seeds, hashed
+  single-use recovery codes, pending-auth bridging between password sign-in and full session.
 - **`/api/healthz`** — an envelope-form health probe inside the API group for deploy tooling
   that cannot reach the root router; the upstream-parity `GET /healthz` (204, no body) stays
   mounted at the root.

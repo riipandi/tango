@@ -91,6 +91,11 @@ the current shape, not a full re-declaration of unchanged columns.
   REFERENCES users(id) ON DELETE CASCADE`, `code_hash TEXT NOT NULL UNIQUE`, `used_at
   TIMESTAMPTZ` — one row per code, hashed, single-use; indexed on `(user_id)` and
   `(user_id, used_at)` for the remaining-code check.
+- `user_mfa_pending` (identity-owned): `id UUID PK uuidv7()`, `user_id UUID NOT NULL UNIQUE
+  REFERENCES users(id) ON DELETE CASCADE`, `token_hash TEXT NOT NULL UNIQUE`, `expires_at
+  TIMESTAMPTZ NOT NULL CHECK (expires_at > CURRENT_TIMESTAMP)`, `created_at TIMESTAMPTZ NOT
+  NULL DEFAULT CURRENT_TIMESTAMP` — the short-lived bridge between a successful password
+  sign-in and full session issuance; one row per user, replaced on every password sign-in.
 
 ### Federation (delta)
 

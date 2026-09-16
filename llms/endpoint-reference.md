@@ -32,6 +32,30 @@ expire in 15 minutes; a completed reset revokes every sign-in session of the acc
 a fresh session for the requester; audit events cover sign-in, sign-out, password changes, and
 reset requests/completions without logging secrets.
 
+## MFA TOTP (tango-only)
+
+Upstream Pocket ID has no TOTP; this surface is tango-only and follows the database contract in
+`llms/porting-plan/database.md` (`user_mfa_totp`, `user_mfa_recovery_codes`,
+`user_mfa_pending`).
+
+| Method | Endpoint                        | Summary / Yaak Title         | Status | Evidence |
+| ------ | ------------------------------- | ---------------------------- | ------ | -------- |
+| POST   | `/api/mfa/totp/enroll`          | Start TOTP enrollment        | planned — self; returns the raw secret + otpauth URI exactly once; re-enroll replaces an unconfirmed row | — |
+| POST   | `/api/mfa/totp/confirm`         | Confirm and enable TOTP      | planned — verifies one code; sets `confirmed_at`; returns recovery codes exactly once | — |
+| GET    | `/api/mfa/totp/status`          | TOTP status                  | planned — confirmed flag + remaining recovery-code count | — |
+| POST   | `/api/mfa/totp/verify`          | Complete a pending sign-in   | planned — pending-auth cookie; accepts a TOTP code or a recovery code; issues the full session | — |
+| POST   | `/api/mfa/totp/recovery-codes`  | Rotate recovery codes        | planned — requires a valid TOTP code; returns the new codes exactly once | — |
+| DELETE | `/api/mfa/totp`                 | Disable TOTP                 | planned — requires the current password; drops all MFA state | — |
+
+Fixed parameters: issuer = the configured app name, 6 digits, 30-second period, SHA-1,
+±1 step bounded skew. Sign-in composition: a confirmed TOTP enrollment turns a successful
+password sign-in into a pending authentication (5-minute TTL, one row per user, cookie-bound)
+instead of a full session; the full session is issued only by `verify`. Pending state is never
+a session flag, expires server-side, is replaced on the next sign-in, and is cleared on
+sign-out. TOTP verification is constant-time with step replay protection (`last_used_step`);
+recovery codes are hashed, single-use, shown exactly once, and rotated atomically. Disablement
+requires the current password and clears every MFA row.
+
 ## API Keys
 
 | Method | Endpoint                   | Summary / Yaak Title | Status | Evidence |
