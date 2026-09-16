@@ -1,0 +1,304 @@
+package totp
+
+// service.go owns the TOTP lifecycle rules: enrollment, confirmation
+// with recovery-code issuance, pending-auth verification, rotation,
+// and disablement. No HTTP knowledge lives here.
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/session"
+	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/pkg/crypto"
+)
+
+// Recovery code shape: eight eight-digit numeric codes per set.
+const (
+	recoveryCodeCount = 8
+	recoveryCodeBytes = 4 // 8 hex characters per code
+)
+
+// PendingTTL bounds the pending-auth bridge.
+const PendingTTL = 5 * time.Minute
+
+// PendingCookieName is the browser cookie carrying the pending-auth
+// token; the raw value lives only in the cookie.
+const PendingCookieName = "tango_mfa_pending"
+
+// Errors surfaced to handlers.
+var (
+	// ErrAlreadyConfirmed blocks a second enrollment over a live one.
+	ErrAlreadyConfirmed = errors.New("totp: a confirmed enrollment already exists")
+	// ErrNoEnrollment covers verification without any enrollment.
+	ErrNoEnrollment = errors.New("totp: no enrollment exists")
+	// ErrNotConfirmed covers verification against an unconfirmed seed.
+	ErrNotConfirmed = errors.New("totp: enrollment is not confirmed")
+)
+
+// Sessions are the session operations verification needs; a
+// confirmed TOTP upgrades a pending auth into the only fresh session.
+type Sessions interface {
+	IssueForUser(ctx context.Context, userID user.UserID, provider string, meta session.Meta) (string, error)
+}
+
+// PasswordVerifier checks the current password for disablement.
+type PasswordVerifier interface {
+	VerifyForUser(ctx context.Context, userID user.UserID, secret string) error
+}
+
+// Service runs the TOTP lifecycle.
+type Service struct {
+	store    Store
+	users    user.Store
+	sessions Sessions
+	password PasswordVerifier
+	cipher   *crypto.Cipher
+	recorder identity.Recorder
+
+	// issuer names the relying party in the otpauth link.
+	issuer string
+	// now is overridable in tests; production uses time.Now.
+	now func() time.Time
+}
+
+// ServiceOption configures the service.
+type ServiceOption func(*Service)
+
+// WithClock overrides the wall clock (tests).
+func WithClock(now func() time.Time) ServiceOption {
+	return func(s *Service) { s.now = now }
+}
+
+// NewService builds the TOTP feature.
+func NewService(store Store, users user.Store, sessions Sessions, password PasswordVerifier, cipher *crypto.Cipher, issuer string, recorder identity.Recorder, opts ...ServiceOption) *Service {
+	s := &Service{
+		store:    store,
+		users:    users,
+		sessions: sessions,
+		password: password,
+		cipher:   cipher,
+		issuer:   issuer,
+		recorder: recorder,
+		now:      time.Now,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// Name names the feature for logs.
+func (s *Service) Name() string { return "totp" }
+
+// Enroll seeds a new enrollment and returns the plaintext secret and
+// provisioning URI exactly once. A confirmed enrollment must be
+// disabled first.
+func (s *Service) Enroll(ctx context.Context, u user.User) (secret, uri string, err error) {
+	state, stateErr := s.store.State(ctx, u.ID)
+	if stateErr == nil && state.Confirmed() {
+		return "", "", ErrAlreadyConfirmed
+	}
+
+	secret, err = GenerateSeed()
+	if err != nil {
+		return "", "", err
+	}
+	sealed, err := s.cipher.Encrypt(secret)
+	if err != nil {
+		return "", "", fmt.Errorf("totp: seal seed: %w", err)
+	}
+	if err := s.store.UpsertUnconfirmed(ctx, u.ID, sealed, defaultDigits, defaultPeriod, AlgorithmSHA1); err != nil {
+		return "", "", err
+	}
+	if s.recorder != nil {
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "mfa.totp_enroll_started", Actor: u.ID.String()}, nil)
+	}
+	return secret, ProvisioningURI(s.issuer, u.Email, secret, defaultDigits, defaultPeriod, AlgorithmSHA1), nil
+}
+
+// Confirm verifies one code from the authenticator, marks the
+// enrollment live, and returns the recovery codes exactly once.
+func (s *Service) Confirm(ctx context.Context, u user.User, code string) ([]string, error) {
+	enrollment, err := s.store.State(ctx, u.ID)
+	if err != nil {
+		return nil, ErrNoEnrollment
+	}
+	if enrollment.Confirmed() {
+		return nil, ErrAlreadyConfirmed
+	}
+
+	accepted, verifyErr := s.verifySeed(ctx, enrollment, code)
+	if verifyErr != nil {
+		return nil, verifyErr
+	}
+	if err := s.store.MarkConfirmed(ctx, u.ID, s.now().UTC()); err != nil {
+		return nil, err
+	}
+	if err := s.store.UpdateLastUsedStep(ctx, u.ID, accepted); err != nil {
+		return nil, err
+	}
+
+	codes, codesErr := s.replaceRecoveryCodes(ctx, u.ID)
+	if codesErr != nil {
+		return nil, codesErr
+	}
+	if s.recorder != nil {
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "mfa.totp_enabled", Actor: u.ID.String()}, nil)
+	}
+	return codes, nil
+}
+
+// Status reports the enrollment flag and the unspent code count.
+func (s *Service) Status(ctx context.Context, u user.User) (confirmed bool, remaining int, err error) {
+	enrollment, err := s.store.State(ctx, u.ID)
+	if err != nil {
+		return false, 0, nil
+	}
+	remaining, err = s.store.RemainingRecoveryCodes(ctx, u.ID)
+	if err != nil {
+		return false, 0, err
+	}
+	return enrollment.Confirmed(), remaining, nil
+}
+
+// VerifyPending consumes the pending-auth bridge, checks the TOTP
+// code (or burns a recovery code), and issues the only full session.
+func (s *Service) VerifyPending(ctx context.Context, pendingToken, code string) (user.User, string, error) {
+	userID, err := s.store.ConsumePending(ctx, hashToken(pendingToken))
+	if err != nil {
+		return user.User{}, "", ErrNoEnrollment
+	}
+
+	enrollment, err := s.store.State(ctx, userID)
+	if err != nil || !enrollment.Confirmed() {
+		return user.User{}, "", ErrNotConfirmed
+	}
+
+	// A numeric code verifies against the seed; a recovery code
+	// burns a stored hash. Wrong answers are indistinguishable.
+	if _, verifyErr := s.verifySeed(ctx, enrollment, code); verifyErr == nil {
+		return s.complete(ctx, userID)
+	}
+	spent, consumeErr := s.store.ConsumeRecoveryCode(ctx, userID, recoveryHash(code))
+	if consumeErr != nil || !spent {
+		return user.User{}, "", ErrInvalidCode
+	}
+	return s.complete(ctx, userID)
+}
+
+// RotateRecoveryCodes verifies one live code and returns a fresh set
+// exactly once; the previous set dies immediately.
+func (s *Service) RotateRecoveryCodes(ctx context.Context, u user.User, code string) ([]string, error) {
+	enrollment, err := s.store.State(ctx, u.ID)
+	if err != nil || !enrollment.Confirmed() {
+		return nil, ErrNoEnrollment
+	}
+	if _, verifyErr := s.verifySeed(ctx, enrollment, code); verifyErr != nil {
+		return nil, verifyErr
+	}
+	codes, codesErr := s.replaceRecoveryCodes(ctx, u.ID)
+	if codesErr != nil {
+		return nil, codesErr
+	}
+	if s.recorder != nil {
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "mfa.recovery_codes_rotated", Actor: u.ID.String()}, nil)
+	}
+	return codes, nil
+}
+
+// Disable verifies the current password and drops all MFA state.
+func (s *Service) Disable(ctx context.Context, u user.User, currentPassword string) error {
+	if err := s.password.VerifyForUser(ctx, u.ID, currentPassword); err != nil {
+		return ErrInvalidCode
+	}
+	if err := s.store.DeleteState(ctx, u.ID); err != nil {
+		return err
+	}
+	if s.recorder != nil {
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "mfa.totp_disabled", Actor: u.ID.String()}, nil)
+	}
+	return nil
+}
+
+// ClearPending drops the pending-auth bridge (sign-out, expiry
+// hygiene).
+func (s *Service) ClearPending(ctx context.Context, u user.User) error {
+	return s.store.DeletePendingForUser(ctx, u.ID)
+}
+
+// complete issues the only full session for the verified user.
+func (s *Service) complete(ctx context.Context, userID user.UserID) (user.User, string, error) {
+	token, err := s.sessions.IssueForUser(ctx, userID, "totp", session.Meta{})
+	if err != nil {
+		return user.User{}, "", err
+	}
+	u, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return user.User{}, "", err
+	}
+	return u, token, nil
+}
+
+// verifySeed checks one TOTP code against the sealed seed and pins
+// the replay watermark on success. Confirmed-ness is the caller's
+// contract (Confirm deliberately runs on an unconfirmed row).
+func (s *Service) verifySeed(ctx context.Context, enrollment Enrollment, code string) (int64, error) {
+	seed, err := s.cipher.Decrypt(enrollment.SecretEnc)
+	if err != nil {
+		return 0, fmt.Errorf("totp: open seed: %w", err)
+	}
+	var lastStep int64
+	if enrollment.LastUsedStep != nil {
+		lastStep = *enrollment.LastUsedStep
+	} else {
+		lastStep = -1
+	}
+	accepted, err := VerifyCode(seed, code, enrollment.Digits, enrollment.Period, enrollment.Algorithm, defaultSkew, lastStep, s.now())
+	if err != nil {
+		return 0, err
+	}
+	if err := s.store.UpdateLastUsedStep(ctx, enrollment.UserID, accepted); err != nil {
+		return 0, err
+	}
+	return accepted, nil
+}
+
+// replaceRecoveryCodes mints a fresh code set; the plaintext values
+// return exactly once here.
+func (s *Service) replaceRecoveryCodes(ctx context.Context, userID user.UserID) ([]string, error) {
+	codes := make([]string, 0, recoveryCodeCount)
+	hashes := make([]string, 0, recoveryCodeCount)
+	for range recoveryCodeCount {
+		buf := make([]byte, recoveryCodeBytes)
+		if _, err := rand.Read(buf); err != nil {
+			return nil, fmt.Errorf("totp: recovery codes: %w", err)
+		}
+		code := hex.EncodeToString(buf)
+		codes = append(codes, code)
+		hashes = append(hashes, recoveryHash(code))
+	}
+	if err := s.store.ReplaceRecoveryCodes(ctx, userID, hashes); err != nil {
+		return nil, err
+	}
+	return codes, nil
+}
+
+// recoveryHash keys the code by its user-scoped SHA-256 hash.
+func recoveryHash(code string) string {
+	sum := sha256.Sum256([]byte("recovery:" + code))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+// hashToken keys the pending-auth bridge by its SHA-256 hash.
+func hashToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
