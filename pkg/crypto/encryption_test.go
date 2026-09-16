@@ -39,6 +39,25 @@ func TestCipherRejectsUnprefixedValue(t *testing.T) {
 	assert.ErrorIs(t, err, ErrMissingPrefix)
 }
 
+func TestCipherPrefixIsCaseSensitiveAndPositional(t *testing.T) {
+	cipher, err := NewCipher(testKey())
+	require.NoError(t, err)
+
+	encrypted, err := cipher.Encrypt("case matters")
+	require.NoError(t, err)
+
+	// Wrong case, leading whitespace, or a mid-string marker all
+	// fail closed: the prefix is exact and positional.
+	_, err = cipher.Decrypt("ENC:" + strings.TrimPrefix(encrypted, EncPrefix))
+	assert.ErrorIs(t, err, ErrMissingPrefix)
+
+	_, err = cipher.Decrypt(" " + encrypted)
+	assert.ErrorIs(t, err, ErrMissingPrefix)
+
+	_, err = cipher.Decrypt(strings.TrimPrefix(encrypted, EncPrefix) + ":enc:")
+	assert.ErrorIs(t, err, ErrMissingPrefix)
+}
+
 func TestCipherUsesFreshNonce(t *testing.T) {
 	cipher, err := NewCipher(testKey())
 	require.NoError(t, err)

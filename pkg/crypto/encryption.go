@@ -44,8 +44,11 @@ func NewCipher(key []byte) (*Cipher, error) {
 }
 
 // EncPrefix marks a recoverable value sealed by this package; every
-// stored ciphertext must carry it. Values without the prefix are
-// invalid — there is no unprefixed legacy format.
+// stored ciphertext must carry it exactly once, case-sensitively, at
+// the beginning of the string, with no surrounding whitespace. It is
+// metadata, not part of the plaintext or ciphertext. Values without
+// it are invalid — there is no unprefixed legacy format, and the
+// prefix is not a password-hash marker.
 const EncPrefix = "enc:"
 
 // Encrypt seals plaintext with a fresh random nonce and returns the
@@ -58,8 +61,9 @@ func (c *Cipher) Encrypt(plaintext string) (string, error) {
 	return EncPrefix + base64.RawStdEncoding.EncodeToString(sealed), nil
 }
 
-// Decrypt opens a value produced by Encrypt. Values without the
-// enc: prefix are rejected.
+// Decrypt opens a value produced by Encrypt. The prefix must appear
+// exactly once at the beginning, case-sensitively; values without it
+// are rejected, and plaintext is never treated as encrypted data.
 func (c *Cipher) Decrypt(encoded string) (string, error) {
 	rest, ok := strings.CutPrefix(encoded, EncPrefix)
 	if !ok {
