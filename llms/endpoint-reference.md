@@ -242,6 +242,36 @@ unregistered `post_logout_redirect_uri` is never followed;
 | POST   | `/api/webauthn/login/begin`     | Begin discoverable passkey login  | done — bare `publicKey` options plus an explicit ceremony id | `modules/identity/webauthn.TestLoginBeginAnonymousAndFinishValidation` |
 | POST   | `/api/webauthn/login/finish`    | Finish discoverable passkey login | done — fail closed on unknown ceremony sessions | `modules/identity/webauthn.TestLoginBeginAnonymousAndFinishValidation` |
 
+## Webhooks (tango-only)
+
+Upstream Pocket ID has no webhooks; this surface is tango-only and follows the database contract
+in `llms/porting-plan/database.md` (`webhook_endpoints`, `webhook_deliveries`,
+`webhook_delivery_attempts`).
+
+| Method | Endpoint                          | Summary / Yaak Title        | Status | Evidence |
+| ------ | --------------------------------- | --------------------------- | ------ | -------- |
+| GET    | `/api/webhooks`                   | List webhook endpoints      | planned — admin guard; `enabled` and `event` filters; secrets never present | — |
+| POST   | `/api/webhooks`                   | Create a webhook endpoint   | planned — 201; returns the signing secret exactly once | — |
+| GET    | `/api/webhooks/{id}`              | Get a webhook endpoint      | planned — no secret field | — |
+| PUT    | `/api/webhooks/{id}`              | Update a webhook endpoint   | planned — partial update; nil fields keep values | — |
+| DELETE | `/api/webhooks/{id}`              | Delete a webhook endpoint   | planned — deliveries survive with `webhook_id` nulled | — |
+| POST   | `/api/webhooks/{id}/rotate-secret`| Rotate the signing secret   | planned — returns the new plaintext exactly once | — |
+| POST   | `/api/webhooks/{id}/test`         | Send a test delivery        | planned — 202 + delivery id; bypasses the subscription filter | — |
+| GET    | `/api/webhooks/{id}/deliveries`   | List deliveries of one endpoint | planned — newest first, paginated | — |
+| GET    | `/api/webhook-deliveries`         | List all deliveries         | planned — `event` filter; redacted response metadata only | — |
+
+Delivery contract: HMAC-SHA256 over `t=<unix>,v1=<hex>` where the digest covers the signed
+timestamp concatenated with the exact canonical body bytes. Headers on every delivery:
+`X-Signature` (timestamp + `v1` digest, ±5-minute verification skew), `X-Webhook-Event` (event
+name), `X-Webhook-Id` (endpoint id), `Content-Type: application/json`. The canonical body is the
+deterministic JSON encoding of the payload, capped at 1 MiB, stored once as immutable bytes and
+reused byte-for-byte by every retry — the signature therefore stays valid across retries. Custom
+registration headers cannot override the signature set. Subscriptions use event names or the
+`*` wildcard; an empty list receives every event. Retries run on the queue (5 attempts, 30 s
+backoff, 30 s receiver deadline); non-2xx and transport failures are recorded per attempt and
+pruned after a week. Rotation affects new deliveries only and never returns the stored
+ciphertext.
+
 ## Version
 
 | Method | Endpoint               | Summary / Yaak Title                      | Status | Evidence |

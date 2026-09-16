@@ -49,7 +49,7 @@ Live tables map to one owner each; obsolete tables are removal targets for the c
 | identity | users, user_passwords, user_groups, user_groups_users, sessions, auth_tokens, signup_tokens, signup_tokens_user_groups, refresh_tokens, device_login_requests, webauthn_credentials, webauthn_sessions, deleted_records (trigger archive) |
 | federation | oidc_clients, oidc_clients_allowed_user_groups, oidc_client_api_grants, oidc_client_api_grant_permissions, user_authorized_oidc_clients, oidc_authorization_codes, oidc_refresh_tokens, oauth2_sessions, oauth2_jtis, interaction_sessions, jwks, scim_service_providers |
 | admin | app_config, audit_logs, api_keys, apis, api_permissions, custom_claims |
-| webhook | webhook_events, webhook_logs |
+| webhook | webhook_endpoints, webhook_deliveries, webhook_delivery_attempts |
 | infrastructure | queue_tasks, queue_tasks_completed, rate_limits (via fn_check_rate_limit) |
 
 Obsolete (zero live references): app_settings (duplicate legacy shape), user_phones,
@@ -128,7 +128,11 @@ the current shape, not a full re-declaration of unchanged columns.
   `response_status`, `error`, `duration_ms`, `created_at`; redacted response metadata only.
 - The outbox write (delivery row + queue task) stays in the domain transaction; the queue is
   notified only after commit.
-
+- Delivery `status` is a fixed set: `pending`, `succeeded`, `failed`. `attempt_count` increments
+  per attempt row; `delivered_at` stamps the first success. The request snapshot (method, target,
+  signature headers) is redacted metadata on the delivery, not re-serialized JSONB of the body.
+- Endpoint deletion keeps deliveries: `webhook_deliveries.webhook_id` is `ON DELETE SET NULL` so
+  the audit trail survives; attempts cascade with their delivery.
 ### Cleanup migration
 
 One new migration drops: `app_settings`, `user_phones`, `invitations`, `mfa_keys`,
