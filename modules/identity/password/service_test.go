@@ -2,6 +2,8 @@ package password
 
 import (
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,6 +38,33 @@ func TestSetPasswordAndVerifyIdentity(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
 	_, err = svc.VerifyIdentity(ctx, "nobody", "s3cret-p@ss")
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
+}
+
+func TestPasswordPolicyBounds(t *testing.T) {
+	svc, u := newTestService(t)
+	ctx := t.Context()
+
+	// One policy: below the floor and above the ceiling fail, the
+	// boundary values pass.
+	assert.ErrorIs(t, svc.SetPassword(ctx, u.ID, "short7"), ErrWeakPassword)
+	assert.ErrorIs(t, svc.SetPassword(ctx, u.ID, strings.Repeat("x", 129)), ErrOversizeSecret)
+	require.NoError(t, svc.SetPassword(ctx, u.ID, strings.Repeat("x", 8)))
+	require.NoError(t, svc.SetPassword(ctx, u.ID, strings.Repeat("y", 128)))
+}
+
+func TestUnknownIdentityBurnsHashWork(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := t.Context()
+
+	// The dummy hash is built lazily once and reused; unknown
+	// identities cost the same hashing work as a real check.
+	_, err := svc.VerifyIdentity(ctx, "nobody", "whatever1")
+	assert.ErrorIs(t, err, ErrInvalidCredentials)
+
+	svc.dummyOnce = sync.Once{}
+	_, err = svc.VerifyIdentity(ctx, "nobody-else", "whatever1")
+	assert.ErrorIs(t, err, ErrInvalidCredentials)
+	assert.NotEmpty(t, svc.dummyHashValue, "the dummy credential must exist after a miss")
 }
 
 func TestSetPasswordRejectsWeak(t *testing.T) {
