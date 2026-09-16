@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"go.jetify.com/typeid"
+
+	"github.com/riipandi/tango/internal/datastore"
 )
 
 // AuditLogID identifies an audit_logs row: a UUIDv7 suffix plus a
@@ -90,7 +92,10 @@ func (p Page) Offset() int {
 // the pointed-to entry. List returns the matching entries (newest
 // first) plus the total row count.
 type Store interface {
-	Record(ctx context.Context, entry *Entry) error
+	// Record writes one entry. A non-nil exec joins the caller's
+	// transaction so the audit row commits (or rolls back) with the
+	// domain write; nil writes standalone.
+	Record(ctx context.Context, entry *Entry, exec ...datastore.Executor) error
 	List(ctx context.Context, filters ListFilters, params Page) ([]Entry, int, error)
 	UserFilterValues(ctx context.Context) ([]string, error)
 	ClientNameFilterValues(ctx context.Context) ([]string, error)

@@ -36,7 +36,7 @@ func (s *Service) record(action, actor, target string) {
 	if s.recorder == nil {
 		return
 	}
-	s.recorder(context.Background(), identity.AuditEvent{Action: action, Actor: actor, Target: target})
+	s.recorder.Record(context.Background(), identity.AuditEvent{Action: action, Actor: actor, Target: target}, nil)
 }
 
 // Create mints a key for the current user and returns it with the

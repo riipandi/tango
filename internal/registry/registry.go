@@ -184,32 +184,40 @@ func (rt *Runtime) Stop(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// auditAdapter converts identity audit events into auditlog entries.
+// auditAdapter converts identity audit events into auditlog entries
+// and joins the caller's transaction when one is provided.
 func auditAdapter(audit *auditlog.Module) identity.Recorder {
-	return func(ctx context.Context, e identity.AuditEvent) {
-		entry := auditlog.Entry{
-			Event:   e.Action,
-			Trigger: auditlog.TriggerUser,
-			Status:  auditlog.StatusSuccess,
-			Payload: map[string]any{},
-		}
+	return auditRecorder{audit: audit}
+}
 
-		if actor, err := typeid.Parse[user.UserID](e.Actor); err == nil {
-			uuidText := actor.UUID()
-			entry.UserID = &uuidText
-		} else {
-			entry.Payload["actor"] = e.Actor
-		}
-		if target, err := typeid.Parse[user.UserID](e.Target); err == nil {
-			uuidText := target.UUID()
-			entry.ResourceType = "user"
-			entry.ResourceID = &uuidText
-		} else {
-			entry.Payload["target"] = e.Target
-		}
+// auditRecorder adapts auditlog for identity features.
+type auditRecorder struct {
+	audit *auditlog.Module
+}
 
-		_ = audit.Record(ctx, &entry)
+func (a auditRecorder) Record(ctx context.Context, e identity.AuditEvent, exec datastore.Executor) {
+	entry := auditlog.Entry{
+		Event:   e.Action,
+		Trigger: auditlog.TriggerUser,
+		Status:  auditlog.StatusSuccess,
+		Payload: map[string]any{},
 	}
+
+	if actor, err := typeid.Parse[user.UserID](e.Actor); err == nil {
+		uuidText := actor.UUID()
+		entry.UserID = &uuidText
+	} else {
+		entry.Payload["actor"] = e.Actor
+	}
+	if target, err := typeid.Parse[user.UserID](e.Target); err == nil {
+		uuidText := target.UUID()
+		entry.ResourceType = "user"
+		entry.ResourceID = &uuidText
+	} else {
+		entry.Payload["target"] = e.Target
+	}
+
+	_ = a.audit.Record(ctx, &entry, exec)
 }
 
 // eventFanout forwards recorded events to audit and webhooks. Sinks
@@ -227,21 +235,30 @@ func NewEventFanout(log logger.Logger) *eventFanout {
 }
 
 // Recorder records identity events: one audit entry plus a webhook
-// emission per event. Webhook failure is logged, never fatal.
+// emission per event. The exec joins the audit write to the caller's
+// transaction; webhook delivery stays best effort after commit.
+// Webhook failure is logged, never fatal.
 func (f *eventFanout) Recorder() identity.Recorder {
-	return func(ctx context.Context, e identity.AuditEvent) {
-		if f.audit != nil {
-			auditAdapter(f.audit)(ctx, e)
-		}
-		if f.webhook == nil {
-			return
-		}
-		if err := f.webhook.Emit(ctx, e.Action, map[string]any{
-			"event":  e.Action,
-			"actor":  e.Actor,
-			"target": e.Target,
-		}); err != nil {
-			f.log.WithError(err).Error("webhook fan-out failed for event " + e.Action)
-		}
+	return fanoutRecorder{fanout: f}
+}
+
+// fanoutRecorder fans one identity event out to audit and webhooks.
+type fanoutRecorder struct {
+	fanout *eventFanout
+}
+
+func (r fanoutRecorder) Record(ctx context.Context, e identity.AuditEvent, exec datastore.Executor) {
+	if r.fanout.audit != nil {
+		auditAdapter(r.fanout.audit).Record(ctx, e, exec)
+	}
+	if r.fanout.webhook == nil {
+		return
+	}
+	if err := r.fanout.webhook.Emit(ctx, e.Action, map[string]any{
+		"event":  e.Action,
+		"actor":  e.Actor,
+		"target": e.Target,
+	}); err != nil {
+		r.fanout.log.WithError(err).Error("webhook fan-out failed for event " + e.Action)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
 )
 
@@ -52,6 +53,8 @@ func New(store Store, opts ...Option) *Module {
 func (m *Module) Name() string { return ModuleName }
 
 // Record stores an audit entry through the configured store.
-func (m *Module) Record(ctx context.Context, entry *Entry) error {
-	return m.store.Record(ctx, entry)
+// Record stores an audit entry through the configured store; a
+// non-nil exec joins the caller's transaction.
+func (m *Module) Record(ctx context.Context, entry *Entry, exec ...datastore.Executor) error {
+	return m.store.Record(ctx, entry, exec...)
 }

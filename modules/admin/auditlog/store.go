@@ -34,8 +34,15 @@ var entryColumns = []string{
 
 // Record inserts one entry; the row's uuidv7() default and
 // CURRENT_TIMESTAMP fill zero ID/CreatedAt. pgx encodes the args by
-// the target column OIDs (jsonb, enums, uuid, inet).
-func (s *PostgresStore) Record(ctx context.Context, entry *Entry) error {
+// the target column OIDs (jsonb, enums, uuid, inet). A non-nil exec
+// writes the row inside the caller's transaction; nil uses the
+// store's own executor.
+func (s *PostgresStore) Record(ctx context.Context, entry *Entry, exec ...datastore.Executor) error {
+	target := s.exec
+	if len(exec) > 0 && exec[0] != nil {
+		target = exec[0]
+	}
+
 	payload := entry.Payload
 	if payload == nil {
 		payload = map[string]any{}
@@ -65,7 +72,7 @@ func (s *PostgresStore) Record(ctx context.Context, entry *Entry) error {
 		id        string
 		createdAt pgtype.Timestamptz
 	)
-	if err := s.exec.QueryRow(ctx, query, args...).Scan(&id, &createdAt); err != nil {
+	if err := target.QueryRow(ctx, query, args...).Scan(&id, &createdAt); err != nil {
 		return fmt.Errorf("auditlog store: record: %w", err)
 	}
 

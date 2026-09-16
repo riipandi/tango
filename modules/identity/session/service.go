@@ -141,7 +141,7 @@ func (s *Service) issueSession(ctx context.Context, u user.User, provider string
 	}
 
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "user.signed_in", Actor: u.ID.String(), Target: se.ID})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "user.signed_in", Actor: u.ID.String(), Target: se.ID}, nil)
 	}
 	return token, se, nil
 }
@@ -173,7 +173,7 @@ func (s *Service) RevokeCurrent(ctx context.Context, token string) error {
 		return err
 	}
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "user.signed_out"})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "user.signed_out"}, nil)
 	}
 	return nil
 }

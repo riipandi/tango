@@ -163,6 +163,10 @@ func (s *PostgresStore) List(ctx context.Context, params ListParams) ([]UserGrou
 	return out, total, rows.Err()
 }
 
+func (s *PostgresStore) WithTx(ctx context.Context, fn func(datastore.Executor) error) error {
+	return s.store.WithTx(ctx, fn)
+}
+
 // SetMembers atomically replaces the membership of one group. Every
 // member ID must reference an existing user.
 func (s *PostgresStore) SetMembers(ctx context.Context, id UserGroupID, memberIDs []user.UserID) error {
@@ -220,51 +224,61 @@ func (s *PostgresStore) SetMembers(ctx context.Context, id UserGroupID, memberID
 // oidc_clients row (the id column is a typeid string).
 func (s *PostgresStore) ReplaceAllowedClients(ctx context.Context, id UserGroupID, clientIDs []string) error {
 	return s.store.WithTx(ctx, func(tx datastore.Executor) error {
-		db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
-		db.DeleteFrom(userGroupsAllowedClientsTable)
-		db.Where(db.E("user_group_id", id.UUIDBytes()))
-
-		delQuery, delArgs := db.Build()
-		if _, err := tx.Exec(ctx, delQuery, delArgs...); err != nil {
-			return fmt.Errorf("usergroup store: clear allowed clients: %w", err)
-		}
-		if len(clientIDs) == 0 {
-			return nil
-		}
-
-		// FK violations would surface as a 500 downstream; verify the
-		// whole batch exists for a deterministic domain error.
-		sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-		sb.Select("count(DISTINCT id)")
-		sb.From("public.oidc_clients")
-		ids := make([]any, 0, len(clientIDs))
-		for _, client := range clientIDs {
-			ids = append(ids, client)
-		}
-		sb.Where(sb.In("id", ids...))
-
-		query, args := sb.Build()
-		var known int
-		if err := tx.QueryRow(ctx, query, args...).Scan(&known); err != nil {
-			return fmt.Errorf("usergroup store: check allowed clients: %w", err)
-		}
-		if known != len(clientIDs) {
-			return ErrInvalidIDs
-		}
-
-		ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
-		ib.InsertInto(userGroupsAllowedClientsTable)
-		ib.Cols("user_group_id", "oidc_client_id")
-		for _, client := range clientIDs {
-			ib.Values(id.UUIDBytes(), client)
-		}
-
-		query, args = ib.Build()
-		if _, err := tx.Exec(ctx, query, args...); err != nil {
-			return fmt.Errorf("usergroup store: add allowed clients: %w", err)
-		}
-		return nil
+		return s.replaceAllowedClients(ctx, tx, id, clientIDs)
 	})
+}
+
+// ReplaceAllowedClientsTx runs the swap inside the caller's
+// transaction so the audit entry commits with the domain write.
+func (s *PostgresStore) ReplaceAllowedClientsTx(ctx context.Context, exec datastore.Executor, id UserGroupID, clientIDs []string) error {
+	return s.replaceAllowedClients(ctx, exec, id, clientIDs)
+}
+
+func (s *PostgresStore) replaceAllowedClients(ctx context.Context, tx datastore.Executor, id UserGroupID, clientIDs []string) error {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(userGroupsAllowedClientsTable)
+	db.Where(db.E("user_group_id", id.UUIDBytes()))
+
+	delQuery, delArgs := db.Build()
+	if _, err := tx.Exec(ctx, delQuery, delArgs...); err != nil {
+		return fmt.Errorf("usergroup store: clear allowed clients: %w", err)
+	}
+	if len(clientIDs) == 0 {
+		return nil
+	}
+
+	// FK violations would surface as a 500 downstream; verify the
+	// whole batch exists for a deterministic domain error.
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("count(DISTINCT id)")
+	sb.From("public.oidc_clients")
+	ids := make([]any, 0, len(clientIDs))
+	for _, client := range clientIDs {
+		ids = append(ids, client)
+	}
+	sb.Where(sb.In("id", ids...))
+
+	query, args := sb.Build()
+	var known int
+	if err := tx.QueryRow(ctx, query, args...).Scan(&known); err != nil {
+		return fmt.Errorf("usergroup store: check allowed clients: %w", err)
+	}
+	if known != len(clientIDs) {
+		return ErrInvalidIDs
+	}
+
+	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+	ib.InsertInto(userGroupsAllowedClientsTable)
+	ib.Cols("user_group_id", "oidc_client_id")
+	for _, client := range clientIDs {
+		ib.Values(id.UUIDBytes(), client)
+	}
+
+	query, args = ib.Build()
+	if _, err := tx.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("usergroup store: add allowed clients: %w", err)
+	}
+	return nil
 }
 
 // AllowedClientIDs lists the OIDC client ids allowlisted for one group.

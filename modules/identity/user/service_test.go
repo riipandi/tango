@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,7 +24,8 @@ func uniqueStamp() string {
 func TestServiceCreateAndGet(t *testing.T) {
 	store := newTestStore(t)
 	var recorded []identity.AuditEvent
-	svc := NewService(store, func(_ context.Context, e identity.AuditEvent) { recorded = append(recorded, e) })
+	recorder := testRecorder{events: &recorded}
+	svc := NewService(store, recorder)
 
 	stamp := uniqueStamp()
 	user, err := svc.Create(t.Context(), CreateParams{
@@ -133,4 +135,13 @@ func TestStoreListNewestFirst(t *testing.T) {
 	// The two just-created users are the newest; newest first.
 	assert.Equal(t, second.ID, users[0].ID)
 	assert.Equal(t, first.ID, users[1].ID)
+}
+
+// testRecorder captures audit events in place of the auditlog sink.
+type testRecorder struct {
+	events *[]identity.AuditEvent
+}
+
+func (r testRecorder) Record(_ context.Context, e identity.AuditEvent, _ datastore.Executor) {
+	*r.events = append(*r.events, e)
 }

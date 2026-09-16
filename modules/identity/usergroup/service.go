@@ -3,6 +3,7 @@ package usergroup
 import (
 	"context"
 
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
 )
@@ -39,7 +40,7 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (UserGroup, e
 		return UserGroup{}, err
 	}
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "user_group.created", Actor: g.ID.String(), Target: g.ID.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "user_group.created", Actor: g.ID.String(), Target: g.ID.String()}, nil)
 	}
 	return g, nil
 }
@@ -61,7 +62,7 @@ func (s *Service) Update(ctx context.Context, id UserGroupID, params UpdateParam
 		return UserGroup{}, err
 	}
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "user_group.updated", Actor: g.ID.String(), Target: g.ID.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "user_group.updated", Actor: g.ID.String(), Target: g.ID.String()}, nil)
 	}
 	return g, nil
 }
@@ -72,7 +73,7 @@ func (s *Service) Delete(ctx context.Context, id UserGroupID) error {
 		return err
 	}
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "user_group.deleted", Actor: id.String(), Target: id.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "user_group.deleted", Actor: id.String(), Target: id.String()}, nil)
 	}
 	return nil
 }
@@ -92,15 +93,19 @@ func (s *Service) GroupsForUser(ctx context.Context, id user.UserID) ([]UserGrou
 	return s.store.GroupIDsForUser(ctx, id)
 }
 
-// ReplaceAllowedClients swaps the group's OIDC client allowlist.
+// ReplaceAllowedClients swaps the group's OIDC client allowlist and
+// writes the audit entry inside the same transaction: the event
+// commits exactly when the domain write does.
 func (s *Service) ReplaceAllowedClients(ctx context.Context, id UserGroupID, clientIDs []string) error {
-	if err := s.store.ReplaceAllowedClients(ctx, id, clientIDs); err != nil {
-		return err
-	}
-	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "user_group.allowed_clients_updated", Actor: id.String(), Target: id.String()})
-	}
-	return nil
+	return s.store.WithTx(ctx, func(tx datastore.Executor) error {
+		if err := s.store.ReplaceAllowedClientsTx(ctx, tx, id, clientIDs); err != nil {
+			return err
+		}
+		if s.recorder != nil {
+			s.recorder.Record(ctx, identity.AuditEvent{Action: "user_group.allowed_clients_updated", Actor: id.String(), Target: id.String()}, tx)
+		}
+		return nil
+	})
 }
 
 // AllowedClientIDs lists the group's allowlisted OIDC client ids.

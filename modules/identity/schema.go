@@ -8,6 +8,7 @@ import (
 
 	"go.jetify.com/typeid"
 
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/mailer"
 )
 
@@ -22,9 +23,13 @@ func ParseID[T typeid.Subtype, PT typeid.SubtypePtr[T]](s string) (T, error) {
 	return typeid.Parse[T, PT](s)
 }
 
-// Recorder receives audit events; the composition root adapts the sink
-// so features never import auditlog directly.
-type Recorder func(ctx context.Context, event AuditEvent)
+// Recorder receives audit events. A nil exec writes the audit row
+// standalone (best effort); a non-nil exec joins the caller's
+// transaction so the entry commits or rolls back with the domain
+// write — the durable outbox boundary.
+type Recorder interface {
+	Record(ctx context.Context, event AuditEvent, exec datastore.Executor)
+}
 
 // MailSender queues transactional email. Implemented by internal/jobs;
 // declared here so identity features stay free of the job package.

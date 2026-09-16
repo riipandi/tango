@@ -62,7 +62,7 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (User, error)
 	}
 
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "user.created", Actor: user.ID.String(), Target: user.ID.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "user.created", Actor: user.ID.String(), Target: user.ID.String()}, nil)
 	}
 	return user, nil
 }
@@ -82,7 +82,7 @@ func (s *Service) Update(ctx context.Context, id UserID, params AdminUpdateParam
 		return User{}, err
 	}
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "user.updated", Actor: u.ID.String(), Target: u.ID.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "user.updated", Actor: u.ID.String(), Target: u.ID.String()}, nil)
 	}
 	return u, nil
 }
@@ -94,7 +94,7 @@ func (s *Service) Delete(ctx context.Context, id UserID) error {
 		return err
 	}
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "user.deleted", Actor: id.String(), Target: id.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "user.deleted", Actor: id.String(), Target: id.String()}, nil)
 	}
 	return nil
 }

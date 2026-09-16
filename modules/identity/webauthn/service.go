@@ -283,7 +283,7 @@ func (s *Service) consumeSession(ctx context.Context, id, kind string) (gowebaut
 // record emits an audit event through the adapter.
 func (s *Service) record(ctx context.Context, action, actor string) {
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: action, Actor: actor})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: action, Actor: actor}, nil)
 	}
 }
 

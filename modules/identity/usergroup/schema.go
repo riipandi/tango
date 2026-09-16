@@ -11,6 +11,7 @@ import (
 	"github.com/go-ozzo/ozzo-validation/v4"
 	"go.jetify.com/typeid"
 
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/user"
 )
 
@@ -63,6 +64,11 @@ type Store interface {
 	GetByID(ctx context.Context, id UserGroupID) (UserGroup, error)
 	Update(ctx context.Context, id UserGroupID, params UpdateParams) (UserGroup, error)
 	Delete(ctx context.Context, id UserGroupID) error
+
+	// WithTx runs fn inside a transaction for multi-statement
+	// domain writes that must commit atomically with their audit
+	// entries.
+	WithTx(ctx context.Context, fn func(datastore.Executor) error) error
 	List(ctx context.Context, params ListParams) ([]UserGroup, int, error)
 	SetMembers(ctx context.Context, id UserGroupID, memberIDs []user.UserID) error
 	MemberIDs(ctx context.Context, id UserGroupID) ([]user.UserID, error)
@@ -75,6 +81,10 @@ type Store interface {
 	// validity.
 	ReplaceAllowedClients(ctx context.Context, id UserGroupID, clientIDs []string) error
 	AllowedClientIDs(ctx context.Context, id UserGroupID) ([]string, error)
+
+	// ReplaceAllowedClientsTx runs the allowlist swap inside the
+	// caller's transaction so the audit entry commits with it.
+	ReplaceAllowedClientsTx(ctx context.Context, exec datastore.Executor, id UserGroupID, clientIDs []string) error
 }
 
 // Page is the store-level paging window: plain ints with no HTTP

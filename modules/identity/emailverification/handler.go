@@ -194,7 +194,7 @@ func (s *Service) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.recorder != nil {
-		s.recorder(r.Context(), identity.AuditEvent{Action: "email.verified", Actor: userID.String()})
+		s.recorder.Record(r.Context(), identity.AuditEvent{Action: "email.verified", Actor: userID.String()}, nil)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

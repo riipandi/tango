@@ -109,7 +109,7 @@ func (s *Service) SignUp(ctx context.Context, req SignUpRequest, isSetup bool) (
 		if isSetup {
 			action = "user.setup_completed"
 		}
-		s.recorder(ctx, identity.AuditEvent{Action: action, Actor: u.ID.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: action, Actor: u.ID.String()}, nil)
 	}
 	return &Result{User: u, Token: token}, nil
 }

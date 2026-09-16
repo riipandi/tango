@@ -48,7 +48,7 @@ func (s *Service) SetPassword(ctx context.Context, userID user.UserID, secret st
 	}
 
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "password.changed", Actor: userID.String(), Target: userID.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "password.changed", Actor: userID.String(), Target: userID.String()}, nil)
 	}
 	return nil
 }

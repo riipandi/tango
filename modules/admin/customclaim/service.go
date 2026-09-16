@@ -65,7 +65,7 @@ func (s *Service) create(ctx context.Context, params UpsertParams) (CustomClaim,
 		return CustomClaim{}, err
 	}
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "custom_claim.created", Actor: params.Key, Target: claim.ID.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "custom_claim.created", Actor: params.Key, Target: claim.ID.String()}, nil)
 	}
 	return claim, nil
 }
@@ -80,7 +80,7 @@ func (s *Service) UpdateValue(ctx context.Context, id CustomClaimID, value strin
 		return CustomClaim{}, err
 	}
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "custom_claim.updated", Actor: claim.Key, Target: claim.ID.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "custom_claim.updated", Actor: claim.Key, Target: claim.ID.String()}, nil)
 	}
 	return claim, nil
 }
@@ -91,7 +91,7 @@ func (s *Service) Delete(ctx context.Context, id CustomClaimID) error {
 		return err
 	}
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: "custom_claim.deleted", Target: id.String()})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: "custom_claim.deleted", Target: id.String()}, nil)
 	}
 	return nil
 }
@@ -154,7 +154,7 @@ func (s *Service) scopeParams(params []UpsertParams, scope func(UpsertParams) Up
 // record emits an audit event through the adapter.
 func (s *Service) record(ctx context.Context, action, target, detail string) {
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: action, Actor: detail, Target: target})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: action, Actor: detail, Target: target}, nil)
 	}
 }
 

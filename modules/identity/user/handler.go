@@ -250,8 +250,8 @@ func (s *Service) listUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	users, total, err := s.List(r.Context(), ListParams{
-		Query:            r.URL.Query().Get("query"),
-		Page: Page{Page: params.Page, Limit: params.Limit},
+		Query: r.URL.Query().Get("query"),
+		Page:  Page{Page: params.Page, Limit: params.Limit},
 	})
 	if err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")

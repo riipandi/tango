@@ -134,7 +134,7 @@ func (s *Service) Decide(ctx context.Context, code, decision string, principal m
 		action = "device_login.approved"
 	}
 	if s.recorder != nil {
-		s.recorder(ctx, identity.AuditEvent{Action: action, Actor: principal.UserID, Target: normalizeCode(code)})
+		s.recorder.Record(ctx, identity.AuditEvent{Action: action, Actor: principal.UserID, Target: normalizeCode(code)}, nil)
 	}
 	return nil
 }
@@ -176,7 +176,7 @@ func (s *Service) Exchange(ctx context.Context, requestID, deviceToken string) (
 				return user.User{}, "", issueErr
 			}
 			if s.recorder != nil {
-				s.recorder(ctx, identity.AuditEvent{Action: "user.remote_signed_in", Actor: uid.String(), Target: request.Code})
+				s.recorder.Record(ctx, identity.AuditEvent{Action: "user.remote_signed_in", Actor: uid.String(), Target: request.Code}, nil)
 			}
 
 			u, userErr := s.users.GetByID(ctx, uid)
