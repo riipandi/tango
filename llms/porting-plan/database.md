@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-09-15
+status: in-progress
+updated: 2026-09-16
 ---
 
 # PostgreSQL Database Design
@@ -39,6 +39,22 @@ federation  OIDC clients, redirect URIs, authorization codes, tokens, keys, SCIM
 admin       app settings, API keys, APIs, permissions, claims, audit logs
 webhook     endpoints, subscriptions, outbox events, deliveries, delivery attempts
 ```
+
+### Current table inventory
+
+Live tables map to one owner each; obsolete tables are removal targets for the cleanup migration.
+
+| Owner | Live tables |
+| --- | --- |
+| identity | users, user_passwords, user_groups, user_groups_users, sessions, auth_tokens, signup_tokens, signup_tokens_user_groups, refresh_tokens, device_login_requests, webauthn_credentials, webauthn_sessions, deleted_records (trigger archive) |
+| federation | oidc_clients, oidc_clients_allowed_user_groups, oidc_client_api_grants, oidc_client_api_grant_permissions, user_authorized_oidc_clients, oidc_authorization_codes, oidc_refresh_tokens, oauth2_sessions, oauth2_jtis, interaction_sessions, jwks, scim_service_providers |
+| admin | app_config, audit_logs, api_keys, apis, api_permissions, custom_claims |
+| webhook | webhook_events, webhook_logs |
+| infrastructure | queue_tasks, queue_tasks_completed, rate_limits (via fn_check_rate_limit) |
+
+Obsolete (zero live references): app_settings (duplicate legacy shape), user_phones,
+invitations, mfa_keys, oauth_connections, oidc_device_codes, file_stores. Session drift:
+`totp_pending`, `oauth_groups`, and `oauth_name` columns on sessions have no live readers.
 
 Cross-module references use foreign keys to UUIDs and consumer-side interfaces in Go. A table must
 not be read or written directly by a non-owner module.
