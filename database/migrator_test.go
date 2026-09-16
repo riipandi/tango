@@ -30,7 +30,7 @@ func TestMigrationsLifecycle(t *testing.T) {
 
 	applied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, applied, 18)
+	require.Len(t, applied, 19)
 	assert.Equal(t, int64(1), applied[0].Version)
 	assert.Contains(t, applied[0].Path, "initialize_schema")
 	assert.Equal(t, int64(4), applied[3].Version)
@@ -54,6 +54,8 @@ func TestMigrationsLifecycle(t *testing.T) {
 	assert.Contains(t, applied[16].Path, "client_metadata_url")
 	assert.Equal(t, int64(32), applied[17].Version)
 	assert.Contains(t, applied[17].Path, "drop_ldap_columns")
+	assert.Equal(t, int64(33), applied[18].Version)
+	assert.Contains(t, applied[18].Path, "cleanup_obsolete_schema")
 
 	db, err := sql.Open("pgx", pg.DSN)
 	require.NoError(t, err)
@@ -78,18 +80,20 @@ func TestMigrationsLifecycle(t *testing.T) {
 	// All tables land in the public schema, asserted by name so test litter cannot skew the count.
 	for schema, names := range map[string][]string{
 		"public": {
-			"deleted_records", "app_settings",
+			"deleted_records", "app_config",
 			"users", "user_passwords", "user_groups", "user_groups_users",
-			"user_phones", "sessions", "auth_tokens", "signup_tokens",
-			"signup_tokens_user_groups", "refresh_tokens", "audit_logs",
-			"file_stores", "webhook_events", "webhook_logs", "jwks",
-			"invitations", "mfa_keys", "webauthn_credentials",
-			"webauthn_sessions", "oauth_connections", "oidc_clients",
+			"sessions", "auth_tokens", "signup_tokens",
+			"signup_tokens_user_groups", "audit_logs",
+			"webhook_events", "webhook_logs", "jwks",
+			"webauthn_credentials",
+			"webauthn_sessions", "oidc_clients",
 			"custom_claims", "oidc_authorization_codes",
 			"user_authorized_oidc_clients", "oidc_clients_allowed_user_groups",
-			"oidc_refresh_tokens", "oidc_device_codes", "scim_service_providers",
+			"oidc_refresh_tokens", "scim_service_providers",
 			"api_keys", "rate_limits", "queue_tasks", "queue_tasks_completed",
 			"oauth2_sessions", "oauth2_jtis", "interaction_sessions",
+			"device_login_requests", "apis", "api_permissions",
+			"user_groups_allowed_oidc_clients",
 		},
 	} {
 		var found int
@@ -116,24 +120,24 @@ func TestMigrationsLifecycle(t *testing.T) {
 	target, err := MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
-	assert.Equal(t, int64(32), target.Version)
+	assert.Equal(t, int64(33), target.Version)
 	assert.Equal(t, "applied", target.State)
 
 	// Roll back the most recent migration, verify the state flipped to pending, then re-apply.
 	outcome, err := MigrateDown(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, outcome)
-	assert.Equal(t, int64(32), outcome.Version)
+	assert.Equal(t, int64(33), outcome.Version)
 
 	target, err = MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
-	assert.Equal(t, int64(31), target.Version, "next down target follows the rollback")
+	assert.Equal(t, int64(32), target.Version, "next down target follows the rollback")
 
 	statuses, err := MigrateStatus(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, statuses, 18)
-	assert.Equal(t, "pending", statuses[17].State)
+	require.Len(t, statuses, 19)
+	assert.Equal(t, "pending", statuses[18].State)
 
 	reapplied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)

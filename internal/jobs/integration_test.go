@@ -206,7 +206,7 @@ func TestCleanupTokensRemovesExpiredRows(t *testing.T) {
 		`INSERT INTO public.signup_tokens (token_hash, expires_at) VALUES ('jobs-expired-signup', $1)`, expired)
 	require.NoError(t, err)
 	_, err = db.Exec(ctx,
-		`INSERT INTO public.sessions (id, user_id, provider, token_hash, expires_at) VALUES ('jobs-expired-session', $1, 'test', 'jobs-session-hash', $2)`,
+		`INSERT INTO public.sessions (id, user_id, provider, token_hash, expires_at) VALUES (uuidv7(), $1, 'test', 'jobs-session-hash', $2)`,
 		userID.UUID(), expired)
 	require.NoError(t, err)
 	_, err = db.Exec(ctx,
@@ -227,7 +227,7 @@ func TestCleanupTokensRemovesExpiredRows(t *testing.T) {
 		{"SELECT count(*) FROM public.auth_tokens WHERE token_hash = 'jobs-expired-auth'", nil, 0},
 		{"SELECT count(*) FROM public.auth_tokens WHERE token_hash = 'jobs-live-auth'", nil, 1},
 		{"SELECT count(*) FROM public.signup_tokens WHERE token_hash = 'jobs-expired-signup'", nil, 0},
-		{"SELECT count(*) FROM public.sessions WHERE id = 'jobs-expired-session'", nil, 0},
+		{"SELECT count(*) FROM public.sessions WHERE token_hash = 'jobs-session-hash'", nil, 0},
 		{"SELECT count(*) FROM public.device_login_requests WHERE code = 'JOBS1234'", nil, 0},
 	} {
 		var got int
@@ -243,7 +243,7 @@ func TestCleanupTokensAlsoDropsRevokedSessions(t *testing.T) {
 
 	_, err := db.Exec(ctx,
 		`INSERT INTO public.sessions (id, user_id, provider, token_hash, expires_at, revoked_at)
-		 VALUES ('jobs-revoked-session', $1, 'test', 'jobs-revoked-hash', $2, CURRENT_TIMESTAMP)`,
+		 VALUES (uuidv7(), $1, 'test', 'jobs-revoked-hash', $2, CURRENT_TIMESTAMP)`,
 		userID.UUID(), time.Now().UTC().Add(time.Hour))
 	require.NoError(t, err)
 
@@ -251,7 +251,7 @@ func TestCleanupTokensAlsoDropsRevokedSessions(t *testing.T) {
 
 	var remaining int
 	require.NoError(t, db.QueryRow(ctx,
-		"SELECT count(*) FROM public.sessions WHERE id = 'jobs-revoked-session'").Scan(&remaining))
+		"SELECT count(*) FROM public.sessions WHERE token_hash = 'jobs-revoked-hash'").Scan(&remaining))
 	assert.Zero(t, remaining, "a revoked session goes with the expired ones")
 }
 

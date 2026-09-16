@@ -7,8 +7,10 @@ import (
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
 )
 
@@ -30,11 +32,31 @@ func NewPostgresStore(exec datastore.Executor) *PostgresStore {
 
 // Create inserts a session; ID, TokenHash, and ExpiresAt are preset
 // by the service.
+// sessionUUID converts the TypeID form to the bare UUID the column
+// stores; the ID must already be a valid session TypeID.
+func sessionUUID(id string) string {
+	parsed, err := identity.ParseID[SessionID](id)
+	if err != nil {
+		return id
+	}
+	return parsed.UUID()
+}
+
+// sessionTypeID converts the stored UUID back to the TypeID form;
+// unparseable values pass through unchanged.
+func sessionTypeID(id string) string {
+	parsed, err := typeid.FromUUID[SessionID](id)
+	if err != nil {
+		return id
+	}
+	return parsed.String()
+}
+
 func (s *PostgresStore) Create(ctx context.Context, se *Session) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(sessionsTable)
 	ib.Cols("id", "user_id", "provider", "token_hash", "user_agent", "device_name", "ip_address", "expires_at")
-	ib.Values(se.ID, se.UserID.UUIDBytes(), se.Provider, se.TokenHash,
+	ib.Values(sessionUUID(se.ID), se.UserID.UUIDBytes(), se.Provider, se.TokenHash,
 		textOrNull(datastore.Deref(se.UserAgent)), textOrNull(datastore.Deref(se.DeviceName)), textOrNull(datastore.Deref(se.IPAddress)), se.ExpiresAt)
 	ib.Returning("created_at")
 
@@ -99,6 +121,7 @@ func (s *PostgresStore) ValidByTokenHash(ctx context.Context, tokenHash string) 
 		return Session{}, user.User{}, mapErr(err)
 	}
 
+	se.ID = sessionTypeID(se.ID)
 	se.UserID = user.MustID(uid)
 	se.UserAgent = datastore.TextPtr(userAgent)
 	se.DeviceName = datastore.TextPtr(deviceName)
@@ -161,7 +184,7 @@ func (s *PostgresStore) RevokeForUser(ctx context.Context, userID user.UserID, s
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(sessionsTable)
 	ub.Set(ub.Assign("revoked_at", time.Now().UTC()))
-	ub.Where(ub.E("id", sessionID), ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"))
+	ub.Where(ub.E("id", sessionUUID(sessionID)), ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"))
 
 	query, args := ub.Build()
 	tag, err := s.exec.Exec(ctx, query, args...)
@@ -184,7 +207,7 @@ func (s *PostgresStore) RevokeAllForUser(ctx context.Context, userID user.UserID
 		ub.Where(ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"))
 	} else {
 		ub.Where(ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"),
-			ub.NE("id", exceptID))
+			ub.NE("id", sessionUUID(exceptID)))
 	}
 
 	query, args := ub.Build()
@@ -228,6 +251,7 @@ func (s *PostgresStore) ListActiveForUser(ctx context.Context, userID user.UserI
 			&deviceName, &ipAddress, &createdAt, &expiresAt, &refreshedAt, &revokedAt); scanErr != nil {
 			continue
 		}
+		se.ID = sessionTypeID(se.ID)
 		se.UserID = user.MustID(uid)
 		se.UserAgent = datastore.TextPtr(userAgent)
 		se.DeviceName = datastore.TextPtr(deviceName)
@@ -253,3 +277,4 @@ func textOrNull(s string) any {
 	}
 	return s
 }
+
