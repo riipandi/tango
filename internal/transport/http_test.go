@@ -67,6 +67,7 @@ func newTestServer(t *testing.T, cfg *config.Config, guard kernel.Guard) *HTTPSe
 		nil, // api-access
 		nil, // api-keys
 		nil, // password recovery
+		nil, // TOTP MFA
 	)
 	return NewHTTPServer(RouteSet{
 		MountAPI: func(r chi.Router) {

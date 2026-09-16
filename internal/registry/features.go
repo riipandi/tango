@@ -229,6 +229,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 			recorder,
 			recovery.WithMail(jobsReg, deps.Config.Public.BaseURL),
 		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
+		totp.NewFeature(totpService).WithCookie(deps.Config.App.Mode != "development"),
 	)
 
 	return module, groups, sessions, audit, apiaccess.NewPostgresStore(deps.DB), blobStore, nil

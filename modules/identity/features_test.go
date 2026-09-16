@@ -48,9 +48,10 @@ func newTestModule(core APIFeature, optional ...APIFeature) *Module {
 		stubAPIFeature{stubFeature{name: "apiaccess"}},
 		stubAPIFeature{stubFeature{name: "apikeys"}},
 		stubAPIFeature{stubFeature{name: "recovery"}},
+		stubAPIFeature{stubFeature{name: "totp"}},
 	}
 	all := append(append(mandatory, optionalSlots...), tail...)
-	return New(all[0], all[1], all[2], all[3], all[4], all[5], all[6], all[7], all[8], all[9], all[10], all[11], all[12])
+	return New(all[0], all[1], all[2], all[3], all[4], all[5], all[6], all[7], all[8], all[9], all[10], all[11], all[12], all[13])
 }
 
 func TestFeatureRoutesMounted(t *testing.T) {

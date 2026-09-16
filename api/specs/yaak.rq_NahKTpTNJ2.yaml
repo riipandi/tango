@@ -1,0 +1,41 @@
+type: http_request
+model: http_request
+id: rq_NahKTpTNJ2
+createdAt: 2026-09-16T20:01:31.374735
+updatedAt: 2026-09-16T20:01:31.374736
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_t3sGoeSaUF
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "password": "REPLACE_CURRENT_PASSWORD"
+    }
+bodyType: application/json
+description: Disable TOTP — requires the current password; drops all MFA state
+headers: []
+method: DELETE
+name: Disable TOTP
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/mfa/totp
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

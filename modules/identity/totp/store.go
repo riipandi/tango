@@ -58,6 +58,11 @@ type Store interface {
 
 	// PutPending replaces the single pending-auth row.
 	PutPending(ctx context.Context, userID user.UserID, tokenHash string, ttl time.Duration) error
+	// PeekPending resolves the bridge owner without consuming it;
+	// verification must succeed before the bridge is deleted.
+	PeekPending(ctx context.Context, tokenHash string) (user.UserID, error)
+	// DeletePending removes the bridge by its token hash.
+	DeletePending(ctx context.Context, tokenHash string) error
 	ConsumePending(ctx context.Context, tokenHash string) (user.UserID, error)
 	DeletePendingForUser(ctx context.Context, userID user.UserID) error
 }
@@ -261,6 +266,39 @@ func (s *PostgresStore) PutPending(ctx context.Context, userID user.UserID, toke
 	query, args := ib.Build()
 	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
 		return fmt.Errorf("totp store: put pending: %w", err)
+	}
+	return nil
+}
+
+// PeekPending resolves the bridge owner without consuming it; the
+// bridge only dies after a successful verification.
+func (s *PostgresStore) PeekPending(ctx context.Context, tokenHash string) (user.UserID, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("user_id")
+	sb.From(pendingTable)
+	sb.Where(sb.And(sb.E("token_hash", tokenHash), sb.GT("expires_at", time.Now().UTC())))
+
+	query, args := sb.Build()
+	var userUUID string
+	err := s.exec.QueryRow(ctx, query, args...).Scan(&userUUID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return user.UserID{}, ErrNoEnrollment
+		}
+		return user.UserID{}, fmt.Errorf("totp store: peek pending: %w", err)
+	}
+	return user.MustID(userUUID), nil
+}
+
+// DeletePending removes the bridge by its token hash.
+func (s *PostgresStore) DeletePending(ctx context.Context, tokenHash string) error {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(pendingTable)
+	db.Where(db.E("token_hash", tokenHash))
+
+	query, args := db.Build()
+	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("totp store: delete pending: %w", err)
 	}
 	return nil
 }

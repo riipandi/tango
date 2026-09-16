@@ -139,16 +139,15 @@ func (s *Service) Confirm(ctx context.Context, u user.User, code string) ([]stri
 		return nil, ErrAlreadyConfirmed
 	}
 
-	accepted, verifyErr := s.verifySeed(ctx, enrollment, code)
-	if verifyErr != nil {
+	if _, verifyErr := s.verifySeed(ctx, enrollment, code, false); verifyErr != nil {
 		return nil, verifyErr
 	}
 	if err := s.store.MarkConfirmed(ctx, u.ID, s.now().UTC()); err != nil {
 		return nil, err
 	}
-	if err := s.store.UpdateLastUsedStep(ctx, u.ID, accepted); err != nil {
-		return nil, err
-	}
+	// The confirmation is not an authentication: the replay
+	// watermark stays untouched so the very same step can still
+	// verify the pending sign-in that follows.
 
 	codes, codesErr := s.replaceRecoveryCodes(ctx, u.ID)
 	if codesErr != nil {
@@ -173,10 +172,11 @@ func (s *Service) Status(ctx context.Context, u user.User) (confirmed bool, rema
 	return enrollment.Confirmed(), remaining, nil
 }
 
-// VerifyPending consumes the pending-auth bridge, checks the TOTP
-// code (or burns a recovery code), and issues the only full session.
+// VerifyPending checks the pending bridge, verifies the TOTP code
+// (or burns a recovery code), and issues the only full session. A
+// failed attempt leaves the bridge alive: only success consumes it.
 func (s *Service) VerifyPending(ctx context.Context, pendingToken, code string) (user.User, string, error) {
-	userID, err := s.store.ConsumePending(ctx, hashToken(pendingToken))
+	userID, err := s.store.PeekPending(ctx, hashToken(pendingToken))
 	if err != nil {
 		return user.User{}, "", ErrNoEnrollment
 	}
@@ -188,12 +188,18 @@ func (s *Service) VerifyPending(ctx context.Context, pendingToken, code string) 
 
 	// A numeric code verifies against the seed; a recovery code
 	// burns a stored hash. Wrong answers are indistinguishable.
-	if _, verifyErr := s.verifySeed(ctx, enrollment, code); verifyErr == nil {
+	if _, verifyErr := s.verifySeed(ctx, enrollment, code, true); verifyErr == nil {
+		if delErr := s.store.DeletePending(ctx, hashToken(pendingToken)); delErr != nil {
+			return user.User{}, "", delErr
+		}
 		return s.complete(ctx, userID)
 	}
 	spent, consumeErr := s.store.ConsumeRecoveryCode(ctx, userID, recoveryHash(code))
 	if consumeErr != nil || !spent {
 		return user.User{}, "", ErrInvalidCode
+	}
+	if delErr := s.store.DeletePending(ctx, hashToken(pendingToken)); delErr != nil {
+		return user.User{}, "", delErr
 	}
 	return s.complete(ctx, userID)
 }
@@ -205,7 +211,7 @@ func (s *Service) RotateRecoveryCodes(ctx context.Context, u user.User, code str
 	if err != nil || !enrollment.Confirmed() {
 		return nil, ErrNoEnrollment
 	}
-	if _, verifyErr := s.verifySeed(ctx, enrollment, code); verifyErr != nil {
+	if _, verifyErr := s.verifySeed(ctx, enrollment, code, true); verifyErr != nil {
 		return nil, verifyErr
 	}
 	codes, codesErr := s.replaceRecoveryCodes(ctx, u.ID)
@@ -287,10 +293,11 @@ func (s *Service) complete(ctx context.Context, userID user.UserID) (user.User, 
 	return u, token, nil
 }
 
-// verifySeed checks one TOTP code against the sealed seed and pins
-// the replay watermark on success. Confirmed-ness is the caller's
-// contract (Confirm deliberately runs on an unconfirmed row).
-func (s *Service) verifySeed(ctx context.Context, enrollment Enrollment, code string) (int64, error) {
+// verifySeed checks one TOTP code against the sealed seed. When
+// pinWatermark is set it advances the replay watermark; Confirm runs
+// without it so the very same step can still verify the pending
+// sign-in that follows.
+func (s *Service) verifySeed(ctx context.Context, enrollment Enrollment, code string, pinWatermark bool) (int64, error) {
 	seed, err := s.cipher.Decrypt(enrollment.SecretEnc)
 	if err != nil {
 		return 0, fmt.Errorf("totp: open seed: %w", err)
@@ -305,8 +312,10 @@ func (s *Service) verifySeed(ctx context.Context, enrollment Enrollment, code st
 	if err != nil {
 		return 0, err
 	}
-	if err := s.store.UpdateLastUsedStep(ctx, enrollment.UserID, accepted); err != nil {
-		return 0, err
+	if pinWatermark {
+		if err := s.store.UpdateLastUsedStep(ctx, enrollment.UserID, accepted); err != nil {
+			return 0, err
+		}
 	}
 	return accepted, nil
 }

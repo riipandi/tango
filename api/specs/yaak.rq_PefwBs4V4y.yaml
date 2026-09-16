@@ -1,0 +1,41 @@
+type: http_request
+model: http_request
+id: rq_PefwBs4V4y
+createdAt: 2026-09-16T19:58:37.643889
+updatedAt: 2026-09-16T19:58:37.643890
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_t3sGoeSaUF
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "code": "123456"
+    }
+bodyType: application/json
+description: Complete a pending sign-in with a TOTP or recovery code — pending cookie required; issues the full session
+headers: []
+method: POST
+name: Verify MFA pending sign-in
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/mfa/totp/verify
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto
