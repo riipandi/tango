@@ -270,6 +270,18 @@ type PendingDelivery struct {
 	Body  []byte
 }
 
+// AttemptRecord is one webhook_delivery_attempts row as exposed to
+// the listing: the outcome of a single delivery try.
+type AttemptRecord struct {
+	Number      int            `json:"attempt_number"`
+	HTTPStatus  *int           `json:"response_status,omitzero"`
+	Error       *string        `json:"error,omitzero"`
+	DurationMs  *int           `json:"duration_ms,omitzero"`
+	Response    map[string]any `json:"response,omitzero"`
+	Succeeded   bool           `json:"succeeded"`
+	CreatedAt   time.Time      `json:"created_at"`
+}
+
 // AttemptResult carries one delivery outcome back into the delivery
 // row and its attempt record: what was sent (Request) and what came
 // back (Response).
@@ -307,6 +319,9 @@ type Store interface {
 	// RecordAttempt appends one attempt row and folds its outcome
 	// into the delivery.
 	RecordAttempt(ctx context.Context, id DeliveryID, result AttemptResult) error
+	// ListAttempts returns the attempt history of one delivery in
+	// attempt order.
+	ListAttempts(ctx context.Context, id DeliveryID) ([]AttemptRecord, error)
 	ListDeliveries(ctx context.Context, params ListParams, webhookID *WebhookID) ([]Delivery, int, error)
 	// PruneDeliveries deletes deliveries recorded before the cutoff.
 	PruneDeliveries(ctx context.Context, before time.Time) (int64, error)

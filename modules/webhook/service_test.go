@@ -89,6 +89,9 @@ type captureSender struct {
 	calls   int
 	gotBody []byte
 	gotReq  OutboundDelivery
+	// latency simulates receiver latency so duration measurements
+	// have a non-zero floor.
+	latency time.Duration
 }
 
 type sendResult struct {
@@ -104,6 +107,10 @@ func (s *captureSender) Send(_ context.Context, delivery OutboundDelivery) (int,
 	s.calls++
 	s.gotReq = delivery
 	s.gotBody = delivery.Body
+
+	if s.latency > 0 {
+		time.Sleep(s.latency)
+	}
 
 	index := min(s.calls-1, len(s.script)-1)
 	result := s.script[index]
@@ -514,4 +521,148 @@ func TestRejectOversizedPayloadAtEmit(t *testing.T) {
 	_, total, err := stack.Store.ListDeliveries(ctx, ListParams{}, nil)
 	require.NoError(t, err)
 	assert.Zero(t, total, "an oversized event must not leave an outbox row")
+}
+
+// TestRetrySignsTheSameImmutableBytes proves the retry contract: the
+// committed body bytes never change between attempts, so a receiver
+// that verified attempt one can verify attempt two against the same
+// signature.
+func TestRetrySignsTheSameImmutableBytes(t *testing.T) {
+	sender := &captureSender{script: []sendResult{
+		{status: http.StatusInternalServerError, body: `{"error":"boom"}`},
+		{status: http.StatusInternalServerError, body: `{"error":"boom"}`},
+		{status: http.StatusOK, body: `{"ok":true}`},
+	}}
+	stack := newTestStack(t, sender)
+	ctx := t.Context()
+
+	hook := stack.create(t, "stable-bytes", "https://example.test/hook", AllEvents)
+	deliveryID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{
+		"event":   "user.created",
+		"user_id": "user_01m2",
+	})
+	require.NoError(t, err)
+
+	bodies := make(map[string]struct{})
+	for range 3 {
+		// The first two attempts fail by script; the third succeeds.
+		_ = stack.Service.Deliver(ctx, WebhookDeliveryTask{
+			DeliveryID: deliveryID.String(),
+			WebhookID:  hook.ID.String(),
+		})
+		bodies[string(sender.last().Body)] = struct{}{}
+	}
+	require.Len(t, bodies, 1, "every retry must carry the identical body bytes")
+
+	stored, err := stack.Store.DeliveryForSend(ctx, deliveryID)
+	require.NoError(t, err)
+	assert.Equal(t, nextKey(bodies), string(stored.Body), "the signed bytes are the committed bytes")
+
+	// The final success wins the delivery state and the attempt
+	// history stays complete.
+	recorded := stack.onlyDelivery(t, hook.ID)
+	assert.True(t, recorded.Succeeded)
+	assert.Equal(t, 3, recorded.Attempts)
+	require.NotNil(t, recorded.DeliveredAt)
+}
+
+// nextKey returns the single map key; the map exists to assert
+// uniqueness, not to iterate.
+func nextKey(set map[string]struct{}) string {
+	for key := range set {
+		return key
+	}
+	return ""
+}
+
+// TestDuplicateAttemptIsIdempotent drives the same delivery twice
+// after success: the state stays succeeded, the attempt count grows,
+// and no duplicate delivery row appears.
+func TestDuplicateAttemptIsIdempotent(t *testing.T) {
+	sender := okSender()
+	stack := newTestStack(t, sender)
+	ctx := t.Context()
+
+	hook := stack.create(t, "idempotent", "https://example.test/hook", AllEvents)
+	deliveryID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
+	require.NoError(t, err)
+
+	task := WebhookDeliveryTask{DeliveryID: deliveryID.String(), WebhookID: hook.ID.String()}
+	require.NoError(t, stack.Service.Deliver(ctx, task))
+	require.NoError(t, stack.Service.Deliver(ctx, task))
+
+	recorded := stack.onlyDelivery(t, hook.ID)
+	assert.True(t, recorded.Succeeded)
+	assert.Equal(t, 2, recorded.Attempts)
+	require.NotNil(t, recorded.DeliveredAt)
+
+	// delivered_at keeps the FIRST success; the second attempt does
+	// not move it.
+	first := *recorded.DeliveredAt
+	require.NoError(t, stack.Service.Deliver(ctx, task))
+	again := stack.onlyDelivery(t, hook.ID)
+	require.NotNil(t, again.DeliveredAt)
+	assert.Equal(t, first.Unix(), again.DeliveredAt.Unix())
+}
+
+// TestTransportErrorIsRetriedAndRecorded covers the sender-failure
+// path: the error is recorded per attempt, the delivery stays failed,
+// and the receiver is retried until the budget is exhausted.
+func TestTransportErrorIsRetriedAndRecorded(t *testing.T) {
+	sender := &captureSender{script: []sendResult{{err: context.DeadlineExceeded}}}
+	stack := newTestStack(t, sender)
+	ctx := t.Context()
+
+	hook := stack.create(t, "timeout", "https://example.test/hook", AllEvents)
+	deliveryID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
+	require.NoError(t, err)
+
+	for range WebhookMaxAttempts {
+		assert.Error(t, stack.Service.Deliver(ctx, WebhookDeliveryTask{
+			DeliveryID: deliveryID.String(),
+			WebhookID:  hook.ID.String(),
+		}))
+	}
+
+	assert.Equal(t, WebhookMaxAttempts, sender.count(), "every retry reaches the receiver")
+
+	recorded := stack.onlyDelivery(t, hook.ID)
+	assert.False(t, recorded.Succeeded)
+	assert.Equal(t, WebhookMaxAttempts, recorded.Attempts)
+	require.NotNil(t, recorded.Error)
+	assert.Contains(t, *recorded.Error, "deadline")
+	assert.Nil(t, recorded.HTTPStatus, "a transport failure carries no response status")
+}
+
+// TestAttemptRowsRecordEveryOutcome checks the per-attempt history:
+// one row per attempt with the response status, the error, and a
+// duration, in attempt order.
+func TestAttemptRowsRecordEveryOutcome(t *testing.T) {
+	sender := &captureSender{script: []sendResult{
+		{status: http.StatusInternalServerError, body: `{"error":"boom"}`},
+		{status: http.StatusOK, body: `{"ok":true}`},
+	}, latency: 2 * time.Millisecond}
+	stack := newTestStack(t, sender)
+	ctx := t.Context()
+
+	hook := stack.create(t, "attempt-history", "https://example.test/hook", AllEvents)
+	deliveryID, err := stack.Service.DeliverTo(ctx, hook.ID, "user.created", map[string]any{"event": "user.created"})
+	require.NoError(t, err)
+
+	task := WebhookDeliveryTask{DeliveryID: deliveryID.String(), WebhookID: hook.ID.String()}
+	assert.Error(t, stack.Service.Deliver(ctx, task))
+	require.NoError(t, stack.Service.Deliver(ctx, task))
+
+	attempts, err := stack.Store.ListAttempts(ctx, deliveryID)
+	require.NoError(t, err)
+	require.Len(t, attempts, 2)
+	assert.Equal(t, 1, attempts[0].Number)
+	assert.False(t, attempts[0].Succeeded)
+	require.NotNil(t, attempts[0].HTTPStatus)
+	assert.Equal(t, http.StatusInternalServerError, *attempts[0].HTTPStatus)
+	assert.Contains(t, attempts[0].Response["body"], "boom")
+	assert.Equal(t, 2, attempts[1].Number)
+	assert.True(t, attempts[1].Succeeded)
+	require.NotNil(t, attempts[1].DurationMs)
+	assert.Positive(t, *attempts[1].DurationMs, "the attempt records its wall time")
 }

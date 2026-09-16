@@ -330,6 +330,54 @@ func (s *PostgresStore) RecordAttempt(ctx context.Context, id DeliveryID, result
 	return nil
 }
 
+// ListAttempts returns the attempt history of one delivery in
+// attempt order.
+func (s *PostgresStore) ListAttempts(ctx context.Context, id DeliveryID) ([]AttemptRecord, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select(
+		"attempt_number", "response_status", "error", "duration_ms",
+		"response", "created_at",
+	)
+	sb.From(attemptsTable)
+	sb.Where(sb.E("delivery_id", id.UUID()))
+	sb.OrderBy("attempt_number ASC")
+
+	query, args := sb.Build()
+	rows, err := s.exec.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("webhook store: list attempts: %w", err)
+	}
+	defer rows.Close()
+
+	out := []AttemptRecord{}
+	for rows.Next() {
+		var (
+			number    int
+			status    pgtype.Int4
+			errorText *string
+			duration  pgtype.Int4
+			response  map[string]any
+			created   pgtype.Timestamptz
+		)
+		if scanErr := rows.Scan(&number, &status, &errorText, &duration, &response, &created); scanErr != nil {
+			return nil, fmt.Errorf("webhook store: scan attempt: %w", scanErr)
+		}
+		record := AttemptRecord{Number: number, Error: errorText, Response: response, CreatedAt: created.Time}
+		if status.Valid {
+			value := int(status.Int32)
+			record.HTTPStatus = &value
+		}
+		if duration.Valid {
+			value := int(duration.Int32)
+			record.DurationMs = &value
+		}
+		record.Succeeded = record.Error == nil && record.HTTPStatus != nil &&
+			*record.HTTPStatus >= 200 && *record.HTTPStatus < 300
+		out = append(out, record)
+	}
+	return out, rows.Err()
+}
+
 // DeliveryForSend loads the immutable delivery bytes and event name
 // for one attempt. The body is returned exactly as committed.
 func (s *PostgresStore) DeliveryForSend(ctx context.Context, id DeliveryID) (PendingDelivery, error) {

@@ -301,9 +301,11 @@ func (s *Service) Deliver(ctx context.Context, task WebhookDeliveryTask) error {
 		return s.finish(ctx, deliveryID, AttemptResult{Err: err})
 	}
 
-	started := s.now()
+	// The duration uses the real clock: an injected signing clock may
+	// be pinned, which would zero every measured duration.
+	started := time.Now()
 	status, body, sendErr := s.send.Send(ctx, outbound)
-	duration := s.now().Sub(started)
+	duration := time.Since(started)
 
 	result := AttemptResult{
 		HTTPStatus: status,
