@@ -20,6 +20,11 @@ match the upstream endpoint contract.
 
 ## Additions beyond upstream
 
+- **Password authentication surface** — upstream signs users in with passkeys only; tango adds
+  `/api/auth/*` (sign-in, sign-out, session inspection, forgot/reset password) and the
+  self-service account endpoints. The full contract lives in the endpoint reference
+  ("Authentication (tango-only)"): generic enumeration-safe failures, SHA-256 hashed single-use
+  reset tokens (15-minute TTL), session invalidation on reset, and the tight auth rate budget.
 - **`/api/healthz`** — an envelope-form health probe inside the API group for deploy tooling
   that cannot reach the root router; the upstream-parity `GET /healthz` (204, no body) stays
   mounted at the root.

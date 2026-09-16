@@ -10,12 +10,33 @@ Tango-only extensions (not in the upstream spec) and all structural deviations (
 pagination, snake_case) are documented in `llms/tango-deviations.md` — read it before porting
 upstream handlers.
 
+## Authentication (tango-only)
+
+Password authentication is a tango-only surface: upstream Pocket ID signs users in with passkeys
+only. Contracts below define the full password lifecycle.
+
+| Method | Endpoint                        | Summary / Yaak Title        | Status | Evidence |
+| ------ | ------------------------------- | --------------------------- | ------ | -------- |
+| POST   | `/api/auth/sign-in`             | Sign in with password       | done — indistinguishable failures for unknown identity vs wrong secret; disabled accounts fail closed | `modules/identity/session.TestSignInSessionSignOutRoundTrip`, `modules/identity/session.TestSignInRejectsBadCredentials` |
+| POST   | `/api/auth/sign-out`            | Sign out                    | done — revokes the presented session only | `modules/identity/session.TestSignInSessionSignOutRoundTrip` |
+| GET    | `/api/auth/session`             | Inspect current session     | done   | `modules/identity/session.TestSignInSessionSignOutRoundTrip` |
+| PUT    | `/api/account/password`         | Change own password         | done — current secret required; other sessions revoked | `modules/identity/account.TestChangePasswordRevokesOtherSessions` |
+| GET    | `/api/account/sessions`         | List own sessions           | done   | `modules/identity/account.TestSessionListAndRevoke` |
+| DELETE | `/api/account/sessions/{id}`    | Revoke one own session      | done   | `modules/identity/account.TestSessionListAndRevoke` |
+| POST   | `/api/auth/forgot-password`     | Request a password reset    | planned — anonymous; always 204; queues recovery email | — |
+| POST   | `/api/auth/reset-password`      | Reset with a reset token    | planned — hashed single-use token; revokes sessions; rotates cookies | — |
+
+Shared rules: both endpoints ride the tight auth rate budget; recovery responses never reveal
+whether the address exists; reset tokens are SHA-256 hashed with purpose-prefixed keys and
+expire in 15 minutes; a completed reset revokes every sign-in session of the account and issues
+a fresh session for the requester; audit events cover sign-in, sign-out, password changes, and
+reset requests/completions without logging secrets.
+
 ## API Keys
 
 | Method | Endpoint                   | Summary / Yaak Title | Status | Evidence |
 | ------ | -------------------------- | -------------------- | ------ | -------- |
-| GET    | `/api/api-keys`            | List API keys        | done   | `modules/admin/apikey.TestKeyPagination` |
-| POST   | `/api/api-keys`            | Create API key       | done — session auth only, API keys cannot create | `modules/admin/apikey.TestKeyRoutesAreSessionGuarded`, `modules/admin/apikey.TestKeyLifecycle` |
+| GET    | `/api/api-keys`            | List API keys        | done   | `modules/admin/apikey.TestKeyPagination` || POST   | `/api/api-keys`            | Create API key       | done — session auth only, API keys cannot create | `modules/admin/apikey.TestKeyRoutesAreSessionGuarded`, `modules/admin/apikey.TestKeyLifecycle` |
 | DELETE | `/api/api-keys/{id}`       | Revoke API key       | done   | `modules/admin/apikey.TestKeyLifecycle` |
 | POST   | `/api/api-keys/{id}/renew` | Renew API key        | done — session auth only, API keys cannot renew | `modules/admin/apikey.TestKeyRoutesAreSessionGuarded`, `modules/admin/apikey.TestKeyLifecycle` |
 
