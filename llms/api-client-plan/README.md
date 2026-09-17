@@ -42,7 +42,7 @@ Phase 1 (shipped, commit `734da80`): core client + `auth` (incl. `mfa`, `webauth
 
 Phase 2 (shipped): every remaining SPA/admin namespace plus auth handling —
 
-- `oidcClients` — client CRUD, secrets, logo, allowed groups, meta, preview, refresh
+- `oidcClients` — client CRUD, secrets, logo (`logoUrl`), allowed groups, meta, preview, refresh
 - `consent` — my authorized clients + revoke, accessible clients, admin views (me + by user + all)
 - `scim` — provider CRUD, sync, client lookup
 - `apis` + `apiAccess` — API resources, permissions, client grants, CIMD toggle, client-centric views
@@ -51,14 +51,30 @@ Phase 2 (shipped): every remaining SPA/admin namespace plus auth handling —
 - `auditLogs` — scoped/all listings + filter suggestions
 - `webhooks` — endpoint CRUD, test delivery, rotate-secret, deliveries (global + per endpoint)
 - `deviceLogin` — request/exchange/inspect/decide pairing flow
-- `system` — version current/latest, readiness probe
+- `deviceApproval` — browser side of the OAuth device flow: consent info (`/oidc/device/info`,
+  bare document) + form-encoded approve/deny (`/oidc/device/verify`)
+- `signupTokens` — admin token-gated signup registry (issue shows the raw token once)
+- `users.me` / `users.updateMe` — the `/users/me` self-service profile routes
 - extensions: `users` gained webauthn-credential admin + one-time access issue; `account` gained
   email verification + `/users/me` picture; `auth` gained one-time access email/token exchange
 - auth handling: `apiKey` option + `setApiKey` rotation → `X-API-KEY` header (machine clients);
   cookie sessions ride `credentials: 'include'`
 
-Protocol surfaces kept out of the SDK on purpose (called by relying parties, not the SPA):
-`/api/oidc/token`, `/api/oidc/introspect`, `/api/oidc/par`, `/api/oidc/device/authorize`,
-`/api/oidc/userinfo`, and the `.well-known` documents — reachable via `raw()` when needed.
+Coverage after phase 2: 133 of the 145 unique method+URL pairs Yaak exercises; the remaining 10
+are relying-party protocol documents and binary image routes reached by URL, not by `fetch`.
+
+## Recommended protocol surface handling
+
+The SDK targets the SPA, the admin console, and internal tools. RP-facing OAuth endpoints
+(`/api/oidc/token`, `/api/oidc/introspect`, `/api/oidc/par`, `/api/oidc/device/authorize`,
+`/api/oidc/userinfo`, `.well-known/*`) stay out of typed namespaces on purpose: they need client
+authentication (secrets/Basic), form encoding, and bare OAuth error bodies — a different error
+contract than the admin envelope. When a future module needs them (e.g. a first-party CLI doing
+the device grant), prefer a small dedicated `protocol` client beside the SDK instead of widening
+the shared executor; `raw()` remains the escape hatch for one-off calls.
+
+Keep new namespaces aligned with future server modules using this workflow: dump the route
+inventory (`chi.Walk` in `route_table_test.go`), diff against the SDK method table, and add the
+missing namespace plus tests in the same change — this keeps coverage drift visible per module.
 
 The core exposes a typed escape hatch so later namespaces slot in without breaking consumers.

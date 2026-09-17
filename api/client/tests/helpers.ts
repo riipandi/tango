@@ -7,6 +7,7 @@ export interface RecordedRequest {
   headers: Headers
   body?: string
   formData?: FormData
+  formBody?: string
   signal?: AbortSignal
   credentials: RequestCredentials
   query: URLSearchParams
@@ -33,6 +34,7 @@ export function mockFetch(responses: QueuedResponse[]) {
       headers: request.headers,
       body: typeof init?.body === 'string' ? init.body : undefined,
       formData: init?.body instanceof FormData ? init.body : undefined,
+      formBody: init?.body instanceof URLSearchParams ? init.body.toString() : undefined,
       signal: init?.signal ?? undefined,
       credentials: request.credentials,
       query: new URL(request.url).searchParams

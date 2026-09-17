@@ -10,9 +10,11 @@ import { createAuditLogsModule, type AuditLogsModule } from './modules/auditlogs
 import { createAuthModule, type AuthModule } from './modules/auth.mod'
 import { createConsentModule, type ConsentModule } from './modules/consent.mod'
 import { createCustomClaimsModule, type CustomClaimsModule } from './modules/customclaims.mod'
+import { createDeviceApprovalModule, type DeviceApprovalModule } from './modules/deviceapproval.mod'
 import { createDeviceLoginModule, type DeviceLoginModule } from './modules/devicelogin.mod'
 import { createOidcClientsModule, type OidcClientsModule } from './modules/oidcclients.mod'
 import { createScimModule, type ScimModule } from './modules/scim.mod'
+import { createSignupTokensModule, type SignupTokensModule } from './modules/signuptokens.mod'
 import { createSystemModule, type SystemModule } from './modules/system.mod'
 import { createUserGroupsModule, type UserGroupsModule } from './modules/usergroups.mod'
 import { createUsersModule, type UsersModule } from './modules/users.mod'
@@ -58,6 +60,10 @@ export interface ApiClient {
   webhooks: WebhooksModule
   /** Passwordless device pairing (QR + polling). */
   deviceLogin: DeviceLoginModule
+  /** Browser side of the OAuth device flow: consent info + decision. */
+  deviceApproval: DeviceApprovalModule
+  /** Admin signup-token registry (token-gated account creation). */
+  signupTokens: SignupTokensModule
   /** Version metadata and the readiness probe. */
   system: SystemModule
   /**
@@ -96,6 +102,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     auditLogs: createAuditLogsModule(exec),
     webhooks: createWebhooksModule(exec),
     deviceLogin: createDeviceLoginModule(exec),
+    deviceApproval: createDeviceApprovalModule(exec),
+    signupTokens: createSignupTokensModule(exec),
     system: createSystemModule(exec),
     raw: (method, path, init) => exec.request(method, path, init),
     setApiKey: (apiKey) => exec.setApiKey(apiKey)

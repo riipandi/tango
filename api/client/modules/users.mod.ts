@@ -1,7 +1,12 @@
 // Admin accounts core: user CRUD, group membership, and profile pictures.
 
 import { toPaginated } from '../pagination'
-import type { AdminUpdateUserParams, CreateUserParams, User } from '../schemas/user.schema'
+import type {
+  AdminUpdateUserParams,
+  CreateUserParams,
+  UpdateProfileParams,
+  User
+} from '../schemas/user.schema'
 import type { UserGroup } from '../schemas/usergroup.schema'
 import type { WebAuthnCredential } from '../schemas/webauthn.schema'
 import type { CallOptions, Executor, Paginated } from '../types'
@@ -13,6 +18,10 @@ export interface UserListParams {
 }
 
 export interface UsersModule {
+  /** The caller's own account (session auth). */
+  me(): Promise<User>
+  /** Self profile update; email changes stay admin-only. */
+  updateMe(patch: UpdateProfileParams): Promise<User>
   list(params?: UserListParams): Promise<Paginated<User>>
   get(userId: string): Promise<User>
   create(params: CreateUserParams): Promise<User>
@@ -37,6 +46,8 @@ export interface UsersModule {
 
 export function createUsersModule(exec: Executor): UsersModule {
   return {
+    me: () => exec.get<User>('/users/me').then((r) => r.data),
+    updateMe: (patch) => exec.put<User>('/users/me', patch).then((r) => r.data),
     list: (params) => {
       const options: CallOptions | undefined = params
         ? { query: { query: params.query, page: params.page, limit: params.limit } }

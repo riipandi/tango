@@ -50,6 +50,12 @@ export type {
   UserGroup
 } from './schemas/usergroup.schema'
 export type { WebAuthnBeginResult, WebAuthnCredential } from './schemas/webauthn.schema'
+export type { DeviceCodeInfo, DeviceVerifyAction } from './schemas/device.schema'
+export type {
+  CreateSignupTokenParams,
+  SignupToken,
+  SignupTokenSecret
+} from './schemas/signuptoken.schema'
 export type {
   DeviceLoginExchangeResult,
   DeviceLoginPending,

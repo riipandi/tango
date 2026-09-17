@@ -28,6 +28,8 @@ export interface OidcClientsModule {
   /** Uploads the logo as the multipart `file` field. */
   updateLogo(clientId: string, file: Blob, filename?: string): Promise<void>
   removeLogo(clientId: string): Promise<void>
+  /** Direct URL of the served logo image (no request is made). */
+  logoUrl(clientId: string): string
   /** Re-fetches CIMD metadata for a CIMD client. */
   refresh(clientId: string): Promise<OidcClient>
 }
@@ -71,6 +73,7 @@ export function createOidcClientsModule(exec: Executor): OidcClientsModule {
       return exec.post(`/oidc/clients/${clientId}/logo`, form).then(() => undefined)
     },
     removeLogo: (clientId) => exec.delete(`/oidc/clients/${clientId}/logo`).then(() => undefined),
+    logoUrl: (clientId) => exec.url(`/oidc/clients/${clientId}/logo`),
     refresh: (clientId) =>
       exec.post<OidcClient>(`/oidc/clients/${clientId}/refresh`).then((r) => r.data)
   }

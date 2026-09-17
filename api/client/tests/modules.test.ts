@@ -457,6 +457,88 @@ describe('system module', () => {
   })
 })
 
+describe('users/me self-service', () => {
+  const user = {
+    id: 'user_01j',
+    username: 'abbey',
+    email: 'a@t.local',
+    display_name: 'A',
+    is_admin: false,
+    disabled: false,
+    created_at: 'x'
+  }
+
+  it('reads and updates the own profile', async () => {
+    const { fetchMock, calls } = mockFetch([envelope(user), envelope(user)])
+    const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
+
+    await expect(c.users.me()).resolves.toMatchObject({ id: 'user_01j' })
+    await expect(c.users.updateMe({ display_name: 'Abbey', locale: 'id' })).resolves.toMatchObject({
+      username: 'abbey'
+    })
+
+    expect(expectCall(calls, 0).path).toBe('/api/users/me')
+    expect(expectCall(calls, 1).body).toBe(JSON.stringify({ display_name: 'Abbey', locale: 'id' }))
+  })
+})
+
+describe('signupTokens module', () => {
+  const token = {
+    id: 'st_01j',
+    usage_limit: 5,
+    usage_count: 0,
+    created_at: 'x',
+    expires_at: 'y',
+    user_groups: ['ug_1']
+  }
+
+  it('lists, issues (secret shown once), and revokes tokens', async () => {
+    const { fetchMock, calls } = mockFetch([
+      envelope([token]),
+      envelope({ ...token, token: 'raw-token' }, {}, 201),
+      envelope(null, {}, 204)
+    ])
+    const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
+
+    await expect(c.signupTokens.list()).resolves.toHaveLength(1)
+    await expect(
+      c.signupTokens.create({ ttl: '24h', usage_limit: 5, user_group_ids: ['ug_1'] })
+    ).resolves.toMatchObject({ token: 'raw-token' })
+    await expect(c.signupTokens.remove('st_01j')).resolves.toBeUndefined()
+
+    expect(expectCall(calls, 1).path).toBe('/api/signup-tokens')
+    expect(expectCall(calls, 2).path).toBe('/api/signup-tokens/st_01j')
+  })
+})
+
+describe('deviceApproval module', () => {
+  it('reads consent info and posts the decision form-encoded', async () => {
+    const { fetchMock, calls } = mockFetch([
+      envelope({ client_id: 'oidc_client_01j', client_name: 'CLI', scope: 'openid profile' }),
+      envelope(null, {}, 204)
+    ])
+    const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
+
+    await expect(c.deviceApproval.info('EABCD12')).resolves.toMatchObject({ client_name: 'CLI' })
+    await c.deviceApproval.verify('EABCD12', 'approve')
+
+    expect(expectCall(calls, 0).query.get('code')).toBe('EABCD12')
+    expect(expectCall(calls, 1).path).toBe('/api/oidc/device/verify')
+    expect(expectCall(calls, 1).formBody).toBe('code=EABCD12&action=approve')
+  })
+})
+
+describe('oidcClients logo URL', () => {
+  it('exposes the direct logo URL without requesting it', () => {
+    const { fetchMock } = mockFetch([])
+    const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
+
+    expect(c.oidcClients.logoUrl('oidc_client_01j')).toBe(
+      `${BASE_URL}/api/oidc/clients/oidc_client_01j/logo`
+    )
+  })
+})
+
 describe('apiKey auth handling', () => {
   it('sends the X-API-KEY header from options', async () => {
     const { fetchMock, calls } = mockFetch([envelope([])])
