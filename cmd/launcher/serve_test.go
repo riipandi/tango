@@ -82,3 +82,33 @@ func TestServeRunLifecycle(t *testing.T) {
 		t.Fatal("serve.Run did not return after SIGTERM")
 	}
 }
+
+// TestServeRunBindFailureExits verifies a listener error surfaces
+// immediately instead of hanging until a signal arrives.
+func TestServeRunBindFailureExits(t *testing.T) {
+	t.Setenv("APP_LOG_LEVEL", "error")
+	pg := testutils.StartPostgres(t.Context(), t)
+	t.Setenv("DATABASE_URL", pg.DSN)
+	if _, err := database.MigrateUp(t.Context(), pg.DSN); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+
+	// Occupy the port so ListenAndServe fails at bind time.
+	port := freePort(t)
+	blocker, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	require.NoError(t, err)
+	defer blocker.Close()
+
+	runErr := make(chan error, 1)
+	go func() {
+		serve := &ServeCmd{Port: fmt.Sprintf("%d", port)}
+		runErr <- serve.Run(&CLI{})
+	}()
+
+	select {
+	case err := <-runErr:
+		require.Error(t, err)
+	case <-time.After(15 * time.Second):
+		t.Fatal("serve.Run hung on bind failure instead of returning")
+	}
+}

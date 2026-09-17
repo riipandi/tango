@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -157,19 +158,40 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	// Preserve the received signal as the context cause.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	<-ctx.Done()
-	lg.WithError(context.Cause(ctx)).Info("received shutdown signal")
+
+	select {
+	case err := <-serveErr:
+		// Startup failure (port busy, listener error) must surface
+		// immediately, not wait for a signal that never comes.
+		return err
+	case <-ctx.Done():
+		lg.WithError(context.Cause(ctx)).Info("received shutdown signal")
+	}
+
+	// A second signal means "get out now": exit hard, skipping the
+	// drain and deferred closes.
+	force := make(chan os.Signal, 1)
+	signal.Notify(force, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(force)
+	go func() {
+		<-force
+		lg.Warn("second shutdown signal — exiting immediately")
+		os.Exit(1)
+	}()
 
 	lg.Info("shutting down server...")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown server: %w", err)
+	// HTTP drain and module stop get independent budgets: a slow
+	// client must not eat the time the queue needs to drain tasks.
+	httpCtx, httpCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer httpCancel()
+	if err := srv.Shutdown(httpCtx); err != nil {
+		lg.WithError(err).Warn("http drain exceeded budget; stopping modules anyway")
 	}
 
-	if err := rt.Stop(shutdownCtx); err != nil {
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stopCancel()
+	if err := rt.Stop(stopCtx); err != nil {
 		lg.WithError(err).Warn("module shutdown errors")
 	}
 
