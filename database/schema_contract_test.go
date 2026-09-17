@@ -26,6 +26,16 @@ func openDB(t *testing.T, dsn string) *pgx.Conn {
 	return conn
 }
 
+// ensureMigrated makes the contract tests order-independent: the
+// shared container starts empty, so every entry point applies the
+// migrations itself (MigrateUp is idempotent).
+func ensureMigrated(t *testing.T, ctx context.Context, dsn string) {
+	t.Helper()
+	if _, err := MigrateUp(ctx, dsn); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+}
+
 // mustExec runs one statement and fails the test on error.
 func mustExec(t *testing.T, ctx context.Context, dsn, sql string, args ...any) {
 	t.Helper()
@@ -68,6 +78,7 @@ func seedClient(t *testing.T, ctx context.Context, dsn string) string {
 func TestSecretEncConstraints(t *testing.T) {
 	pg := testutils.StartPostgres(t.Context(), t)
 	ctx := t.Context()
+	ensureMigrated(t, ctx, pg.DSN)
 
 	// Unprefixed secrets violate the marker constraint.
 	mustFail(t, ctx, pg.DSN,
@@ -87,7 +98,7 @@ func TestSecretEncConstraints(t *testing.T) {
 		clientID)
 
 	// TOTP seeds and JWKS private material carry the same marker.
-	userID := seedUser(t, ctx, pg.DSN, "totp-seed")
+	userID := seedUser(t, ctx, pg.DSN, "totp_seed")
 	mustFail(t, ctx, pg.DSN,
 		`INSERT INTO public.user_mfa_totp (user_id, secret_enc) VALUES ($1, 'plain')`,
 		"user_mfa_totp_secret_enc_check", userID)
@@ -105,6 +116,7 @@ func TestSecretEncConstraints(t *testing.T) {
 func TestLoginUniquenessIsNormalized(t *testing.T) {
 	pg := testutils.StartPostgres(t.Context(), t)
 	ctx := t.Context()
+	ensureMigrated(t, ctx, pg.DSN)
 
 	seedUser(t, ctx, pg.DSN, "ada")
 
@@ -118,6 +130,7 @@ func TestLoginUniquenessIsNormalized(t *testing.T) {
 func TestTokenExpiryIsEnforced(t *testing.T) {
 	pg := testutils.StartPostgres(t.Context(), t)
 	ctx := t.Context()
+	ensureMigrated(t, ctx, pg.DSN)
 
 	userID := seedUser(t, ctx, pg.DSN, "expiry")
 
@@ -133,6 +146,7 @@ func TestTokenExpiryIsEnforced(t *testing.T) {
 func TestOutboxAtomicity(t *testing.T) {
 	pg := testutils.StartPostgres(t.Context(), t)
 	ctx := t.Context()
+	ensureMigrated(t, ctx, pg.DSN)
 
 	conn := openDB(t, pg.DSN)
 
@@ -161,6 +175,7 @@ func TestOutboxAtomicity(t *testing.T) {
 func TestQueueNotifyAfterCommit(t *testing.T) {
 	pg := testutils.StartPostgres(t.Context(), t)
 	ctx := t.Context()
+	ensureMigrated(t, ctx, pg.DSN)
 
 	conn := openDB(t, pg.DSN)
 	// A second connection simulates the dispatcher's independent
@@ -191,6 +206,7 @@ func TestQueueNotifyAfterCommit(t *testing.T) {
 func TestCleanupIndexesExist(t *testing.T) {
 	pg := testutils.StartPostgres(t.Context(), t)
 	ctx := t.Context()
+	ensureMigrated(t, ctx, pg.DSN)
 
 	conn := openDB(t, pg.DSN)
 
