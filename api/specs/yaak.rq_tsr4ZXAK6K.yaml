@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_tsr4ZXAK6K
+createdAt: 2026-09-17T11:48:25.184656
+updatedAt: 2026-09-17T11:48:25.184657
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_t3sGoeSaUF
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: 'Device Authorization Grant (RFC 8628) — Basic client auth; body: client_id, scope=openid. Returns device_code, user_code, verification_uri, expires_in, interval'
+headers: []
+method: POST
+name: Device authorization
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/oidc/device/authorize
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

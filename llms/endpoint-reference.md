@@ -162,6 +162,10 @@ requires the current password and clears every MFA row.
 | POST   | `/api/oidc/clients/{id}/secrets`                   | Create client secret                          | done — multi-secret, values shown once      | `modules/federation/oidc.TestClientSecretsLifecycle` |
 | DELETE | `/api/oidc/clients/{id}/secrets/{secretId}`        | Delete client secret                          | done — multi-secret, values shown once      | `modules/federation/oidc.TestClientSecretsLifecycle` |
 | POST   | `/api/oidc/introspect`                             | Introspect OIDC tokens                        | done — client-scoped RFC 7662               | `modules/federation/oidc.TestIntrospection` |
+| POST   | `/api/oidc/par`                                    | Push authorization request                    | done — RFC 9126; one-time request_uri; parameters validated at push | `modules/federation/oidc.TestPARPushAndOneTimeAuthorizeResume` |
+| POST   | `/api/oidc/device/authorize`                       | Device authorization grant                    | done — RFC 8628; hashed codes; unambiguous user code | `modules/federation/oidc.TestDeviceFlowIssuesTokensAfterApproval` |
+| POST   | `/api/oidc/device/verify`                          | Approve or deny a device code                 | done — browser session; single approval; deny → access_denied | `modules/federation/oidc.TestDeviceFlowDenialDeniesThePoll` |
+| GET    | `/api/oidc/device/info`                            | Device code info for the consent page         | done   | `modules/federation/oidc.TestDeviceFlowIssuesTokensAfterApproval` |
 | GET    | `/api/oidc/userinfo`                               | Get user information                          | done                                        | `modules/federation/oidc.TestEndToEndAuthorizeTokenUserinfo` |
 | GET    | `/api/oidc/users/me/authorized-clients`            | List authorized clients for current user      | done — revocation cascades to active tokens | `modules/federation/oidc.TestUsersMeClientSurfaces` |
 | DELETE | `/api/oidc/users/me/authorized-clients/{clientId}` | Revoke authorization for an OIDC client       | done — revocation cascades to active tokens | `modules/federation/oidc.TestUsersMeClientSurfaces` |
@@ -169,15 +173,21 @@ requires the current password and clears every MFA row.
 | GET    | `/api/oidc/users/{id}/authorized-clients`          | List authorized clients for a user            | done — revocation cascades to active tokens | `modules/federation/oidc.TestUsersMeClientSurfaces` |
 | PUT    | `/api/user-groups/{id}/allowed-oidc-clients`       | Update allowed OIDC clients                   | done — snake_case oidc_client_ids           | `modules/identity/usergroup.TestSetAllowedClients` |
 
-The protocol endpoints (root router, bare OAuth documents) are verified by the same suite:
-`/authorize` → `modules/federation/oidc.TestEndToEndAuthorizeTokenUserinfo` and friends;
-`/api/oidc/end-session` (RP-initiated logout) → `modules/federation/oidc.TestEndSessionRevokesFamilyAndRedirects`:
+The protocol endpoints (root router, bare OAuth documents) are verified by the same suite:`/authorize` → `modules/federation/oidc.TestEndToEndAuthorizeTokenUserinfo` and friends. It
+accepts an RFC 9126 `request_uri` in place of inline parameters (one-time; a replayed push is
+rejected); `/api/oidc/end-session` (RP-initiated logout) → `modules/federation/oidc.TestEndSessionRevokesFamilyAndRedirects`:
 the `id_token_hint` must verify (issuer, audience, subject, jti), the `client_id` must match the
 hint's audience, and the user must have granted the client — every failure redirects to the
 instance logout page without explaining why. Ending the session deactivates the grant's whole
 token family (the ID token carries the access token's `jti`), replays are idempotent, and an
 unregistered `post_logout_redirect_uri` is never followed;
-`/.well-known/*` and JWKS → `modules/federation/discovery` and `modules/federation/jwks`.
+`/.well-known/*` and JWKS → `modules/federation/discovery` and `modules/federation/jwks`. The
+discovery document advertises the device, PAR, and introspection endpoints plus upstream's
+metadata fields (`response_modes_supported`, `prompt_values_supported`, `grant_types_supported`
+with the device grant, `authorization_response_iss_parameter_supported`,
+`client_id_metadata_document_supported: false`, `require_pushed_authorization_requests: false`).
+Device-flow codes are stored hashed; the poll answers `authorization_pending`, `slow_down`,
+`expired_token`, and `access_denied` per RFC 8628 §3.5.
 
 ## SCIM
 
