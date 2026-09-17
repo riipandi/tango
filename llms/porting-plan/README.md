@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-09-15
+status: done
+updated: 2026-09-17
 ---
 
 # Pocket ID Authentication Porting Plan
