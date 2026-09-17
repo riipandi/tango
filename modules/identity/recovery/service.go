@@ -4,7 +4,7 @@ package recovery
 // anonymous request mints a hashed single-use token delivered by
 // email only, and the reset consumes it atomically, applies the
 // shared password policy, revokes every sign-in session, and issues
-// a fresh one.
+// a fresh one. The HTTP surface lives in handler.go.
 
 import (
 	"context"
@@ -12,12 +12,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-ozzo/ozzo-validation/v4"
 
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/modules/identity"
@@ -26,8 +22,6 @@ import (
 	"github.com/riipandi/tango/modules/identity/token"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/crypto"
-	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/validate"
 )
 
 // ResetTokenTTL bounds reset tokens.
@@ -184,108 +178,4 @@ func (r *Recovery) applyNewSecret(ctx context.Context, userID user.UserID, newPa
 		return err
 	}
 	return nil
-}
-
-// Feature is the wireable recovery HTTP unit (anonymous endpoints).
-type Feature struct {
-	recovery *Recovery
-	cookie   string
-	secure   bool
-}
-
-// NewFeature wires the recovery flow into the HTTP surface.
-func NewFeature(recovery *Recovery) Feature {
-	return Feature{recovery: recovery}
-}
-
-// WithCookie wires the session cookie settings for the fresh session.
-func (f Feature) WithCookie(name string, secure bool) Feature {
-	f.cookie, f.secure = name, secure
-	return f
-}
-
-// Name names the feature for logs.
-func (f Feature) Name() string { return "password-recovery" }
-
-// APIRoutes mounts the anonymous recovery endpoints relative to the
-// shared /api group.
-func (f Feature) APIRoutes(r chi.Router, _ identity.RouteGroups) {
-	r.Post("/auth/forgot-password", f.recovery.handleForgot)
-	r.Post("/auth/reset-password", f.recovery.handleReset(f.cookie, f.secure))
-}
-
-// forgotRequest is the POST forgot-password payload.
-type forgotRequest struct {
-	Identity string `json:"identity"`
-}
-
-func (r forgotRequest) Validate() error {
-	return validation.ValidateStruct(&r,
-		validation.Field(&r.Identity, validation.Required),
-	)
-}
-
-// handleForgot serves POST /auth/forgot-password: always 204.
-func (r *Recovery) handleForgot(w http.ResponseWriter, req *http.Request) {
-	var body forgotRequest
-	if verr := validate.Request(req.Body, &body); verr != nil {
-		responder.Fail(w, req, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(verr)))
-		return
-	}
-	if err := r.ForgotPassword(req.Context(), body.Identity); err != nil {
-		responder.Fail(w, req, http.StatusInternalServerError, "internal error")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// resetRequest is the POST reset-password payload.
-type resetRequest struct {
-	Token       string `json:"token"`
-	NewPassword string `json:"new_password"`
-}
-
-func (r resetRequest) Validate() error {
-	return validation.ValidateStruct(&r,
-		validation.Field(&r.Token, validation.Required),
-		validation.Field(&r.NewPassword, validation.Required),
-	)
-}
-
-// handleReset serves POST /auth/reset-password: consumes the token
-// and starts the fresh session.
-func (r *Recovery) handleReset(cookieName string, secure bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		var body resetRequest
-		if verr := validate.Request(req.Body, &body); verr != nil {
-			responder.Fail(w, req, http.StatusUnprocessableEntity, "validation failed",
-				responder.WithError(validate.FieldErrors(verr)))
-			return
-		}
-
-		u, sessionToken, err := r.ResetPassword(req.Context(), body.Token, body.NewPassword)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				responder.Fail(w, req, http.StatusNotFound, ErrNotFound.Error())
-				return
-			}
-			if errors.Is(err, password.ErrWeakPassword) || errors.Is(err, password.ErrOversizeSecret) {
-				responder.Fail(w, req, http.StatusUnprocessableEntity, err.Error())
-				return
-			}
-			responder.Fail(w, req, http.StatusInternalServerError, "internal error")
-			return
-		}
-
-		http.SetCookie(w, &http.Cookie{ // #nosec G124 -- session cookie parity (SameSite=Lax, Secure off in dev)
-			Name:     cookieName,
-			Value:    sessionToken,
-			Path:     "/",
-			MaxAge:   0,
-			HttpOnly: true,
-			Secure:   secure,
-		})
-		responder.Success(w, req, http.StatusOK, u)
-	}
 }
