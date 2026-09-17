@@ -218,6 +218,18 @@ func secretHash(secret string) string {
 	return sha256Hex(secret)
 }
 
+// hasUsableSecret reports whether at least one credentials entry
+// can still authenticate (active, unexpired).
+func hasUsableSecret(c Client) bool {
+	for _, entry := range c.Secrets {
+		if !entry.IsActive || (entry.ExpiresAt != nil && entry.ExpiresAt.Before(time.Now().UTC())) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // addSecret creates a new client secret (generated or caller
 // supplied) and returns the view plus the raw value — the only time
 // the value is visible.
@@ -232,8 +244,7 @@ func (s *Service) addSecret(ctx context.Context, id OIDCClientID, req createSecr
 	}
 
 	entry := ClientSecret{
-		// Sub-entitas tanpa tabel sendiri: ID acak cukup, tanpa
-		// TypeID.
+		// Sub-entity without its own table: a random ID suffices, no TypeID.
 		ID:        randomHex(16),
 		CreatedAt: time.Now().UTC(),
 		ExpiresAt: req.ExpiresAt,

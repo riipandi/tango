@@ -19,13 +19,12 @@ import (
 )
 
 // Client is a relying party. Secrets never round-trip: the store
-// keeps SHA-256 hashes in the credentials JSONB (plus the legacy
-// single-secret column) and only the create-secret call sees raw.
+// keeps SHA-256 hashes in the credentials JSONB and only the
+// create-secret call sees raw.
 type Client struct {
 	ID                          OIDCClientID
 	Name                        string
 	Description                 string
-	SecretHash                  *string
 	Secrets                     []ClientSecret
 	CallbackURLs                []string
 	LogoutCallbackURLs          []string
@@ -68,10 +67,6 @@ type SecretEntryView struct {
 	ExpiresAt *time.Time `json:"expires_at,omitzero"`
 	IsActive  bool       `json:"is_active"`
 }
-
-// LegacySecretID names the synthetic entry for secrets that predate
-// the credentials list.
-const LegacySecretID = "legacy"
 
 // ClientCreateParams carries admin-supplied client fields.
 type ClientCreateParams struct {
@@ -116,7 +111,7 @@ type ClientUpdateParams struct {
 
 // clientColumns is the SELECT list; keep in sync with scanClient.
 var clientColumns = []string{
-	"c.id", "c.name", "c.description", "c.secret", "c.credentials", "c.callback_urls", "c.logout_callback_urls",
+	"c.id", "c.name", "c.description", "c.credentials", "c.callback_urls", "c.logout_callback_urls",
 	"c.launch_url", "c.is_public", "c.pkce_enabled", "c.pkce_supported",
 	"c.requires_reauthentication", "c.skip_consent", "c.is_group_restricted",
 	"c.access_token_duration_minutes", "c.refresh_token_duration_minutes",
@@ -132,23 +127,25 @@ func (s *PostgresStore) clientSelect(id string) *sqlbuilder.SelectBuilder {
 	return sb
 }
 
-// CreateClient inserts a client; the caller supplies the secret
-// hash (may be empty for public clients).
+// CreateClient inserts a client; the caller supplies the initial
+// secret hash (may be empty for public clients). The hash becomes
+// the single active credentials entry.
 func (s *PostgresStore) CreateClient(ctx context.Context, params ClientCreateParams) (Client, error) {
 	id := NewID()
 	callbacks, _ := jsonv2.Marshal(params.CallbackURLs)
 	logoutCallbacks, _ := jsonv2.Marshal(params.LogoutCallbackURLs)
+	credentials, _ := jsonv2.Marshal(initialCredentials(params.SecretHash))
 
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(oidcClientsTable)
 	ib.Cols(
-		"id", "name", "description", "secret", "callback_urls", "logout_callback_urls", "launch_url",
+		"id", "name", "description", "credentials", "callback_urls", "logout_callback_urls", "launch_url",
 		"is_public", "pkce_enabled", "pkce_supported", "skip_consent", "is_group_restricted",
 		"access_token_duration_minutes", "refresh_token_duration_minutes", "created_by_id",
 		"client_type", "metadata_url",
 	)
 	ib.Values(
-		id.String(), params.Name, params.Description, nullIfEmpty(params.SecretHash), callbacks, logoutCallbacks, params.LaunchURL,
+		id.String(), params.Name, params.Description, nullIfJSON(credentials), callbacks, logoutCallbacks, params.LaunchURL,
 		params.IsPublic, params.PKCEEnabled, params.PKCESupported, params.SkipConsent, params.IsGroupRestricted,
 		params.AccessTokenDurationMinutes, params.RefreshTokenDurationMinutes, nullIfEmpty(params.CreatedByID),
 		orDefault(params.ClientType, "standard"), nullIfEmpty(params.MetadataURL),
@@ -275,7 +272,9 @@ func (s *PostgresStore) UpdateClient(ctx context.Context, id OIDCClientID, param
 		assignments = append(assignments, ub.Assign("refresh_token_duration_minutes", *params.RefreshTokenDurationMinutes))
 	}
 	if params.SecretHash != nil {
-		assignments = append(assignments, ub.Assign("secret", *params.SecretHash))
+		// Rotation replaces the whole list: one fresh active entry.
+		credentials, _ := jsonv2.Marshal(initialCredentials(*params.SecretHash))
+		assignments = append(assignments, ub.Assign("credentials", nullIfJSON(credentials)))
 	}
 	if len(assignments) == 0 {
 		return s.GetClient(ctx, id)
@@ -418,9 +417,7 @@ func (s *PostgresStore) attachGroups(ctx context.Context, c *Client) error {
 	return rows.Err()
 }
 
-// AddClientSecret appends a credentials entry. The legacy
-// single-secret column mirrors the FIRST entry only (older
-// readers).
+// AddClientSecret appends a credentials entry.
 func (s *PostgresStore) AddClientSecret(ctx context.Context, clientID OIDCClientID, entry ClientSecret, rawHash string) error {
 	credentials, err := s.credentialsJSON(ctx, clientID)
 	if err != nil {
@@ -435,11 +432,7 @@ func (s *PostgresStore) AddClientSecret(ctx context.Context, clientID OIDCClient
 
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(oidcClientsTable)
-	assignments := []string{ub.Assign("credentials", encoded)}
-	if len(credentials) == 1 {
-		assignments = append(assignments, ub.Assign("secret", rawHash))
-	}
-	ub.Set(assignments...)
+	ub.Set(ub.Assign("credentials", encoded))
 	ub.Where(ub.E("id", clientID.String()))
 
 	query, args := ub.Build()
@@ -449,9 +442,7 @@ func (s *PostgresStore) AddClientSecret(ctx context.Context, clientID OIDCClient
 	return nil
 }
 
-// DeleteClientSecret removes one credentials entry; the legacy
-// column clears when the list empties or the removed entry was the
-// legacy hash.
+// DeleteClientSecret removes one credentials entry.
 func (s *PostgresStore) DeleteClientSecret(ctx context.Context, clientID OIDCClientID, secretID string) error {
 	credentials, err := s.credentialsJSON(ctx, clientID)
 	if err != nil {
@@ -459,13 +450,8 @@ func (s *PostgresStore) DeleteClientSecret(ctx context.Context, clientID OIDCCli
 	}
 
 	kept := credentials[:0]
-	var legacyHash *string
 	for _, entry := range credentials {
 		if entry.ID == secretID {
-			if entry.ID == LegacySecretID {
-				hash := entry.SecretHash
-				legacyHash = &hash
-			}
 			continue
 		}
 		kept = append(kept, entry)
@@ -477,11 +463,7 @@ func (s *PostgresStore) DeleteClientSecret(ctx context.Context, clientID OIDCCli
 
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(oidcClientsTable)
-	assignments := []string{ub.Assign("credentials", encoded)}
-	if len(kept) == 0 || legacyHash != nil {
-		assignments = append(assignments, ub.Assign("secret", nil))
-	}
-	ub.Set(assignments...)
+	ub.Set(ub.Assign("credentials", encoded))
 	ub.Where(ub.E("id", clientID.String()))
 
 	query, args := ub.Build()
@@ -545,13 +527,12 @@ func (s *PostgresStore) AccessibleClients(ctx context.Context, userID string) ([
 
 // scanClient scans one row; keep in sync with clientColumns. The
 // id column stores the typeid string; secrets carry SHA-256 hashes
-// (legacy single-secret column + credentials JSONB list).
+// in the credentials JSONB list.
 func scanClient(row scanner) (*Client, error) {
 	var (
 		id          string
 		c           Client
 		name        *string
-		secret      *string
 		credentials []byte
 		callbacks   []byte
 		logoutCBs   []byte
@@ -563,7 +544,7 @@ func scanClient(row scanner) (*Client, error) {
 		metadataExpiresAt pgtype.Timestamptz
 	)
 	if err := row.Scan(
-		&id, &name, &c.Description, &secret, &credentials, &callbacks, &logoutCBs, &launchURL,
+		&id, &name, &c.Description, &credentials, &callbacks, &logoutCBs, &launchURL,
 		&c.IsPublic, &c.PKCEEnabled, &c.PKCESupported, &c.RequiresReauthentication, &c.SkipConsent, &c.IsGroupRestricted,
 		&c.AccessTokenDurationMinutes, &c.RefreshTokenDurationMinutes, &createdByID, &createdAt,
 		&c.ImageType, &c.DarkImageType, &c.ClientType, &c.LogoPath, &c.MetadataURL, &metadataGrants, &metadataExpiresAt,
@@ -579,19 +560,7 @@ func scanClient(row scanner) (*Client, error) {
 	if name != nil {
 		c.Name = *name
 	}
-	if secret != nil {
-		c.SecretHash = secret
-	}
 	_ = jsonv2.Unmarshal(credentials, &c.Secrets)
-	if c.Secrets == nil && secret != nil {
-		// Secrets migrated before the credentials list existed show
-		// up as one synthetic legacy entry.
-		c.Secrets = []ClientSecret{{
-			ID:         LegacySecretID,
-			SecretHash: *secret,
-			IsActive:   true,
-		}}
-	}
 	if launchURL != nil {
 		c.LaunchURL = *launchURL
 	}

@@ -425,7 +425,7 @@ func (c Client) view() map[string]any {
 		"id":                             c.ID.String(),
 		"name":                           c.Name,
 		"description":                    c.Description,
-		"has_secret":                     c.SecretHash != nil,
+		"has_secret":                     hasUsableSecret(c),
 		"callback_urls":                  c.CallbackURLs,
 		"logout_callback_urls":           c.LogoutCallbackURLs,
 		"launch_url":                     c.LaunchURL,

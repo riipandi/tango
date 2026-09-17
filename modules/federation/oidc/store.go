@@ -90,12 +90,11 @@ type Store interface {
 	// RevokeClientTokens kills a user's active token family rows for one client (authorization revocation cascade).
 	RevokeClientTokens(ctx context.Context, clientID, userID string) error
 
-	// Multi-secret management (credentials JSONB + legacy column).
+	// Multi-secret management (credentials JSONB is the only storage).
 	AddClientSecret(ctx context.Context, clientID OIDCClientID, entry ClientSecret, rawHash string) error
 	DeleteClientSecret(ctx context.Context, clientID OIDCClientID, secretID string) error
 
 	// Client logo: blob path and image type.
-	// column, cleared together.
 	SetClientLogoPath(ctx context.Context, id OIDCClientID, path *string) error
 
 	// RefreshClientMetadata rewrites the document-owned columns for a
@@ -123,6 +122,28 @@ func nullIfEmpty(value string) any {
 		return nil
 	}
 	return value
+}
+
+// initialCredentials builds the single active entry created together
+// with a confidential client.
+func initialCredentials(secretHash string) []ClientSecret {
+	if secretHash == "" {
+		return nil
+	}
+	return []ClientSecret{{
+		ID:         randomHex(16),
+		SecretHash: secretHash,
+		CreatedAt:  time.Now().UTC(),
+		IsActive:   true,
+	}}
+}
+
+// nullIfJSON maps an empty JSON document to nil for nullable columns.
+func nullIfJSON(encoded []byte) any {
+	if len(encoded) == 0 || string(encoded) == "null" {
+		return nil
+	}
+	return encoded
 }
 
 // orDefault substitutes a fallback for empty strings (NOT NULL

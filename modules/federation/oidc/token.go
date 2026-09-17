@@ -84,10 +84,14 @@ func (s *Service) authenticateClient(w http.ResponseWriter, r *http.Request) (Cl
 }
 
 // secretMatches reports whether the presented secret matches any
-// active stored secret (credentials list first, then the legacy
-// single-secret column).
+// active, unexpired credentials entry.
 func secretMatches(client Client, secret string) bool {
-	sum := sha256Hex(secret)
+	return usableSecret(client, sha256Hex(secret))
+}
+
+// usableSecret constant-time compares the digest against every
+// active, unexpired credentials entry.
+func usableSecret(client Client, sum string) bool {
 	for _, entry := range client.Secrets {
 		if !entry.IsActive || (entry.ExpiresAt != nil && entry.ExpiresAt.Before(time.Now().UTC())) {
 			continue
@@ -96,10 +100,7 @@ func secretMatches(client Client, secret string) bool {
 			return true
 		}
 	}
-	if client.SecretHash == nil {
-		return false
-	}
-	return subtle.ConstantTimeCompare([]byte(*client.SecretHash), []byte(sum)) == 1
+	return false
 }
 
 // exchangeCode performs the authorization_code grant: one-time
