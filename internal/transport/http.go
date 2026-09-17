@@ -79,7 +79,6 @@ func (s *HTTPServer) ListenAndServe(addr string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
-		// Read and write deadlines are set by route-specific middleware.
 	}
 
 	return s.Server.ListenAndServe()

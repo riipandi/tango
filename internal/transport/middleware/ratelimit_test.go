@@ -40,6 +40,8 @@ func (r fakeRow) Scan(dest ...any) error {
 func TestClassForPath(t *testing.T) {
 	for _, path := range []string{
 		"/api/auth/sign-in",
+		"/api/account/password",
+		"/api/mfa/totp/verify",
 		"/api/oidc/token",
 		"/api/signup",
 		"/api/signup-tokens",

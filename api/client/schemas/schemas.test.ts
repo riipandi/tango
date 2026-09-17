@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SignInSchema, SessionSchema } from '../schemas/session.schema'
+import { SignInSchema } from '../schemas/session.schema'
 import { UserSchema } from '../schemas/user.schema'
 
 describe('api-client schemas', () => {

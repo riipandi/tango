@@ -105,8 +105,8 @@ const (
 	tokenAPIPath    = "/oidc/token"
 	userinfoAPIPath = "/oidc/userinfo"
 
-	deviceAPIPrefix  = "/oidc/device"
-	parAPIPath       = "/oidc/par"
+	deviceAPIPrefix = "/oidc/device"
+	parAPIPath      = "/oidc/par"
 )
 
 // clientRequest is the POST/PUT /api/oidc/clients payload.

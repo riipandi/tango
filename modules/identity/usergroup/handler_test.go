@@ -158,7 +158,8 @@ func TestReplaceUserGroupsForUser(t *testing.T) {
 	assert.Len(t, memberships, 1, "a failed replace must not change the set")
 }
 
-func TestGroupEndpointsAdminGated(t *testing.T) {	r, users, _, passwords, _ := newTestRouter(t)
+func TestGroupEndpointsAdminGated(t *testing.T) {
+	r, users, _, passwords, _ := newTestRouter(t)
 	admin := newAdminUser(t, users, passwords, "gadm")
 	token := signInToken(t, r, admin)
 

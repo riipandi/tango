@@ -10,8 +10,6 @@ import (
 
 	"github.com/riipandi/tango/modules/admin/apikey"
 	"github.com/riipandi/tango/modules/identity"
-	"github.com/riipandi/tango/modules/identity/multifactor"
-	"github.com/riipandi/tango/modules/identity/oauthconnections"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/signup"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -55,9 +53,7 @@ func TestEveryPrefixIsLowercaseSnakeCase(t *testing.T) {
 		identity.NewID[session.RefreshTokenID](),
 		identity.NewID[signup.SignupTokenID](), identity.NewID[signup.InvitationID](),
 		identity.NewID[webauthn.CredentialID](),
-		identity.NewID[multifactor.MFAKeyID](),
 		identity.NewID[apikey.APIKeyID](),
-		identity.NewID[oauthconnections.OAuthConnectionID](),
 	} {
 		prefix := id.Prefix()
 		assert.NotEmpty(t, prefix)

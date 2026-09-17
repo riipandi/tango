@@ -95,6 +95,8 @@ func ClassForPath(path string) string {
 // endpoint.
 var authPrefixes = []string{
 	"/api/auth/",
+	"/api/account/password",
+	"/api/mfa/",
 	"/api/oidc/token",
 	"/api/signup",
 	"/api/one-time-access-email",

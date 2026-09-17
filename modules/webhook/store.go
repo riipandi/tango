@@ -532,17 +532,17 @@ func scanWebhook(row scanner) (Webhook, error) {
 // order follows deliveryColumns.
 func scanDelivery(row scanner) (Delivery, error) {
 	var (
-		id          string
-		webhookID   *string
-		entry       Delivery
-		event       *string
-		attempts    int
-		state       string
-		created     pgtype.Timestamptz
-		delivered   pgtype.Timestamptz
-		respStatus  pgtype.Int4
-		errorText   *string
-		respObject  map[string]any
+		id         string
+		webhookID  *string
+		entry      Delivery
+		event      *string
+		attempts   int
+		state      string
+		created    pgtype.Timestamptz
+		delivered  pgtype.Timestamptz
+		respStatus pgtype.Int4
+		errorText  *string
+		respObject map[string]any
 	)
 	err := row.Scan(&id, &webhookID, &event, &attempts, &state, &created, &delivered,
 		&respStatus, &errorText, &respObject)

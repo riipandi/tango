@@ -245,4 +245,3 @@ func doDelete(t *testing.T, r chi.Router, path, cookie string) *httptest.Respons
 	r.ServeHTTP(w, req)
 	return w
 }
-

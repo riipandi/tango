@@ -250,16 +250,16 @@ type ListParams struct {
 // body plus the delivery state. The latest attempt's outcome (status,
 // error, redacted response) rides along for the listing view.
 type Delivery struct {
-	ID         DeliveryID     `json:"id"`
-	WebhookID  *WebhookID     `json:"webhook_id,omitzero"`
-	Event      *string        `json:"event,omitzero"`
-	HTTPStatus *int           `json:"http_status,omitzero"`
-	Response   map[string]any `json:"response,omitzero"`
-	Attempts   int            `json:"attempts"`
-	Succeeded  bool           `json:"succeeded"`
-	Error      *string        `json:"error,omitzero"`
-	CreatedAt  time.Time      `json:"created_at"`
-	DeliveredAt *time.Time    `json:"delivered_at,omitzero"`
+	ID          DeliveryID     `json:"id"`
+	WebhookID   *WebhookID     `json:"webhook_id,omitzero"`
+	Event       *string        `json:"event,omitzero"`
+	HTTPStatus  *int           `json:"http_status,omitzero"`
+	Response    map[string]any `json:"response,omitzero"`
+	Attempts    int            `json:"attempts"`
+	Succeeded   bool           `json:"succeeded"`
+	Error       *string        `json:"error,omitzero"`
+	CreatedAt   time.Time      `json:"created_at"`
+	DeliveredAt *time.Time     `json:"delivered_at,omitzero"`
 }
 
 // PendingDelivery is the send-ready view of one delivery row: the
@@ -273,13 +273,13 @@ type PendingDelivery struct {
 // AttemptRecord is one webhook_delivery_attempts row as exposed to
 // the listing: the outcome of a single delivery try.
 type AttemptRecord struct {
-	Number      int            `json:"attempt_number"`
-	HTTPStatus  *int           `json:"response_status,omitzero"`
-	Error       *string        `json:"error,omitzero"`
-	DurationMs  *int           `json:"duration_ms,omitzero"`
-	Response    map[string]any `json:"response,omitzero"`
-	Succeeded   bool           `json:"succeeded"`
-	CreatedAt   time.Time      `json:"created_at"`
+	Number     int            `json:"attempt_number"`
+	HTTPStatus *int           `json:"response_status,omitzero"`
+	Error      *string        `json:"error,omitzero"`
+	DurationMs *int           `json:"duration_ms,omitzero"`
+	Response   map[string]any `json:"response,omitzero"`
+	Succeeded  bool           `json:"succeeded"`
+	CreatedAt  time.Time      `json:"created_at"`
 }
 
 // AttemptResult carries one delivery outcome back into the delivery

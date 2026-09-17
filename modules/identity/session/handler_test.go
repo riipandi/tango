@@ -157,7 +157,8 @@ func TestSignInWithPendingAuth(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestSignInRejectsBadCredentials(t *testing.T) {	r, _, passwords, users := newTestRouter(t)
+func TestSignInRejectsBadCredentials(t *testing.T) {
+	r, _, passwords, users := newTestRouter(t)
 	u := newUser(t, users, passwords, "bad")
 
 	w := signIn(t, r, u.Username, "wrong-secret")

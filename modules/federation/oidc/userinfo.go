@@ -50,8 +50,13 @@ type accessClaims struct {
 	ClientID string
 }
 
-// userInfoError writes the RFC 6750 §3 WWW-Authenticate error form.
+// userInfoError writes the RFC 6750 §3 WWW-Authenticate error form
+// with a bare RFC 6749 error body, matching upstream's fosite
+// rendering — no responder envelope on protocol errors.
 func userInfoError(w http.ResponseWriter, r *http.Request, status int, code, description string) {
 	w.Header().Set("WWW-Authenticate", `Bearer error="`+code+`", error_description="`+description+`"`)
-	responder.Fail(w, r, status, description)
+	responder.WriteJSON(w, status, map[string]any{
+		"error":             code,
+		"error_description": description,
+	})
 }

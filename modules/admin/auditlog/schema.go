@@ -59,11 +59,11 @@ type Entry struct {
 	IPAddress    *string `json:"ip_address,omitzero"`
 	UserAgent    *string `json:"user_agent,omitzero"`
 
-// Device is the human-readable client summary parsed from the
-// user agent at read time ("<browser> on <os> <version>").
-Device string `json:"device,omitzero"`
+	// Device is the human-readable client summary parsed from the
+	// user agent at read time ("<browser> on <os> <version>").
+	Device string `json:"device,omitzero"`
 
-CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // uaParser compiles the UA regexes once; every entry render reuses it.

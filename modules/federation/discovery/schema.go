@@ -25,10 +25,10 @@ const (
 
 // OIDC endpoint paths advertised in the discovery document.
 const (
-	AuthorizeEndpoint  = "/authorize"
-	TokenEndpoint      = "/api/oidc/token"
-	UserInfoEndpoint   = "/api/oidc/userinfo"
-	EndSessionEndpoint = "/api/oidc/end-session"
+	AuthorizeEndpoint     = "/authorize"
+	TokenEndpoint         = "/api/oidc/token"
+	UserInfoEndpoint      = "/api/oidc/userinfo"
+	EndSessionEndpoint    = "/api/oidc/end-session"
 	IntrospectionEndpoint = "/api/oidc/introspect"
 	// PushedAuthorizationRequestEndpoint is the RFC 9126 PAR endpoint.
 	PushedAuthorizationRequestEndpoint = "/api/oidc/par"

@@ -47,8 +47,9 @@ match the upstream endpoint contract.
 
 - Two budgets replace upstream's twelve per-route token buckets: the default budget
   (100 requests / 900s) and a tight auth budget (20 requests / 60s) applied by path — sign-in
-  surfaces, token minting/exchange, signup, one-time access, device login, passkey ceremonies,
-  and email verification. The check is a fixed-window SQL function keyed by client IP and class.
+  surfaces, password change, MFA verification, token minting/exchange, signup, one-time access,
+  device login, passkey ceremonies, and email verification. The check is a fixed-window SQL
+  function keyed by client IP and class.
 - Audit-log entries render `device` from the user agent with `ua-parser/uap-go` (upstream's
   `mileusna/useragent` equivalent format: "<agent family> on <os family> <version>"); geo
   fields (`country`, `city`) are not collected.

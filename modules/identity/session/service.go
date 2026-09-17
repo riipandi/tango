@@ -103,10 +103,10 @@ var ErrInvalidCredentials = errors.New("session: invalid credentials")
 // SignInWithPendingResult carries either a full session or the
 // pending-auth bridge that only MFA verification can upgrade.
 type SignInWithPendingResult struct {
-	Pending      bool
-	Token        string // pending token when Pending, else the session token
-	User         user.User
-	Session      Session
+	Pending bool
+	Token   string // pending token when Pending, else the session token
+	User    user.User
+	Session Session
 }
 
 // SignInWithPending verifies the credentials and lands in a full
