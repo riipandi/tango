@@ -1,6 +1,6 @@
 ---
 status: draft
-updated: 2026-09-17
+updated: 2026-09-18
 owner: tango-remediation
 ---
 
@@ -20,6 +20,20 @@ Do not turn tests into skips just to make the gate green. If the sandbox cannot 
 on a matching host/devbox and record the commands and results.
 
 Commit: `test: make remediation verification reproducible`
+
+### Evidence (2026-09-18)
+
+- Docker daemon `29.4.0`; dev stack healthy (`docker compose up -d`): pgsql, mailpit, redis,
+  nginx, silo, and the upstream `pocketid` parity instance.
+- `gotestsum` (dev) and `golangci-lint` on PATH; testcontainers Postgres/Mailpit spin up.
+- Every suite command pins `-count=1 -failfast -timeout <600-1200s>`; no test was skipped
+  to force the gate green.
+- Reproducible commands:
+  - `task test:go -- ./...` (release-tag suite via gotestsum);
+  - `go test -tags release -count=1 -failfast -timeout 1200s ./...`;
+  - `go test -tags debug -count=1 -failfast -timeout 900s ./cmd/... ./database/...`;
+  - `pnpm exec vitest run` (76 tests, 9 files);
+  - `task lint`, `task check`, `task typecheck`.
 
 ## Task 5.2 — Run database and race verification
 
