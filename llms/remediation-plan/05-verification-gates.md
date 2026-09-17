@@ -49,6 +49,21 @@ Fix failure sources one at a time; every fix is its own atomic commit.
 
 Commit: `test: verify database and race gates`
 
+### Evidence (2026-09-18)
+
+- Fresh migration up/down/up: `TestMigrationsLifecycle` PASS (3.9s), schema contract suite
+  (`TestSecretEncConstraints`, `TestLoginUniquenessIsNormalized`, `TestTokenExpiryIsEnforced`,
+  `TestOutboxAtomicity`, `TestQueueNotifyAfterCommit`, `TestCleanupIndexesExist`) PASS,
+  `TestFreshSchemaHasNoObsoleteTables` PASS.
+- Race suite (`-race -failfast`): webauthn, webhook, queue, recovery, scimsync, oidc, apikey,
+  apiaccess — no data races, no failures.
+- Full release suite: 42 packages ok. Debug suite (`./cmd/... ./database/...`): ok.
+- Frontend: vitest 76/76 (9 files). `task lint` 0 issues, `task check` clean, `task typecheck`
+  clean.
+- Fixes made while verifying (each verified before commit): staticcheck QF1001 in
+  `internal/registry/architecture_test.go` (De Morgan rewrite), govet shadow in
+  `modules/identity/devicelogin/handler_test.go`, oxfmt on `api/client/tests/modules.test.ts`.
+
 ## Task 5.3 — Re-run the endpoint matrix
 
 Compare tango against the local upstream Pocket ID v2.14.0 for every in-scope endpoint:

@@ -91,7 +91,7 @@ func TestServiceAndStoreFilesStayTransportFree(t *testing.T) {
 		}
 		base := filepath.Base(path)
 		isStore := base == "store.go" || strings.HasSuffix(base, "_store.go")
-		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || !(isStore || base == "service.go") {
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || (!isStore && base != "service.go") {
 			return nil
 		}
 

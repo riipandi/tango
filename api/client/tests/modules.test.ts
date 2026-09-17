@@ -570,4 +570,3 @@ describe('apiKey auth handling', () => {
     expect(expectCall(calls).headers.get('x-api-key')).toBe('default')
   })
 })
-

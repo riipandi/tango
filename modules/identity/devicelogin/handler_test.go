@@ -64,9 +64,9 @@ func TestExchangeErrorIsGeneric(t *testing.T) {
 		if token != "" {
 			req.AddCookie(&http.Cookie{Name: "tango_device_login", Value: token})
 		}
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		return w
+		rw := httptest.NewRecorder()
+		r.ServeHTTP(rw, req)
+		return rw
 	}
 
 	// A tampered pairing token and an unknown request id are
