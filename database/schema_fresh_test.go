@@ -42,6 +42,15 @@ func TestFreshSchemaHasNoObsoleteTables(t *testing.T) {
 		  AND column_name IN ('totp_pending', 'oauth_groups', 'oauth_name', 'oauth_sub')`).Scan(&dead))
 	assert.Zero(t, dead, "dead session columns must not exist")
 
+	// The obsolete oidc_clients columns are gone: the single-secret
+	// mirror and the image type columns.
+	var clientCols int
+	require.NoError(t, conn.QueryRow(ctx, `
+		SELECT count(*) FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = 'oidc_clients'
+		  AND column_name IN ('secret', 'image_type', 'dark_image_type')`).Scan(&clientCols))
+	assert.Zero(t, clientCols, "obsolete oidc_clients columns must not exist")
+
 	// Session ids are UUIDs now.
 	var idType string
 	require.NoError(t, conn.QueryRow(ctx, `

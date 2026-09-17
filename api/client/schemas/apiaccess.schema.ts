@@ -25,8 +25,7 @@ export const ClientRefSchema = z.object({
   name: z.string(),
   client_type: z.string(),
   is_public: z.boolean(),
-  has_logo: z.boolean(),
-  has_dark_logo: z.boolean()
+  has_logo: z.boolean()
 })
 
 export const GrantParamsSchema = z.object({

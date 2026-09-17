@@ -80,14 +80,13 @@ func TestClientSecretNoLegacyFallback(t *testing.T) {
 
 	client := clientFixture(ctx, t, store, "rp-nolegacy-"+stamp())
 
-	// A row without credentials entries must not authenticate, even
-	// when an old mirrored column value still exists.
+	// A row without credentials entries must not authenticate: there
+	// is no fallback reader, even if some column value existed.
 	_, err := ds.Exec(ctx,
-		`UPDATE public.oidc_clients SET credentials = NULL, secret = $1 WHERE id = $2`,
-		sha256Hex("stale-column-secret"), client.ID.String())
+		`UPDATE public.oidc_clients SET credentials = NULL WHERE id = $1`,
+		client.ID.String())
 	require.NoError(t, err)
 
-	assert.Equal(t, http.StatusUnauthorized, clientAuthStatus(t, service, client.ID.String(), "stale-column-secret"))
 	assert.Equal(t, http.StatusUnauthorized, clientAuthStatus(t, service, client.ID.String(), "rp-secret"))
 }
 

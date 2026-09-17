@@ -192,10 +192,9 @@ const (
 // ClientRef is the apiClientDto shape: the OIDC client subset the
 // API admin UI renders.
 type ClientRef struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	ClientType  string `json:"client_type"`
-	IsPublic    bool   `json:"is_public"`
-	HasLogo     bool   `json:"has_logo"`
-	HasDarkLogo bool   `json:"has_dark_logo"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	ClientType string `json:"client_type"`
+	IsPublic   bool   `json:"is_public"`
+	HasLogo    bool   `json:"has_logo"`
 }

@@ -335,7 +335,7 @@ func TestClientLogoLifecycle(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusNotFound, rec.Code)
 
-	// Upload (admin) → 204; image_type syncs for the meta view.
+	// Upload (admin) → 204; the meta view derives has_logo from the path.
 	contentType, body := uploadLogo(t, tinyPNG)
 	req = httptest.NewRequest(http.MethodPost, clientsAPIPrefix+"/"+client.ID.String()+"/logo", body)
 	req.Header.Set("Content-Type", contentType)
@@ -347,8 +347,7 @@ func TestClientLogoLifecycle(t *testing.T) {
 	updated, err := store.GetClient(ctx, client.ID)
 	require.NoError(t, err)
 	require.NotNil(t, updated.LogoPath)
-	require.NotNil(t, updated.ImageType)
-	assert.Equal(t, "png", *updated.ImageType)
+	assert.True(t, strings.HasSuffix(*updated.LogoPath, ".png"))
 
 	// Public read serves the bytes bare.
 	req = httptest.NewRequest(http.MethodGet, "/oidc/clients/"+client.ID.String()+"/logo", nil)
@@ -365,7 +364,7 @@ func TestClientLogoLifecycle(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"has_logo":true`)
 
-	// Delete (admin) → 204, read is 404 again, image_type cleared.
+	// Delete (admin) → 204, read is 404 again, logo path cleared.
 	req = signInRequest(http.MethodDelete, clientsAPIPrefix+"/"+client.ID.String()+"/logo")
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -374,7 +373,6 @@ func TestClientLogoLifecycle(t *testing.T) {
 	cleared, err := store.GetClient(ctx, client.ID)
 	require.NoError(t, err)
 	assert.Nil(t, cleared.LogoPath)
-	assert.Nil(t, cleared.ImageType)
 
 	req = httptest.NewRequest(http.MethodGet, "/oidc/clients/"+client.ID.String()+"/logo", nil)
 	rec = httptest.NewRecorder()

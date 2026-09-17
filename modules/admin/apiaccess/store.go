@@ -230,7 +230,7 @@ func (s *PostgresStore) permissionsFor(ctx context.Context, id APIID) ([]Permiss
 }
 
 // clientColumns is the apiClientDto projection over oidc_clients.
-var clientColumns = []string{"id", "name", "client_type", "is_public", "image_type IS NOT NULL", "dark_image_type IS NOT NULL"}
+var clientColumns = []string{"id", "name", "client_type", "is_public", "logo_path IS NOT NULL"}
 
 // ListClientsWithAccess pages the clients holding a grant on the API.
 func (s *PostgresStore) ListClientsWithAccess(ctx context.Context, id APIID, params ListParams) ([]ClientRef, int, error) {
@@ -774,7 +774,7 @@ func scanPermission(row scanner) (Permission, error) {
 // scanClient scans one apiClientDto projection row.
 func scanClient(row scanner) (ClientRef, error) {
 	var c ClientRef
-	if err := row.Scan(&c.ID, &c.Name, &c.ClientType, &c.IsPublic, &c.HasLogo, &c.HasDarkLogo); err != nil {
+	if err := row.Scan(&c.ID, &c.Name, &c.ClientType, &c.IsPublic, &c.HasLogo); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ClientRef{}, ErrNotFound
 		}

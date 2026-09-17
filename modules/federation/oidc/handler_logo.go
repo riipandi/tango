@@ -76,7 +76,8 @@ func (s *Service) serveClientLogo(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateClientLogo handles POST /oidc/clients/{id}/logo: multipart
-// 'file' → blob store → path column (+ image_type for meta).
+// 'file' → blob store → path column (the meta view derives
+// has_logo from it).
 func (s *Service) updateClientLogo(w http.ResponseWriter, r *http.Request) {
 	client, ok := s.clientForLogo(w, r)
 	if !ok {

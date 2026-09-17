@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
-	"strings"
 	"time"
 
 	jsonv2 "encoding/json/v2"
@@ -29,8 +27,6 @@ type Client struct {
 	CallbackURLs                []string
 	LogoutCallbackURLs          []string
 	LaunchURL                   string
-	ImageType                   *string
-	DarkImageType               *string
 	LogoPath                    *string
 	MetadataURL                 *string
 	ClientType                  string
@@ -115,7 +111,7 @@ var clientColumns = []string{
 	"c.launch_url", "c.is_public", "c.pkce_enabled", "c.pkce_supported",
 	"c.requires_reauthentication", "c.skip_consent", "c.is_group_restricted",
 	"c.access_token_duration_minutes", "c.refresh_token_duration_minutes",
-	"c.created_by_id", "c.created_at", "c.image_type", "c.dark_image_type", "c.client_type", "c.logo_path", "c.metadata_url",
+	"c.created_by_id", "c.created_at", "c.client_type", "c.logo_path", "c.metadata_url",
 	"c.metadata_grant_types", "c.metadata_expires_at",
 }
 
@@ -341,20 +337,12 @@ func (s *PostgresStore) RefreshClientMetadata(ctx context.Context, id OIDCClient
 	return nil
 }
 
-// SetClientLogoPath stores or clears (nil) the logo blob path and
-// keeps the image_type column in sync (the meta
-// view's has_logo reads it).
+// SetClientLogoPath stores or clears (nil) the logo blob path; the
+// meta view's has_logo derives from it.
 func (s *PostgresStore) SetClientLogoPath(ctx context.Context, id OIDCClientID, logoPath *string) error {
-	imageType := new(string)
-	if logoPath != nil {
-		*imageType = strings.TrimPrefix(path.Ext(*logoPath), ".")
-	} else {
-		imageType = nil
-	}
-
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(oidcClientsTable)
-	ub.Set(ub.Assign("logo_path", logoPath), ub.Assign("image_type", imageType))
+	ub.Set(ub.Assign("logo_path", logoPath))
 	ub.Where(ub.E("id", id.String()))
 
 	query, args := ub.Build()
@@ -547,7 +535,7 @@ func scanClient(row scanner) (*Client, error) {
 		&id, &name, &c.Description, &credentials, &callbacks, &logoutCBs, &launchURL,
 		&c.IsPublic, &c.PKCEEnabled, &c.PKCESupported, &c.RequiresReauthentication, &c.SkipConsent, &c.IsGroupRestricted,
 		&c.AccessTokenDurationMinutes, &c.RefreshTokenDurationMinutes, &createdByID, &createdAt,
-		&c.ImageType, &c.DarkImageType, &c.ClientType, &c.LogoPath, &c.MetadataURL, &metadataGrants, &metadataExpiresAt,
+		&c.ClientType, &c.LogoPath, &c.MetadataURL, &metadataGrants, &metadataExpiresAt,
 	); err != nil {
 		return nil, err
 	}

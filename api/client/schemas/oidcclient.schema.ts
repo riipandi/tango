@@ -32,7 +32,6 @@ export const OidcClientMetaSchema = z.object({
   name: z.string(),
   description: z.string().nullable().optional(),
   has_logo: z.boolean(),
-  has_dark_logo: z.boolean(),
   launch_url: z.string().nullable().optional(),
   requires_reauthentication: z.boolean().optional(),
   client_type: z.string().optional()

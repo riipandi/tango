@@ -225,8 +225,7 @@ describe('apis + apiAccess modules', () => {
       name: 'app',
       client_type: 'confidential',
       is_public: false,
-      has_logo: false,
-      has_dark_logo: false
+      has_logo: false
     }
     const { fetchMock, calls } = mockFetch([
       envelope([ref], { page: 1, limit: 20, total_pages: 1, total_items: 1 }),
@@ -571,3 +570,4 @@ describe('apiKey auth handling', () => {
     expect(expectCall(calls).headers.get('x-api-key')).toBe('default')
   })
 })
+
