@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
-description: Version metadata endpoints (phase 1 completion)
+description: Version metadata endpoints
 headers: []
 name: Version
 sortPriority: 17000.0

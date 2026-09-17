@@ -13,9 +13,9 @@ match the upstream endpoint contract.
 - **LDAP directory synchronization** — no LDAP config surface, no sync endpoint, no runtime
   wiring, and no directory-key columns. Do not reintroduce LDAP settings or clients.
 - **Application Images management** — the `/api/application-images/*` endpoints are not mounted
-  and their Yaak requests were removed. The bundled default profile picture is still served
-  through the user profile-picture fallback; OIDC client logos use the shared blob store
-  directly.
+  and their Yaak artifacts (folder and requests) were removed. The bundled default profile picture
+  is still served through the user profile-picture fallback; OIDC client logos use the shared
+  blob store directly (`logo_path`; logo presence derives from it).
 - **SQLite and MySQL** — Postgres is the only supported database.
 
 ## Additions beyond upstream
@@ -83,17 +83,19 @@ Verification-only values are one-way hashes and must never be encrypted.
 | Value | Owner | Storage |
 | --- | --- | --- |
 | Webhook signing secret | webhook | `enc:` — workers recover it to sign deliveries; DB CHECK enforces the prefix |
-| SCIM service-provider token | federation | `enc:` — the server must send it; DB CHECK enforces the prefix |
+| SCIM service-provider token | federation | `enc:` — the server must send it; DB CHECK enforces the prefix; reads decrypt strictly (an undecryptable token is an error, never a plaintext fallback) |
 | JWKS private key PEM | federation | `enc:` — rotation needs recovery; public key material stays plain |
-| TOTP seed (planned, MFA phase) | identity | `enc:` — verification requires recovery; DB CHECK planned with the table |
-| OIDC client secrets | federation | SHA-256 hash — comparison only, raw value shown once at creation |
+| TOTP seed | identity | `enc:` — verification requires recovery; DB CHECK enforces the prefix |
+| Sensitive app settings (`smtp_password`) | admin | `enc:` — sealed on write, decrypted on read through the module cipher; the DB CHECK rejects plaintext for sensitive keys |
+| OIDC client secrets | federation | SHA-256 hashes in the credentials JSONB (multi-secret with per-entry expiry/active state); raw value shown once at creation |
 | Passwords | identity | scrypt/Argon2id PHC hash (`pkg/crypto.PasswordHasher`) |
 | Session tokens | identity | SHA-256 `token_hash` on sessions; the raw token lives only in the cookie |
 | Auth tokens (email verification, one-time access, reauthentication) | identity | SHA-256 hash keyed by purpose |
 | Signup tokens | identity | SHA-256 hash |
 | API keys | admin | SHA-256 hash; raw value shown once at creation/renewal |
 | Device login device token | identity | SHA-256 hash |
-| Recovery codes (planned, MFA phase) | identity | one hash row per code with a single-use timestamp |
+| Recovery codes | identity | one hash row per code with a single-use timestamp |
 
-Cipher consumers (the only `crypto.Cipher` wirings): the webhook module, the SCIM store, and the
-JWKS key service — each keyed from a SHA-256 digest of `AUTH_SECRET_KEY` at the composition root.
+Cipher consumers (the only `crypto.Cipher` wirings): the webhook module, the SCIM store, the JWKS
+key service, and the appconfig module — each keyed from a SHA-256 digest of `AUTH_SECRET_KEY` at
+the composition root.

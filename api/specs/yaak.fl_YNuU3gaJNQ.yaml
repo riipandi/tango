@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
-description: RFC 8615 discovery endpoints (phase 3)
+description: RFC 8615 discovery endpoints
 headers: []
 name: Well Known
 sortPriority: 18000.0

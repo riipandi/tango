@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
-description: 'SCIM service-provider endpoints (phase 8): CRUD + sync push'
+description: 'SCIM service-provider endpoints: CRUD + sync push'
 headers: []
 name: SCIM
 sortPriority: 13000.0
