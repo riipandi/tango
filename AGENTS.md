@@ -61,6 +61,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 
 - Check `gofmt -l` before committing; lefthook `format-go` and `format-js` block dirty trees. Committing without a JS file staged can still fail `format-js` — retry or use `--no-verify` after confirming `format-go` is clean.
 - `env.example` and `internal/config` are kept in sync by a test — new config keys must be documented in `.env.example`.
+- The SDK's zod schemas and test fixtures are hand-mirrored from Go DTOs — nothing fails automatically when a handler response shape changes. Whenever a DTO, envelope usage, or status code changes, update the matching `api/client/` schema and test in the same change, or the SDK silently drifts from the wire.
 - Tests and Yaak requests must fail fast with explicit timeouts. Prefer focused commands with `-failfast` where supported; stop and report a hung test, unavailable container, or stalled request instead of waiting for a long default timeout.
 - When local Pocket ID behavior, a database field, or an API contract is ambiguous, do not guess. Record the evidence and ask the project owner for confirmation before changing dependent code, endpoint matrices, or Yaak requests.
 - Route params with IDs only accept TypeID form (`user_...`, `oidc_client_...`); raw UUIDs 404.
