@@ -26,6 +26,7 @@ func TestFreshSchemaHasNoObsoleteTables(t *testing.T) {
 	for _, table := range []string{
 		"app_settings", "user_phones", "invitations", "mfa_keys",
 		"oauth_connections", "file_stores", "refresh_tokens",
+		"oidc_refresh_tokens",
 	} {
 		var count int
 		require.NoError(t, conn.QueryRow(ctx,
