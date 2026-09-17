@@ -79,8 +79,22 @@ type createTokenRequest struct {
 
 func (r createTokenRequest) Validate() error {
 	return validation.ValidateStruct(&r,
+		validation.Field(&r.TTL, validation.By(validateDurationField)),
 		validation.Field(&r.UsageLimit, validation.Required, validation.Min(1)),
 	)
+}
+
+// validateDurationField accepts empty (defaults apply) or a Go
+// duration string.
+func validateDurationField(value any) error {
+	s, _ := value.(string)
+	if s == "" {
+		return nil
+	}
+	if _, err := time.ParseDuration(s); err != nil {
+		return errors.New("must be a duration (e.g. 24h)")
+	}
+	return nil
 }
 
 // handleSignUp serves POST /signup: token-gated account creation.
@@ -160,7 +174,8 @@ func (s *Service) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 
 	ttl, parseErr := parseTTL(req.TTL)
 	if parseErr != nil {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "ttl must be a duration (e.g. 24h)")
+		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
+			responder.WithError("ttl must be a duration (e.g. 24h)"))
 		return
 	}
 

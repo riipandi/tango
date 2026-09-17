@@ -245,3 +245,18 @@ func doDelete(t *testing.T, r chi.Router, path, cookie string) *httptest.Respons
 	r.ServeHTTP(w, req)
 	return w
 }
+
+// TestRegisterFinishRejectsMissingSession pins the ceremony contract:
+// the finish endpoint fails closed before any crypto when the
+// ceremony session id is absent.
+func TestRegisterFinishRejectsMissingSession(t *testing.T) {
+	r, users, passwords, _, _ := newTestRouter(t)
+	cookie, _ := signIn(t, r, users, passwords, false)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/webauthn/register/finish", strings.NewReader("{}"))
+	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code, "finish without a session id must be rejected")
+	assert.Contains(t, w.Body.String(), "session_id is required")
+}

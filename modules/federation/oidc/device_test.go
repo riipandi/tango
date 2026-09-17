@@ -308,3 +308,24 @@ func TestDeviceCodesExpireAndPrune(t *testing.T) {
 	_, err = store.GetDeviceCode(ctx, sha256Hex("expired-device"))
 	assert.ErrorIs(t, err, ErrInvalidGrant)
 }
+
+// TestDeviceVerifyAndInfoRejectMissingCode pins the manual protocol
+// parsing contract: a verify/info call without a user code is a 400
+// before any store work.
+func TestDeviceVerifyAndInfoRejectMissingCode(t *testing.T) {
+	_, router, _, _ := deviceStack(t)
+
+	// Verify without a code.
+	req := signInRequest(http.MethodPost, "/oidc/device/verify", url.Values{}.Encode())
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "missing code")
+
+	// Info without a code.
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/oidc/device/info", nil))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "missing code")
+}
