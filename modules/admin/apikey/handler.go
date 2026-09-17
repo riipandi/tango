@@ -7,10 +7,21 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
+
+// currentSelf resolves the caller from the principal the session
+// middleware attached to the request context.
+func (s *Service) currentSelf(r *http.Request) (string, bool) {
+	p, ok := middleware.PrincipalFromContext(r.Context())
+	if !ok || p.UserID == "" {
+		return "", false
+	}
+	return p.UserID, true
+}
 
 // writeError maps api-key domain errors onto HTTP statuses; anything
 // else keeps the shared mapping.

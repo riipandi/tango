@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -51,11 +50,11 @@ func fetchMetadataDocument(ctx context.Context, fetcher DocumentFetcher, documen
 		return nil, metadataError{errors.New("metadata document URL must be https")}
 	}
 
-	status, body, err := fetcher.SendRaw(ctx, http.MethodGet, documentURL, map[string]string{"Accept": "application/json"}, nil)
+	status, body, err := fetcher.SendRaw(ctx, "GET", documentURL, map[string]string{"Accept": "application/json"}, nil)
 	if err != nil {
 		return nil, metadataError{fmt.Errorf("metadata document fetch: %w", err)}
 	}
-	if status != http.StatusOK {
+	if status != 200 {
 		return nil, metadataError{fmt.Errorf("metadata document fetch: unexpected status %d", status)}
 	}
 	if len(body) > MaxMetadataDocument {

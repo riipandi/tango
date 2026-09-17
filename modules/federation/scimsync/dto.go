@@ -3,7 +3,6 @@ package scimsync
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/url"
 	"time"
 
@@ -114,13 +113,11 @@ func listResources[T Resource](s *Service, ctx context.Context, provider Service
 		if err != nil {
 			return result, err
 		}
-		defer resp.Body.Close()
 		if resp.StatusCode/100 != 2 {
-			body, _ := readAll(resp.Body)
-			return result, fmt.Errorf("scim list %s: status %d: %s", path, resp.StatusCode, body)
+			return result, fmt.Errorf("scim list %s: status %d: %s", path, resp.StatusCode, resp.Body)
 		}
 		var pageResp ListResponse[T]
-		if err := jsonv2.UnmarshalRead(resp.Body, &pageResp); err != nil {
+		if err := jsonv2.Unmarshal(resp.Body, &pageResp); err != nil {
 			return result, fmt.Errorf("decode scim list %s: %w", path, err)
 		}
 		result.Resources = append(result.Resources, pageResp.Resources...)
@@ -140,13 +137,11 @@ func createResource[T Resource](s *Service, ctx context.Context, provider Servic
 	if err != nil {
 		return zero, err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
-		body, _ := readAll(resp.Body)
-		return zero, fmt.Errorf("scim create %s: status %d: %s", path, resp.StatusCode, body)
+		return zero, fmt.Errorf("scim create %s: status %d: %s", path, resp.StatusCode, resp.Body)
 	}
 	var created T
-	if err := jsonv2.UnmarshalRead(resp.Body, &created); err != nil {
+	if err := jsonv2.Unmarshal(resp.Body, &created); err != nil {
 		return zero, fmt.Errorf("decode scim create %s: %w", path, err)
 	}
 	return created, nil
@@ -159,13 +154,11 @@ func updateResource[T Resource](s *Service, ctx context.Context, provider Servic
 	if err != nil {
 		return zero, err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
-		body, _ := readAll(resp.Body)
-		return zero, fmt.Errorf("scim update %s: status %d: %s", path, resp.StatusCode, body)
+		return zero, fmt.Errorf("scim update %s: status %d: %s", path, resp.StatusCode, resp.Body)
 	}
 	var updated T
-	if err := jsonv2.UnmarshalRead(resp.Body, &updated); err != nil {
+	if err := jsonv2.Unmarshal(resp.Body, &updated); err != nil {
 		return zero, fmt.Errorf("decode scim update %s: %w", path, err)
 	}
 	return updated, nil
@@ -177,16 +170,8 @@ func (s *Service) deleteResource(ctx context.Context, provider ServiceProvider, 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 && resp.StatusCode != 404 {
-		body, _ := readAll(resp.Body)
-		return fmt.Errorf("scim delete %s: status %d: %s", path, resp.StatusCode, body)
+		return fmt.Errorf("scim delete %s: status %d: %s", path, resp.StatusCode, resp.Body)
 	}
 	return nil
-}
-
-// io_ReadAll bounds remote bodies to 4 MiB.
-func readAll(r io.Reader) (string, error) {
-	data, err := io.ReadAll(io.LimitReader(r, 4<<20))
-	return string(data), err
 }

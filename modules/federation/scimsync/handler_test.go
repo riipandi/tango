@@ -57,7 +57,7 @@ func decodeEnvelope(t *testing.T, w *httptest.ResponseRecorder) envelope {
 // TestHandlerProviderLifecycle drives the CRUD surface end to end.
 func TestHandlerProviderLifecycle(t *testing.T) {
 	store, _ := newStore(t)
-	svc := NewService(store, &fakeSource{}, logger.Slog(logger.NewMock()))
+	svc := NewService(store, &fakeSource{}, httpPoster{client: &http.Client{Timeout: 30 * time.Second}}, logger.Slog(logger.NewMock()))
 	router := mountRouter(svc)
 	ctx := t.Context()
 

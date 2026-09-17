@@ -72,14 +72,16 @@ func TestModuleBoundariesDoNotImportAcrossApplicationAreas(t *testing.T) {
 	assert.Empty(t, violations, "cross-boundary concrete imports")
 }
 
-// TestStoreFilesStayTransportFree pins the persistence boundary:
-// store files must not import the HTTP transport stack or the
-// response envelope — mapping to HTTP belongs to handlers.
-func TestStoreFilesStayTransportFree(t *testing.T) {
+// TestServiceAndStoreFilesStayTransportFree pins the persistence and
+// use-case boundaries: service and store files must not import the
+// HTTP transport stack or the response envelope — mapping to HTTP
+// belongs to handlers.
+func TestServiceAndStoreFilesStayTransportFree(t *testing.T) {
 	banned := []string{
 		"github.com/riipandi/tango/pkg/responder",
 		"github.com/riipandi/tango/internal/transport",
 		"net/http",
+		"github.com/go-chi/chi/v5",
 	}
 
 	violations := []string{}
@@ -89,7 +91,7 @@ func TestStoreFilesStayTransportFree(t *testing.T) {
 		}
 		base := filepath.Base(path)
 		isStore := base == "store.go" || strings.HasSuffix(base, "_store.go")
-		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || !isStore {
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || !(isStore || base == "service.go") {
 			return nil
 		}
 
@@ -109,7 +111,78 @@ func TestStoreFilesStayTransportFree(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Empty(t, violations, "store files importing transport concerns")
+	assert.Empty(t, violations, "service/store files importing transport concerns")
+}
+
+// TestUseCaseFilesStayTransportFree extends the boundary to the
+// area/use-case files that are neither service.go nor store files.
+// HTTP work belongs to the handler files (handler*.go, module.go,
+// schema.go route mounts); no other file may touch the transport
+// stack.
+func TestUseCaseFilesStayTransportFree(t *testing.T) {
+	banned := []string{
+		"github.com/riipandi/tango/pkg/responder",
+		"net/http",
+		"github.com/go-chi/chi/v5",
+	}
+
+	violations := []string{}
+	err := filepath.WalkDir("../../modules", func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		base := filepath.Base(path)
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		if strings.HasPrefix(base, "handler") || base == "module.go" || base == "schema.go" ||
+			base == "service.go" || base == "store.go" || strings.HasSuffix(base, "_store.go") {
+			return nil // covered by the handler rule or the service/store test
+		}
+
+		src, err := os.ReadFile(path)
+		require.NoError(t, err)
+		file, err := parser.ParseFile(token.NewFileSet(), path, src, parser.ImportsOnly)
+		require.NoError(t, err)
+
+		for _, imp := range file.Imports {
+			imported := strings.Trim(imp.Path.Value, `"`)
+			for _, b := range banned {
+				if imported == b {
+					violations = append(violations, path+" imports "+imported)
+				}
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Empty(t, violations, "use-case files importing transport concerns")
+}
+
+// TestStoresDoNotTouchThePoolDirectly keeps stores on the datastore
+// Executor surface: reaching into the raw pool bypasses transaction
+// discipline.
+func TestStoresDoNotTouchThePoolDirectly(t *testing.T) {
+	violations := []string{}
+	err := filepath.WalkDir("../../modules", func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		base := filepath.Base(path)
+		isStore := base == "store.go" || strings.HasSuffix(base, "_store.go")
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || !isStore {
+			return nil
+		}
+
+		src, err := os.ReadFile(path)
+		require.NoError(t, err)
+		if strings.Contains(string(src), ".Pool()") {
+			violations = append(violations, path+" touches Pool()")
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Empty(t, violations, "store files reaching into the raw pool")
 }
 
 func packagePath(filePath string) string {

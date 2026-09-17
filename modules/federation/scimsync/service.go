@@ -1,13 +1,10 @@
 package scimsync
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"net/url"
 
 	jsonv2 "encoding/json/v2"
@@ -22,20 +19,43 @@ const scimContentType = "application/scim+json"
 // retryAttempts bounds retries for a rate-limited request.
 const retryAttempts = 3
 
+// scimRequest is one outbound SCIM call the service assembles.
+type ScimRequest struct {
+	Method  string
+	URL     string
+	Headers map[string]string
+	Body    []byte
+}
+
+// scimResponse is the provider's answer.
+type ScimResponse struct {
+	StatusCode int
+	// Header carries the response headers the retry policy reads
+	// (Retry-After).
+	Header map[string]string
+	Body   []byte
+}
+
+// scimPoster performs one outbound SCIM request. The composition
+// root implements it over net/http; the service stays transport-free.
+type ScimPoster interface {
+	Do(ctx context.Context, req ScimRequest) (ScimResponse, error)
+}
+
 // Service drives the outbound provisioning.
 type Service struct {
 	store  *PostgresStore
 	source SnapshotSource
-	http   *http.Client
+	poster ScimPoster
 	logger *slog.Logger
 }
 
 // NewService builds the sync service.
-func NewService(store *PostgresStore, source SnapshotSource, log *slog.Logger) *Service {
+func NewService(store *PostgresStore, source SnapshotSource, poster ScimPoster, log *slog.Logger) *Service {
 	return &Service{
 		store:  store,
 		source: source,
-		http:   &http.Client{Timeout: 30 * time.Second},
+		poster: poster,
 		logger: log,
 	}
 }
@@ -183,53 +203,42 @@ func findByExternalID[T Resource](resources []T, externalID string) *T {
 }
 
 // request sends one SCIM request with 429-aware retry.
-func (s *Service) request(ctx context.Context, provider ServiceProvider, method, p string, payload any, query url.Values) (*http.Response, error) {
+func (s *Service) request(ctx context.Context, provider ServiceProvider, method, p string, payload any, query url.Values) (ScimResponse, error) {
 	endpoint := strings.TrimRight(provider.Endpoint, "/") + p
 	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
 
+	headers := map[string]string{"Accept": scimContentType}
 	var body []byte
 	if payload != nil {
 		encoded, err := jsonv2.Marshal(payload)
 		if err != nil {
-			return nil, fmt.Errorf("encode payload: %w", err)
+			return ScimResponse{}, fmt.Errorf("encode payload: %w", err)
 		}
 		body = encoded
+		headers["Content-Type"] = scimContentType
+	}
+	if provider.Token != "" {
+		headers["Authorization"] = "Bearer " + provider.Token
 	}
 
+	req := ScimRequest{Method: method, URL: endpoint, Headers: headers, Body: body}
 	for attempt := 1; ; attempt++ {
-		var reader io.Reader
-		if body != nil {
-			reader = bytes.NewReader(body)
-		}
-		req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
+		resp, err := s.poster.Do(ctx, req)
 		if err != nil {
-			return nil, err
+			return ScimResponse{}, err
 		}
-		req.Header.Set("Accept", scimContentType)
-		if payload != nil {
-			req.Header.Set("Content-Type", scimContentType)
-		}
-		if provider.Token != "" {
-			req.Header.Set("Authorization", "Bearer "+provider.Token)
-		}
-
-		resp, err := s.http.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		if resp.StatusCode != http.StatusTooManyRequests || attempt >= retryAttempts {
+		if resp.StatusCode != 429 || attempt >= retryAttempts {
 			return resp, nil
 		}
-		delay := retryDelay(resp.Header.Get("Retry-After"), attempt)
-		resp.Body.Close()
+		delay := retryDelay(resp.Header["Retry-After"], attempt)
 		s.logger.WarnContext(ctx, "SCIM provider rate-limited, retrying",
 			slog.String("provider", provider.ID.String()),
 			slog.Duration("retry_after", delay))
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ScimResponse{}, ctx.Err()
 		case <-time.After(delay):
 		}
 	}

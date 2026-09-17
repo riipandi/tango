@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -305,8 +306,45 @@ func withSCIMSync(deps Deps) federation.APIFeature {
 	}
 	store := scimsync.NewPostgresStore(deps.DB, cipher)
 	source := scimsync.NewIdentitySnapshotSource(deps.DB)
-	service := scimsync.NewService(store, source, logger.Slog(deps.Logger))
+	service := scimsync.NewService(store, source, newSCIMPoster(), logger.Slog(deps.Logger))
 	return scimsync.New(service)
+}
+
+// scimPoster executes outbound SCIM requests over net/http; the
+// module stays transport-free behind the scimPoster port.
+type scimPoster struct{ client *http.Client }
+
+func newSCIMPoster() *scimPoster {
+	return &scimPoster{client: &http.Client{Timeout: 30 * time.Second}}
+}
+
+func (p *scimPoster) Do(ctx context.Context, req scimsync.ScimRequest) (scimsync.ScimResponse, error) {
+	var body io.Reader
+	if len(req.Body) > 0 {
+		body = bytes.NewReader(req.Body)
+	}
+	out, err := http.NewRequestWithContext(ctx, req.Method, req.URL, body)
+	if err != nil {
+		return scimsync.ScimResponse{}, err
+	}
+	for key, value := range req.Headers {
+		out.Header.Set(key, value)
+	}
+	resp, err := p.client.Do(out)
+	if err != nil {
+		return scimsync.ScimResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return scimsync.ScimResponse{}, err
+	}
+	header := map[string]string{}
+	for key := range resp.Header {
+		header[key] = resp.Header.Get(key)
+	}
+	return scimsync.ScimResponse{StatusCode: resp.StatusCode, Header: header, Body: data}, nil
 }
 
 // newKeyService builds the JWKS key service.

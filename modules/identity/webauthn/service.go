@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -106,24 +105,25 @@ func (s *Service) BeginRegistration(ctx context.Context, userID user.UserID) (*p
 	return &options.Response, sessionID, nil
 }
 
-// VerifyRegistration finishes the attestation ceremony: consumes
-// the session, validates the response, stores the credential.
-func (s *Service) VerifyRegistration(ctx context.Context, sessionID string, userID user.UserID, r *http.Request) (StoredCredential, error) {
+// PrepareRegistration loads the user and consumes the registration
+// ceremony session (one-time); the caller then runs the protocol
+// ceremony against the browser response and hands the credential to
+// StoreRegistration.
+func (s *Service) PrepareRegistration(ctx context.Context, sessionID string, userID user.UserID) (*User, gowebauthn.SessionData, error) {
 	waUser, err := s.loadUser(ctx, userID)
 	if err != nil {
-		return StoredCredential{}, err
+		return nil, gowebauthn.SessionData{}, err
 	}
 
 	session, err := s.consumeSession(ctx, sessionID, ChallengeRegistration)
 	if err != nil {
-		return StoredCredential{}, err
+		return nil, gowebauthn.SessionData{}, err
 	}
+	return waUser, session, nil
+}
 
-	credential, err := s.webAuthn.FinishRegistration(waUser, session, r)
-	if err != nil {
-		return StoredCredential{}, classifyAssertionError(err)
-	}
-
+// StoreRegistration persists a completed attestation result.
+func (s *Service) StoreRegistration(ctx context.Context, userID user.UserID, credential *gowebauthn.Credential) (StoredCredential, error) {
 	row := StoredCredential{
 		UserID:          userID,
 		Name:            "New Passkey",

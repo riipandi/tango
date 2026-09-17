@@ -2,10 +2,8 @@ package apikey
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/riipandi/tango/internal/kernel"
-	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 )
 
@@ -111,14 +109,4 @@ func (s *Service) Verify(ctx context.Context, rawKey string) (kernel.Principal, 
 		Provider: "api_key",
 		IsAdmin:  u.IsAdmin,
 	}, nil
-}
-
-// currentSelf resolves the caller from the principal the session
-// middleware attached to the request context.
-func (s *Service) currentSelf(r *http.Request) (string, bool) {
-	p, ok := middleware.PrincipalFromContext(r.Context())
-	if !ok || p.UserID == "" {
-		return "", false
-	}
-	return p.UserID, true
 }

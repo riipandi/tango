@@ -1,9 +1,11 @@
 package scimsync
 
 import (
+	"bytes"
 	"context"
 	jsonv2 "encoding/json/v2"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -158,12 +160,12 @@ func (s *scimStub) delete(w http.ResponseWriter, id string) {
 }
 
 func (s *scimStub) decode(w http.ResponseWriter, r *http.Request, into any) bool {
-	body, err := readAll(r.Body)
+	data, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return false
 	}
-	if err := jsonv2.Unmarshal([]byte(body), into); err != nil {
+	if err := jsonv2.Unmarshal(data, into); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return false
 	}
@@ -201,8 +203,41 @@ func newSyncStack(t *testing.T, source *fakeSource, stub *scimStub) (*Service, S
 	provider, err := store.GetByID(t.Context(), created.ID)
 	require.NoError(t, err)
 
-	svc := NewService(store, source, logger.Slog(logger.NewMock()))
+	svc := NewService(store, source, httpPoster{client: &http.Client{Timeout: 30 * time.Second}}, logger.Slog(logger.NewMock()))
 	return svc, provider
+}
+
+// httpPoster is the real net/http-backed ScimPoster for tests that
+// drive the stub SCIM server.
+type httpPoster struct{ client *http.Client }
+
+func (p httpPoster) Do(ctx context.Context, req ScimRequest) (ScimResponse, error) {
+	var body io.Reader
+	if len(req.Body) > 0 {
+		body = bytes.NewReader(req.Body)
+	}
+	out, err := http.NewRequestWithContext(ctx, req.Method, req.URL, body)
+	if err != nil {
+		return ScimResponse{}, err
+	}
+	for key, value := range req.Headers {
+		out.Header.Set(key, value)
+	}
+	resp, err := p.client.Do(out)
+	if err != nil {
+		return ScimResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return ScimResponse{}, err
+	}
+	header := map[string]string{}
+	for key := range resp.Header {
+		header[key] = resp.Header.Get(key)
+	}
+	return ScimResponse{StatusCode: resp.StatusCode, Header: header, Body: data}, nil
 }
 
 func userRow(id, username string) ScimUserRow {

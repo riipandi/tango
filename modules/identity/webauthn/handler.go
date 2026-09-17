@@ -100,12 +100,24 @@ func (s *Service) handleFinishRegistration(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	credential, err := s.VerifyRegistration(r.Context(), sessionID, userID, r)
+	// The service prepares (user + one-time ceremony session); the
+	// protocol ceremony itself runs here against the browser request.
+	waUser, session, err := s.PrepareRegistration(r.Context(), sessionID, userID)
 	if err != nil {
 		s.writeCeremonyError(w, r, err)
 		return
 	}
-	responder.Success(w, r, http.StatusCreated, credentialView(credential))
+	credential, err := s.webAuthn.FinishRegistration(waUser, session, r)
+	if err != nil {
+		s.writeCeremonyError(w, r, classifyAssertionError(err))
+		return
+	}
+	stored, err := s.StoreRegistration(r.Context(), userID, credential)
+	if err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+	responder.Success(w, r, http.StatusCreated, credentialView(stored))
 }
 
 // handleBeginLogin serves POST /webauthn/login/begin (anonymous):
