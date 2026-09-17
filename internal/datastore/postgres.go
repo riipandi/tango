@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	PgSearchPath = "public,auth,reference,scheduler"
+	PgSearchPath = "public,internal,reference"
 	PgTimezone   = "UTC"
 )
 

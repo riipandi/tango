@@ -60,7 +60,7 @@ func TestMigrationsLifecycle(t *testing.T) {
 
 	// The initial migration registers extensions and creates the
 	// application schemas the search path expects.
-	for _, schema := range []string{"auth", "reference", "scheduler"} {
+	for _, schema := range []string{"internal", "reference"} {
 		var count int
 		require.NoError(t, db.QueryRow(
 			"SELECT count(*) FROM pg_namespace WHERE nspname = $1", schema,

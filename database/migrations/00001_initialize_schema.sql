@@ -18,18 +18,13 @@ CREATE EXTENSION IF NOT EXISTS plpgsql;   -- PL/pgSQL procedural language
 -- ============================================================================
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'auth') THEN
-        EXECUTE 'CREATE SCHEMA auth AUTHORIZATION pg_database_owner';
-        EXECUTE 'GRANT USAGE, CREATE ON SCHEMA auth TO pg_database_owner;';
+    IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'internal') THEN
+        EXECUTE 'CREATE SCHEMA internal AUTHORIZATION pg_database_owner';
+        EXECUTE 'GRANT USAGE, CREATE ON SCHEMA internal TO pg_database_owner;';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'reference') THEN
         EXECUTE 'CREATE SCHEMA reference AUTHORIZATION pg_database_owner';
         EXECUTE 'GRANT USAGE, CREATE ON SCHEMA reference TO pg_database_owner;';
-    END IF;
-    -- Scheduler schema for background jobs (queue)
-    IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'scheduler') THEN
-        EXECUTE 'CREATE SCHEMA scheduler AUTHORIZATION pg_database_owner';
-        EXECUTE 'GRANT USAGE, CREATE ON SCHEMA scheduler TO pg_database_owner;';
     END IF;
 END$$;
 
@@ -180,12 +175,10 @@ DROP FUNCTION IF EXISTS get_table_sizes();
 DROP FUNCTION IF EXISTS get_database_sizes();
 DROP FUNCTION IF EXISTS fn_updated_at_value();
 
-REVOKE USAGE, CREATE ON SCHEMA auth FROM pg_database_owner;
+REVOKE USAGE, CREATE ON SCHEMA internal FROM pg_database_owner;
 REVOKE USAGE, CREATE ON SCHEMA reference FROM pg_database_owner;
-REVOKE USAGE, CREATE ON SCHEMA scheduler FROM pg_database_owner;
 
-DROP SCHEMA IF EXISTS auth CASCADE;
+DROP SCHEMA IF EXISTS internal CASCADE;
 DROP SCHEMA IF EXISTS reference CASCADE;
-DROP SCHEMA IF EXISTS scheduler CASCADE;
 
 -- +goose StatementEnd
