@@ -131,6 +131,12 @@ func (s *Service) exchangeCode(ctx context.Context, client Client, code, verifie
 		return nil, serverError()
 	}
 
+	// The code is spent; the parked authorize_code session must not
+	// stay active.
+	if err := s.store.DeactivateSession(ctx, KindAuthorizeCode, sum); err != nil {
+		return nil, serverError()
+	}
+
 	if err := s.store.UpsertAuthorizedClient(ctx, consumed.UserID, client.ID.String(), strings.Fields(consumed.Scope)); err != nil {
 		return nil, serverError()
 	}

@@ -27,7 +27,13 @@ type LogPruner interface {
 	PruneDeliveries(ctx context.Context, before time.Time) (int64, error)
 }
 
-// CleanupTokens builds the recurring job that removes expired tokens and sessions.
+// CleanupTokens builds the recurring job that removes expired tokens,
+// sessions, and protocol state.
+//
+// oauth2_sessions needs two sweeps: access/refresh rows expire via
+// expires_at, but authorize_code and PAR rows carry no expiry (their
+// lifetime is the code/URI itself), so consumed ones are removed by
+// activity age.
 func CleanupTokens(db datastore.Store, log logger.Logger) Job {
 	return Job{
 		Name:     "cleanup_tokens",
@@ -45,6 +51,11 @@ func CleanupTokens(db datastore.Store, log logger.Logger) Job {
 					{"DELETE FROM public.signup_tokens WHERE expires_at < $1", []any{cutoff}},
 					{"DELETE FROM public.sessions WHERE expires_at < $1 OR revoked_at IS NOT NULL", []any{cutoff}},
 					{"DELETE FROM public.device_login_requests WHERE expires_at < $1", []any{cutoff}},
+					{"DELETE FROM public.oidc_authorization_codes WHERE expires_at < $1", []any{cutoff}},
+					{"DELETE FROM public.oidc_device_codes WHERE expires_at < $1", []any{cutoff}},
+					{"DELETE FROM public.oauth2_sessions WHERE expires_at < $1", []any{cutoff}},
+					{"DELETE FROM public.oauth2_sessions WHERE active = FALSE AND kind = $1 AND created_at < $2",
+						[]any{"authorize_code", cutoff}},
 				} {
 					tag, execErr := exec.Exec(ctx, statement.query, statement.args...)
 					if execErr != nil {

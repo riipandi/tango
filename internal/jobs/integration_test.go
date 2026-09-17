@@ -189,12 +189,17 @@ func TestCleanupTokensRemovesExpiredRows(t *testing.T) {
 	ctx := t.Context()
 	userID := newUserRow(t, db)
 
+	// The protocol rows reference a real client.
+	_, err := db.Exec(t.Context(),
+		`INSERT INTO public.oidc_clients (id, name) VALUES ('jobs-client', 'Jobs Test Client')`)
+	require.NoError(t, err)
+
 	// Write valid rows, then move the job clock past their expiry.
 	inserted := time.Now().UTC()
 	expired := inserted.Add(2 * time.Hour)
 	live := inserted.Add(24 * time.Hour)
 
-	_, err := db.Exec(ctx,
+	_, err = db.Exec(ctx,
 		`INSERT INTO public.auth_tokens (user_id, token_hash, purpose, expires_at) VALUES ($1, 'jobs-expired-auth', 'one_time_access', $2)`,
 		userID.UUID(), expired)
 	require.NoError(t, err)
@@ -213,6 +218,32 @@ func TestCleanupTokensRemovesExpiredRows(t *testing.T) {
 		`INSERT INTO public.device_login_requests (code, device_token_hash, expires_at) VALUES ('JOBS1234', 'jobs-device-hash', $1)`, expired)
 	require.NoError(t, err)
 
+	// OIDC protocol state: an expired authorization code, an expired
+	// device code, an expired access-token session, and a consumed
+	// (inactive) authorize_code session with no expiry.
+	_, err = db.Exec(ctx,
+		`INSERT INTO public.oidc_authorization_codes (code, scope, user_id, client_id, expires_at)
+		 VALUES ('jobs-expired-code', 'openid', $1, 'jobs-client', $2)`,
+		userID.UUID(), expired)
+	require.NoError(t, err)
+	_, err = db.Exec(ctx,
+		`INSERT INTO public.oidc_device_codes (device_code_hash, user_code_hash, scope, client_id, expires_at)
+		 VALUES ('jobs-expired-device', 'jobs-expired-user-code', 'openid', 'jobs-client', $1)`, expired)
+	require.NoError(t, err)
+	_, err = db.Exec(ctx,
+		`INSERT INTO public.oauth2_sessions (kind, key, request_id, request_data, client_id, expires_at)
+		 VALUES ('access_token', 'jobs-expired-access', 'jobs-req-1', '{"client_id":"jobs-client"}', 'jobs-client', $1)`, expired)
+	require.NoError(t, err)
+	_, err = db.Exec(ctx,
+		`INSERT INTO public.oauth2_sessions (kind, key, request_id, request_data, client_id, active, created_at)
+		 VALUES ('authorize_code', 'jobs-consumed-code', 'jobs-req-2', '{"client_id":"jobs-client"}', 'jobs-client', FALSE, $1)`,
+		inserted.Add(-2*time.Hour))
+	require.NoError(t, err)
+	_, err = db.Exec(ctx,
+		`INSERT INTO public.oauth2_sessions (kind, key, request_id, request_data, client_id, created_at)
+		 VALUES ('authorize_code', 'jobs-live-code', 'jobs-req-3', '{"client_id":"jobs-client"}', 'jobs-client', $1)`, inserted)
+	require.NoError(t, err)
+
 	freezeAt(t, expired.Add(3*time.Hour))
 
 	job := CleanupTokens(db, logger.NewMock())
@@ -229,6 +260,11 @@ func TestCleanupTokensRemovesExpiredRows(t *testing.T) {
 		{"SELECT count(*) FROM public.signup_tokens WHERE token_hash = 'jobs-expired-signup'", nil, 0},
 		{"SELECT count(*) FROM public.sessions WHERE token_hash = 'jobs-session-hash'", nil, 0},
 		{"SELECT count(*) FROM public.device_login_requests WHERE code = 'JOBS1234'", nil, 0},
+		{"SELECT count(*) FROM public.oidc_authorization_codes WHERE code = 'jobs-expired-code'", nil, 0},
+		{"SELECT count(*) FROM public.oidc_device_codes WHERE device_code_hash = 'jobs-expired-device'", nil, 0},
+		{"SELECT count(*) FROM public.oauth2_sessions WHERE key = 'jobs-expired-access'", nil, 0},
+		{"SELECT count(*) FROM public.oauth2_sessions WHERE key = 'jobs-consumed-code'", nil, 0},
+		{"SELECT count(*) FROM public.oauth2_sessions WHERE key = 'jobs-live-code'", nil, 1},
 	} {
 		var got int
 		require.NoError(t, db.QueryRow(ctx, probe.query, probe.args...).Scan(&got))

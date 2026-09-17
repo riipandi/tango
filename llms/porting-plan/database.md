@@ -53,8 +53,11 @@ Live tables map to one owner each; obsolete tables are removal targets for the c
 | infrastructure | queue_tasks, queue_tasks_completed, rate_limits (via fn_check_rate_limit) |
 
 Obsolete (zero live references): app_settings (duplicate legacy shape), user_phones,
-invitations, mfa_keys, oauth_connections, oidc_device_codes, file_stores, refresh_tokens
-(sessions use sliding expiry via `refreshed_at`, not separate refresh-token rows). Session
+invitations, mfa_keys, oauth_connections, file_stores, refresh_tokens
+(sessions use sliding expiry via `refreshed_at`, not separate refresh-token rows). Note:
+`oidc_device_codes` was on the earlier obsolete list but the device authorization grant uses
+it as its dedicated table; upstream instead keeps device codes as `oauth2_sessions` rows.
+Session
 drift: `totp_pending`, `oauth_groups`, `oauth_name`, and `oauth_sub` columns on sessions have
 no live readers. The `refresh_token` TypeID prefix is also dead.
 
@@ -136,10 +139,12 @@ the current shape, not a full re-declaration of unchanged columns.
 ### Cleanup migration
 
 One new migration drops: `app_settings`, `user_phones`, `invitations`, `mfa_keys`,
-`oauth_connections`, `oidc_device_codes`, `file_stores`, `refresh_tokens`, the dead `sessions`
+`oauth_connections`, `file_stores`, `refresh_tokens`, the dead `sessions`
 columns (`totp_pending`, `oauth_groups`, `oauth_name`, `oauth_sub`), and converts `sessions.id`
 to UUID where the live code allows. The webhook restructure (rename + new tables + data
 migration) lands in the same or a following migration — never by editing an applied migration.
+`oidc_device_codes` stays: the device authorization grant uses it (see the obsolete-list note
+above).
 
 Cross-module references use foreign keys to UUIDs and consumer-side interfaces in Go. A table must
 not be read or written directly by a non-owner module.

@@ -124,6 +124,37 @@ Verification-only values are one-way hashes and must never be encrypted.
 | Device login device token | identity | SHA-256 hash |
 | Recovery codes | identity | one hash row per code with a single-use timestamp |
 
+## Database shape deviations
+
+Deltas against the upstream schema dump (`llms/database-reference.sql`) beyond the excluded
+features:
+
+- **Authorization codes carry two coordinated rows** — upstream stores the authorize code only
+  as a fosite `oauth2_sessions` row (`kind=authorize_code`). Tango splits it: the one-time
+  code row (PKCE, scope, nonce) lives in `oidc_authorization_codes` and is consumed by an
+  atomic DELETE, while the parked `/authorize` context (redirect URI, session id, audience)
+  lives in an `oauth2_sessions` row that is deactivated once the code is spent. The token
+  exchange verifies both.
+- **API grants are an explicit grant model** — upstream's `oidc_clients_allowed_apis` /
+  `oidc_clients_allowed_api_permissions` junction rows carry a `subject_type` column
+  (`user`/`client`). Tango replaces them with `oidc_client_api_grants` (per client+API grant
+  flags: `user_delegated_access`, `client_access`, `cimd_granted_access`) and
+  `oidc_client_api_grant_permissions` (granted scopes with `subject`
+  `client`/`user_delegated`/`cimd`), so a grant's access mode is a column, not a duplicated
+  junction row.
+- **One SCIM provider per client** — upstream allows several `scim_service_providers` rows per
+  OIDC client; tango enforces a UNIQUE index on `oidc_client_id` because the provider is the
+  client's single outbound provisioning target.
+- **`reauthentication_tokens` is folded into `auth_tokens`** — upstream keeps a separate
+  table for reauthentication tokens; tango stores them as `auth_tokens` rows with purpose
+  `reauthentication`, sharing the SHA-256 hash, expiry, and cleanup path.
+- **Device codes keep a dedicated table** — upstream stores device/user codes as
+  `oauth2_sessions` kinds; tango models the RFC 8628 state machine explicitly in
+  `oidc_device_codes` (status, `last_polled_at`, hashed codes).
+- **Group-side client restriction** — `user_groups_allowed_oidc_clients` (a group may only see
+  the OIDC clients on its allowlist) is a tango addition; upstream only restricts from the
+  client side (`oidc_clients_allowed_user_groups`).
+
 Cipher consumers (the only `crypto.Cipher` wirings): the webhook module, the SCIM store, the JWKS
 key service, and the appconfig module — each keyed from a SHA-256 digest of `AUTH_SECRET_KEY` at
 the composition root.
