@@ -250,15 +250,15 @@ in `llms/porting-plan/database.md` (`webhook_endpoints`, `webhook_deliveries`,
 
 | Method | Endpoint                          | Summary / Yaak Title        | Status | Evidence |
 | ------ | --------------------------------- | --------------------------- | ------ | -------- |
-| GET    | `/api/webhooks`                   | List webhook endpoints      | planned — admin guard; `enabled` and `event` filters; secrets never present | — |
-| POST   | `/api/webhooks`                   | Create a webhook endpoint   | planned — 201; returns the signing secret exactly once | — |
-| GET    | `/api/webhooks/{id}`              | Get a webhook endpoint      | planned — no secret field | — |
-| PUT    | `/api/webhooks/{id}`              | Update a webhook endpoint   | planned — partial update; nil fields keep values | — |
-| DELETE | `/api/webhooks/{id}`              | Delete a webhook endpoint   | planned — deliveries survive with `webhook_id` nulled | — |
-| POST   | `/api/webhooks/{id}/rotate-secret`| Rotate the signing secret   | planned — returns the new plaintext exactly once | — |
-| POST   | `/api/webhooks/{id}/test`         | Send a test delivery        | planned — 202 + delivery id; bypasses the subscription filter | — |
-| GET    | `/api/webhooks/{id}/deliveries`   | List deliveries of one endpoint | planned — newest first, paginated | — |
-| GET    | `/api/webhook-deliveries`         | List all deliveries         | planned — `event` filter; redacted response metadata only | — |
+| GET    | `/api/webhooks`                   | List webhook endpoints      | done — admin guard; `enabled` and `event` filters; secrets never present | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
+| POST   | `/api/webhooks`                   | Create a webhook endpoint   | done — 201; returns the signing secret exactly once | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
+| GET    | `/api/webhooks/{id}`              | Get a webhook endpoint      | done — no secret field | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
+| PUT    | `/api/webhooks/{id}`              | Update a webhook endpoint   | done — partial update; nil fields keep values | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
+| DELETE | `/api/webhooks/{id}`              | Delete a webhook endpoint   | done — deliveries survive with `webhook_id` nulled | `modules/webhook.TestDeleteKeepsDeliveries` |
+| POST   | `/api/webhooks/{id}/rotate-secret`| Rotate the signing secret   | done — returns the new plaintext exactly once; new deliveries sign with it | `modules/webhook.TestRotateSecretInvalidatesTheOldSignature` |
+| POST   | `/api/webhooks/{id}/test`         | Send a test delivery        | done — 202 + delivery id; bypasses the subscription filter | `modules/webhook.TestTestEndpointAcceptsAndQueues` |
+| GET    | `/api/webhooks/{id}/deliveries`   | List deliveries of one endpoint | done — newest first, paginated; latest attempt rides along | `modules/webhook.TestDeliveriesEndpointsListScopedAndGlobal` |
+| GET    | `/api/webhook-deliveries`         | List all deliveries         | done — `event` filter; redacted response metadata only | `modules/webhook.TestDeliveriesEndpointsListScopedAndGlobal` |
 
 Delivery contract: HMAC-SHA256 over `t=<unix>,v1=<hex>` where the digest covers the signed
 timestamp concatenated with the exact canonical body bytes. Headers on every delivery:
