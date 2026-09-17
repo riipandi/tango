@@ -1,15 +1,15 @@
 package oidc
 
-// par.go implements Pushed Authorization Requests (RFC 9126): a
-// client pushes its authorize parameters to the server and receives
-// a one-time request_uri; the browser flow then references it.
+// par.go implements Pushed Authorization Requests (RFC 9126) use
+// cases: a client pushes its authorize parameters to the server and
+// receives a one-time request_uri; the browser flow then references
+// it. The HTTP shell lives in handler_device.go alongside the other
+// bare-protocol shells.
 
 import (
-	"net/http"
+	"context"
 	"strings"
 	"time"
-
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // pushedAuthorizationResponse is the RFC 9126 §3.2 payload.
@@ -18,50 +18,32 @@ type pushedAuthorizationResponse struct {
 	ExpiresIn  int    `json:"expires_in"`
 }
 
-// HandlePAR implements POST /api/oidc/par (client-authenticated,
-// form-encoded). The pushed parameters are validated as far as the
-// unredirected request allows; the /authorize resume re-validates
-// everything else. Bare OAuth errors: this is a protocol endpoint.
-func (s *Service) HandlePAR(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		tokenError(w, r, "invalid_request", http.StatusBadRequest)
-		return
-	}
-
-	params, err := parseAuthorizeForm(r.PostForm)
+// pushPAR validates the pushed parameters as far as the
+// unredirected request allows and stores them as a one-time PAR
+// session; the /authorize resume re-validates everything else.
+func (s *Service) pushPAR(ctx context.Context, params *authorizeParams) (*pushedAuthorizationResponse, *tokenFailure) {
+	client, err := s.store.GetClient(ctx, params.ClientID)
 	if err != nil {
-		tokenError(w, r, "invalid_request", http.StatusBadRequest)
-		return
-	}
-
-	client, err := s.store.GetClient(r.Context(), params.ClientID)
-	if err != nil {
-		tokenError(w, r, "invalid_request", http.StatusBadRequest)
-		return
+		return nil, invalidRequest()
 	}
 	if !client.MatchesCallback(params.RedirectURI) || params.ResponseType != "code" {
-		tokenError(w, r, "invalid_request", http.StatusBadRequest)
-		return
+		return nil, invalidRequest()
 	}
 	if !scopeList(params.Scope)[ScopeOpenID] {
-		tokenError(w, r, "invalid_scope", http.StatusBadRequest)
-		return
+		return nil, &tokenFailure{Code: "invalid_scope", Status: 400}
 	}
 	if params.CodeChallenge == "" || params.CodeChallengeMethod != "S256" {
-		tokenError(w, r, "invalid_request", http.StatusBadRequest)
-		return
+		return nil, invalidRequest()
 	}
 
 	requestURI, err := randomToken()
 	if err != nil {
-		tokenError(w, r, "server_error", http.StatusInternalServerError)
-		return
+		return nil, serverError()
 	}
 
-	sum := sha256Hex(requestURI)
-	if err := s.store.PutSession(r.Context(), OAuth2Session{
+	if err := s.store.PutSession(ctx, OAuth2Session{
 		Kind:      KindPAR,
-		Key:       sum,
+		Key:       sha256Hex(requestURI),
 		RequestID: NewID().String(),
 		Active:    true,
 		RequestData: map[string]any{
@@ -78,17 +60,16 @@ func (s *Service) HandlePAR(w http.ResponseWriter, r *http.Request) {
 		ClientID:  client.ID.String(),
 		ExpiresAt: timeOfPtr(time.Now().UTC().Add(PARTTL)),
 	}); err != nil {
-		tokenError(w, r, "server_error", http.StatusInternalServerError)
-		return
+		return nil, serverError()
 	}
 
-	s.record(r.Context(), "oidc_par_created", map[string]any{
+	s.record(ctx, "oidc_par_created", map[string]any{
 		"client_id": client.ID.String(),
 	})
-	responder.WriteJSON(w, http.StatusOK, pushedAuthorizationResponse{
+	return &pushedAuthorizationResponse{
 		RequestURI: "urn:ietf:params:oauth:request_uri:" + requestURI,
 		ExpiresIn:  int(PARTTL.Seconds()),
-	})
+	}, nil
 }
 
 // parRequestURI extracts a pushed request_uri value; empty when the

@@ -9,8 +9,6 @@ package oidc
 import (
 	"errors"
 	"net/http"
-	"strings"
-	"time"
 
 	jsonv2 "encoding/json/v2"
 
@@ -306,60 +304,13 @@ func (s *Service) handleListAuthorizedClients(w http.ResponseWriter, r *http.Req
 	responder.Success(w, r, http.StatusOK, records)
 }
 
-// handleToken implements POST /api/oidc/token (form-encoded).
-func (s *Service) handleToken(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		tokenError(w, r, "invalid_request", http.StatusBadRequest)
-		return
-	}
-
-	client, ok := s.authenticateClient(w, r)
-	if !ok {
-		return // response already written
-	}
-
-	switch grant := r.PostFormValue("grant_type"); grant {
-	case "authorization_code":
-		s.exchangeCode(w, r, client)
-	case "refresh_token":
-		s.exchangeRefresh(w, r, client)
-	case GrantDeviceCode:
-		s.exchangeDevice(w, r, client)
-	default:
-		tokenError(w, r, "unsupported_grant_type", http.StatusBadRequest)
-	}
-}
-
-// handleUserInfo serves GET/POST /api/oidc/userinfo: introspect the
-// bearer token, then assemble the user's scoped claims.
-func (s *Service) handleUserInfo(w http.ResponseWriter, r *http.Request) {
-	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if !ok || token == "" {
-		userInfoError(w, r, http.StatusUnauthorized, "invalid_token", "bearer token required")
-		return
-	}
-
-	introspected, scope, err := s.introspectAccessToken(r, token)
-	if err != nil {
-		userInfoError(w, r, http.StatusUnauthorized, "invalid_token", "token is invalid or expired")
-		return
-	}
-
-	claims, err := s.claimsFor(r.Context(), introspected.Subject, scope, introspected.SID, time.Now().UTC())
-	if err != nil {
-		userInfoError(w, r, http.StatusUnauthorized, "invalid_token", "token subject no longer exists")
-		return
-	}
-
-	responder.WriteJSON(w, http.StatusOK, profileClaimsMap(scope, claims))
-}
-
 // handleGetInteraction returns the interaction state for the SPA
 // (client name, requested scopes, resume parameters).
 func (s *Service) handleGetInteraction(w http.ResponseWriter, r *http.Request) {
-	session, err := s.loadInteraction(w, r)
+	session, err := s.getInteraction(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		return // response already written
+		s.interactionError(w, r, err)
+		return
 	}
 	responder.Success(w, r, http.StatusOK, map[string]any{
 		"id":                      session.ID.String(),
@@ -375,9 +326,10 @@ func (s *Service) handleGetInteraction(w http.ResponseWriter, r *http.Request) {
 // signed-in session, issues the code, and returns the callback URL
 // for the SPA to redirect to.
 func (s *Service) handleApproveInteraction(w http.ResponseWriter, r *http.Request) {
-	session, err := s.loadInteraction(w, r)
+	session, err := s.getInteraction(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		return // response already written
+		s.interactionError(w, r, err)
+		return
 	}
 
 	principal, authenticated := s.principal(r)

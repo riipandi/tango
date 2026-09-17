@@ -23,12 +23,12 @@ func (s *Service) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, ok := s.authenticateClient(w, r)
+	client, ok := s.authenticatedClient(w, r)
 	if !ok {
 		return
 	}
 
-	introspected, _, err := s.introspectAccessToken(r, r.PostFormValue("token"))
+	introspected, _, err := s.introspectAccessToken(r.Context(), r.PostFormValue("token"))
 	inactive := err != nil
 	if !inactive && introspected.ClientID != client.ID.String() {
 		// Tokens minted for other clients introspect as inactive.

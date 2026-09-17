@@ -1,14 +1,15 @@
 package oidc
 
-// token.go holds the token-endpoint logic: client authentication,
-// the authorization_code exchange (one-time code + PKCE), the
-// refresh_token grant (rotation per use with family reuse
-// revocation), and token minting. HTTP shells live in handler.go.
+// token.go holds the token-endpoint use cases: client
+// authentication against the credentials list, the authorization_code
+// exchange (one-time code + PKCE), the refresh_token grant (rotation
+// per use with family reuse revocation), and token minting. The HTTP
+// shells and the RFC 6749 §5.2 error rendering live in
+// handler_token.go.
 
 import (
 	"context"
 	"crypto/subtle"
-	"net/http"
 	"strings"
 	"time"
 
@@ -17,7 +18,6 @@ import (
 
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/jwtutils"
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // tokenResponse is the RFC 6749 §5.1 success payload.
@@ -30,41 +30,35 @@ type tokenResponse struct {
 	Scope        string `json:"scope"`
 }
 
-// tokenError writes the RFC 6749 §5.2 error payload.
-func tokenError(w http.ResponseWriter, r *http.Request, code string, status int) {
-	responder.WriteJSON(w, status, map[string]any{
-		"error":             code,
-		"error_description": http.StatusText(status),
-	})
+// tokenFailure is one RFC 6749 §5.2 error: the protocol error code
+// plus the HTTP status it renders with. Plain data — the transport
+// layer renders it.
+type tokenFailure struct {
+	Code   string
+	Status int
 }
 
-// authenticateClient validates Basic or form-body client
-// credentials. Public clients (no secret) authenticate by ID alone.
-func (s *Service) authenticateClient(w http.ResponseWriter, r *http.Request) (Client, bool) {
-	ctx := r.Context()
+func (f *tokenFailure) Error() string { return f.Code }
 
-	var clientID, clientSecret string
-	if id, secret, ok := r.BasicAuth(); ok {
-		clientID, clientSecret = id, secret
-	} else {
-		clientID = r.PostFormValue("client_id")
-		clientSecret = r.PostFormValue("client_secret")
-	}
+func invalidClient() *tokenFailure  { return &tokenFailure{Code: "invalid_client", Status: 401} }
+func invalidGrant() *tokenFailure   { return &tokenFailure{Code: "invalid_grant", Status: 400} }
+func invalidRequest() *tokenFailure { return &tokenFailure{Code: "invalid_request", Status: 400} }
+func serverError() *tokenFailure    { return &tokenFailure{Code: "server_error", Status: 500} }
 
+// authenticateClient validates the presented client credentials.
+// Public clients (no secret) authenticate by ID alone.
+func (s *Service) authenticateClient(ctx context.Context, clientID, clientSecret string) (Client, *tokenFailure) {
 	if clientID == "" {
-		tokenError(w, r, "invalid_client", http.StatusUnauthorized)
-		return Client{}, false
+		return Client{}, invalidClient()
 	}
 
 	id, err := OIDCParseClientID(clientID)
 	if err != nil {
-		tokenError(w, r, "invalid_client", http.StatusUnauthorized)
-		return Client{}, false
+		return Client{}, invalidClient()
 	}
 	client, err := s.store.GetClient(ctx, id)
 	if err != nil {
-		tokenError(w, r, "invalid_client", http.StatusUnauthorized)
-		return Client{}, false
+		return Client{}, invalidClient()
 	}
 
 	// Public clients authenticate by identity only; confidential
@@ -72,15 +66,13 @@ func (s *Service) authenticateClient(w http.ResponseWriter, r *http.Request) (Cl
 	// hashes).
 	switch {
 	case client.IsPublic:
-		return client, true
+		return client, nil
 	case clientSecret == "":
-		tokenError(w, r, "invalid_client", http.StatusUnauthorized)
-		return Client{}, false
+		return Client{}, invalidClient()
 	case !secretMatches(client, clientSecret):
-		tokenError(w, r, "invalid_client", http.StatusUnauthorized)
-		return Client{}, false
+		return Client{}, invalidClient()
 	}
-	return client, true
+	return client, nil
 }
 
 // secretMatches reports whether the presented secret matches any
@@ -106,92 +98,74 @@ func usableSecret(client Client, sum string) bool {
 // exchangeCode performs the authorization_code grant: one-time
 // consume, redirect_uri match, PKCE S256 verification, then token
 // issuance with session bookkeeping.
-func (s *Service) exchangeCode(w http.ResponseWriter, r *http.Request, client Client) {
-	ctx := r.Context()
-
-	code := r.PostFormValue("code")
-	verifier := r.PostFormValue("code_verifier")
+func (s *Service) exchangeCode(ctx context.Context, client Client, code, verifier, redirectURI string) (*tokenResponse, *tokenFailure) {
 	if code == "" || verifier == "" {
-		tokenError(w, r, "invalid_request", http.StatusBadRequest)
-		return
+		return nil, invalidRequest()
 	}
 
 	sum := sha256Hex(code)
 	consumed, err := s.store.ConsumeCode(ctx, sum)
 	if err != nil {
-		tokenError(w, r, "invalid_grant", http.StatusBadRequest)
-		return
+		return nil, invalidGrant()
 	}
 
 	// The authorize_code session row carries the redirect_uri and
 	// login context captured at /authorize time.
 	seed, err := s.store.GetSession(ctx, KindAuthorizeCode, sum)
 	if err != nil || seed.ClientID != client.ID.String() {
-		tokenError(w, r, "invalid_grant", http.StatusBadRequest)
-		return
+		return nil, invalidGrant()
 	}
-	redirectURI, _ := seed.RequestData["redirect_uri"].(string)
+	seedRedirect, _ := seed.RequestData["redirect_uri"].(string)
 	sid, _ := seed.RequestData["sid"].(string)
 	audience, _ := seed.RequestData["audience"].(string)
-	if redirectURI != r.PostFormValue("redirect_uri") || !client.MatchesCallback(redirectURI) {
-		tokenError(w, r, "invalid_grant", http.StatusBadRequest)
-		return
+	if seedRedirect != redirectURI || !client.MatchesCallback(seedRedirect) {
+		return nil, invalidGrant()
 	}
 	if !consumed.MethodSHA256 || pkceS256(verifier) != consumed.CodeChallenge {
-		tokenError(w, r, "invalid_grant", http.StatusBadRequest)
-		return
+		return nil, invalidGrant()
 	}
 
 	family := seedFamily(seed.RequestID, sid, consumed.AuthMethod, seedCreatedAt(seed))
 	response, err := s.mintTokens(ctx, client, consumed.UserID, consumed.Scope, consumed.Nonce, audience, family)
 	if err != nil {
-		tokenError(w, r, "server_error", http.StatusInternalServerError)
-		return
+		return nil, serverError()
 	}
 
 	if err := s.store.UpsertAuthorizedClient(ctx, consumed.UserID, client.ID.String(), strings.Fields(consumed.Scope)); err != nil {
-		tokenError(w, r, "server_error", http.StatusInternalServerError)
-		return
+		return nil, serverError()
 	}
 	s.record(ctx, "oidc_token_issued", map[string]any{
 		"client_id": client.ID.String(),
 		"user_id":   consumed.UserID,
 		"grant":     "authorization_code",
 	})
-	responder.WriteJSON(w, http.StatusOK, response)
+	return response, nil
 }
 
 // exchangeRefresh performs the refresh_token grant: rotation per
 // use with reuse detection — replaying a rotated token revokes the
 // whole family.
-func (s *Service) exchangeRefresh(w http.ResponseWriter, r *http.Request, client Client) {
-	ctx := r.Context()
-
-	raw := r.PostFormValue("refresh_token")
+func (s *Service) exchangeRefresh(ctx context.Context, client Client, raw string) (*tokenResponse, *tokenFailure) {
 	if raw == "" {
-		tokenError(w, r, "invalid_request", http.StatusBadRequest)
-		return
+		return nil, invalidRequest()
 	}
 
 	sum := sha256Hex(raw)
 	session, err := s.store.GetSession(ctx, KindRefresh, sum)
 	if err != nil || session.ClientID != client.ID.String() {
-		tokenError(w, r, "invalid_grant", http.StatusUnauthorized)
-		return
+		return nil, &tokenFailure{Code: "invalid_grant", Status: 401}
 	}
 
 	// Reuse detection: the family has already been rotated once, or
 	// the jti is on the replay registry.
 	if !session.Active {
 		_ = s.store.DeactivateFamily(ctx, session.RequestID)
-		tokenError(w, r, "invalid_grant", http.StatusUnauthorized)
-		return
+		return nil, &tokenFailure{Code: "invalid_grant", Status: 401}
 	}
 	spent, err := s.store.JTIExists(ctx, sum)
 	if err != nil || spent {
 		_ = s.store.DeactivateFamily(ctx, session.RequestID)
-		tokenError(w, r, "invalid_grant", http.StatusUnauthorized)
-		return
+		return nil, &tokenFailure{Code: "invalid_grant", Status: 401}
 	}
 
 	userID, _ := session.RequestData["subject"].(string)
@@ -205,29 +179,25 @@ func (s *Service) exchangeRefresh(w http.ResponseWriter, r *http.Request, client
 
 	// Rotate: retire the presented token, remember its jti on the
 	// replay registry, and mint a fresh pair in the same family.
-	deactivateErr := s.store.DeactivateSession(ctx, KindRefresh, sum)
-	if deactivateErr != nil {
-		tokenError(w, r, "server_error", http.StatusInternalServerError)
-		return
+	if deactivateErr := s.store.DeactivateSession(ctx, KindRefresh, sum); deactivateErr != nil {
+		return nil, serverError()
 	}
 	if recordErr := s.store.RecordJTI(ctx, sum, time.Now().UTC().Add(RefreshTokenTTL)); recordErr != nil {
-		tokenError(w, r, "server_error", http.StatusInternalServerError)
-		return
+		return nil, serverError()
 	}
 
 	family := seedFamily(session.RequestID, sid, authMethod, authTime)
 	audience, _ := session.RequestData["audience"].(string)
 	response, err := s.mintTokens(ctx, client, userID, scope, "", audience, family)
 	if err != nil {
-		tokenError(w, r, "server_error", http.StatusInternalServerError)
-		return
+		return nil, serverError()
 	}
 
 	s.record(ctx, "oidc_token_refreshed", map[string]any{
 		"client_id": client.ID.String(),
 		"user_id":   userID,
 	})
-	responder.WriteJSON(w, http.StatusOK, response)
+	return response, nil
 }
 
 // seedFamily seeds the family metadata for a token exchange; the

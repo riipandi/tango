@@ -1,86 +1,32 @@
 package oidc
 
-// authorize.go holds the authorization-endpoint logic: request
-// parsing/validation, the interaction state machine, and one-time
-// code issuance. HTTP shells live in handler.go.
+// authorize.go holds the authorization-endpoint use cases: request
+// parameter validation, the interaction state machine, and one-time
+// code issuance. The HTTP shells and redirect rendering live in
+// handler_authorize.go.
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
-	"net/http"
+	"errors"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/transport/middleware"
-	"github.com/riipandi/tango/pkg/responder"
 )
 
-// handleAuthorize is the HTTP shell; see authorizeLogic below.
-func (s *Service) handleAuthorize(w http.ResponseWriter, r *http.Request) {
-	// RFC 9126: a pushed request_uri REPLACES the inline parameters —
-	// only request_uri (and nothing else) is on the query when PAR
-	// is used, so it is resolved before any inline validation.
-	var params *authorizeParams
-	if par := parRequestURI(r.URL.Query().Get("request_uri")); par != "" {
-		loaded, parErr := s.loadPARParams(r.Context(), par)
-		if parErr != nil {
-			responder.Fail(w, r, http.StatusBadRequest, "invalid authorization request")
-			return
-		}
-		params = loaded
-	} else {
-		loaded, err := parseAuthorizeRequest(r)
-		if err != nil {
-			// Unverified request: never redirect — the redirect_uri has
-			// not been validated against the client's callbacks yet.
-			responder.Fail(w, r, http.StatusBadRequest, "invalid authorization request")
-			return
-		}
-		params = loaded
-	}
-
-	client, err := s.store.GetClient(r.Context(), params.ClientID)
-	if err != nil {
-		// Unknown client or unregistered callback: never redirect —
-		// the redirect target itself is unverified.
-		responder.Fail(w, r, http.StatusBadRequest, "invalid authorization request")
-		return
-	}
-
-	// redirect_uri must match a registered pattern before anything
-	// else is disclosed.
-	if !client.MatchesCallback(params.RedirectURI) {
-		responder.Fail(w, r, http.StatusBadRequest, "invalid authorization request")
-		return
-	}
-	if params.ResponseType != "code" {
-		s.redirectError(w, r, params, ErrInvalidRequest)
-		return
-	}
-	if !scopeList(params.Scope)[ScopeOpenID] {
-		s.redirectError(w, r, params, ErrInvalidRequest)
-		return
-	}
-
-	principal, authenticated := s.principal(r)
-	switch {
-	case !authenticated:
-		s.startInteraction(w, r, client, params, true)
-	case client.IsGroupRestricted && !s.userAllowed(r.Context(), client, principal.UserID):
-		responder.Fail(w, r, http.StatusForbidden, "user is not allowed to use this client")
-	case client.SkipConsent:
-		s.issueCodeRedirect(w, r, client, params, principal)
-	default:
-		s.startInteraction(w, r, client, params, false)
-	}
-}
+// Interaction lookup outcomes (the HTTP layer maps them onto
+// status codes).
+var (
+	ErrInvalidInteraction = errors.New("oidc: invalid interaction id")
+	ErrInteractionExpired = errors.New("oidc: interaction expired")
+)
 
 // authorizeParams is the validated /authorize query.
 type authorizeParams struct {
@@ -96,20 +42,9 @@ type authorizeParams struct {
 	Prompt              string
 }
 
-// parseAuthorizeRequest validates the query set. PKCE is mandatory:
-// S256 only, plain is rejected (spec-allowed but weak).
-func parseAuthorizeRequest(r *http.Request) (*authorizeParams, error) {
-	if r.Method == http.MethodPost {
-		if err := r.ParseForm(); err != nil {
-			return nil, ErrInvalidRequest
-		}
-		return parseAuthorizeForm(r.PostForm)
-	}
-	return parseAuthorizeForm(r.URL.Query())
-}
-
 // parseAuthorizeForm validates the authorize parameter set from any
-// values collection (query or form). PKCE is mandatory: S256 only.
+// values collection (query or form). PKCE is mandatory: S256 only,
+// plain is rejected (spec-allowed but weak).
 func parseAuthorizeForm(values url.Values) (*authorizeParams, error) {
 	p := &authorizeParams{
 		RedirectURI:         values.Get("redirect_uri"),
@@ -189,9 +124,10 @@ func OIDCClientIDFromClientKey(raw string) OIDCClientID {
 	return id
 }
 
-// startInteraction parks an unauthenticated (or consent-pending)
+// createInteraction parks an unauthenticated (or consent-pending)
 // authorize request; the SPA resumes via the approve endpoint.
-func (s *Service) startInteraction(w http.ResponseWriter, r *http.Request, client Client, params *authorizeParams, authenticationRequired bool) {
+// userID is empty for anonymous requests.
+func (s *Service) createInteraction(ctx context.Context, client Client, params *authorizeParams, authenticationRequired bool, userID string) (InteractionSession, error) {
 	interaction := InteractionSession{
 		ID:       NewInteractionID(),
 		ClientID: client.ID.String(),
@@ -211,61 +147,34 @@ func (s *Service) startInteraction(w http.ResponseWriter, r *http.Request, clien
 		AuthenticationRequired: authenticationRequired,
 		RequestedAt:            time.Now().UTC(),
 	}
-	if !authenticationRequired {
-		if principal, ok := middleware.PrincipalFromContext(r.Context()); ok {
-			interaction.UserID = &principal.UserID
-		}
+	if userID != "" {
+		interaction.UserID = &userID
 	}
 
-	if err := s.store.CreateInteraction(r.Context(), interaction); err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to start interaction")
-		return
+	if err := s.store.CreateInteraction(ctx, interaction); err != nil {
+		return InteractionSession{}, err
 	}
-
-	http.Redirect(w, r, s.issuer+InteractionPath+"/"+interaction.ID.String(), http.StatusFound)
+	return interaction, nil
 }
 
-// loadInteraction resolves the interaction path segment, enforcing
-// the interaction TTL. HTTP-facing: writes the error response.
-func (s *Service) loadInteraction(w http.ResponseWriter, r *http.Request) (InteractionSession, error) {
-	id, err := InteractionIDFromString(chi.URLParam(r, "id"))
+// getInteraction resolves an interaction by its raw path segment,
+// enforcing the interaction TTL. Expired interactions are deleted
+// and answer ErrInteractionExpired; unknown ids answer ErrNotFound.
+func (s *Service) getInteraction(ctx context.Context, raw string) (InteractionSession, error) {
+	id, err := InteractionIDFromString(raw)
 	if err != nil {
-		responder.Fail(w, r, http.StatusBadRequest, "invalid interaction id")
-		return InteractionSession{}, err
+		return InteractionSession{}, ErrInvalidInteraction
 	}
 
-	session, err := s.store.GetInteraction(r.Context(), id)
+	session, err := s.store.GetInteraction(ctx, id)
 	if err != nil {
-		responder.Fail(w, r, http.StatusNotFound, "interaction not found")
-		return InteractionSession{}, err
-	}
-	if time.Since(session.RequestedAt) > InteractionSessionTTL {
-		_ = s.store.DeleteInteraction(r.Context(), session.ID)
-		responder.Fail(w, r, http.StatusNotFound, "interaction expired")
 		return InteractionSession{}, ErrNotFound
 	}
+	if time.Since(session.RequestedAt) > InteractionSessionTTL {
+		_ = s.store.DeleteInteraction(ctx, session.ID)
+		return InteractionSession{}, ErrInteractionExpired
+	}
 	return session, nil
-}
-
-// issueCodeRedirect resolves the RFC 8707 resource (if any), mints
-// the one-time code with the granted scope subset, and redirects
-// back to the relying party with code + state.
-func (s *Service) issueCodeRedirect(w http.ResponseWriter, r *http.Request, client Client, params *authorizeParams, principal middleware.Principal) {
-	audience, granted, errName := s.resolveResource(r.Context(), client.ID.String(), params.Resource, params.Scope, SubjectUser)
-	if errName != "" {
-		s.redirectError(w, r, params, errName)
-		return
-	}
-	params.Resource = audience
-	params.Scope = strings.Join(granted, " ")
-
-	code, err := s.issueCode(r.Context(), client, principal, params.Scope, params)
-	if err != nil {
-		s.redirectError(w, r, params, ErrInvalidRequest)
-		return
-	}
-
-	http.Redirect(w, r, buildCallback(params.RedirectURI, code, params.State), http.StatusFound) // #nosec G710 -- redirect_uri verified against the client's registered patterns
 }
 
 // issueCode persists a fresh one-time code (hash at rest) plus its
@@ -359,57 +268,6 @@ func buildCallback(redirectURI, code, state string) string {
 	}
 	callback.RawQuery = query.Encode()
 	return callback.String()
-}
-
-// redirectError sends the RFC 6749 §4.1.2.1 error response. Only
-// callable with a verified redirect_uri (client + MatchesCallback
-// already checked), which is what keeps this off the open-redirect
-// path.
-func (s *Service) redirectError(w http.ResponseWriter, r *http.Request, params *authorizeParams, cause any) {
-	errorCode := "invalid_request"
-	switch c := cause.(type) {
-	case error:
-		if c == ErrAccessDenied {
-			errorCode = "access_denied"
-		}
-	case string:
-		errorCode = c
-	}
-
-	callback, err := url.Parse(params.RedirectURI)
-	if err != nil {
-		responder.Fail(w, r, http.StatusBadRequest, "invalid authorization request")
-		return
-	}
-	query := callback.Query()
-	query.Set("error", errorCode)
-	if params.State != "" {
-		query.Set("state", params.State)
-	}
-	callback.RawQuery = query.Encode()
-	http.Redirect(w, r, callback.String(), http.StatusFound) // #nosec G710 -- redirect_uri verified against the client's registered patterns
-}
-
-// principal resolves the session cookie (optional auth): /authorize
-// is callable both signed-in and anonymous. The context principal
-// (middleware chain) wins; the cookie is the fallback.
-func (s *Service) principal(r *http.Request) (middleware.Principal, bool) {
-	if principal, ok := middleware.PrincipalFromContext(r.Context()); ok {
-		return principal, true
-	}
-	if s.authenticator == nil {
-		return middleware.Principal{}, false
-	}
-
-	cookie, err := r.Cookie(s.cookieName)
-	if err != nil || cookie.Value == "" {
-		return middleware.Principal{}, false
-	}
-	principal, err := s.authenticator.ResolveSession(r.Context(), cookie.Value)
-	if err != nil {
-		return middleware.Principal{}, false
-	}
-	return principal, true
 }
 
 // userAllowed checks the group restriction: at least one of the
