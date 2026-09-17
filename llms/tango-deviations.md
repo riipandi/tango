@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-16
+updated: 2026-09-18
 ---
 
 # Tango Deviations from Upstream Pocket ID
@@ -73,6 +73,25 @@ match the upstream endpoint contract.
   rename uses `PUT` with `{name}` rather than `PATCH`. Upstream's `/webauthn/logout` is not
   mounted — sign-out runs through the session surface; the reauthentication token purpose
   exists in the token feature without a dedicated webauthn route.
+
+## OIDC protocol failure mapping
+
+Tango maps OAuth/OIDC protocol failures to RFC 6749/6750 error responses instead of copying
+upstream's per-endpoint habits (verified live against the upstream parity instance, 2026-09-18):
+
+- **`invalid_client` for all client-authentication failures** — token, introspect, and PAR
+  answer 401 `invalid_client` with a short generic description when client credentials are
+  missing or unknown. Upstream mixes 400/401 with long library-generated descriptions.
+- **`/authorize` with a malformed request answers 400** (JSON envelope) instead of redirecting
+  to the `redirect_uri` with `error=invalid_request`; redirect-based error reporting is used
+  only for validated requests whose client and redirect URI are known.
+- **PAR without client credentials answers 400 `invalid_request`** (the pushed request itself
+  is malformed before authentication is evaluated) instead of upstream's 401.
+- **userinfo lives at `/api/oidc/userinfo`** (401 without a bearer token); upstream also
+  exposes a root-level `/userinfo` alias that tango does not mount.
+- **Discovery omits `service_documentation`** (tango ships no self-hosted docs page; the field
+  is optional in the discovery spec) and adds `request_parameter_supported: true`; the JWKS
+  document marks keys with `"use": "sig"` like upstream.
 
 ## Encrypted and hashed value inventory
 

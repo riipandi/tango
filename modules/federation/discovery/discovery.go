@@ -1,6 +1,8 @@
 package discovery
 
 // discoveryDocument is the OIDC Discovery 1.0 document we expose.
+// service_documentation is omitted: tango ships no self-hosted docs page
+// and the field is optional in the discovery spec.
 type discoveryDocument struct {
 	Issuer                             string   `json:"issuer"`
 	AuthorizationEndpoint              string   `json:"authorization_endpoint"`
@@ -26,7 +28,9 @@ type discoveryDocument struct {
 	AuthorizationResponseIssParameter  bool     `json:"authorization_response_iss_parameter_supported"`
 	ClientIDMetadataDocumentSupported  bool     `json:"client_id_metadata_document_supported"`
 	RequestURIParameterSupported       bool     `json:"request_uri_parameter_supported"`
+	RequestParameterSupported          bool     `json:"request_parameter_supported"`
 	RequirePushedAuthorizationRequests bool     `json:"require_pushed_authorization_requests"`
+	ServiceDocumentation               string   `json:"service_documentation,omitempty"`
 }
 
 func newDiscoveryDocument(issuer string) discoveryDocument {
@@ -55,6 +59,7 @@ func newDiscoveryDocument(issuer string) discoveryDocument {
 		AuthorizationResponseIssParameter:  true,
 		ClientIDMetadataDocumentSupported:  false,
 		RequestURIParameterSupported:       true,
+		RequestParameterSupported:          true,
 		RequirePushedAuthorizationRequests: false,
 	}
 }

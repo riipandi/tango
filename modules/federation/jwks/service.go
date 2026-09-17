@@ -134,7 +134,8 @@ func (s *Service) decryptPrivate(sealed []byte) ([]byte, error) {
 	return []byte(plaintext), nil
 }
 
-// bindKey wraps a raw crypto key into a jwk.Key carrying kid + alg.
+// bindKey wraps a raw crypto key into a jwk.Key carrying kid, alg,
+// and the sig usage marker relying parties expect in a JWKS document.
 func bindKey(raw any, keyID, algorithm string) (jwk.Key, error) {
 	key, err := jwk.Import(raw)
 	if err != nil {
@@ -142,6 +143,9 @@ func bindKey(raw any, keyID, algorithm string) (jwk.Key, error) {
 	}
 	if err := key.Set(jwk.KeyIDKey, keyID); err != nil {
 		return nil, fmt.Errorf("jwks: set kid: %w", err)
+	}
+	if err := key.Set(jwk.KeyUsageKey, jwk.ForSignature); err != nil {
+		return nil, fmt.Errorf("jwks: set use: %w", err)
 	}
 	if err := key.Set(jwk.AlgorithmKey, jwa.NewSignatureAlgorithm(algorithm)); err != nil {
 		return nil, fmt.Errorf("jwks: set alg: %w", err)

@@ -80,6 +80,26 @@ paper over a defect without fixing the implementation or getting an owner decisi
 
 Commit: `docs: refresh endpoint parity evidence`
 
+### Evidence (2026-09-18)
+
+Live comparison against the upstream parity instance (`tango-pocketid-1`, host port 1411) with
+a freshly migrated tango build on :3081 (`tango_verify` database, all 11 migrations applied):
+
+- Method/path/auth-boundary statuses match for the admin and account surfaces (users, oidc
+  clients, api keys, audit logs, users/me — 401 unauthenticated; device login request creation
+  201 both sides).
+- Discovery: field sets now match except the recorded deviation (see below); JWKS documents
+  match including the `use: sig` marker after the fix below.
+- Fixes made while verifying: JWKS keys now carry `use: sig`
+  (`modules/federation/jwks/service.go`), and the discovery document adds
+  `request_parameter_supported: true` (`modules/federation/discovery/discovery.go`) — both
+  verified live after rebuild and covered by unit tests.
+- Remaining live diffs classified as deliberate deviations, recorded in
+  `llms/tango-deviations.md` ("OIDC protocol failure mapping"): invalid_client 401 mapping,
+  /authorize 400 for malformed requests, PAR 400 before client auth, userinfo path without the
+  root alias, omitted `service_documentation`. Tango-only surfaces (auth, account sessions,
+  forgot-password) 404 on upstream by design.
+
 ## Task 5.4 — Re-send Yaak live verification
 
 Use a clean cookie jar and a fresh Postgres. Re-send every changed request, at minimum:

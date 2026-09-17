@@ -29,6 +29,7 @@ func newStubProvider(t *testing.T) *stubProvider {
 	key, err := jwk.Import(priv)
 	require.NoError(t, err)
 	require.NoError(t, key.Set(jwk.KeyIDKey, "test-kid"))
+	require.NoError(t, key.Set(jwk.KeyUsageKey, jwk.ForSignature))
 	require.NoError(t, key.Set(jwk.AlgorithmKey, jwa.ES256()))
 	return &stubProvider{key: key}
 }
@@ -73,6 +74,7 @@ func TestJWKSHandler(t *testing.T) {
 	require.Len(t, body.Keys, 1)
 	assert.Equal(t, "test-kid", body.Keys[0]["kid"])
 	assert.Equal(t, "EC", body.Keys[0]["kty"])
+	assert.Equal(t, "sig", body.Keys[0]["use"])
 	assert.Nil(t, body.Keys[0]["d"], "private material must never serialize")
 }
 
@@ -92,4 +94,6 @@ func TestOpenIDConfigurationHandler(t *testing.T) {
 	assert.Equal(t, "https://sso.example.com"+AuthorizeEndpoint, doc.AuthorizationEndpoint)
 	assert.Contains(t, doc.IDTokenSigningAlgValuesSupported, "RS256")
 	assert.Equal(t, []string{"code"}, doc.ResponseTypesSupported)
+	assert.True(t, doc.RequestParameterSupported)
+	assert.Equal(t, "", doc.ServiceDocumentation)
 }
