@@ -4,48 +4,46 @@ updated: 2026-09-17
 owner: tango-remediation
 ---
 
-# Phase 2 — Excluded Feature dan Contract Artifact Cleanup
+# Phase 2 — Excluded Feature and Contract Artifact Cleanup
 
-Prasyarat: Phase 0 selesai. Task schema yang berdampak pada contract boleh dilakukan setelah
-Phase 1 selesai.
+Prerequisite: Phase 0 done. Schema tasks that impact contracts may run after Phase 1 finishes.
 
 ## Task 2.1 — Remove stale Application Images Yaak artifacts
 
-Hapus folder dan request Application Images dari exported Yaak specs, atau tandai excluded bila
-workspace memang memerlukan record tersebut. Preferensi target fresh implementation adalah
-menghapus request yang tidak didukung.
+Remove the Application Images folder and requests from the exported Yaak specs, or mark them
+excluded if the workspace really needs the record. The fresh-implementation preference is to
+delete requests that are not supported.
 
-Pastikan tidak ada saved body, expected response, atau folder description yang menyiratkan route
-Application Images supported.
+Make sure no saved body, expected response, or folder description implies the Application Images
+routes are supported.
 
 Commit: `chore: remove excluded application image requests`
 
 ## Task 2.2 — Remove LDAP artifact wording
 
-Hapus referensi LDAP dari active code/config/spec descriptions yang bukan penjelasan exclusion.
-Pertahankan hanya reference yang diperlukan untuk membuktikan route tidak mounted atau exclusion
-di dokumen scope/deviation.
+Remove LDAP references from active code/config/spec descriptions that are not exclusion
+explanations. Keep only the references needed to prove the route is not mounted or the exclusion
+in the scope/deviation documents.
 
-Pastikan tidak ada LDAP dependency, config key, compose service, fixture, schema column, atau
+Make sure there is no LDAP dependency, config key, compose service, fixture, schema column, or
 active Yaak request.
 
 Commit: `chore: clean excluded ldap artifacts`
 
 ## Task 2.3 — Refresh endpoint reference and deviations
 
-Sinkronkan endpoint reference dan deviations dengan runtime final:
+Synchronize the endpoint reference and the deviations doc with the final runtime:
 
-- status `done`, `partial`, dan `excluded` harus akurat;
-- request CIMD tidak boleh lagi berdeskripsi `planned` bila endpoint sudah selesai;
-- setiap intentional deviation memiliki alasan, status, dan evidence;
-- excluded endpoints tidak dihitung sebagai parity failure atau supported surface.
+- the `done`, `partial`, and `excluded` statuses must be accurate;
+- CIMD requests must no longer be described as `planned` once the endpoint is complete;
+- every intentional deviation carries a reason, a status, and evidence;
+- excluded endpoints do not count as parity failures or supported surfaces.
 
 Commit: `docs: synchronize endpoint contract artifacts`
 
-## Acceptance criteria fase
+## Phase acceptance criteria
 
-- Tidak ada Application Images request aktif atau stale.
-- LDAP hanya muncul dalam dokumen exclusion/route-negative test yang diperlukan.
-- Tidak ada endpoint `planned` yang sebenarnya sudah implemented.
-- Setiap in-scope row memiliki test reference dan Yaak reference yang mutakhir.
-
+- No active or stale Application Images request remains.
+- LDAP appears only in the required exclusion documents/route-negative tests.
+- No `planned` endpoint is actually implemented.
+- Every in-scope row has an up-to-date test reference and Yaak reference.

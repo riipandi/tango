@@ -4,46 +4,45 @@ updated: 2026-09-17
 owner: tango-remediation
 ---
 
-# Phase 4 — Validation dan Error Safety
+# Phase 4 — Validation and Error Safety
 
-Prasyarat: Phase 3 selesai.
+Prerequisite: Phase 3 done.
 
 ## Task 4.1 — Normalize request validation
 
-Inventarisasi pemeriksaan manual seperti `missing code`, `session_id is required`, multipart
-field checks, dan invalid body parsing. Untuk endpoint JSON/form biasa, buat request DTO dengan
-`Validate()` melalui `pkg/validate` dan petakan error ke 422 envelope.
+Inventory the manual checks such as `missing code`, `session_id is required`, multipart field
+checks, and invalid body parsing. For ordinary JSON/form endpoints, create request DTOs with
+`Validate()` through `pkg/validate` and map errors to the 422 envelope.
 
-Protocol-required parsing boleh tetap manual, tetapi harus memiliki status/error contract yang
-terdokumentasi dan test invalid-input.
+Protocol-required parsing may stay manual, but it must have a documented status/error contract
+and invalid-input tests.
 
 Commit: `refactor: normalize request validation`
 
 ## Task 4.2 — Stabilize public error mapping
 
-Ganti pengiriman langsung `err.Error()` pada response publik dengan sentinel/typed error mapping.
-Detail provider, database, crypto, dan implementation tidak boleh keluar melalui response.
+Replace direct `err.Error()` responses on public surfaces with sentinel/typed error mapping.
+Provider, database, crypto, and implementation details must never leave through a response.
 
-Pertahankan error code/message yang memang bagian dari protocol contract, khususnya OAuth/OIDC.
-Tambahkan tests yang memastikan internal wrapped error tidak terlihat oleh client.
+Keep the error codes/messages that are part of a protocol contract, especially OAuth/OIDC. Add
+tests proving internal wrapped errors are invisible to clients.
 
 Commit: `fix: prevent internal error disclosure`
 
 ## Task 4.3 — Review security and redaction boundaries
 
-Audit response, logger, audit payload, Yaak body, dan test fixture untuk password, reset token,
-TOTP seed/code, recovery code, API key, webhook secret, provider token, private key, dan
-ciphertext.
+Audit responses, loggers, audit payloads, Yaak bodies, and test fixtures for passwords, reset
+tokens, TOTP seeds/codes, recovery codes, API keys, webhook secrets, provider tokens, private
+keys, and ciphertext.
 
-Tambahkan regression tests untuk one-time secret response, redacted list/get response, log
-redaction, dan audit payload.
+Add regression tests for one-time secret responses, redacted list/get responses, log redaction,
+and audit payloads.
 
 Commit: `test: harden secret redaction boundaries`
 
-## Acceptance criteria fase
+## Phase acceptance criteria
 
-- Request validation menggunakan `pkg/validate` pada endpoint non-protocol.
-- Tidak ada internal error detail pada public response.
-- Protocol errors tetap sesuai RFC dan endpoint contract.
-- Tidak ada secret atau ciphertext pada log, audit, Yaak, atau response terlarang.
-
+- Request validation uses `pkg/validate` on non-protocol endpoints.
+- No internal error detail appears in public responses.
+- Protocol errors stay RFC- and endpoint-contract compliant.
+- No secret or ciphertext appears in logs, audit, Yaak, or forbidden responses.

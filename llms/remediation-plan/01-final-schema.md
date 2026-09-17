@@ -1,72 +1,102 @@
 ---
-status: draft
+status: done
 updated: 2026-09-17
 owner: tango-remediation
 ---
 
-# Phase 1 — Final Schema dan Penghapusan Compatibility
+# Phase 1 — Final Schema and Compatibility Removal
 
-Prasyarat: Phase 0 selesai dan inventory disetujui.
+Prerequisite: Phase 0 done and the inventory approved.
 
-## Task 1.1 — Pilih bentuk final client secret
+## Task 1.1 — Choose the final client secret shape
 
-Tetapkan satu bentuk final untuk client secrets. Bentuk final harus mendukung secret metadata,
-hash-only comparison, expiry, active state, create-once response, rotation, dan deletion tanpa
-membutuhkan kolom legacy.
+Settle on one final shape for client secrets. The final shape must support secret metadata,
+hash-only comparison, expiry, active state, create-once response, rotation, and deletion without
+requiring a legacy column.
 
-Update schema types, store queries, create/verify/rotate/delete flows, dan tests agar hanya bentuk
-final yang digunakan. Hapus `LegacySecretID`, synthetic legacy entry, fallback comparison, dan
-komentar yang mengklaim kompatibilitas lama.
+Update the schema types, store queries, create/verify/rotate/delete flows, and tests so only the
+final shape is used. Remove `LegacySecretID`, the synthetic legacy entry, the fallback
+comparison, and any comments claiming legacy compatibility.
 
-Tambahkan tests untuk create, multi-secret, expiry, inactive secret, rotation, deletion, dan
-client authentication setelah kolom legacy tidak lagi dibaca.
+Add tests for create, multi-secret, expiry, inactive secret, rotation, deletion, and client
+authentication after the legacy column is no longer read.
 
 Commit: `refactor: finalize oidc client secret storage`
 
-## Task 1.2 — Hapus kolom client-secret dan image legacy
+## Task 1.2 — Drop the client-secret and image legacy columns
 
-Buat migration baru; jangan mengedit migration applied. Hapus kolom yang tidak termasuk schema
-final, minimal:
+Create a new migration; never edit an applied migration. Remove the columns that are not part of
+the final schema, at minimum:
 
-- `oidc_clients.secret` jika Task 1.1 sudah memindahkan seluruh pemakaian;
+- `oidc_clients.secret` once Task 1.1 has moved every usage;
 - `oidc_clients.image_type`;
 - `oidc_clients.dark_image_type`.
 
-Sesuaikan `SELECT`, `INSERT`, `UPDATE`, scanner, metadata view, API access view, dan tests. Logo
-client tetap dipertahankan melalui `logo_path` bila itu memang fitur in-scope.
+Adjust `SELECT`, `INSERT`, `UPDATE`, scanners, the metadata view, the API access view, and tests.
+Client logos stay supported through `logo_path` if that is an in-scope feature.
 
-Migration harus aman pada fresh database dan pada database yang sudah memiliki bentuk sebelumnya.
-Tambahkan schema contract test yang memastikan kolom obsolete tidak ada.
+The migration must be safe on a fresh database and on a database that already holds the previous
+shape. Add a schema contract test asserting the obsolete columns are absent.
 
 Commit: `db: remove obsolete client columns`
 
-## Task 1.3 — Hapus tabel refresh-token yang tidak dipakai
+## Task 1.3 — Drop the unused refresh-token table
 
-Pastikan seluruh runtime OIDC menggunakan storage final yang dipilih. Jika `oidc_refresh_tokens`
-tidak memiliki caller aktif, hapus tabel dan index-nya melalui migration baru, lalu perbarui
-migrator count/assertions, schema contract, backup tests, dan database reference bila diperlukan.
+Make sure every runtime OIDC flow uses the chosen final storage. If `oidc_refresh_tokens` has no
+active caller, drop the table and its indexes through a new migration, then update the migrator
+count/assertions, schema contract, backup tests, and the database reference if needed.
 
-Jika ditemukan caller aktif, dokumentasikan caller dan buktikan mengapa tabel tersebut adalah
-bagian final schema sebelum mengubahnya.
+If an active caller turns up, document the caller and prove why the table is part of the final
+schema before changing it.
 
 Commit: `db: remove unused oidc refresh token table`
 
-## Task 1.4 — Enforce final encrypted-value storage
+## Task 1.4 — Enforce the final encrypted-value storage
 
-Audit semua recoverable secret: TOTP, webhook, SCIM, JWKS/private material, dan settings sensitif.
-Pastikan seluruh write memakai `pkg/crypto.Cipher.Encrypt`, seluruh read memakai `Decrypt`, dan
-semua known encrypted columns memiliki marker check yang sesuai.
+Audit every recoverable secret: TOTP, webhook, SCIM, JWKS/private material, and sensitive
+settings. Make sure every write goes through `pkg/crypto.Cipher.Encrypt`, every read through
+`Decrypt`, and every known encrypted column has the matching marker check.
 
-Tambahkan real-Postgres tests untuk malformed prefix, missing prefix, wrong key, tampering, dan
-redaction. Hash-only values tetap hash dan tidak boleh dipindah ke encryption.
+Add real-Postgres tests for malformed prefix, missing prefix, wrong key, tampering, and
+redaction. Hash-only values stay hashes and must never move to encryption.
 
 Commit: `test: enforce final encrypted value storage`
 
-## Acceptance criteria fase
+## Phase acceptance criteria
 
-- Tidak ada `legacy`, fallback reader, dual write, atau compatibility adapter pada client secret.
-- Fresh schema dan migration upgrade menghasilkan schema final yang sama.
-- Tidak ada kolom atau tabel obsolete yang tidak memiliki caller final.
-- Semua recoverable secrets memakai format `enc:`.
-- Migration version/count assertions sudah diperbarui.
+- No `legacy`, fallback reader, dual write, or compatibility adapter remains for client secrets.
+- Fresh schema and migration upgrade produce the same final schema.
+- No obsolete column or table without a final caller remains.
+- Every recoverable secret uses the `enc:` format.
+- Migration version/count assertions are updated.
 
+## Evidence
+
+All four tasks committed and validated (2026-09-17):
+
+- Task 1.1 — commit `cd085ef`. Final shape: credentials JSONB only; `CreateClient` seeds one
+  active entry, `UpdateClient` with `SecretHash` replaces the whole list (rotation), `AddClientSecret`
+  appends, `DeleteClientSecret` removes. `secretMatches` reads the credentials list only;
+  `has_secret` reports an active, unexpired entry. Tests: `modules/federation/oidc/client_secret_test.go`
+  (lifecycle + no-legacy-fallback over real Postgres).
+- Task 1.2 — commit `b52886c`. Migration `00009_drop_obsolete_oidc_client_columns.sql` drops
+  `secret`, `image_type`, `dark_image_type`. `has_logo` derives from `logo_path`; `has_dark_logo`
+  removed from the meta view, the apiaccess `ClientRef`, and the SDK zod schemas/fixtures.
+  Schema contract test asserts the columns are absent (`database/schema_fresh_test.go`).
+- Task 1.3 — commit `e17a7e0`. Migration `00010_drop_unused_oidc_refresh_tokens.sql` drops the
+  table and `idx_oidc_refresh_tokens_expires_at`; no runtime caller existed (runtime refresh
+  tokens are `oauth2_sessions` rows). Migrator count/assertions updated.
+- Task 1.4 — commit `e7fbfd7`. Sensitive settings (`smtp_password`) are sealed with `enc:` on
+  write and decrypted on read via the module cipher (wired in `internal/registry/registry.go`);
+  an undecryptable value fails closed (no plaintext fallback). The SCIM provider token decrypts
+  strictly (the plaintext fallback reader is gone). Marker checks now cover `user_mfa_totp.secret_enc`
+  and `jwks.private_key` in addition to webhook/SCIM (`database/schema_contract_test.go`).
+  Migration `00011_enforce_app_config_sensitive_enc.sql` adds the conditional CHECK and purges
+  un-encryptable plaintext overrides. Tests: `appconfig/store_test.go` (enc: at rest, fail-closed
+  on tampering), `scimsync/store_test.go` (enc: at rest, strict decrypt), real-Postgres wrong
+  key/tampering covered in both.
+
+Validation run at close: `go vet ./...` pass, `gofmt -l` clean, full `go test -tags release ./...`
+pass (exit 0), debug-tag `./cmd/... ./database/...` pass, vitest 76/76 pass, `tsc -b --noEmit`
+clean. Migrations count is 11; assertions live in `database/migrator_test.go` and
+`cmd/launcher/db_migrate*_test.go`.

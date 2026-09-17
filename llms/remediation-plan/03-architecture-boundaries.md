@@ -4,53 +4,50 @@ updated: 2026-09-17
 owner: tango-remediation
 ---
 
-# Phase 3 — Pemisahan Architecture Boundary
+# Phase 3 — Architecture Boundary Separation
 
-Prasyarat: Phase 1 dan Phase 2 selesai.
+Prerequisite: Phase 1 and Phase 2 done.
 
 ## Task 3.1 — Separate recovery HTTP handlers from use cases
 
-Pisahkan `modules/identity/recovery` menjadi request/response handler dan service/use-case layer.
-Service tidak boleh mengimpor `net/http`, chi, middleware, atau responder. Handler menerjemahkan
-sentinel/typed errors ke envelope.
+Split `modules/identity/recovery` into request/response handlers and a service/use-case layer.
+The service must not import `net/http`, chi, middleware, or responder. Handlers translate
+sentinel/typed errors into the envelope.
 
-Pertahankan generic forgot-password response, token single-use, session invalidation, cookie
-rotation, dan email queue behavior.
+Preserve the generic forgot-password response, token single-use, session invalidation, cookie
+rotation, and email queue behavior.
 
-Tambahkan unit tests service tanpa HTTP serta handler tests untuk body, status, envelope, dan
-cookies.
+Add service unit tests without HTTP plus handler tests for body, status, envelope, and cookies.
 
 Commit: `refactor: separate recovery transport from service`
 
 ## Task 3.2 — Normalize federation transport boundaries
 
-Audit `authorize`, `token`, `device`, `PAR`, `userinfo`, discovery, dan metadata code. Pisahkan
-protocol handler dari service/store ketika file tersebut mencampur use case dan HTTP response
-mapping.
+Audit the `authorize`, `token`, `device`, `PAR`, `userinfo`, discovery, and metadata code. Split
+protocol handlers from service/store when a file mixes use cases with HTTP response mapping.
 
-Protocol exceptions tetap bare sesuai OIDC/OAuth; endpoint JSON biasa tetap memakai responder.
-Jangan memindahkan responder ke store atau domain service.
+Protocol exceptions stay bare per OIDC/OAuth; ordinary JSON endpoints keep using responder. Do
+not move responder into stores or domain services.
 
 Commit: `refactor: isolate federation protocol handlers`
 
 ## Task 3.3 — Add enforceable architecture checks
 
-Perluas architecture tests untuk mendeteksi:
+Extend the architecture tests to detect:
 
-- responder/net/http/chi import pada service dan store files;
-- concrete sibling-module imports di luar composition root;
-- store files yang mengakses `Pool()` langsung;
-- route registration di luar module route methods;
+- responder/net/http/chi imports in service and store files;
+- concrete sibling-module imports outside the composition root;
+- store files touching `Pool()` directly;
+- route registration outside module route methods;
 - duplicate method+path.
 
-Aturan harus memiliki false-positive exception yang eksplisit hanya untuk protocol handler files.
+The rules must have explicit false-positive exceptions only for protocol handler files.
 
 Commit: `test: enforce application architecture boundaries`
 
-## Acceptance criteria fase
+## Phase acceptance criteria
 
-- Domain/service package dapat diuji tanpa HTTP transport.
-- Handler adalah satu-satunya layer yang memetakan domain error ke HTTP response.
-- Architecture tests menangkap regression secara otomatis.
-- Tidak ada module baru atau nested generic internal architecture.
-
+- Domain/service packages are testable without the HTTP transport.
+- Handlers are the only layer mapping domain errors to HTTP responses.
+- Architecture tests catch regressions automatically.
+- No new module or nested generic internal architecture appears.

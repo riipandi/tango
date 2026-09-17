@@ -4,75 +4,74 @@ updated: 2026-09-17
 owner: tango-remediation
 ---
 
-# Phase 5 — Verification Runtime dan Live Contract
+# Phase 5 — Runtime Verification and Live Contract
 
-Prasyarat: semua code/schema/contract task fase sebelumnya selesai.
+Prerequisite: every code/schema/contract task of the previous phases is done.
 
-## Task 5.1 — Repair focused test execution environment
+## Task 5.1 — Repair the focused test execution environment
 
-Pastikan test dapat dijalankan pada environment yang mendukung:
+Make sure tests run in an environment that provides:
 
-- Docker daemon untuk testcontainers Postgres/Mailpit;
-- listener HTTP untuk `httptest`;
-- explicit timeout dan fail-fast behavior.
+- a Docker daemon for the testcontainers Postgres/Mailpit;
+- HTTP listeners for `httptest`;
+- explicit timeout and fail-fast behavior.
 
-Jangan mengubah test menjadi skip hanya untuk membuat gate hijau. Jika sandbox tidak mendukung,
-jalankan pada host/devbox yang sesuai dan simpan command serta hasilnya.
+Do not turn tests into skips just to make the gate green. If the sandbox cannot support it, run
+on a matching host/devbox and record the commands and results.
 
 Commit: `test: make remediation verification reproducible`
 
 ## Task 5.2 — Run database and race verification
 
-Jalankan dengan timeout eksplisit:
+Run with explicit timeouts:
 
 - fresh migration up/down/up;
-- schema contract dan migration tests;
-- seluruh Go release/debug suites;
-- race test untuk identity MFA, webhook, queue, dan store yang diubah;
-- `go vet`, `gofmt`, `task lint`, `task check`, dan typecheck.
+- schema contract and migration tests;
+- the full Go release/debug suites;
+- race tests for identity MFA, webhook, queue, and the changed stores;
+- `go vet`, `gofmt`, `task lint`, `task check`, and the typecheck.
 
-Perbaiki failure source satu per satu; setiap fix adalah atomic commit terpisah.
+Fix failure sources one at a time; every fix is its own atomic commit.
 
 Commit: `test: verify database and race gates`
 
-## Task 5.3 — Re-run endpoint matrix
+## Task 5.3 — Re-run the endpoint matrix
 
-Bandingkan tango dengan local upstream Pocket ID v2.14.0 untuk setiap in-scope endpoint:
+Compare tango against the local upstream Pocket ID v2.14.0 for every in-scope endpoint:
 
 - method/path;
 - query/path parameters;
 - request encoding;
-- auth boundary dan headers;
-- status, headers, envelope, bare response, dan error fields;
-- pagination dan TypeID behavior.
+- auth boundary and headers;
+- status, headers, envelope, bare response, and error fields;
+- pagination and TypeID behavior.
 
-Catat hanya intentional deviation di `llms/tango-deviations.md`. Jangan menyesuaikan matrix untuk
-menutupi defect tanpa memperbaiki implementation atau mendapat keputusan owner.
+Record only intentional deviations in `llms/tango-deviations.md`. Never adjust the matrix to
+paper over a defect without fixing the implementation or getting an owner decision.
 
 Commit: `docs: refresh endpoint parity evidence`
 
 ## Task 5.4 — Re-send Yaak live verification
 
-Gunakan clean cookie jar dan fresh Postgres. Re-send seluruh request yang berubah, minimum:
+Use a clean cookie jar and a fresh Postgres. Re-send every changed request, at minimum:
 
 - password/recovery;
 - TOTP enrollment/confirm/verify/recovery/disable;
-- OIDC client secret lifecycle;
+- the OIDC client secret lifecycle;
 - device/PAR/token/userinfo;
 - SCIM/JWKS;
 - webhook CRUD/rotation/test/delivery/retry;
 - excluded route negative checks.
 
-Simpan nama request, observed status, header differences, dan tanggal verifikasi. Jangan menyimpan
-secret, token, recovery code, seed, atau ciphertext.
+Record the request names, observed statuses, header differences, and verification dates. Never
+store secrets, tokens, recovery codes, seeds, or ciphertext.
 
 Commit: `test: record live remediation verification`
 
-## Acceptance criteria fase
+## Phase acceptance criteria
 
-- Full gates benar-benar berjalan pada environment yang sesuai.
-- Fresh database hanya berisi final schema.
-- Race test dan security cases lulus.
-- Semua in-scope endpoint memiliki evidence matrix dan Yaak terbaru.
-- Tidak ada stale request atau undocumented deviation.
-
+- The full gates really run in a matching environment.
+- A fresh database holds only the final schema.
+- Race tests and security cases pass.
+- Every in-scope endpoint has a current evidence matrix and Yaak run.
+- No stale request or undocumented deviation remains.
