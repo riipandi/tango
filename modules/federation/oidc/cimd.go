@@ -52,7 +52,9 @@ func fetchMetadataDocument(ctx context.Context, fetcher DocumentFetcher, documen
 
 	status, body, err := fetcher.SendRaw(ctx, "GET", documentURL, map[string]string{"Accept": "application/json"}, nil)
 	if err != nil {
-		return nil, metadataError{fmt.Errorf("metadata document fetch: %w", err)}
+		// The transport detail (host, dial error) stays in the logs,
+		// never in the caller-facing message.
+		return nil, metadataError{errors.New("metadata document is unreachable or invalid")}
 	}
 	if status != 200 {
 		return nil, metadataError{fmt.Errorf("metadata document fetch: unexpected status %d", status)}
@@ -63,7 +65,7 @@ func fetchMetadataDocument(ctx context.Context, fetcher DocumentFetcher, documen
 
 	var doc MetadataDocument
 	if err := jsonv2.Unmarshal(body, &doc); err != nil {
-		return nil, metadataError{fmt.Errorf("metadata document parse: %w", err)}
+		return nil, metadataError{errors.New("metadata document is not valid JSON")}
 	}
 	return &doc, nil
 }

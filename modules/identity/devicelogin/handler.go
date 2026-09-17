@@ -122,7 +122,7 @@ func (s *Service) handleInspect(w http.ResponseWriter, r *http.Request) {
 
 	info, err := s.Inspect(r.Context(), req.Code)
 	if err != nil {
-		responder.Fail(w, r, http.StatusNotFound, "device login request is invalid or expired: "+err.Error())
+		responder.Fail(w, r, http.StatusNotFound, "device login request is invalid or expired")
 		return
 	}
 	responder.Success(w, r, http.StatusOK, info)
