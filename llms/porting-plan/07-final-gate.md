@@ -60,8 +60,9 @@ endpoint reference.
 
 Final baselines (all green):
 
-- `gotestsum ./...` — 566 tests.
-- `gotestsum -- -tags debug ./cmd/... ./database/...` — 36 tests.
+- `task test` — the full gate: Go release-tag suite (566), debug-tag suite (36), and the
+  frontend vitest suite (4 smoke tests over the api-client schemas; the SDK is a placeholder,
+  so the suite pins the zod contract surface and keeps the task green until real modules land).
 - `gotestsum -- -tags release ./...` — 564 tests.
 - Race-enabled focused suites: `go test -race ./modules/webhook/ ./modules/identity/totp/ ./internal/queue/`.
 - `task lint` — 0 issues; `task check` — 0 warnings, 0 errors.
