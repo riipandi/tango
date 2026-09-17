@@ -16,7 +16,7 @@ body:
       "session_duration": "43200"
     }
 bodyType: application/json
-description: Update application configuration settings — partial body; snake_case keys (upstream camelCase); SMTP/LDAP stay env-only in tango
+description: Update application configuration settings — partial body; snake_case keys (upstream camelCase); sensitive values redact in the admin view
 headers: []
 method: PUT
 name: Update application configurations
