@@ -75,7 +75,7 @@ func newTestServer(t *testing.T, cfg *config.Config, guard kernel.Guard) *HTTPSe
 			idModule.APIRoutes(r, identity.RouteGroups{})
 		},
 		RequireSession: guard,
-	}, cfg, testLogger(), nil, nil)
+	}, cfg, testLogger(), nil, nil, nil)
 }
 
 // denyAllGuard rejects every request with the standard 401 envelope,
@@ -186,7 +186,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 
 func TestHTTPServerShutdown(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(RouteSet{}, cfg, testLogger(), nil, nil)
+	srv := NewHTTPServer(RouteSet{}, cfg, testLogger(), nil, nil, nil)
 
 	// Shutdown is safe before the server listens.
 	assert.NoError(t, srv.Shutdown(contextWithTimeout()))

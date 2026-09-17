@@ -29,7 +29,9 @@ type RouteSet struct {
 }
 
 // NewHTTPServer wires middleware, core routes, and runtime routes.
-func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limiter func(http.Handler) http.Handler, latest LatestVersionSource) *HTTPServer {
+// The checks back the API readiness endpoint; each check is owned by
+// the composition root.
+func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limiter func(http.Handler) http.Handler, latest LatestVersionSource, checks []HealthCheck) *HTTPServer {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -38,6 +40,8 @@ func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limit
 	r.Use(middleware.CORS())
 
 	r.Get("/static/*", StaticAssetsHandler)
+	// Root healthz is liveness: the process is up, dependencies are
+	// not touched so a broken database cannot restart the pod loop.
 	r.Get("/healthz", RootHealthzHandler)
 	r.Get("/.well-known/version", VersionHandler)
 
@@ -51,7 +55,7 @@ func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limit
 			r.Use(limiter)
 		}
 		r.Get("/", APIRootHandler)
-		r.Get("/healthz", HealthCheckHandler)
+		r.Get("/healthz", newHealthHandler(checks).ServeHTTP)
 		if routes.RequireSession != nil {
 			r.Get("/version/current", routes.RequireSession(http.HandlerFunc(VersionCurrentHandler)).ServeHTTP)
 		}

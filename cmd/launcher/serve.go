@@ -143,7 +143,13 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		return fmt.Errorf("start modules: %w", err)
 	}
 
-	srv := transport.NewHTTPServer(transport.RouteSet{MountRoot: rt.MountRoot, MountAPI: rt.MountAPI, RequireSession: rt.SessionGuard()}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs))
+	// Postgres is the only runtime dependency; the queue rides the
+	// same pool, so one ping covers both.
+	healthChecks := []transport.HealthCheck{
+		{Name: "database", Check: db.HealthCheck},
+	}
+
+	srv := transport.NewHTTPServer(transport.RouteSet{MountRoot: rt.MountRoot, MountAPI: rt.MountAPI, RequireSession: rt.SessionGuard()}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs), healthChecks)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	serveErr := make(chan error, 1)
 	go func() {

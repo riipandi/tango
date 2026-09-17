@@ -1,6 +1,8 @@
 package transport
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,15 +29,43 @@ func testConfig() *config.Config {
 	}
 }
 
-func TestHealthzLiveness(t *testing.T) {
-	w := httptest.NewRecorder()
-	HealthCheckHandler(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+// TestAPIHealthzReadiness checks the real readiness handler: every
+// dependency check passes → 200 "up"; any failing check → 503
+// "down" with the failing component named.
+func TestAPIHealthzReadiness(t *testing.T) {
+	healthy := []HealthCheck{
+		{Name: "database", Check: func(ctx context.Context) error { return nil }},
+	}
 
+	w := httptest.NewRecorder()
+	newHealthHandler(healthy).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/healthz", nil))
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var body map[string]string
-	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &body))
-	assert.Equal(t, "healthy", body["status"])
+	var up struct {
+		Status string `json:"status"`
+	}
+	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &up))
+	assert.Equal(t, "up", up.Status)
+
+	failing := []HealthCheck{
+		{Name: "database", Check: func(ctx context.Context) error { return nil }},
+		{Name: "cache", Check: func(ctx context.Context) error { return errors.New("connection refused") }},
+	}
+
+	w = httptest.NewRecorder()
+	newHealthHandler(failing).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/healthz", nil))
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+
+	var down struct {
+		Status  string `json:"status"`
+		Details map[string]struct {
+			Status string `json:"status"`
+		} `json:"details"`
+	}
+	require.NoError(t, jsonUnmarshal(w.Body.Bytes(), &down))
+	assert.Equal(t, "down", down.Status)
+	assert.Equal(t, "up", down.Details["database"].Status)
+	assert.Equal(t, "down", down.Details["cache"].Status)
 }
 
 // TestRootHealthzAndVersionEndpoints checks health and version endpoints.
@@ -112,7 +142,7 @@ func TestAPIRootHandler(t *testing.T) {
 
 func TestStaticAssetsHandler(t *testing.T) {
 	cfg := testConfig()
-	srv := NewHTTPServer(RouteSet{}, cfg, testLogger(), nil, nil)
+	srv := NewHTTPServer(RouteSet{}, cfg, testLogger(), nil, nil, nil)
 
 	// Missing files return JSON 404.
 	w := httptest.NewRecorder()

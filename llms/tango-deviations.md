@@ -28,9 +28,12 @@ match the upstream endpoint contract.
 - **TOTP MFA surface** — `/api/mfa/totp/*` (enroll, confirm, status, verify, recovery-code
   rotation, disablement) per the endpoint reference's MFA contract: `enc:`-sealed seeds, hashed
   single-use recovery codes, pending-auth bridging between password sign-in and full session.
-- **`/api/healthz`** — an envelope-form health probe inside the API group for deploy tooling
-  that cannot reach the root router; the upstream-parity `GET /healthz` (204, no body) stays
-  mounted at the root.
+- **`/api/healthz`** — a bare readiness probe inside the API group for deploy tooling that cannot
+  reach the root router. Built on `github.com/alexliesenfeld/health`: dependency checks (Postgres
+  ping, owned by the composition root) run with bounded timeouts and a 5s result cache; the
+  response is the library document `{"status": "up"|"down", "details": {...}}` — 200 only when
+  every check passes, 503 otherwise. The upstream-parity `GET /healthz` (204, no body) stays
+  mounted at the root as the liveness probe and never touches dependencies.
 - **`/.well-known/version`** — a bare version document under `.well-known` for instance
   fingerprinting; the upstream-parity version endpoints stay under `/api/version/*`.
 

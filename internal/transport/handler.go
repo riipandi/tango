@@ -11,13 +11,6 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// HealthCheckHandler reports application health.
-func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
-	responder.WriteJSON(w, http.StatusOK, map[string]string{
-		"status": "healthy",
-	})
-}
-
 // APIRootHandler returns build metadata.
 func APIRootHandler(w http.ResponseWriter, r *http.Request) {
 	responder.Success(w, r, http.StatusOK, map[string]string{
