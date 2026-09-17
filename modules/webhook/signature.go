@@ -43,7 +43,7 @@ type OutboundDelivery struct {
 
 // Sign renders one outbound request: the signature covers a timestamp
 // prefix concatenated with the exact committed body bytes.
-func Sign(event, endpoint, method string, custom map[string]string, body []byte, secret string, at time.Time) (OutboundDelivery, error) {
+func Sign(event, endpoint, method string, hookID WebhookID, custom map[string]string, body []byte, secret string, at time.Time) (OutboundDelivery, error) {
 	timestamp := strconv.FormatInt(at.Unix(), 10)
 	headers := make(map[string]string, len(custom)+4)
 	for name, value := range custom {
@@ -51,6 +51,7 @@ func Sign(event, endpoint, method string, custom map[string]string, body []byte,
 	}
 	headers["Content-Type"] = "application/json"
 	headers[EventHeader] = event
+	headers[DeliveryHeader] = hookID.String()
 	headers[SignatureHeader] = SignatureHeaderValue(timestamp, body, secret)
 
 	return OutboundDelivery{URL: endpoint, Method: method, Headers: headers, Body: body}, nil

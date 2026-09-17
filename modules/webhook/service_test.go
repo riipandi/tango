@@ -496,7 +496,7 @@ func TestHTTPDeliveryAgainstLiveReceiver(t *testing.T) {
 	stored, err := store.DeliveryForSend(ctx, recorded.ID)
 	require.NoError(t, err)
 	assert.Equal(t, string(body), string(stored.Body), "the stored bytes are the delivered bytes")
-	fresh, err := Sign(stored.Event, hook.Endpoint, hook.Method, nil, stored.Body, *hook.Secret, time.Now().UTC())
+	fresh, err := Sign(stored.Event, hook.Endpoint, hook.Method, hook.ID, nil, stored.Body, *hook.Secret, time.Now().UTC())
 	require.NoError(t, err)
 	require.NoError(t, VerifySignature(fresh.Headers[SignatureHeader], stored.Body, *hook.Secret, time.Now().UTC()))
 }

@@ -18,7 +18,7 @@ func TestSignProducesVerifiableDelivery(t *testing.T) {
 	body, err := CanonicalPayload(map[string]any{"event": "user.created", "user_id": "user_01m2"})
 	require.NoError(t, err)
 
-	delivery, err := Sign("user.created", "https://example.test/hook", "POST",
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", WebhookID{},
 		map[string]string{"X-Custom": "1"}, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 
@@ -43,7 +43,7 @@ func TestSignSignatureVector(t *testing.T) {
 	// a third-party receiver verifier asserts against.
 	body, err := CanonicalPayload(map[string]any{"event": "user.created"})
 	require.NoError(t, err)
-	delivery, err := Sign("user.created", "https://example.test/hook", "POST", nil, body, "s3cret", fixedTime)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", WebhookID{}, nil, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 
 	assert.Equal(t, `{"event":"user.created"}`, string(delivery.Body))
@@ -54,7 +54,7 @@ func TestSignSignsTheExactBytes(t *testing.T) {
 	// The signature must cover the bytes as given, not a
 	// re-serialization of them.
 	body := []byte(`{"event":"user.created"}`)
-	delivery, err := Sign("user.created", "https://example.test/hook", "POST", nil, body, "s3cret", fixedTime)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", WebhookID{}, nil, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 	require.NoError(t, VerifySignature(delivery.Headers[SignatureHeader], body, "s3cret", fixedTime))
 }
@@ -73,7 +73,7 @@ func TestSignCanonicalPayloadStableAcrossCalls(t *testing.T) {
 func TestVerifySignatureRejectsTamperedBody(t *testing.T) {
 	body, err := CanonicalPayload(map[string]any{"event": "user.created"})
 	require.NoError(t, err)
-	delivery, err := Sign("user.created", "https://example.test/hook", "POST", nil, body, "s3cret", fixedTime)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", WebhookID{}, nil, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 
 	tampered := append([]byte{}, delivery.Body...)
@@ -86,7 +86,7 @@ func TestVerifySignatureRejectsTamperedBody(t *testing.T) {
 func TestVerifySignatureRejectsWrongSecret(t *testing.T) {
 	body, err := CanonicalPayload(map[string]any{"event": "user.created"})
 	require.NoError(t, err)
-	delivery, err := Sign("user.created", "https://example.test/hook", "POST", nil, body, "s3cret", fixedTime)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", WebhookID{}, nil, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 
 	err = VerifySignature(delivery.Headers[SignatureHeader], delivery.Body, "other", fixedTime)
@@ -96,7 +96,7 @@ func TestVerifySignatureRejectsWrongSecret(t *testing.T) {
 func TestVerifySignatureRejectsStaleTimestamp(t *testing.T) {
 	body, err := CanonicalPayload(map[string]any{"event": "user.created"})
 	require.NoError(t, err)
-	delivery, err := Sign("user.created", "https://example.test/hook", "POST", nil, body, "s3cret", fixedTime)
+	delivery, err := Sign("user.created", "https://example.test/hook", "POST", WebhookID{}, nil, body, "s3cret", fixedTime)
 	require.NoError(t, err)
 
 	// Replay beyond the tolerance window fails even with a valid MAC.

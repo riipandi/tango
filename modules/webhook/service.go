@@ -296,7 +296,7 @@ func (s *Service) Deliver(ctx context.Context, task WebhookDeliveryTask) error {
 		return s.finish(ctx, deliveryID, AttemptResult{Err: fmt.Errorf("webhook: decrypt secret: %w", err)})
 	}
 
-	outbound, err := Sign(delivery.Event, hook.Endpoint, hook.Method, hook.Headers, delivery.Body, secret, s.now())
+	outbound, err := Sign(delivery.Event, hook.Endpoint, hook.Method, hook.ID, hook.Headers, delivery.Body, secret, s.now())
 	if err != nil {
 		return s.finish(ctx, deliveryID, AttemptResult{Err: err})
 	}

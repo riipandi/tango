@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_mqQSXZc2Zt
+createdAt: 2026-09-17T09:39:07.887960
+updatedAt: 2026-09-17T09:39:07.887960
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_t3sGoeSaUF
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: application/json
+description: Send a test delivery — 202 + delivery_id; bypasses the subscription filter
+headers: []
+method: POST
+name: Send webhook test delivery
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/webhooks/${[ webhookId ]}/test
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto
