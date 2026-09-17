@@ -3,6 +3,7 @@ package appconfig
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -12,6 +13,7 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
@@ -25,6 +27,7 @@ type Module struct {
 	mailer      MailSender
 	guard       func(http.Handler) http.Handler
 	envDefaults map[string]string
+	cipher      *crypto.Cipher
 }
 
 var _ = (*Module)(nil)
@@ -68,6 +71,14 @@ func (m *Module) WithEnvDefaults(defaults map[string]string) *Module {
 	return m
 }
 
+// WithCipher wires the seal for sensitive settings; without one the
+// module rejects writes to sensitive keys and returns stored
+// ciphertext untouched on reads (fail closed).
+func (m *Module) WithCipher(cipher *crypto.Cipher) *Module {
+	m.cipher = cipher
+	return m
+}
+
 // Name identifies the module.
 func (*Module) Name() string { return ModuleName }
 
@@ -105,12 +116,22 @@ func (m *Module) listPublic(w http.ResponseWriter, r *http.Request) {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
-	responder.Success(w, r, http.StatusOK, publicView(m.merged(r.Context(), overrides)))
+	merged, err := m.merged(r.Context(), overrides)
+	if err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+	responder.Success(w, r, http.StatusOK, publicView(merged))
 }
 
-// merged folds the module's env defaults with the stored overrides.
-func (m *Module) merged(ctx context.Context, overrides map[string]string) map[string]string {
-	return mergedValues(m.envDefaults, overrides)
+// merged folds the module's env defaults with the stored overrides,
+// revealing the encrypted sensitive values.
+func (m *Module) merged(ctx context.Context, overrides map[string]string) (map[string]string, error) {
+	plain, err := m.decryptOverrides(overrides)
+	if err != nil {
+		return nil, err
+	}
+	return mergedValues(m.envDefaults, plain), nil
 }
 
 // MergedValues folds env defaults with stored overrides — the
@@ -121,7 +142,34 @@ func (m *Module) MergedValues(ctx context.Context) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return m.merged(ctx, overrides), nil
+	return m.merged(ctx, overrides)
+}
+
+// decryptOverrides reveals sensitive stored values. An undecryptable
+// value (wrong key, tampering) is a configuration error: it fails
+// closed instead of leaking ciphertext or falling back to plaintext.
+func (m *Module) decryptOverrides(overrides map[string]string) (map[string]string, error) {
+	if m.cipher == nil {
+		for key, value := range overrides {
+			if entry, known := lookup(key); known && entry.Sensitive && value != "" {
+				return nil, fmt.Errorf("sensitive setting %s cannot be revealed: no cipher configured", key)
+			}
+		}
+		return overrides, nil
+	}
+
+	out := make(map[string]string, len(overrides))
+	for key, value := range overrides {
+		if entry, known := lookup(key); known && entry.Sensitive && value != "" {
+			plain, err := m.cipher.Decrypt(value)
+			if err != nil {
+				return nil, fmt.Errorf("sensitive setting %s cannot be revealed: %w", key, err)
+			}
+			value = plain
+		}
+		out[key] = value
+	}
+	return out, nil
 }
 
 // listAll serves GET /application-configuration/all (admin): every
@@ -132,7 +180,12 @@ func (m *Module) listAll(w http.ResponseWriter, r *http.Request) {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
-	responder.Success(w, r, http.StatusOK, allView(m.merged(r.Context(), overrides)))
+	merged, err := m.merged(r.Context(), overrides)
+	if err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+	responder.Success(w, r, http.StatusOK, allView(merged))
 }
 
 // updateRequest is the PUT /application-configuration body:
@@ -163,11 +216,16 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only catalog keys persist; the rest never reach the store.
+	// Sensitive values are sealed before they hit the disk.
 	known := map[string]string{}
 	for key, value := range req {
 		if _, ok := lookup(key); ok {
 			known[key] = value
 		}
+	}
+	if err := m.sealSensitive(known); err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
 	}
 	if err := m.store.Upsert(r.Context(), known); err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
@@ -179,7 +237,37 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
-	responder.Success(w, r, http.StatusOK, allView(m.merged(r.Context(), overrides)))
+	merged, err := m.merged(r.Context(), overrides)
+	if err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+	responder.Success(w, r, http.StatusOK, allView(merged))
+}
+
+// sealSensitive encrypts every sensitive value in place. Empty
+// values stay empty (clearing a setting).
+func (m *Module) sealSensitive(values map[string]string) error {
+	if m.cipher == nil {
+		for key, value := range values {
+			if entry, known := lookup(key); known && entry.Sensitive && value != "" {
+				return fmt.Errorf("sensitive setting %s cannot be sealed: no cipher configured", key)
+			}
+		}
+		return nil
+	}
+	for key, value := range values {
+		entry, known := lookup(key)
+		if !known || !entry.Sensitive || value == "" {
+			continue
+		}
+		sealed, err := m.cipher.Encrypt(value)
+		if err != nil {
+			return fmt.Errorf("sensitive setting %s cannot be sealed: %w", key, err)
+		}
+		values[key] = sealed
+	}
+	return nil
 }
 
 // testEmailRequest is the POST /application-configuration/test-email

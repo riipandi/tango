@@ -13,12 +13,14 @@ import (
 
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
 // newStoreStack boots a throwaway Postgres, applies migrations, and
-// returns the real store wired into the module.
-func newStoreStack(t *testing.T) (Store, *Module) {
+// returns the real store (raw stored values) and data store wired
+// into the cipher-sealed module.
+func newStoreStack(t *testing.T) (Store, datastore.Store, *Module) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -31,9 +33,12 @@ func newStoreStack(t *testing.T) (Store, *Module) {
 	require.NoError(t, err)
 	t.Cleanup(func() { ds.Close() })
 
+	cipher, err := crypto.NewCipher(make([]byte, 32))
+	require.NoError(t, err)
+
 	store := NewPostgresStore(ds)
-	return store, func() *Module {
-		return New(nil, WithGuard(testPrincipalContext)).WithStore(store)
+	return store, ds, func() *Module {
+		return New(nil, WithGuard(testPrincipalContext)).WithStore(store).WithCipher(cipher)
 	}()
 }
 
@@ -41,7 +46,7 @@ func newStoreStack(t *testing.T) (Store, *Module) {
 // trip: defaults fold with overrides, validation rejects bad values,
 // unknown keys are ignored.
 func TestConfigCRUD(t *testing.T) {
-	_, module := newStoreStack(t)
+	_, _, module := newStoreStack(t)
 	router := mount(t, module)
 
 	// Public view (no guard): defaults only, public keys.
@@ -129,7 +134,7 @@ func TestConfigCRUD(t *testing.T) {
 // never leave the server, while MergedValues still serves the real
 // secret to wired consumers.
 func TestEnvDefaultsAndSensitiveRedaction(t *testing.T) {
-	_, module := newStoreStack(t)
+	store, _, module := newStoreStack(t)
 	module = module.WithEnvDefaults(map[string]string{
 		"smtp_host":     "relay.example",
 		"smtp_password": "env-secret",
@@ -180,4 +185,38 @@ func TestEnvDefaultsAndSensitiveRedaction(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "db-secret", merged["smtp_password"])
 	assert.Equal(t, "db-relay.example", merged["smtp_host"])
+
+	// The stored override is sealed: the raw row carries the enc:
+	// marker, never the plaintext.
+	stored, err := store.List(ctx)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(stored["smtp_password"], "enc:"),
+		"stored sensitive value must carry the enc: marker, got %q", stored["smtp_password"])
+}
+
+// TestSensitiveSealFailClosed covers undecryptable stored values:
+// tampering or a foreign key surfaces as an error instead of a
+// plaintext fallback or ciphertext leak.
+func TestSensitiveSealFailClosed(t *testing.T) {
+	_, ds, module := newStoreStack(t)
+	router := mount(t, module)
+	ctx := t.Context()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/application-configuration",
+		strings.NewReader(`{"smtp_password":"db-secret"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	// Tamper with the stored ciphertext.
+	_, err := ds.Exec(ctx, `UPDATE public.app_config SET value = 'enc:AAAA' WHERE key = 'smtp_password'`)
+	require.NoError(t, err)
+
+	_, err = module.MergedValues(ctx)
+	assert.Error(t, err, "a tampered sensitive value must fail closed")
+
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/application-configuration/all", nil))
+	assert.Equal(t, http.StatusInternalServerError, w.Code, "admin view refuses to render a tampered secret")
 }

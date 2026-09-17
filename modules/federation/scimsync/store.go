@@ -73,7 +73,7 @@ func (s *PostgresStore) GetByID(ctx context.Context, id SCIMServiceProviderID) (
 	if err != nil {
 		return ServiceProvider{}, fmt.Errorf("scimsync: get provider: %w", err)
 	}
-	return s.decrypt(p), nil
+	return s.decrypt(p)
 }
 
 // GetByClient loads the provider bound to an OIDC client; ErrNotFound
@@ -88,7 +88,7 @@ func (s *PostgresStore) GetByClient(ctx context.Context, clientID string) (Servi
 	if err != nil {
 		return ServiceProvider{}, fmt.Errorf("scimsync: get provider by client: %w", err)
 	}
-	return s.decrypt(p), nil
+	return s.decrypt(p)
 }
 
 // List returns all providers (admin surface; the set is small).
@@ -110,7 +110,11 @@ func (s *PostgresStore) List(ctx context.Context) ([]ServiceProvider, error) {
 		if err != nil {
 			return nil, fmt.Errorf("scimsync: scan provider: %w", err)
 		}
-		out = append(out, s.decrypt(p))
+		revealed, err := s.decrypt(p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, revealed)
 	}
 	return out, rows.Err()
 }
@@ -141,7 +145,7 @@ func (s *PostgresStore) Create(ctx context.Context, params UpsertParams) (Servic
 	}
 	// RETURNING hands back the ciphertext; callers get the plaintext
 	// view like on reads (the token is shown once, on write).
-	return s.decrypt(p), nil
+	return s.decrypt(p)
 }
 
 // Update replaces endpoint/token for one provider.
@@ -176,7 +180,7 @@ func (s *PostgresStore) Update(ctx context.Context, id SCIMServiceProviderID, pa
 	}
 	// RETURNING hands back the ciphertext; callers get the plaintext
 	// view like on reads (the token is shown once, on write).
-	return s.decrypt(p), nil
+	return s.decrypt(p)
 }
 
 // queryProvider runs a RETURNING query and drains it fully: pgx
@@ -248,11 +252,16 @@ func (s *PostgresStore) ensureClient(ctx context.Context, clientID string) error
 	return nil
 }
 
-func (s *PostgresStore) decrypt(p ServiceProvider) ServiceProvider {
-	if plain, err := s.cipher.Decrypt(p.Token); err == nil {
-		p.Token = plain
+// decrypt reveals the stored bearer token. The enc: marker check
+// makes plaintext-at-rest impossible, so a decrypt failure means a
+// foreign key or tampering — surfaced, never treated as plaintext.
+func (s *PostgresStore) decrypt(p ServiceProvider) (ServiceProvider, error) {
+	plain, err := s.cipher.Decrypt(p.Token)
+	if err != nil {
+		return ServiceProvider{}, fmt.Errorf("scimsync: reveal provider token: %w", err)
 	}
-	return p
+	p.Token = plain
+	return p, nil
 }
 
 func isUniqueViolation(err error) bool {

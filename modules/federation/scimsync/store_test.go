@@ -131,3 +131,37 @@ func TestProviderGetByClient(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, created.ID.String(), got.ID.String())
 }
+
+// TestProviderSealedAtRest verifies the enc: marker lands in the
+// raw row and that an undecryptable token (wrong key, tampering)
+// fails closed instead of passing ciphertext or plaintext through.
+func TestProviderSealedAtRest(t *testing.T) {
+	store, ds := newStore(t)
+	ctx := t.Context()
+
+	params := UpsertParams{
+		Endpoint:     "https://scim.example.com/v2",
+		Token:        "secret-token-" + strconv.Itoa(int(time.Now().UnixNano())),
+		OIDCClientID: clientFixtureID,
+	}
+	created, err := store.Create(ctx, params)
+	require.NoError(t, err)
+
+	var stored string
+	require.NoError(t, ds.QueryRow(ctx,
+		"SELECT token FROM public.scim_service_providers WHERE id = $1", created.ID.UUIDBytes()).Scan(&stored))
+	assert.True(t, strings.HasPrefix(stored, "enc:"),
+		"stored token must carry the enc: marker, got %q", stored)
+
+	// Tamper with the ciphertext: reads fail closed, the tampered
+	// value is never handed out as plaintext.
+	_, err = ds.Exec(ctx,
+		"UPDATE public.scim_service_providers SET token = 'enc:AAAA' WHERE id = $1", created.ID.UUIDBytes())
+	require.NoError(t, err)
+
+	_, err = store.GetByID(ctx, created.ID)
+	assert.Error(t, err, "tampered token must not decrypt")
+
+	_, err = store.List(ctx)
+	assert.Error(t, err, "one tampered row fails the whole listing")
+}

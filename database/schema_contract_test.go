@@ -85,6 +85,21 @@ func TestSecretEncConstraints(t *testing.T) {
 	mustExec(t, ctx, pg.DSN,
 		`INSERT INTO public.scim_service_providers (endpoint, token, oidc_client_id) VALUES ('https://scim.example', 'enc:c2VhbGVk', $1)`,
 		clientID)
+
+	// TOTP seeds and JWKS private material carry the same marker.
+	userID := seedUser(t, ctx, pg.DSN, "totp-seed")
+	mustFail(t, ctx, pg.DSN,
+		`INSERT INTO public.user_mfa_totp (user_id, secret_enc) VALUES ($1, 'plain')`,
+		"user_mfa_totp_secret_enc_check", userID)
+	mustExec(t, ctx, pg.DSN,
+		`INSERT INTO public.user_mfa_totp (user_id, secret_enc) VALUES ($1, 'enc:c2VhbGVk')`,
+		userID)
+
+	mustFail(t, ctx, pg.DSN,
+		`INSERT INTO public.jwks (key_id, key_type, public_key, private_key) VALUES ('kid-plain', 'RSA', 'pk'::bytea, convert_to('plain', 'UTF8'))`,
+		"chk_jwks_private_key_enc")
+	mustExec(t, ctx, pg.DSN,
+		`INSERT INTO public.jwks (key_id, key_type, public_key, private_key) VALUES ('kid-enc', 'RSA', 'pk'::bytea, convert_to('enc:c2VhbGVk', 'UTF8'))`)
 }
 
 func TestLoginUniquenessIsNormalized(t *testing.T) {
