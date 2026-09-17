@@ -2,7 +2,8 @@
 -- +goose StatementBegin
 
 -- --------------------------------------------------------
--- Table: public.rate_limits (use advisory locks to synchronize access)
+-- Table: public.rate_limits (fixed-window counter; the check runs
+-- under advisory locks to synchronize access)
 -- --------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS public.rate_limits (
@@ -18,7 +19,6 @@ CREATE TABLE IF NOT EXISTS public.rate_limits (
     CONSTRAINT chk_key_format CHECK (key ~ '^[a-z0-9_:]+$')
 ) USING heap;
 
--- Create trigger for updated_at column
 CREATE OR REPLACE FUNCTION fn_update_rate_limits_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -280,17 +280,13 @@ $$ LANGUAGE plpgsql;
 -- +goose Down
 -- +goose StatementBegin
 
--- Drop trigger first
 DROP TRIGGER IF EXISTS trg_rate_limits_updated_at ON public.rate_limits;
 
--- Drop indexes in reverse order of creation
 DROP INDEX IF EXISTS idx_rate_limits_window_start;
 DROP INDEX IF EXISTS idx_rate_limits_key;
 
--- Drop the table
 DROP TABLE IF EXISTS public.rate_limits;
 
--- Drop all functions in reverse order
 DROP FUNCTION IF EXISTS fn_get_rate_limit_stats();
 DROP FUNCTION IF EXISTS fn_reset_rate_limit(TEXT);
 DROP FUNCTION IF EXISTS fn_cleanup_rate_limits(INTEGER);

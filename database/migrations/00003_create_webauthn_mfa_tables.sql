@@ -26,10 +26,8 @@ CREATE TABLE IF NOT EXISTS public.webauthn_credentials (
     CONSTRAINT unique_credential_id UNIQUE (credential_id)
 ) USING heap;
 
--- Create trigger for updated_at column
 CREATE TRIGGER trg_webauthn_credentials_updated_at BEFORE UPDATE ON public.webauthn_credentials FOR EACH ROW EXECUTE FUNCTION fn_updated_at_value();
 
--- Indexes for `public.webauthn_credentials` table
 -- NOTICE: Index for Bytea column is only optimal for the search for exact match, not LIKE or range.
 CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id ON public.webauthn_credentials USING btree (user_id);
 CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_credential_id ON public.webauthn_credentials (credential_id);
@@ -55,22 +53,76 @@ CREATE TABLE IF NOT EXISTS public.webauthn_sessions (
     expires_at TIMESTAMPTZ NOT NULL CHECK (expires_at > CURRENT_TIMESTAMP)
 ) USING heap;
 
--- Indexes for `public.webauthn_sessions` table
 CREATE INDEX IF NOT EXISTS idx_webauthn_sessions_user_id ON public.webauthn_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_webauthn_sessions_challenge ON public.webauthn_sessions (challenge);
 CREATE INDEX IF NOT EXISTS idx_webauthn_sessions_expires_at ON public.webauthn_sessions USING btree (expires_at);
 CREATE INDEX IF NOT EXISTS idx_webauthn_sessions_type ON public.webauthn_sessions (challenge_type);
 CREATE INDEX IF NOT EXISTS idx_webauthn_sessions_user_type ON public.webauthn_sessions (user_id, challenge_type);
 
+-- --------------------------------------------------------
+-- Table: public.user_mfa_totp — TOTP MFA state: one enroll row per
+-- user (secret sealed with the canonical enc: prefix).
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.user_mfa_totp (
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    user_id UUID NOT NULL UNIQUE REFERENCES public.users (id) ON DELETE CASCADE,
+    secret_enc TEXT NOT NULL CHECK (secret_enc LIKE 'enc:%'),
+    digits SMALLINT NOT NULL DEFAULT 6 CHECK (digits IN (6, 8)),
+    period SMALLINT NOT NULL DEFAULT 30 CHECK (period BETWEEN 15 AND 120),
+    algorithm TEXT NOT NULL DEFAULT 'SHA1' CHECK (algorithm IN ('SHA1', 'SHA256', 'SHA512')),
+    confirmed_at TIMESTAMPTZ,
+    last_used_step BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_mfa_totp_user_id ON public.user_mfa_totp (user_id);
+
+-- --------------------------------------------------------
+-- Table: public.user_mfa_recovery_codes — hashed single-use codes.
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.user_mfa_recovery_codes (
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    user_id UUID NOT NULL REFERENCES public.users (id) ON DELETE CASCADE,
+    code_hash TEXT NOT NULL UNIQUE,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_mfa_recovery_codes_user_id ON public.user_mfa_recovery_codes (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_mfa_recovery_codes_user_used
+    ON public.user_mfa_recovery_codes (user_id, used_at);
+
+-- --------------------------------------------------------
+-- Table: public.user_mfa_pending — the short-lived pending-auth
+-- bridge between a successful password sign-in and full session
+-- issuance.
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.user_mfa_pending (
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    user_id UUID NOT NULL UNIQUE REFERENCES public.users (id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL CHECK (expires_at > CURRENT_TIMESTAMP),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_mfa_pending_expires_at
+    ON public.user_mfa_pending (expires_at);
+
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
 
--- Drop trigger first
+DROP TABLE IF EXISTS public.user_mfa_pending;
+DROP TABLE IF EXISTS public.user_mfa_recovery_codes;
+DROP TABLE IF EXISTS public.user_mfa_totp;
+
 DROP TRIGGER IF EXISTS trg_webauthn_credentials_updated_at ON public.webauthn_credentials;
 
--- Drop indexes in reverse order of creation
 DROP INDEX IF EXISTS idx_webauthn_sessions_user_type;
 DROP INDEX IF EXISTS idx_webauthn_sessions_type;
 DROP INDEX IF EXISTS idx_webauthn_sessions_expires_at;
@@ -84,7 +136,6 @@ DROP INDEX IF EXISTS idx_webauthn_credentials_device_type;
 DROP INDEX IF EXISTS idx_webauthn_credentials_credential_id;
 DROP INDEX IF EXISTS idx_webauthn_credentials_user_id;
 
--- Drop the tables themselves
 DROP TABLE IF EXISTS public.webauthn_sessions;
 DROP TABLE IF EXISTS public.webauthn_credentials;
 

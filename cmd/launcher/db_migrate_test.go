@@ -28,22 +28,22 @@ func TestMigrateLifecycle(t *testing.T) {
 
 	out, err := runMigrate(t, true, strings.NewReader("\n"), "db", "migrate:up")
 	require.NoError(t, err)
-	assert.Contains(t, out, "00038")
+	assert.Contains(t, out, "00008")
 
 	// Partial apply: up to an already-applied version is a no-op.
-	out, err = runMigrate(t, true, strings.NewReader("\n"), "db", "migrate:up", "--to", "25")
+	out, err = runMigrate(t, true, strings.NewReader("\n"), "db", "migrate:up", "--to", "5")
 	require.NoError(t, err)
 	assert.Contains(t, out, "nothing to migrate")
 
 	out, err = runMigrate(t, false, nil, "db", "migrate:version")
 	require.NoError(t, err)
-	assert.Contains(t, out, "current: 38")
+	assert.Contains(t, out, "current: 8")
 
 	// Dry-run: reports the target without rolling it back.
 	out, err = runMigrate(t, true, strings.NewReader("\n"), "db", "migrate:down", "--dry-run")
 	require.NoError(t, err)
 	assert.Contains(t, out, "would roll back")
-	assert.Contains(t, out, "00038")
+	assert.Contains(t, out, "00008")
 
 	// Non-interactive stdin refuses even an explicit Enter.
 	_, err = runMigrate(t, false, strings.NewReader("\n"), "db", "migrate:down")

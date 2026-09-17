@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS public.queue_tasks (
     CHECK (attempts >= 0)
 );
 
--- Indexes for `public.queue_tasks` table
 CREATE INDEX IF NOT EXISTS idx_queue_tasks_fetch ON public.queue_tasks (wait_until ASC, id ASC) WHERE wait_until IS NOT NULL;
 
 -- --------------------------------------------------------
@@ -38,7 +37,6 @@ CREATE TABLE IF NOT EXISTS public.queue_tasks_completed (
     CHECK (attempts >= 0)
 );
 
--- Indexes for `public.queue_tasks_completed` table
 CREATE INDEX IF NOT EXISTS idx_queue_tasks_completed_expires ON public.queue_tasks_completed (expires_at) WHERE expires_at IS NOT NULL;
 
 -- +goose StatementEnd
@@ -46,11 +44,9 @@ CREATE INDEX IF NOT EXISTS idx_queue_tasks_completed_expires ON public.queue_tas
 -- +goose Down
 -- +goose StatementBegin
 
--- Drop indexes in reverse order of creation
 DROP INDEX IF EXISTS idx_queue_tasks_completed_expires;
 DROP INDEX IF EXISTS idx_queue_tasks_fetch;
 
--- Drop the table
 DROP TABLE IF EXISTS public.queue_tasks_completed;
 DROP TABLE IF EXISTS public.queue_tasks;
 

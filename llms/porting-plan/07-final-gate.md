@@ -58,12 +58,12 @@ endpoint reference.
 
 ### Task 3 — Gates
 
-Final baselines (all green):
+Final baselines (all green, after the migration consolidation to 8 final-shape files):
 
-- `task test` — the full gate: Go release-tag suite (566), debug-tag suite (36), and the
+- `task test` — the full gate: Go release-tag suite (567), debug-tag suite (37), and the
   frontend vitest suite (4 smoke tests over the api-client schemas; the SDK is a placeholder,
   so the suite pins the zod contract surface and keeps the task green until real modules land).
-- `gotestsum -- -tags release ./...` — 564 tests.
+- `gotestsum -- -tags release ./...` — 565 tests.
 - Race-enabled focused suites: `go test -race ./modules/webhook/ ./modules/identity/totp/ ./internal/queue/`.
 - `task lint` — 0 issues; `task check` — 0 warnings, 0 errors.
 

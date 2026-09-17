@@ -3,8 +3,6 @@
 
 -- --------------------------------------------------------
 -- Table: public.jwks — JSON Web Key Sets for signing/verifying JWTs
--- This table is optional, depending on whether you want to manage your own keys
--- or use a third-party service. Example use case: multi-tenant applications.
 -- --------------------------------------------------------
 
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'jwt_algorithm') THEN
@@ -32,13 +30,15 @@ CREATE TABLE IF NOT EXISTS public.jwks (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     expires_at TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT NULL
+    updated_at TIMESTAMPTZ DEFAULT NULL,
+    -- Recoverable private key material is always sealed with the
+    -- canonical enc: prefix; convert_from fails closed on non-UTF8
+    -- bytes, so unprefixed or malformed values are rejected.
+    CONSTRAINT chk_jwks_private_key_enc CHECK (private_key IS NULL OR convert_from(private_key, 'UTF8') LIKE 'enc:%')
 ) USING heap;
 
--- Create trigger for updated_at column
 CREATE TRIGGER trg_jwks_updated_at BEFORE UPDATE ON public.jwks FOR EACH ROW EXECUTE FUNCTION fn_updated_at_value();
 
--- Indexes for `public.jwks` table
 CREATE INDEX IF NOT EXISTS idx_jwks_active ON public.jwks(is_active);
 CREATE INDEX IF NOT EXISTS idx_jwks_algorithm ON public.jwks(algorithm);
 CREATE INDEX IF NOT EXISTS idx_jwks_use_for ON public.jwks(use_for);
@@ -68,8 +68,10 @@ CREATE TABLE IF NOT EXISTS public.oidc_clients (
     skip_consent BOOLEAN NOT NULL DEFAULT FALSE,
     is_group_restricted BOOLEAN NOT NULL DEFAULT FALSE,
     client_type TEXT NOT NULL DEFAULT 'standard', -- 'standard' or 'cimd' (Client-ID Metadata Document)
+    metadata_url TEXT, -- CIMD: the metadata document URL a client materializes from
     metadata_expires_at TIMESTAMPTZ, -- CIMD document refresh deadline
     metadata_grant_types JSONB, -- Grant types allowed by the CIMD document
+    logo_path TEXT, -- Blob path; NULL = no logo
     access_token_duration_minutes BIGINT NOT NULL DEFAULT 60,
     refresh_token_duration_minutes BIGINT NOT NULL DEFAULT 43200,
     created_by_id UUID,
@@ -91,7 +93,7 @@ CREATE TABLE IF NOT EXISTS public.custom_claims (
     CHECK (user_id IS NOT NULL OR user_group_id IS NOT NULL),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_group_id) REFERENCES user_groups(id) ON DELETE CASCADE
+    FOREIGN KEY (user_group_id) REFERENCES public.user_groups(id) ON DELETE CASCADE
 ) USING heap;
 
 CREATE INDEX IF NOT EXISTS idx_custom_claims_user_id ON public.custom_claims USING btree (user_id);
@@ -114,7 +116,7 @@ CREATE TABLE IF NOT EXISTS public.oidc_authorization_codes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMPTZ NOT NULL,
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
-    FOREIGN KEY (client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE
+    FOREIGN KEY (client_id) REFERENCES public.oidc_clients(id) ON DELETE CASCADE
 ) USING heap;
 
 CREATE INDEX IF NOT EXISTS idx_oidc_authorization_codes_expires_at ON public.oidc_authorization_codes USING btree (expires_at);
@@ -130,22 +132,38 @@ CREATE TABLE IF NOT EXISTS public.user_authorized_oidc_clients (
     last_used_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, client_id),
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
-    FOREIGN KEY (client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE
+    FOREIGN KEY (client_id) REFERENCES public.oidc_clients(id) ON DELETE CASCADE
 ) USING heap;
 
 CREATE INDEX IF NOT EXISTS idx_user_authorized_oidc_clients_last_used_at ON public.user_authorized_oidc_clients USING btree (last_used_at);
 
 -- --------------------------------------------------------
--- Table: public.oidc_clients_allowed_user_groups (junction table)
+-- Table: public.oidc_clients_allowed_user_groups (client-side group restriction)
 -- --------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS public.oidc_clients_allowed_user_groups (
     user_group_id UUID NOT NULL,
     oidc_client_id TEXT NOT NULL,
     PRIMARY KEY (oidc_client_id, user_group_id),
-    FOREIGN KEY (user_group_id) REFERENCES user_groups(id) ON DELETE CASCADE,
-    FOREIGN KEY (oidc_client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE
+    FOREIGN KEY (user_group_id) REFERENCES public.user_groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (oidc_client_id) REFERENCES public.oidc_clients(id) ON DELETE CASCADE
 ) USING heap;
+
+-- --------------------------------------------------------
+-- Table: public.user_groups_allowed_oidc_clients — group-side client
+-- allowlist (the inverse of oidc_clients_allowed_user_groups).
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.user_groups_allowed_oidc_clients (
+    user_group_id UUID NOT NULL,
+    oidc_client_id TEXT NOT NULL,
+    PRIMARY KEY (user_group_id, oidc_client_id),
+    FOREIGN KEY (user_group_id) REFERENCES public.user_groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (oidc_client_id) REFERENCES public.oidc_clients(id) ON DELETE CASCADE
+) USING heap;
+
+CREATE INDEX IF NOT EXISTS idx_user_groups_allowed_oidc_clients_client_id
+    ON public.user_groups_allowed_oidc_clients USING btree (oidc_client_id);
 
 -- --------------------------------------------------------
 -- Table: public.oidc_refresh_tokens
@@ -161,32 +179,39 @@ CREATE TABLE IF NOT EXISTS public.oidc_refresh_tokens (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMPTZ NOT NULL,
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
-    FOREIGN KEY (client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE
+    FOREIGN KEY (client_id) REFERENCES public.oidc_clients(id) ON DELETE CASCADE
 ) USING heap;
 
 CREATE INDEX IF NOT EXISTS idx_oidc_refresh_tokens_expires_at ON public.oidc_refresh_tokens USING btree (expires_at);
 
 -- --------------------------------------------------------
--- Table: public.oidc_device_codes
+-- Table: public.oidc_device_codes — OAuth 2.0 Device Flow (RFC 8628).
+-- Device and user codes are stored as SHA-256 hashes; status drives
+-- the token poll (pending → approved/denied → consumed). PAR (RFC
+-- 9126) lives in oauth2_sessions with kind 'par'.
 -- --------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS public.oidc_device_codes (
     id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
-    device_code TEXT NOT NULL UNIQUE,
-    user_code TEXT NOT NULL UNIQUE,
+    device_code_hash TEXT NOT NULL UNIQUE,
+    user_code_hash TEXT NOT NULL UNIQUE,
     scope TEXT NOT NULL,
-    is_authorized BOOLEAN NOT NULL DEFAULT FALSE,
+    resource TEXT,
     nonce TEXT,
-    authentication_method TEXT NOT NULL DEFAULT '',
-    user_id UUID,
     client_id TEXT NOT NULL,
+    user_id UUID,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied', 'consumed')),
+    last_polled_at TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMPTZ NOT NULL,
+    approved_at TIMESTAMPTZ DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
-    FOREIGN KEY (client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE
+    FOREIGN KEY (client_id) REFERENCES public.oidc_clients(id) ON DELETE CASCADE,
+    CONSTRAINT chk_oidc_device_codes_expiry CHECK (expires_at > created_at)
 ) USING heap;
 
-CREATE INDEX IF NOT EXISTS idx_oidc_device_codes_expires_at ON public.oidc_device_codes USING btree (expires_at);
+CREATE INDEX IF NOT EXISTS idx_oidc_device_codes_expires_at ON public.oidc_device_codes (expires_at);
+CREATE INDEX IF NOT EXISTS idx_oidc_device_codes_status ON public.oidc_device_codes (status);
 
 -- --------------------------------------------------------
 -- Table: public.oauth2_sessions (Fosite-style OAuth 2.0 storage)
@@ -203,7 +228,7 @@ CREATE TABLE IF NOT EXISTS public.oauth2_sessions (
     client_id TEXT NOT NULL,
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE,
+    FOREIGN KEY (client_id) REFERENCES public.oidc_clients(id) ON DELETE CASCADE,
     CONSTRAINT chk_oauth2_sessions_client_id
         CHECK (client_id = request_data ->> 'client_id')
 ) USING heap;
@@ -244,7 +269,7 @@ CREATE TABLE IF NOT EXISTS public.interaction_sessions (
     reauthenticated_at TIMESTAMPTZ,
     parameters JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE,
+    FOREIGN KEY (client_id) REFERENCES public.oidc_clients(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
 ) USING heap;
 
@@ -258,11 +283,12 @@ CREATE INDEX IF NOT EXISTS idx_interaction_sessions_user_id ON public.interactio
 CREATE TABLE IF NOT EXISTS public.scim_service_providers (
     id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
     endpoint TEXT NOT NULL,
-    token TEXT NOT NULL,
+    token TEXT NOT NULL, -- sealed with the canonical enc: prefix
     oidc_client_id TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_synced_at TIMESTAMPTZ,
-    FOREIGN KEY (oidc_client_id) REFERENCES oidc_clients(id) ON DELETE CASCADE
+    FOREIGN KEY (oidc_client_id) REFERENCES public.oidc_clients(id) ON DELETE CASCADE,
+    CONSTRAINT chk_scim_token_enc CHECK (token LIKE 'enc:%')
 ) USING heap;
 
 -- One provider per client: the provider IS the client's outbound provisioning target; a second row for the same client is a defect.
@@ -273,10 +299,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_scim_providers_client ON public.scim_servi
 -- +goose Down
 -- +goose StatementBegin
 
--- Drop triggers in reverse order
 DROP TRIGGER IF EXISTS trg_jwks_updated_at ON public.jwks;
 
--- Drop indexes in reverse order of creation
 DROP INDEX IF EXISTS idx_scim_providers_client;
 DROP INDEX IF EXISTS idx_interaction_sessions_client_id;
 DROP INDEX IF EXISTS idx_interaction_sessions_user_id;
@@ -285,10 +309,12 @@ DROP INDEX IF EXISTS idx_oauth2_sessions_client_subject;
 DROP INDEX IF EXISTS idx_oauth2_sessions_expires_at;
 DROP INDEX IF EXISTS idx_oauth2_sessions_kind_request;
 DROP INDEX IF EXISTS idx_oauth2_sessions_kind_key;
+DROP INDEX IF EXISTS idx_oidc_device_codes_status;
 DROP INDEX IF EXISTS idx_oidc_device_codes_expires_at;
 DROP INDEX IF EXISTS idx_oidc_refresh_tokens_expires_at;
 DROP INDEX IF EXISTS idx_oidc_authorization_codes_expires_at;
 DROP INDEX IF EXISTS idx_user_authorized_oidc_clients_last_used_at;
+DROP INDEX IF EXISTS idx_user_groups_allowed_oidc_clients_client_id;
 DROP INDEX IF EXISTS idx_custom_claims_user_group_id;
 DROP INDEX IF EXISTS idx_custom_claims_user_id;
 DROP INDEX IF EXISTS idx_jwks_active_algorithm_use_for;
@@ -297,13 +323,13 @@ DROP INDEX IF EXISTS idx_jwks_use_for;
 DROP INDEX IF EXISTS idx_jwks_algorithm;
 DROP INDEX IF EXISTS idx_jwks_active;
 
--- Drop tables in reverse order of creation (tables with FKs first)
+DROP TABLE IF EXISTS public.scim_service_providers;
 DROP TABLE IF EXISTS public.interaction_sessions;
 DROP TABLE IF EXISTS public.oauth2_jtis;
 DROP TABLE IF EXISTS public.oauth2_sessions;
-DROP TABLE IF EXISTS public.scim_service_providers;
 DROP TABLE IF EXISTS public.oidc_device_codes;
 DROP TABLE IF EXISTS public.oidc_refresh_tokens;
+DROP TABLE IF EXISTS public.user_groups_allowed_oidc_clients;
 DROP TABLE IF EXISTS public.oidc_clients_allowed_user_groups;
 DROP TABLE IF EXISTS public.user_authorized_oidc_clients;
 DROP TABLE IF EXISTS public.oidc_authorization_codes;
@@ -311,7 +337,6 @@ DROP TABLE IF EXISTS public.custom_claims;
 DROP TABLE IF EXISTS public.oidc_clients;
 DROP TABLE IF EXISTS public.jwks;
 
--- Drop the custom enum type
 DROP TYPE IF EXISTS public.jwt_algorithm;
 
 -- +goose StatementEnd
