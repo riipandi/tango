@@ -50,14 +50,12 @@ type MailerConfig struct {
 }
 
 type PublicConfig struct {
-	BaseURL                string   `koanf:"base_url"`
-	S3AssetsURL            string   `koanf:"s3_assets_url"`
-	VersionCheckURL        string   `koanf:"version_check_url"`
-	TrustedOrigins         []string `koanf:"trusted_origins"`
-	JwtAccessTokenExpiry   int      `koanf:"jwt_access_token_expiry"`
-	JwtRefreshTokenExpiry  int      `koanf:"jwt_refresh_token_expiry"`
-	RateLimitDefaultMax    int      `koanf:"rate_limit_default_max"`
-	RateLimitDefaultWindow int      `koanf:"rate_limit_default_window"`
+	BaseURL               string   `koanf:"base_url"`
+	S3AssetsURL           string   `koanf:"s3_assets_url"`
+	VersionCheckURL       string   `koanf:"version_check_url"`
+	TrustedOrigins        []string `koanf:"trusted_origins"`
+	JwtAccessTokenExpiry  int      `koanf:"jwt_access_token_expiry"`
+	JwtRefreshTokenExpiry int      `koanf:"jwt_refresh_token_expiry"`
 }
 
 type QueueConfig struct {

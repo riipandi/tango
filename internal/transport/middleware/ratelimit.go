@@ -21,29 +21,127 @@ type RateLimitStore interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// Rate limit classes.
-const (
-	RateClassDefault = "default"
-	RateClassAuth    = "auth"
-)
-
-// classLimits maps each class to a request limit and window in seconds.
-var classLimits = map[string]struct {
+// Policy is a fixed-window budget for one sensitive endpoint.
+type Policy struct {
+	// Name separates the per-IP counter keys so budgets stay isolated
+	// across endpoints.
+	Name   string
 	Max    int
-	Window int
-}{
-	RateClassDefault: {100, 900},
-	RateClassAuth:    {20, 60},
+	Window int // seconds
 }
 
-// RateLimit counts requests per client IP; the class comes from the
-// request path, so sensitive auth routes get the tighter budget.
+// policies holds every enforced budget. Only sensitive endpoints appear
+// here; all other routes pass through unchecked. Budgets mirror the
+// intent of upstream Pocket ID's per-route limiters, adapted to the
+// tango-only surfaces.
+var policies = map[string]Policy{
+	"sign-in":                   {Name: "sign-in", Max: 20, Window: 60},
+	"forgot-password":           {Name: "forgot-password", Max: 2, Window: 600},
+	"reset-password":            {Name: "reset-password", Max: 5, Window: 600},
+	"totp-enroll":               {Name: "totp-enroll", Max: 5, Window: 60},
+	"totp-confirm":              {Name: "totp-confirm", Max: 10, Window: 60},
+	"totp-verify":               {Name: "totp-verify", Max: 10, Window: 60},
+	"totp-recovery-codes":       {Name: "totp-recovery-codes", Max: 5, Window: 60},
+	"totp-disable":              {Name: "totp-disable", Max: 5, Window: 60},
+	"signup":                    {Name: "signup", Max: 5, Window: 60},
+	"signup-setup":              {Name: "signup-setup", Max: 5, Window: 60},
+	"one-time-access-email":     {Name: "one-time-access-email", Max: 2, Window: 600},
+	"one-time-access-token":     {Name: "one-time-access-token", Max: 10, Window: 60},
+	"device-login-create":       {Name: "device-login-create", Max: 10, Window: 60},
+	"device-login-exchange":     {Name: "device-login-exchange", Max: 30, Window: 60},
+	"device-login-verify":       {Name: "device-login-verify", Max: 10, Window: 60},
+	"device-login-decision":     {Name: "device-login-decision", Max: 10, Window: 60},
+	"webauthn-login":            {Name: "webauthn-login", Max: 10, Window: 60},
+	"webauthn-reauthenticate":   {Name: "webauthn-reauthenticate", Max: 6, Window: 60},
+	"email-verification-send":   {Name: "email-verification-send", Max: 2, Window: 600},
+	"email-verification-verify": {Name: "email-verification-verify", Max: 6, Window: 60},
+}
+
+// rule binds one endpoint shape to a policy. Matching requires the
+// path to continue the prefix at a segment boundary (or end there), so
+// /api/signup never shadows /api/signup-tokens. An optional suffix pins
+// the tail, and an empty method matches any. Rules are evaluated in
+// order and the first match wins.
+var rules = []struct {
+	Policy string
+	Method string
+	Prefix string
+	Suffix string
+}{
+	{"sign-in", http.MethodPost, "/api/auth/sign-in", ""},
+	{"forgot-password", http.MethodPost, "/api/auth/forgot-password", ""},
+	{"reset-password", http.MethodPost, "/api/auth/reset-password", ""},
+	{"totp-enroll", http.MethodPost, "/api/mfa/totp/enroll", ""},
+	{"totp-confirm", http.MethodPost, "/api/mfa/totp/confirm", ""},
+	{"totp-verify", http.MethodPost, "/api/mfa/totp/verify", ""},
+	{"totp-recovery-codes", http.MethodPost, "/api/mfa/totp/recovery-codes", ""},
+	{"totp-disable", http.MethodDelete, "/api/mfa/totp", ""},
+	{"signup-setup", http.MethodPost, "/api/signup/setup", ""},
+	{"signup", http.MethodPost, "/api/signup", ""},
+	{"one-time-access-email", http.MethodPost, "/api/one-time-access-email", ""},
+	{"one-time-access-token", http.MethodPost, "/api/one-time-access-token/", ""},
+	{"device-login-exchange", http.MethodPost, "/api/device-login/requests/", "/exchange"},
+	{"device-login-create", http.MethodPost, "/api/device-login/requests", ""},
+	{"device-login-decision", http.MethodPost, "/api/device-login/verification/decision", ""},
+	{"device-login-verify", http.MethodPost, "/api/device-login/verification", ""},
+	{"webauthn-login", http.MethodPost, "/api/webauthn/login/finish", ""},
+	{"webauthn-reauthenticate", http.MethodPost, "/api/webauthn/reauthenticate", ""},
+	{"email-verification-send", http.MethodPost, "/api/users/me/send-email-verification", ""},
+	{"email-verification-verify", http.MethodPost, "/api/users/me/verify-email", ""},
+	{"one-time-access-email", http.MethodPost, "/api/users/", "/one-time-access-email"},
+}
+
+// PolicyFor returns the enforced policy for a request, or false when the
+// route is not rate limited.
+func PolicyFor(method, path string) (Policy, bool) {
+	for _, rule := range rules {
+		if rule.Method != "" && rule.Method != method {
+			continue
+		}
+		rest, ok := matchPrefix(path, rule.Prefix)
+		if !ok {
+			continue
+		}
+		if rule.Suffix != "" {
+			if !strings.HasSuffix(rest, rule.Suffix) {
+				continue
+			}
+			rest = strings.TrimSuffix(rest, rule.Suffix)
+		}
+		if rest != "" && !strings.HasPrefix(rest, "/") && !strings.HasSuffix(rule.Prefix, "/") {
+			continue
+		}
+		return policies[rule.Policy], true
+	}
+	return Policy{}, false
+}
+
+// matchPrefix consumes the rule prefix and returns the remainder when
+// the path continues at a segment boundary. A prefix that ends in its
+// own slash already pins the boundary.
+func matchPrefix(path, prefix string) (string, bool) {
+	if !strings.HasPrefix(path, prefix) {
+		return "", false
+	}
+	rest := path[len(prefix):]
+	if rest != "" && !strings.HasPrefix(rest, "/") && !strings.HasSuffix(prefix, "/") {
+		return "", false
+	}
+	return rest, true
+}
+
+// RateLimit enforces the per-endpoint policies against a fixed-window
+// store. Requests without a policy pass through without touching the
+// store; a store failure fails open.
 func RateLimit(store RateLimitStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			class := ClassForPath(r.URL.Path)
-			limits := classLimits[class]
-			key := rateKey(r, class)
+			policy, ok := PolicyFor(r.Method, r.URL.Path)
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+			key := rateKey(r, policy.Name)
 			if key == "" {
 				next.ServeHTTP(w, r)
 				return
@@ -51,7 +149,7 @@ func RateLimit(store RateLimitStore) func(http.Handler) http.Handler {
 
 			var result []byte
 			err := store.QueryRow(r.Context(),
-				"SELECT fn_check_rate_limit($1, $2, $3)", key, limits.Max, limits.Window).Scan(&result)
+				"SELECT fn_check_rate_limit($1, $2, $3)", key, policy.Max, policy.Window).Scan(&result)
 			if err != nil {
 				var pgErr *pgconn.PgError
 				if errors.As(err, &pgErr) && pgErr.Code == "42901" {
@@ -78,44 +176,15 @@ func RateLimit(store RateLimitStore) func(http.Handler) http.Handler {
 	}
 }
 
-// ClassForPath maps a request path to its rate-limit class. Sensitive
-// authentication surfaces share the tight auth budget; everything
-// else rides the default budget.
-func ClassForPath(path string) string {
-	for _, prefix := range authPrefixes {
-		if strings.HasPrefix(path, prefix) {
-			return RateClassAuth
-		}
-	}
-	return RateClassDefault
-}
-
-// authPrefixes lists the paths the tight auth budget protects: the
-// sign-in surfaces plus every token-minting or token-exchanging
-// endpoint.
-var authPrefixes = []string{
-	"/api/auth/",
-	"/api/account/password",
-	"/api/mfa/",
-	"/api/oidc/token",
-	"/api/signup",
-	"/api/one-time-access-email",
-	"/api/one-time-access-token/",
-	"/api/device-login/",
-	"/api/webauthn/",
-	"/api/users/me/send-email-verification",
-	"/api/users/me/verify-email",
-}
-
-// rateKey builds the database key for a client IP and class.
-func rateKey(r *http.Request, class string) string {
+// rateKey builds the database key for a client IP and policy.
+func rateKey(r *http.Request, policy string) string {
 	ip := clientIP(r)
 	if ip == "" {
 		return ""
 	}
 	ip = strings.ReplaceAll(ip, ".", "_")
 	ip = strings.ReplaceAll(ip, ":", "_")
-	return fmt.Sprintf("rl_%s_%s", class, ip)
+	return fmt.Sprintf("rl_%s_%s", policy, ip)
 }
 
 // clientIP resolves the peer and trusts forwarded IPs from loopback only.

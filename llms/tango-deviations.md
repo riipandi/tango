@@ -24,7 +24,16 @@ match the upstream endpoint contract.
   `/api/auth/*` (sign-in, sign-out, session inspection, forgot/reset password) and the
   self-service account endpoints. The full contract lives in the endpoint reference
   ("Authentication (tango-only)"): generic enumeration-safe failures, SHA-256 hashed single-use
-  reset tokens (15-minute TTL), session invalidation on reset, and the tight auth rate budget.
+  reset tokens (15-minute TTL), session invalidation on reset, and per-endpoint rate limits.
+- **Rate limiting** — upstream throttles every `/api` route with a shared token-bucket budget
+  plus per-route limiters. Tango instead limits only sensitive endpoints, each with its own
+  fixed-window per-IP budget (`internal/transport/middleware/ratelimit.go`): sign-in,
+  forgot/reset password, TOTP enroll/confirm/verify/rotation/disablement, signup and initial
+  setup, one-time access email/token, device login create/exchange/verify/decision, WebAuthn
+  login finish and re-authentication, and email verification send/verify. Admin CRUD, session
+  inspection, OIDC token/introspect/PAR/device-authorize/userinfo, health, and version routes
+  are intentionally unthrottled. Store failures fail open; throttled responses use the shared
+  429 envelope with `Retry-After`.
 - **TOTP MFA surface** — `/api/mfa/totp/*` (enroll, confirm, status, verify, recovery-code
   rotation, disablement) per the endpoint reference's MFA contract: `enc:`-sealed seeds, hashed
   single-use recovery codes, pending-auth bridging between password sign-in and full session.
