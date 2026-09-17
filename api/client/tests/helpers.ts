@@ -41,10 +41,13 @@ export function mockFetch(responses: QueuedResponse[]) {
     if (!next) throw new Error('unexpected extra request')
     // Null-body statuses reject any body; sending one throws TypeError.
     const nullBody = next.status === 204 || next.status === 205 || next.status === 304
-    return new Response(nullBody ? null : next.body === undefined ? null : JSON.stringify(next.body), {
-      status: next.status,
-      headers: { 'content-type': 'application/json', ...next.headers }
-    })
+    return new Response(
+      nullBody ? null : next.body === undefined ? null : JSON.stringify(next.body),
+      {
+        status: next.status,
+        headers: { 'content-type': 'application/json', ...next.headers }
+      }
+    )
   })
   return { fetchMock: fetchMock as unknown as typeof globalThis.fetch, calls }
 }

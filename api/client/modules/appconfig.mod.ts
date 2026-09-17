@@ -1,5 +1,8 @@
-import type { Executor } from '../types'
+// Editable application settings: the public bootstrap payload plus the
+// admin-managed full surface.
+
 import type { ConfigVariable } from '../schemas/appconfig.schema'
+import type { Executor } from '../types'
 
 export interface AppConfigModule {
   /** Bootstrap payload the unauthenticated SPA may read. */
@@ -13,12 +16,11 @@ export interface AppConfigModule {
 
 export function createAppConfigModule(exec: Executor): AppConfigModule {
   return {
-    listPublic: () => exec.get<ConfigVariable[]>('/api/application-configuration').then((r) => r.data),
-    listAll: () =>
-      exec.get<ConfigVariable[]>('/api/application-configuration/all').then((r) => r.data),
+    listPublic: () => exec.get<ConfigVariable[]>('/application-configuration').then((r) => r.data),
+    listAll: () => exec.get<ConfigVariable[]>('/application-configuration/all').then((r) => r.data),
     update: (values) =>
-      exec.put<ConfigVariable[]>('/api/application-configuration', values).then((r) => r.data),
+      exec.put<ConfigVariable[]>('/application-configuration', values).then((r) => r.data),
     sendTestEmail: (email) =>
-      exec.post('/api/application-configuration/test-email', { email }).then(() => undefined)
+      exec.post('/application-configuration/test-email', { email }).then(() => undefined)
   }
 }

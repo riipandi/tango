@@ -7,21 +7,43 @@ updated: 2026-09-17
 
 ## File layout
 
-```
+```plaintext
 api/client/
   index.ts          # public entry: createApiClient, types re-exports, default singleton
-  client.ts         # createApiClient(options): namespaced SDK over one ofetch instance
-  error.ts          # ApiClientError + normalization from ofetch FetchError
-  types.ts          # envelope, metadata, pagination, request options
+  client.ts         # createApiClient(options): composes namespaces over the executor
+  http.ts           # transport: ofetch instance, /api prefix, envelope unwrap, executor
+  envelope.ts       # envelope detection + wire→camelCase metadata projection
+  error.ts          # ApiClientError + normalization (api_error/network_error/aborted/unknown)
+  pagination.ts     # toPaginated: list results from envelope metadata
+  types.ts          # types only: envelope, metadata, pagination, executor contract
+  README.md         # usage quickstart
   modules/
-    auth.mod.ts     # auth (+ auth.mfa, auth.webauthn)
-    account.mod.ts  # self-service profile, password, sessions
-    user.mod.ts     # admin user CRUD + membership + profile picture
-    usergroup.mod.ts
+    auth.mod.ts       # auth; composes mfa + webauthn; one-time access
+    mfa.mod.ts        # auth.mfa.totp lifecycle
+    webauthn.mod.ts   # auth.webauthn ceremonies (bare begin payloads)
+    account.mod.ts    # self-service profile, password, sessions, email verification
+    users.mod.ts      # admin user CRUD + membership + credentials + one-time access
+    usergroups.mod.ts
     appconfig.mod.ts
+    oidcclients.mod.ts # relying-party client registry
+    consent.mod.ts    # authorized clients (me + admin)
+    scim.mod.ts
+    apis.mod.ts       # API resources, permissions, grants, CIMD
+    apiaccess.mod.ts  # client-centric grant views
+    apikeys.mod.ts    # X-API-KEY machine credentials
+    customclaims.mod.ts
+    auditlogs.mod.ts
+    webhooks.mod.ts
+    devicelogin.mod.ts
+    system.mod.ts     # versions + readiness
   schemas/          # zod schemas (runtime-validated in tests only) + inferred types
   tests/            # vitest, node environment
 ```
+
+Layering is acyclic: `types` ← `envelope` ← `error` ← `http` ← modules ← `client` ← `index`.
+Module paths are resource paths (`/users/{id}`); the executor owns the `/api` prefix and the
+absolute-URL helper (`exec.url`). Placeholder schema files for unbuilt namespaces were removed —
+schemas land together with their namespace.
 
 ## Client core
 
@@ -73,7 +95,7 @@ All calls go through an internal executor using `ofetch.raw` so status and heade
 | `fieldErrors: FieldError[]` | envelope `error` when it is the 422 `{field, message}[]` form |
 | `rateLimit?` | envelope metadata rate limit (`limit`, `remaining`, `reset`) |
 | `envelope?` | the raw envelope for unreduced consumers |
-| `code: 'api_error' \| 'network_error' \| 'unknown'` | classification |
+| `code: 'api_error' \| 'network_error' \| 'aborted' \| 'unknown'` | classification; aborts are detected on the ofetch cause chain (timeouts and aborted signals) |
 
 Normalizer duck-types ofetch `FetchError` (has `response` / `data`); anything else with no
 response becomes `network_error`. No retry logic, no token refresh — sessions are cookie-backed.

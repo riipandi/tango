@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-
 import { createApiClient } from '../index'
 import { envelope, expectCall, mockFetch } from './helpers'
 

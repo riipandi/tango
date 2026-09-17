@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-
 import { createApiClient } from '../index'
 import { envelope, expectCall, mockFetch } from './helpers'
 
@@ -78,7 +77,9 @@ describe('users module', () => {
   })
 
   it('reads and replaces group membership', async () => {
-    const groups = [{ id: 'ug_1', name: 'admins', display_name: 'Admins', created_at: '2026-01-01T00:00:00Z' }]
+    const groups = [
+      { id: 'ug_1', name: 'admins', display_name: 'Admins', created_at: '2026-01-01T00:00:00Z' }
+    ]
     const { fetchMock, calls } = mockFetch([envelope(groups), envelope(null)])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 

@@ -19,8 +19,8 @@ updated: 2026-09-17
 
 | File | Covers |
 | --- | --- |
-| `tests/client.test.ts` | Envelope unwrap (data + metadata), bare-document passthrough (WebAuthn begin shape), baseUrl join, default `credentials: 'include'`, custom headers merge, per-call `signal`, `raw()` escape hatch |
-| `tests/error.test.ts` | 422 → `ApiClientError` with `fieldErrors`; 429 → `rateLimit`; 401 message passthrough; non-envelope error body; network failure → `code: 'network_error'`; 2xx envelope with `status: 'error'` throws |
+| `tests/client.test.ts` | Envelope unwrap (data + metadata + links), bare-document passthrough (WebAuthn begin shape), baseUrl join, default `credentials: 'include'`, custom headers merge, per-call `signal`, `raw()` escape hatch with resource paths |
+| `tests/error.test.ts` | 422 → `ApiClientError` with `fieldErrors`; 429 → `rateLimit`; 401 message passthrough; non-envelope error body; network failure → `code: 'network_error'`; abort/timeout → `code: 'aborted'` (direct and wrapped); non-Error throw → `'unknown'`; 2xx envelope with `status: 'error'` throws |
 | `tests/auth.test.ts` | `signInWithPassword` (POST `/api/auth/sign-in`, body `{identity, secret}`, result type), `getSession`, `signOut`, `forgotPassword`, `resetPassword`, `signUp`, `setupAccount`, `setupAvailable` (204 → true, 404 → false), mfa totp six methods, webauthn begin/finish incl. `session_id` query |
 | `tests/account.test.ts` | profile get/update, change password, list/revoke sessions |
 | `tests/users.test.ts` | list with `query/page/limit` query encoding, `Paginated` build, get/create/update/remove, groups get/set, multipart profile picture upload (`FormData` field `file`), `profilePictureUrl` |

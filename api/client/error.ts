@@ -1,7 +1,7 @@
-import { isEnvelope } from './types'
+import { isEnvelope } from './envelope'
 import type { ApiEnvelope, FieldError, RateLimitInfo } from './types'
 
-export type ApiErrorCode = 'api_error' | 'network_error' | 'unknown'
+export type ApiErrorCode = 'api_error' | 'network_error' | 'aborted' | 'unknown'
 
 interface ApiClientErrorInit {
   code?: ApiErrorCode
@@ -16,7 +16,7 @@ interface ApiClientErrorInit {
 /**
  * Normalized failure for every SDK call: HTTP-level errors keep the
  * envelope's message and validation details; transport failures become
- * `network_error` with no status.
+ * `network_error` or `aborted` (signal or timeout) with no status.
  */
 export class ApiClientError extends Error {
   readonly code: ApiErrorCode
@@ -69,17 +69,32 @@ export function toApiClientError(error: unknown): ApiClientError {
   if (error instanceof ApiClientError) return error
 
   const cause = error as {
+    name?: string
     response?: { status?: number }
     statusCode?: number
     data?: unknown
     message?: string
+    cause?: { name?: string }
   }
-  const status = cause.response?.status ?? (typeof cause.statusCode === 'number' ? cause.statusCode : undefined)
+  const status =
+    cause.response?.status ?? (typeof cause.statusCode === 'number' ? cause.statusCode : undefined)
 
   if (status !== undefined) {
     if (isEnvelope(cause.data)) return ApiClientError.fromEnvelope(cause.data, status)
     return new ApiClientError(cause.message ?? 'request failed', { code: 'api_error', status })
   }
 
-  return new ApiClientError('network error', { code: 'network_error' })
+  // The request never completed: abort/timeout, transport failure, or an
+  // unexpected throw. ofetch wraps rejections, so check the cause chain.
+  if (isAbort(cause)) {
+    return new ApiClientError(cause.message ?? 'request aborted', { code: 'aborted' })
+  }
+  if (cause instanceof Error) {
+    return new ApiClientError('network error', { code: 'network_error' })
+  }
+  return new ApiClientError('unexpected failure', { code: 'unknown' })
+}
+
+function isAbort(cause: { name?: string; cause?: { name?: string } }): boolean {
+  return cause.name === 'AbortError' || cause.cause?.name === 'AbortError'
 }

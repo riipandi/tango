@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { createApiClient, ApiClientError } from '../index'
+import { createApiClient, ApiClientError, toApiClientError } from '../index'
 import { errorEnvelope, mockFetch } from './helpers'
 
 const BASE_URL = 'http://localhost:3080'
@@ -54,7 +53,9 @@ describe('error normalization', () => {
     ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.auth.signInWithPassword({ identity: 'abbey', secret: 'x' }))
+    const error = await catchError(
+      client.auth.signInWithPassword({ identity: 'abbey', secret: 'x' })
+    )
 
     expect(error.status).toBe(429)
     expect(error.rateLimit).toEqual({ limit: 5, remaining: 0, reset: 1760000000 })
@@ -98,5 +99,22 @@ describe('error normalization', () => {
 
     expect(error.code).toBe('network_error')
     expect(error.status).toBeUndefined()
+  })
+
+  it('classifies aborted requests as aborted', async () => {
+    const abortingFetch = vi.fn(async () => {
+      const error = new TypeError('The operation was aborted')
+      error.name = 'AbortError'
+      throw error
+    }) as unknown as typeof globalThis.fetch
+    const client = createApiClient({ baseUrl: BASE_URL, fetch: abortingFetch })
+
+    const error = await catchError(client.users.list())
+
+    expect(error.code).toBe('aborted')
+  })
+
+  it('classifies non-error throws as unknown', () => {
+    expect(toApiClientError('boom').code).toBe('unknown')
   })
 })

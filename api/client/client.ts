@@ -1,20 +1,23 @@
-import { ofetch } from 'ofetch'
+// Public SDK factory: composes the feature namespaces over one executor.
 
-import { ApiClientError, toApiClientError } from './error'
+import { createHttp } from './http'
 import { createAccountModule, type AccountModule } from './modules/account.mod'
+import { createApiAccessModule, type ApiAccessModule } from './modules/apiaccess.mod'
+import { createAPIKeysModule, type APIKeysModule } from './modules/apikeys.mod'
+import { createApisModule, type ApisModule } from './modules/apis.mod'
 import { createAppConfigModule, type AppConfigModule } from './modules/appconfig.mod'
+import { createAuditLogsModule, type AuditLogsModule } from './modules/auditlogs.mod'
 import { createAuthModule, type AuthModule } from './modules/auth.mod'
-import { createUserGroupsModule, type UserGroupsModule } from './modules/usergroup.mod'
-import { createUsersModule, type UsersModule } from './modules/user.mod'
-import { isEnvelope } from './types'
-import type {
-  CallInit,
-  CallResult,
-  Executor,
-  HttpMethod,
-  ResponseMetadata,
-  WireMetadata
-} from './types'
+import { createConsentModule, type ConsentModule } from './modules/consent.mod'
+import { createCustomClaimsModule, type CustomClaimsModule } from './modules/customclaims.mod'
+import { createDeviceLoginModule, type DeviceLoginModule } from './modules/devicelogin.mod'
+import { createOidcClientsModule, type OidcClientsModule } from './modules/oidcclients.mod'
+import { createScimModule, type ScimModule } from './modules/scim.mod'
+import { createSystemModule, type SystemModule } from './modules/system.mod'
+import { createUserGroupsModule, type UserGroupsModule } from './modules/usergroups.mod'
+import { createUsersModule, type UsersModule } from './modules/users.mod'
+import { createWebhooksModule, type WebhooksModule } from './modules/webhooks.mod'
+import type { CallInit, CallResult, HttpMethod } from './types'
 
 export interface ApiClientOptions {
   /** API origin; empty string targets the same origin the page was served from. */
@@ -24,73 +27,58 @@ export interface ApiClientOptions {
   credentials?: RequestCredentials
   timeout?: number
   fetch?: typeof globalThis.fetch
+  /** Machine credential for X-API-KEY-guarded admin surfaces. */
+  apiKey?: string
 }
 
 export interface ApiClient {
+  /** Sign-in, recovery, signup, MFA, WebAuthn, one-time access. */
   auth: AuthModule
+  /** Self-service profile, password, sessions, email verification. */
   account: AccountModule
+  /** Admin user CRUD, membership, credentials, one-time access. */
   users: UsersModule
   userGroups: UserGroupsModule
+  /** Public bootstrap payload plus the admin settings surface. */
   appConfig: AppConfigModule
-  /** Typed escape hatch for endpoints without a dedicated namespace yet. */
+  /** Admin relying-party registry. */
+  oidcClients: OidcClientsModule
+  /** The user's consents plus the admin view of any user's consents. */
+  consent: ConsentModule
+  /** SCIM service providers. */
+  scim: ScimModule
+  /** API resources, permissions, client grants, CIMD access. */
+  apis: ApisModule
+  /** Client-centric grant views. */
+  apiAccess: ApiAccessModule
+  /** The user's own X-API-KEY machine credentials. */
+  apiKeys: APIKeysModule
+  customClaims: CustomClaimsModule
+  auditLogs: AuditLogsModule
+  webhooks: WebhooksModule
+  /** Passwordless device pairing (QR + polling). */
+  deviceLogin: DeviceLoginModule
+  /** Version metadata and the readiness probe. */
+  system: SystemModule
+  /**
+   * Typed escape hatch for endpoints without a dedicated namespace yet.
+   * The path is a resource path under the API prefix: `/users/{id}` calls
+   * `/api/users/{id}`.
+   */
   raw<T>(method: HttpMethod, path: string, init?: CallInit): Promise<CallResult<T>>
+  /** Rotates (or clears with `undefined`) the X-API-KEY credential. */
+  setApiKey(apiKey: string | undefined): void
 }
 
 /**
- * Builds the namespaced SDK client. One ofetch instance backs all modules;
- * failures surface as {@link ApiClientError} with no transport-level retries
- * (retry policy belongs to the caller, e.g. TanStack Query).
+ * Builds the namespaced SDK client. Session auth rides the `tango_session`
+ * cookie (`credentials: 'include'`); machine auth rides `X-API-KEY` when an
+ * `apiKey` is configured. Failures surface as {@link ApiClientError} with no
+ * transport-level retries (retry policy belongs to the caller, e.g. TanStack
+ * Query).
  */
 export function createApiClient(options: ApiClientOptions = {}): ApiClient {
-  const baseUrl = options.baseUrl ?? ''
-
-  // `fetch` is a global option in ofetch: it must arrive via the second
-  // create() argument, not the request defaults, or it is ignored.
-  const http = ofetch.create(
-    {
-      baseURL: baseUrl,
-      credentials: options.credentials ?? 'include',
-      retry: 0,
-      headers: options.headers,
-      ...(options.timeout !== undefined && { timeout: options.timeout })
-    },
-    options.fetch !== undefined ? { fetch: options.fetch } : {}
-  )
-
-  async function request<T>(method: HttpMethod, path: string, init: CallInit = {}): Promise<CallResult<T>> {
-    let response
-    try {
-      response = await http.raw<unknown>(path, {
-        method,
-        body: init.body as never,
-        query: init.query,
-        headers: init.headers,
-        signal: init.signal
-      })
-    } catch (cause) {
-      throw toApiClientError(cause)
-    }
-
-    const body = response._data
-    if (isEnvelope(body)) {
-      if (body.status === 'error') throw ApiClientError.fromEnvelope(body, response.status)
-      return { data: body.data as T, metadata: metadataOf(body.metadata, response.status) }
-    }
-
-    // Bare document (WebAuthn begin payloads, JWKS, discovery): no envelope.
-    const requestId = response.headers.get('x-request-id') ?? undefined
-    return { data: body as T, metadata: { statusCode: response.status, requestId } }
-  }
-
-  const exec: Executor = {
-    base: baseUrl,
-    request: (method, path, init) => request(method, path, init),
-    get: (path, opts) => request('GET', path, { ...opts }),
-    post: (path, body, opts) => request('POST', path, { ...opts, body }),
-    put: (path, body, opts) => request('PUT', path, { ...opts, body }),
-    patch: (path, body, opts) => request('PATCH', path, { ...opts, body }),
-    delete: (path, opts) => request('DELETE', path, { ...opts })
-  }
+  const exec = createHttp(options)
 
   return {
     auth: createAuthModule(exec),
@@ -98,21 +86,18 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     users: createUsersModule(exec),
     userGroups: createUserGroupsModule(exec),
     appConfig: createAppConfigModule(exec),
-    raw: (method, path, init) => request(method, path, init)
-  }
-}
-
-function metadataOf(metadata: WireMetadata, status: number): ResponseMetadata {
-  return {
-    statusCode: metadata.status_code ?? status,
-    requestId: metadata.request_id,
-    traceId: metadata.trace_id,
-    rateLimit: metadata.rate_limit,
-    page: metadata.page,
-    limit: metadata.limit,
-    totalPages: metadata.total_pages,
-    totalItems: metadata.total_items,
-    firstItemIndex: metadata.first_item_index,
-    lastItemIndex: metadata.last_item_index
+    oidcClients: createOidcClientsModule(exec),
+    consent: createConsentModule(exec),
+    scim: createScimModule(exec),
+    apis: createApisModule(exec),
+    apiAccess: createApiAccessModule(exec),
+    apiKeys: createAPIKeysModule(exec),
+    customClaims: createCustomClaimsModule(exec),
+    auditLogs: createAuditLogsModule(exec),
+    webhooks: createWebhooksModule(exec),
+    deviceLogin: createDeviceLoginModule(exec),
+    system: createSystemModule(exec),
+    raw: (method, path, init) => exec.request(method, path, init),
+    setApiKey: (apiKey) => exec.setApiKey(apiKey)
   }
 }

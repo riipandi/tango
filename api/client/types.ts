@@ -1,6 +1,6 @@
 // Wire and client-facing types for the tango API: the responder envelope,
-// its metadata projection, and the internal executor contract shared by all
-// SDK modules.
+// its camelCase projection, and the transport contract shared by all SDK
+// modules. Types only — runtime helpers live in envelope.ts / http.ts.
 
 export interface FieldError {
   field: string
@@ -53,6 +53,8 @@ export interface ResponseMetadata {
 export interface CallResult<T> {
   data: T
   metadata: ResponseMetadata
+  /** Link relations from the envelope, when present. */
+  links?: Record<string, string | null>
 }
 
 export interface Pagination {
@@ -87,20 +89,19 @@ export interface CallInit extends CallOptions {
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
-/** Transport surface the SDK modules are built against. */
+/**
+ * Transport surface every SDK module builds on. Paths are resource paths
+ * relative to the API prefix: `/users/{id}`, not `/api/users/{id}`.
+ */
 export interface Executor {
+  /** Configured origin; empty string means same origin. */
   base: string
+  /** Absolute URL for a resource path under the API prefix. */
+  url(path: string): string
   request<T>(method: HttpMethod, path: string, init?: CallInit): Promise<CallResult<T>>
   get<T>(path: string, options?: CallOptions): Promise<CallResult<T>>
   post<T>(path: string, body?: unknown, options?: CallOptions): Promise<CallResult<T>>
   put<T>(path: string, body?: unknown, options?: CallOptions): Promise<CallResult<T>>
   patch<T>(path: string, body?: unknown, options?: CallOptions): Promise<CallResult<T>>
   delete<T>(path: string, options?: CallOptions): Promise<CallResult<T>>
-}
-
-export function isEnvelope(value: unknown): value is ApiEnvelope {
-  if (typeof value !== 'object' || value === null) return false
-  const candidate = value as Record<string, unknown>
-  if (candidate['status'] !== 'success' && candidate['status'] !== 'error') return false
-  return typeof candidate['metadata'] === 'object' && candidate['metadata'] !== null
 }

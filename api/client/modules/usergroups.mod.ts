@@ -1,3 +1,5 @@
+// Grantable groups of users: CRUD, membership, and the OIDC client allowlist.
+
 import { toPaginated } from '../pagination'
 import type {
   CreateUserGroupParams,
@@ -29,18 +31,18 @@ export function createUserGroupsModule(exec: Executor): UserGroupsModule {
       const options: CallOptions | undefined = params
         ? { query: { query: params.query, page: params.page, limit: params.limit } }
         : undefined
-      return exec.get<UserGroup[]>('/api/user-groups', options).then(toPaginated)
+      return exec.get<UserGroup[]>('/user-groups', options).then(toPaginated)
     },
-    get: (groupId) => exec.get<UserGroup>(`/api/user-groups/${groupId}`).then((r) => r.data),
-    create: (params) => exec.post<UserGroup>('/api/user-groups', params).then((r) => r.data),
+    get: (groupId) => exec.get<UserGroup>(`/user-groups/${groupId}`).then((r) => r.data),
+    create: (params) => exec.post<UserGroup>('/user-groups', params).then((r) => r.data),
     update: (groupId, patch) =>
-      exec.put<UserGroup>(`/api/user-groups/${groupId}`, patch).then((r) => r.data),
-    remove: (groupId) => exec.delete(`/api/user-groups/${groupId}`).then(() => undefined),
+      exec.put<UserGroup>(`/user-groups/${groupId}`, patch).then((r) => r.data),
+    remove: (groupId) => exec.delete(`/user-groups/${groupId}`).then(() => undefined),
     listMembers: (groupId) =>
-      exec.get<string[]>(`/api/user-groups/${groupId}/users`).then((r) => r.data),
+      exec.get<string[]>(`/user-groups/${groupId}/users`).then((r) => r.data),
     setMembers: (groupId, userIds) =>
-      exec.put(`/api/user-groups/${groupId}/users`, userIds).then(() => undefined),
+      exec.put(`/user-groups/${groupId}/users`, userIds).then(() => undefined),
     setAllowedClients: (groupId, clientIds) =>
-      exec.put(`/api/user-groups/${groupId}/allowed-oidc-clients`, clientIds).then(() => undefined)
+      exec.put(`/user-groups/${groupId}/allowed-oidc-clients`, clientIds).then(() => undefined)
   }
 }

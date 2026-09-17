@@ -37,9 +37,28 @@ DTOs.
 
 ## Scope
 
-Phase 1 (this plan): core client + `auth` (incl. `mfa`, `webauthn`), `account`, `users`,
-`userGroups`, `appConfig` — the five module files already scaffolded in `api/client/modules/`.
+Phase 1 (shipped, commit `734da80`): core client + `auth` (incl. `mfa`, `webauthn`), `account`,
+`users`, `userGroups`, `appConfig` — 45 of the ±146 unique method+URL pairs Yaak exercises.
 
-Follow-up namespaces (not in this plan): `oidcClients`, `apiKeys`, `apiAccess`, `auditLogs`,
-`customClaims`, `webhooks`, `scim`, `deviceLogin`. The core exposes a typed escape hatch so later
-namespaces slot in without breaking consumers.
+Phase 2 (shipped): every remaining SPA/admin namespace plus auth handling —
+
+- `oidcClients` — client CRUD, secrets, logo, allowed groups, meta, preview, refresh
+- `consent` — my authorized clients + revoke, accessible clients, admin views (me + by user + all)
+- `scim` — provider CRUD, sync, client lookup
+- `apis` + `apiAccess` — API resources, permissions, client grants, CIMD toggle, client-centric views
+- `apiKeys` — the user's own X-API-KEY machine credentials
+- `customClaims` — user and user-group claim CRUD + suggestions
+- `auditLogs` — scoped/all listings + filter suggestions
+- `webhooks` — endpoint CRUD, test delivery, rotate-secret, deliveries (global + per endpoint)
+- `deviceLogin` — request/exchange/inspect/decide pairing flow
+- `system` — version current/latest, readiness probe
+- extensions: `users` gained webauthn-credential admin + one-time access issue; `account` gained
+  email verification + `/users/me` picture; `auth` gained one-time access email/token exchange
+- auth handling: `apiKey` option + `setApiKey` rotation → `X-API-KEY` header (machine clients);
+  cookie sessions ride `credentials: 'include'`
+
+Protocol surfaces kept out of the SDK on purpose (called by relying parties, not the SPA):
+`/api/oidc/token`, `/api/oidc/introspect`, `/api/oidc/par`, `/api/oidc/device/authorize`,
+`/api/oidc/userinfo`, and the `.well-known` documents — reachable via `raw()` when needed.
+
+The core exposes a typed escape hatch so later namespaces slot in without breaking consumers.

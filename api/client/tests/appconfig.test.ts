@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-
 import { createApiClient } from '../index'
 import { envelope, errorEnvelope, expectCall, mockFetch } from './helpers'
 
@@ -45,7 +44,10 @@ describe('appConfig module', () => {
   })
 
   it('queues a test email with an optional address', async () => {
-    const { fetchMock, calls } = mockFetch([{ status: 202, body: null }, { status: 202, body: null }])
+    const { fetchMock, calls } = mockFetch([
+      { status: 202, body: null },
+      { status: 202, body: null }
+    ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
     await client.appConfig.sendTestEmail('ops@tango.local')

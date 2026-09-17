@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
 import { createApiClient, ApiClientError } from '../index'
 import { envelope, expectCall, mockFetch } from './helpers'
 
@@ -17,7 +16,7 @@ describe('client core', () => {
     ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const result = await client.raw<{ username: string }>('GET', '/api/account')
+    const result = await client.raw<{ username: string }>('GET', '/account')
 
     expect(result.data).toEqual({ username: 'abbey' })
     expect(result.metadata.statusCode).toBe(200)
@@ -27,22 +26,42 @@ describe('client core', () => {
     expect(expectCall(calls).url).toBe(`${BASE_URL}/api/account`)
   })
 
+  it('exposes envelope link relations on the result', async () => {
+    const { fetchMock } = mockFetch([
+      {
+        status: 200,
+        body: {
+          status: 'success',
+          data: { username: 'abbey' },
+          metadata: { status_code: 200, request_id: 'req_test' },
+          links: { self: `${BASE_URL}/api/account` }
+        }
+      }
+    ])
+    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
+
+    const result = await client.raw<{ username: string }>('GET', '/account')
+
+    expect(result.links).toEqual({ self: `${BASE_URL}/api/account` })
+  })
+
   it('passes bare documents through without envelope unwrapping', async () => {
     const begin = { publicKey: { challenge: 'abc' }, session_id: 'ws_1' }
     const { fetchMock } = mockFetch([{ status: 200, body: begin }])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const result = await client.raw<Record<string, unknown>>('POST', '/api/webauthn/login/begin')
+    const result = await client.raw<Record<string, unknown>>('POST', '/webauthn/login/begin')
 
     expect(result.data).toEqual(begin)
     expect(result.metadata.statusCode).toBe(200)
+    expect(result.links).toBeUndefined()
   })
 
-  it('joins baseUrl with API paths', async () => {
+  it('joins baseUrl with the API prefix', async () => {
     const { fetchMock, calls } = mockFetch([envelope([])])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    await client.raw('GET', '/api/users')
+    await client.raw('GET', '/users')
 
     expect(expectCall(calls).url).toBe(`${BASE_URL}/api/users`)
   })
@@ -51,7 +70,7 @@ describe('client core', () => {
     const { fetchMock, calls } = mockFetch([envelope({})])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    await client.raw('GET', '/api/auth/session')
+    await client.raw('GET', '/auth/session')
 
     const call = expectCall(calls)
     expect(call.credentials).toBe('include')
@@ -65,7 +84,7 @@ describe('client core', () => {
       headers: { 'X-API-KEY': 'admin_key' }
     })
 
-    await client.raw('GET', '/api/users', { headers: { 'X-Trace-Id': 't-42' } })
+    await client.raw('GET', '/users', { headers: { 'X-Trace-Id': 't-42' } })
 
     const call = expectCall(calls)
     expect(call.headers.get('x-api-key')).toBe('admin_key')
@@ -77,7 +96,7 @@ describe('client core', () => {
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
     const controller = new AbortController()
 
-    await client.raw('GET', '/api/users', { signal: controller.signal })
+    await client.raw('GET', '/users', { signal: controller.signal })
 
     expect(expectCall(calls).signal).toBe(controller.signal)
   })
@@ -86,7 +105,7 @@ describe('client core', () => {
     const { fetchMock, calls } = mockFetch([envelope([])])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    await client.raw('GET', '/api/users', { query: { query: 'abb', page: 2, limit: undefined } })
+    await client.raw('GET', '/users', { query: { query: 'abb', page: 2, limit: undefined } })
 
     const call = expectCall(calls)
     expect(call.url).toBe(`${BASE_URL}/api/users?query=abb&page=2`)
@@ -98,7 +117,7 @@ describe('client core', () => {
     }) as unknown as typeof globalThis.fetch
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    await expect(client.raw('GET', '/api/account')).rejects.toMatchObject({
+    await expect(client.raw('GET', '/account')).rejects.toMatchObject({
       name: 'ApiClientError',
       code: 'network_error',
       status: undefined
@@ -106,10 +125,15 @@ describe('client core', () => {
   })
 
   it('throws when a 2xx envelope still reports an error status', async () => {
-    const { fetchMock } = mockFetch([{ status: 200, body: { status: 'error', metadata: { status_code: 200, request_id: 'req_test' } } }])
+    const { fetchMock } = mockFetch([
+      {
+        status: 200,
+        body: { status: 'error', metadata: { status_code: 200, request_id: 'req_test' } }
+      }
+    ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    await expect(client.raw('GET', '/api/account')).rejects.toBeInstanceOf(ApiClientError)
+    await expect(client.raw('GET', '/account')).rejects.toBeInstanceOf(ApiClientError)
   })
 
   it('signs in through the auth namespace', async () => {
@@ -123,7 +147,12 @@ describe('client core', () => {
       created_at: '2026-01-01T00:00:00Z'
     }
     const { fetchMock, calls } = mockFetch([
-      envelope({ user, session_id: SESSION_TOKEN, provider: 'password', expires_at: '2026-02-01T00:00:00Z' })
+      envelope({
+        user,
+        session_id: SESSION_TOKEN,
+        provider: 'password',
+        expires_at: '2026-02-01T00:00:00Z'
+      })
     ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-
 import { createApiClient } from '../index'
 import { envelope, errorEnvelope, expectCall, mockFetch } from './helpers'
 
@@ -64,9 +63,7 @@ describe('auth module', () => {
     expect(forgot.body).toBe(JSON.stringify({ identity: 'abbey@tango.local' }))
     const reset = expectCall(calls, 1)
     expect(reset.path).toBe('/api/auth/reset-password')
-    expect(reset.body).toBe(
-      JSON.stringify({ token: 'rt_1', new_password: 'n3wS3cret' })
-    )
+    expect(reset.body).toBe(JSON.stringify({ token: 'rt_1', new_password: 'n3wS3cret' }))
   })
 
   it('signs up and bootstraps the first admin', async () => {
@@ -82,7 +79,10 @@ describe('auth module', () => {
   })
 
   it('maps setup availability from 204 and 404', async () => {
-    const { fetchMock, calls } = mockFetch([{ status: 204 }, errorEnvelope(404, 'setup not available')])
+    const { fetchMock, calls } = mockFetch([
+      { status: 204 },
+      errorEnvelope(404, 'setup not available')
+    ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
     await expect(client.auth.setupAvailable()).resolves.toBe(true)
@@ -150,9 +150,9 @@ describe('auth.webauthn module', () => {
     const beginResult = await client.auth.webauthn.beginLogin()
     expect(beginResult).toEqual(begin)
 
-    await expect(
-      client.auth.webauthn.finishLogin({ id: 'cred' }, 'ws_1')
-    ).resolves.toMatchObject({ username: 'abbey' })
+    await expect(client.auth.webauthn.finishLogin({ id: 'cred' }, 'ws_1')).resolves.toMatchObject({
+      username: 'abbey'
+    })
 
     const finish = expectCall(calls, 1)
     expect(finish.path).toBe('/api/webauthn/login/finish')
@@ -163,7 +163,10 @@ describe('auth.webauthn module', () => {
   it('registers a passkey with the ceremony session', async () => {
     const begin = { publicKey: { challenge: 'xyz' }, session_id: 'ws_9' }
     const credential = { id: 'cred_1', credential_id: 'aaaa', name: 'laptop' }
-    const { fetchMock, calls } = mockFetch([{ status: 200, body: begin }, envelope(credential, {}, 201)])
+    const { fetchMock, calls } = mockFetch([
+      { status: 200, body: begin },
+      envelope(credential, {}, 201)
+    ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
     const beginResult = await client.auth.webauthn.beginRegistration()
