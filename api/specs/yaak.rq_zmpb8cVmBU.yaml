@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_zmpb8cVmBU
 createdAt: 2026-09-14T09:52:41.431189
-updatedAt: 2026-09-16T11:41:56.871942
+updatedAt: 2026-09-17T18:36:52.707923
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_owstPiB2PV
 authentication: {}
@@ -13,7 +13,7 @@ description: Start a discoverable passkey login — bare {publicKey} options plu
 headers: []
 method: POST
 name: Begin discoverable passkey login
-sortPriority: 0.0
+sortPriority: 2000.0
 url: ${[ apiBaseURL ]}/api/webauthn/login/begin
 urlParameters: []
 settingSendCookies:

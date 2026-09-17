@@ -52,13 +52,13 @@ WORKDIR /srv
 # Install dependencies and build the application.
 # ------------------------------------------------------------------------------
 FROM base AS builder
-ENV CGO_ENABLED=0 GOOS=linux GOEXPERIMENT=jsonv2
+ENV CGO_ENABLED=0 GOOS=linux
 
 # Copy the source files
 COPY --link . .
 
-# Bash will load fnm function via .bashrc. Since we're starting non-interactive shell,
-# we wil need to tell bash to load .bashrc manually.
+# Bash will load fnm function via .bashrc. Since we're starting non-interactive
+# shell, we wil need to tell bash to load .bashrc manually.
 SHELL ["/usr/bin/bash", "-c"]
 ENV BASH_ENV=$HOME/.bashrc
 
@@ -81,7 +81,7 @@ FROM base AS pruner
 COPY --from=builder /srv/build/release /srv
 
 # Create necessary data directories and set permissions
-RUN mkdir -p /srv/storage/{backup,certs,data,logs,uploads} && chmod -R 0775 /srv/storage
+RUN mkdir -p /srv/storage/{backup,certs,data,keys,logs,uploads} && chmod -R 0775 /srv/storage
 
 # ------------------------------------------------------------------------------
 # Production image, copy build output files and run the application.

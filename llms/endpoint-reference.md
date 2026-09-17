@@ -56,11 +56,43 @@ sign-out. TOTP verification is constant-time with step replay protection (`last_
 recovery codes are hashed, single-use, shown exactly once, and rotated atomically. Disablement
 requires the current password and clears every MFA row.
 
+## Webhooks (tango-only)
+
+Upstream Pocket ID has no webhooks; this surface is tango-only and follows the database contract
+in `llms/porting-plan/database.md` (`webhook_endpoints`, `webhook_deliveries`,
+`webhook_delivery_attempts`).
+
+| Method | Endpoint                          | Summary / Yaak Title        | Status | Evidence |
+| ------ | --------------------------------- | --------------------------- | ------ | -------- |
+| GET    | `/api/webhooks`                   | List webhook endpoints      | done — admin guard; `enabled` and `event` filters; secrets never present | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
+| POST   | `/api/webhooks`                   | Create a webhook endpoint   | done — 201; returns the signing secret exactly once | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
+| GET    | `/api/webhooks/{id}`              | Get a webhook endpoint      | done — no secret field | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
+| PUT    | `/api/webhooks/{id}`              | Update a webhook endpoint   | done — partial update; nil fields keep values | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
+| DELETE | `/api/webhooks/{id}`              | Delete a webhook endpoint   | done — deliveries survive with `webhook_id` nulled | `modules/webhook.TestDeleteKeepsDeliveries` |
+| POST   | `/api/webhooks/{id}/rotate-secret`| Rotate the signing secret   | done — returns the new plaintext exactly once; new deliveries sign with it | `modules/webhook.TestRotateSecretInvalidatesTheOldSignature` |
+| POST   | `/api/webhooks/{id}/test`         | Send a test delivery        | done — 202 + delivery id; bypasses the subscription filter | `modules/webhook.TestTestEndpointAcceptsAndQueues` |
+| GET    | `/api/webhooks/{id}/deliveries`   | List deliveries of one endpoint | done — newest first, paginated; latest attempt rides along | `modules/webhook.TestDeliveriesEndpointsListScopedAndGlobal` |
+| GET    | `/api/webhook-deliveries`         | List all deliveries         | done — `event` filter; redacted response metadata only | `modules/webhook.TestDeliveriesEndpointsListScopedAndGlobal` |
+
+Delivery contract: HMAC-SHA256 over `t=<unix>,v1=<hex>` where the digest covers the signed
+timestamp concatenated with the exact canonical body bytes. Headers on every delivery:
+`X-Signature` (timestamp + `v1` digest, ±5-minute verification skew), `X-Webhook-Event` (event
+name), `X-Webhook-Id` (endpoint id), `Content-Type: application/json`. The canonical body is the
+deterministic JSON encoding of the payload, capped at 1 MiB, stored once as immutable bytes and
+reused byte-for-byte by every retry — the signature therefore stays valid across retries. Custom
+registration headers cannot override the signature set. Subscriptions use event names or the
+`*` wildcard; an empty list receives every event. Retries run on the queue (5 attempts, 30 s
+backoff, 30 s receiver deadline); non-2xx and transport failures are recorded per attempt and
+pruned after a week. Rotation affects new deliveries only and never returns the stored
+ciphertext.
+
+---
+
 ## API Keys
 
 | Method | Endpoint                   | Summary / Yaak Title | Status | Evidence |
 | ------ | -------------------------- | -------------------- | ------ | -------- |
-| GET    | `/api/api-keys`            | List API keys        | done   | `modules/admin/apikey.TestKeyPagination` || POST   | `/api/api-keys`            | Create API key       | done — session auth only, API keys cannot create | `modules/admin/apikey.TestKeyRoutesAreSessionGuarded`, `modules/admin/apikey.TestKeyLifecycle` |
+| GET | `/api/api-keys` | List API keys | done | `modules/admin/apikey.TestKeyPagination` |
 | DELETE | `/api/api-keys/{id}`       | Revoke API key       | done   | `modules/admin/apikey.TestKeyLifecycle` |
 | POST   | `/api/api-keys/{id}/renew` | Renew API key        | done — session auth only, API keys cannot renew | `modules/admin/apikey.TestKeyRoutesAreSessionGuarded`, `modules/admin/apikey.TestKeyLifecycle` |
 
@@ -141,6 +173,7 @@ requires the current password and clears every MFA row.
 | Method | Endpoint   | Summary / Yaak Title     | Status | Evidence |
 | ------ | ---------- | ------------------------ | ------ | -------- |
 | GET    | `/healthz` | Responds to healthchecks | done   | `internal/transport.TestNewHTTPServerRoutes` |
+
 ## OIDC
 
 | Method | Endpoint                                           | Summary / Yaak Title                          | Status                                      | Evidence |
@@ -251,36 +284,6 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | POST   | `/api/webauthn/register/finish` | Finish passkey registration       | done   | `modules/identity/webauthn.TestRegisterBeginReturnsOptions` |
 | POST   | `/api/webauthn/login/begin`     | Begin discoverable passkey login  | done — bare `publicKey` options plus an explicit ceremony id | `modules/identity/webauthn.TestLoginBeginAnonymousAndFinishValidation` |
 | POST   | `/api/webauthn/login/finish`    | Finish discoverable passkey login | done — fail closed on unknown ceremony sessions | `modules/identity/webauthn.TestLoginBeginAnonymousAndFinishValidation` |
-
-## Webhooks (tango-only)
-
-Upstream Pocket ID has no webhooks; this surface is tango-only and follows the database contract
-in `llms/porting-plan/database.md` (`webhook_endpoints`, `webhook_deliveries`,
-`webhook_delivery_attempts`).
-
-| Method | Endpoint                          | Summary / Yaak Title        | Status | Evidence |
-| ------ | --------------------------------- | --------------------------- | ------ | -------- |
-| GET    | `/api/webhooks`                   | List webhook endpoints      | done — admin guard; `enabled` and `event` filters; secrets never present | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
-| POST   | `/api/webhooks`                   | Create a webhook endpoint   | done — 201; returns the signing secret exactly once | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
-| GET    | `/api/webhooks/{id}`              | Get a webhook endpoint      | done — no secret field | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
-| PUT    | `/api/webhooks/{id}`              | Update a webhook endpoint   | done — partial update; nil fields keep values | `modules/webhook.TestCreateListGetUpdateDeleteLifecycle` |
-| DELETE | `/api/webhooks/{id}`              | Delete a webhook endpoint   | done — deliveries survive with `webhook_id` nulled | `modules/webhook.TestDeleteKeepsDeliveries` |
-| POST   | `/api/webhooks/{id}/rotate-secret`| Rotate the signing secret   | done — returns the new plaintext exactly once; new deliveries sign with it | `modules/webhook.TestRotateSecretInvalidatesTheOldSignature` |
-| POST   | `/api/webhooks/{id}/test`         | Send a test delivery        | done — 202 + delivery id; bypasses the subscription filter | `modules/webhook.TestTestEndpointAcceptsAndQueues` |
-| GET    | `/api/webhooks/{id}/deliveries`   | List deliveries of one endpoint | done — newest first, paginated; latest attempt rides along | `modules/webhook.TestDeliveriesEndpointsListScopedAndGlobal` |
-| GET    | `/api/webhook-deliveries`         | List all deliveries         | done — `event` filter; redacted response metadata only | `modules/webhook.TestDeliveriesEndpointsListScopedAndGlobal` |
-
-Delivery contract: HMAC-SHA256 over `t=<unix>,v1=<hex>` where the digest covers the signed
-timestamp concatenated with the exact canonical body bytes. Headers on every delivery:
-`X-Signature` (timestamp + `v1` digest, ±5-minute verification skew), `X-Webhook-Event` (event
-name), `X-Webhook-Id` (endpoint id), `Content-Type: application/json`. The canonical body is the
-deterministic JSON encoding of the payload, capped at 1 MiB, stored once as immutable bytes and
-reused byte-for-byte by every retry — the signature therefore stays valid across retries. Custom
-registration headers cannot override the signature set. Subscriptions use event names or the
-`*` wildcard; an empty list receives every event. Retries run on the queue (5 attempts, 30 s
-backoff, 30 s receiver deadline); non-2xx and transport failures are recorded per attempt and
-pruned after a week. Rotation affects new deliveries only and never returns the stored
-ciphertext.
 
 ## Version
 

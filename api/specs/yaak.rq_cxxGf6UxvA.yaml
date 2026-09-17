@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_cxxGf6UxvA
 createdAt: 2026-09-14T09:52:45.895053
-updatedAt: 2026-09-14T10:24:36.659194
+updatedAt: 2026-09-17T18:36:52.707221
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_owstPiB2PV
 authentication: {}
@@ -26,7 +26,7 @@ description: Verify the passkey assertion and set the sign-in session cookie; se
 headers: []
 method: POST
 name: Finish discoverable passkey login
-sortPriority: 0.0
+sortPriority: 3000.0
 url: ${[ apiBaseURL ]}/api/webauthn/login/finish
 urlParameters:
 - enabled: true
