@@ -146,8 +146,9 @@ func (f *APIFeature) sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := f.service.SyncProvider(r.Context(), provider); err != nil {
-		responder.Fail(w, r, http.StatusBadGateway, "scim sync failed",
-			responder.WithError(err.Error()))
+		// The sync failure may carry provider/network internals —
+		// log-bound only, the client sees the fixed 502.
+		responder.Fail(w, r, http.StatusBadGateway, "scim sync failed")
 		return
 	}
 	responder.Success(w, r, http.StatusOK, toResponse(provider, false))

@@ -102,7 +102,7 @@ func (s *Service) handleExchange(w http.ResponseWriter, r *http.Request) {
 		responder.Fail(w, r, http.StatusForbidden, "device login was denied")
 		return
 	default:
-		responder.Fail(w, r, http.StatusNotFound, "device login request is invalid or expired: "+err.Error())
+		responder.Fail(w, r, http.StatusNotFound, "device login request is invalid or expired")
 		return
 	}
 

@@ -110,6 +110,10 @@ func TestHandlerProviderLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	w = do(router, http.MethodPost, "/api/scim/service-provider/"+deadProvider.ID.String()+"/sync", "")
 	assert.Equal(t, http.StatusBadGateway, w.Code)
+	// The 502 is fixed text: the provider/network failure detail
+	// stays out of the response.
+	assert.NotContains(t, w.Body.String(), "connection")
+	assert.NotContains(t, w.Body.String(), "refused")
 
 	// Sync against the stub: 200. Bad id: 404.
 	stub := newSCIMStub(t)
