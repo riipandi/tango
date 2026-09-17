@@ -1,6 +1,6 @@
 ---
-status: draft
-updated: 2026-09-17
+status: done
+updated: 2026-09-18
 owner: tango-remediation
 ---
 
@@ -53,11 +53,18 @@ contract.
 
 1. [Baseline and inventory](./00-baseline.md) — done
 2. [Final schema and compatibility removal](./01-final-schema.md) — done
-3. [Excluded feature and contract artifact cleanup](./02-excluded-and-contracts.md)
-4. [Architecture boundary separation](./03-architecture-boundaries.md)
-5. [Validation and error safety](./04-validation-and-errors.md)
-6. [Runtime verification and live contract](./05-verification-gates.md)
-7. [Final acceptance and closeout](./06-closeout.md)
+3. [Excluded feature and contract artifact cleanup](./02-excluded-and-contracts.md) — done
+4. [Architecture boundary separation](./03-architecture-boundaries.md) — done
+5. [Validation and error safety](./04-validation-and-errors.md) — done
+6. [Runtime verification and live contract](./05-verification-gates.md) — done
+7. [Final acceptance and closeout](./06-closeout.md) — done
 
 A phase starts only after the previous phase's acceptance criteria are met and every task of the
 previous phase has its atomic commit.
+
+## Open decision (blocker)
+
+- **Setup endpoint session cookie** — `POST /api/signup/setup` issues a session token but does
+  not set the cookie, and the first admin has no password row. The account is reachable only
+  through `tango setup` (CLI) until this is decided: set the cookie (upstream parity) or
+  document CLI-only bootstrap. Evidence and options: `05-verification-gates.md` § Findings.

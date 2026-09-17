@@ -1,6 +1,6 @@
 ---
-status: draft
-updated: 2026-09-17
+status: done
+updated: 2026-09-18
 owner: tango-remediation
 ---
 
@@ -80,3 +80,39 @@ Commit: `docs: close remediation acceptance`
 - `task test`, `task lint`, `task check`, format, vet, race, fresh migration, the endpoint
   matrix, and Yaak verification all carry current evidence.
 - The repository is ready for human review and the final commit recommendation goes to the owner.
+
+## Final gate record (2026-09-18)
+
+Environment: macOS (darwin/arm64), Go 1.27, Node >= 24, Docker 29.4.0 with the compose stack up
+(pgsql, mailpit, redis, nginx, silo, upstream pocketid parity instance on :1411).
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| Go release suite | `go test -tags release -count=1 -failfast -timeout 1200s ./...` | 42 packages ok |
+| Go debug suite | `go test -tags debug -count=1 -failfast -timeout 900s ./cmd/... ./database/...` | ok |
+| Race suite | `go test -tags release -race -failfast` over webauthn, webhook, queue, recovery, scimsync, oidc, apikey, apiaccess | no races, ok |
+| Fresh migration | `TestMigrationsLifecycle`, `TestFreshSchemaHasNoObsoleteTables`, contract suite | ok |
+| Frontend | `pnpm exec vitest run` | 76/76 (9 files) |
+| Lint | `task lint` | 0 issues |
+| Check | `task check` | clean |
+| Format | `gofmt -l`, oxfmt | clean |
+| Vet | `go vet ./...` | clean |
+| Typecheck | `task typecheck` (`tsc -b --noEmit`) | clean |
+| Endpoint matrix | live diff tango (:3081, fresh DB) vs upstream (:1411) | statuses match; deviations recorded |
+| Live Yaak contracts | curl re-send of every changed flow against the fresh DB | all pass; findings recorded |
+
+## Commit inventory (this plan, branch `overhaul-stack`, unpushed)
+
+Baseline `cacaa6355c11` → `e9d6f7a`, `c9c4efb` (phase 0) → `cd085ef`, `b52886c`, `e17a7e0`,
+`e7fbfd7` (phase 1) → plan translation commit → `acfdeb4`, `bbc5182` (phase 2) → three phase-3
+commits (recovery split, federation split, architecture tests) → three phase-4 commits
+(validation, error disclosure, redaction) → `aa1ebe9` (contract test order fix),
+`11988eb` (owner-directed schema consolidation) → `e2f2923`, `19c83b3`, `b3321df`, `d9c7760`
+(phase 5) → `81cc019` (phase 6 audit) → this closeout commit.
+
+## Open decision (stays open until the owner decides)
+
+- **Setup endpoint session cookie** — `POST /api/signup/setup` issues a session token but does
+  not set the cookie; the first admin has no password row, so API access requires the CLI
+  bootstrap until decided. Options: set the cookie (upstream parity) or document CLI-only
+  bootstrap. Evidence: `05-verification-gates.md` § Findings.

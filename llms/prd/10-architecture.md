@@ -1,6 +1,6 @@
 ---
-status: draft
-updated: 2026-09-15
+status: done
+updated: 2026-09-18
 owner: tango-auth-porting
 ---
 

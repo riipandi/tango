@@ -1,6 +1,6 @@
 ---
-status: draft
-updated: 2026-09-17
+status: done
+updated: 2026-09-18
 owner: tango-remediation
 ---
 
