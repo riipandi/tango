@@ -6,6 +6,7 @@ import (
 	jsonv2 "encoding/json/v2"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -490,4 +491,47 @@ func TestPayloadMappers(t *testing.T) {
 	empty := scimGroupPayload(ScimGroupRow{ID: "g2", Name: "Empty"}, nil)
 	assert.NotNil(t, empty.Members, "members stay non-nil for SCIM list output")
 	assert.Empty(t, empty.Members)
+}
+
+// TestSyncLogsNeverCarrySecrets drives a rate-limited sync with a
+// captured slog output: the retry path logs provider id only — the
+// bearer token and snapshot values never reach the log.
+func TestSyncLogsNeverCarrySecrets(t *testing.T) {
+	ctx := t.Context()
+	stub := newSCIMStub(t)
+	source := &fakeSource{
+		users:  []ScimUserRow{userRow("u1", "ada_wong")},
+		groups: []ScimGroupRow{{ID: "g1", Name: "Devs", Members: []string{"u1"}}},
+	}
+
+	var logs bytes.Buffer
+	sink := slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})
+	svc, provider := newSyncStackWithLogger(t, source, stub, slog.New(sink))
+
+	stub.rateLimitOne = true
+	require.NoError(t, svc.SyncProvider(ctx, provider))
+
+	out := logs.String()
+	assert.Contains(t, out, "rate-limited", "the retry path must log")
+	assert.NotContains(t, out, "sync-token", "the bearer token must never be logged")
+	assert.NotContains(t, out, "ada_wong", "snapshot values must never be logged")
+}
+
+// newSyncStackWithLogger is newSyncStack with an explicit slog logger.
+func newSyncStackWithLogger(t *testing.T, source *fakeSource, stub *scimStub, log *slog.Logger) (*Service, ServiceProvider) {
+	t.Helper()
+	store, _ := newStore(t)
+
+	created, err := store.Create(t.Context(), UpsertParams{
+		Endpoint:     stub.srv.URL,
+		Token:        "sync-token",
+		OIDCClientID: clientFixtureID,
+	})
+	require.NoError(t, err)
+
+	provider, err := store.GetByID(t.Context(), created.ID)
+	require.NoError(t, err)
+
+	svc := NewService(store, source, httpPoster{client: &http.Client{Timeout: 30 * time.Second}}, log)
+	return svc, provider
 }
