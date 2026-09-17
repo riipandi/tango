@@ -15,6 +15,7 @@ const (
 	userAuthorizedClientsTable    = "public.user_authorized_oidc_clients"
 	oauth2SessionsTable           = "public.oauth2_sessions"
 	oauth2JtisTable               = "public.oauth2_jtis"
+	oidcDeviceCodesTable          = "public.oidc_device_codes"
 	interactionSessionsTable      = "public.interaction_sessions"
 
 	usersTable           = "public.users"
@@ -39,6 +40,21 @@ type Store interface {
 	// One-time authorization codes.
 	InsertCode(ctx context.Context, code AuthorizationCode) error
 	ConsumeCode(ctx context.Context, codeHash string) (AuthorizationCode, error)
+
+	// Device authorizations (RFC 8628).
+	InsertDeviceCode(ctx context.Context, code DeviceCode) error
+	GetDeviceCode(ctx context.Context, deviceCodeHash string) (DeviceCode, error)
+	GetDeviceCodeByUserCode(ctx context.Context, userCodeHash string) (DeviceCode, error)
+	ApproveDeviceCode(ctx context.Context, userCodeHash, userID string) error
+	DenyDeviceCode(ctx context.Context, userCodeHash string) error
+	// ConsumeDeviceCode atomically flips an approved authorization to
+	// consumed and returns it; any other state is ErrInvalidGrant.
+	ConsumeDeviceCode(ctx context.Context, deviceCodeHash string) (DeviceCode, error)
+	// UpdateDeviceCodeGrant stamps the resolved audience and granted
+	// scope on approval.
+	UpdateDeviceCodeGrant(ctx context.Context, userCodeHash, audience, scope string) error
+	TouchDevicePoll(ctx context.Context, deviceCodeHash string, at time.Time) error
+	PruneDeviceCodes(ctx context.Context, before time.Time) (int64, error)
 
 	// OAuth 2.0 session bookkeeping + replay registry.
 	PutSession(ctx context.Context, session OAuth2Session) error

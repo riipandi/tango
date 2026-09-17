@@ -32,6 +32,9 @@ const (
 	KindAuthorizeCode = "authorize_code"
 	KindAccessToken   = "access_token"
 	KindRefresh       = "refresh_token"
+	// KindPAR is a pushed authorization request (RFC 9126): the key
+	// is the request_uri payload, unique per push.
+	KindPAR = "par"
 )
 
 // PutSession upserts one oauth2_sessions row (kind, key) unique.

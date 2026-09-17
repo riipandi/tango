@@ -24,12 +24,26 @@ import (
 
 // handleAuthorize is the HTTP shell; see authorizeLogic below.
 func (s *Service) handleAuthorize(w http.ResponseWriter, r *http.Request) {
-	params, err := parseAuthorizeRequest(r)
-	if err != nil {
-		// Unverified request: never redirect — the redirect_uri has
-		// not been validated against the client's callbacks yet.
-		responder.Fail(w, r, http.StatusBadRequest, "invalid authorization request")
-		return
+	// RFC 9126: a pushed request_uri REPLACES the inline parameters —
+	// only request_uri (and nothing else) is on the query when PAR
+	// is used, so it is resolved before any inline validation.
+	var params *authorizeParams
+	if par := parRequestURI(r.URL.Query().Get("request_uri")); par != "" {
+		loaded, parErr := s.loadPARParams(r.Context(), par)
+		if parErr != nil {
+			responder.Fail(w, r, http.StatusBadRequest, "invalid authorization request")
+			return
+		}
+		params = loaded
+	} else {
+		loaded, err := parseAuthorizeRequest(r)
+		if err != nil {
+			// Unverified request: never redirect — the redirect_uri has
+			// not been validated against the client's callbacks yet.
+			responder.Fail(w, r, http.StatusBadRequest, "invalid authorization request")
+			return
+		}
+		params = loaded
 	}
 
 	client, err := s.store.GetClient(r.Context(), params.ClientID)
@@ -85,21 +99,31 @@ type authorizeParams struct {
 // parseAuthorizeRequest validates the query set. PKCE is mandatory:
 // S256 only, plain is rejected (spec-allowed but weak).
 func parseAuthorizeRequest(r *http.Request) (*authorizeParams, error) {
-	query := r.URL.Query()
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			return nil, ErrInvalidRequest
+		}
+		return parseAuthorizeForm(r.PostForm)
+	}
+	return parseAuthorizeForm(r.URL.Query())
+}
 
+// parseAuthorizeForm validates the authorize parameter set from any
+// values collection (query or form). PKCE is mandatory: S256 only.
+func parseAuthorizeForm(values url.Values) (*authorizeParams, error) {
 	p := &authorizeParams{
-		RedirectURI:         query.Get("redirect_uri"),
-		ResponseType:        query.Get("response_type"),
-		Scope:               query.Get("scope"),
-		Resource:            query.Get("resource"),
-		State:               query.Get("state"),
-		Nonce:               query.Get("nonce"),
-		CodeChallenge:       query.Get("code_challenge"),
-		CodeChallengeMethod: query.Get("code_challenge_method"),
-		Prompt:              query.Get("prompt"),
+		RedirectURI:         values.Get("redirect_uri"),
+		ResponseType:        values.Get("response_type"),
+		Scope:               values.Get("scope"),
+		Resource:            values.Get("resource"),
+		State:               values.Get("state"),
+		Nonce:               values.Get("nonce"),
+		CodeChallenge:       values.Get("code_challenge"),
+		CodeChallengeMethod: values.Get("code_challenge_method"),
+		Prompt:              values.Get("prompt"),
 	}
 
-	clientID, err := OIDCParseClientID(query.Get("client_id"))
+	clientID, err := OIDCParseClientID(values.Get("client_id"))
 	if err != nil {
 		return p, ErrInvalidRequest
 	}
@@ -112,6 +136,41 @@ func parseAuthorizeRequest(r *http.Request) (*authorizeParams, error) {
 		return p, ErrInvalidRequest
 	}
 	return p, nil
+}
+
+// loadPARParams resolves a pushed request_uri into the authorize
+// parameters; an unknown or expired push is invalid.
+func (s *Service) loadPARParams(ctx context.Context, requestURI string) (*authorizeParams, error) {
+	sum := sha256Hex(requestURI)
+	session, err := s.store.GetSession(ctx, KindPAR, sum)
+	if err != nil || !session.Active {
+		return nil, ErrInvalidRequest
+	}
+	// One-time use: the push dies with the authorize resume.
+	if deactivateErr := s.store.DeactivateSession(ctx, KindPAR, sum); deactivateErr != nil {
+		return nil, ErrInvalidRequest
+	}
+
+	str := func(key string) string {
+		value, _ := session.RequestData[key].(string)
+		return value
+	}
+	clientID, err := OIDCParseClientID(str("client_id"))
+	if err != nil {
+		return nil, ErrInvalidRequest
+	}
+	return &authorizeParams{
+		ClientID:            clientID,
+		RedirectURI:         str("redirect_uri"),
+		ResponseType:        "code",
+		Scope:               str("scope"),
+		Resource:            str("resource"),
+		State:               str("state"),
+		Nonce:               str("nonce"),
+		CodeChallenge:       str("code_challenge"),
+		CodeChallengeMethod: str("code_challenge_met"),
+		Prompt:              str("prompt"),
+	}, nil
 }
 
 // OIDCParseClientID parses the clients.id TEXT key into the typed

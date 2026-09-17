@@ -84,6 +84,14 @@ func (f Feature) APIRoutes(r chi.Router, g federation.RouteGroups) {
 	r.Post(introspectAPIPath, f.service.handleIntrospect)
 	r.Post(endSessionAPIPath, f.service.handleEndSession)
 	r.Get(endSessionAPIPath, f.service.handleEndSession)
+
+	// RFC 9126 pushed authorization requests.
+	r.Post(parAPIPath, f.service.HandlePAR)
+
+	// RFC 8628 device authorization grant.
+	r.Post(deviceAPIPrefix+"/authorize", f.service.HandleDeviceAuthorize)
+	r.Post(deviceAPIPrefix+"/verify", f.service.HandleDeviceVerify)
+	r.Get(deviceAPIPrefix+"/info", f.service.HandleDeviceInfo)
 }
 
 // API mount prefixes (relative to the /api group).
@@ -96,6 +104,9 @@ const (
 
 	tokenAPIPath    = "/oidc/token"
 	userinfoAPIPath = "/oidc/userinfo"
+
+	deviceAPIPrefix  = "/oidc/device"
+	parAPIPath       = "/oidc/par"
 )
 
 // clientRequest is the POST/PUT /api/oidc/clients payload.
@@ -312,6 +323,8 @@ func (s *Service) handleToken(w http.ResponseWriter, r *http.Request) {
 		s.exchangeCode(w, r, client)
 	case "refresh_token":
 		s.exchangeRefresh(w, r, client)
+	case GrantDeviceCode:
+		s.exchangeDevice(w, r, client)
 	default:
 		tokenError(w, r, "unsupported_grant_type", http.StatusBadRequest)
 	}

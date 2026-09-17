@@ -29,7 +29,12 @@ const (
 	TokenEndpoint      = "/api/oidc/token"
 	UserInfoEndpoint   = "/api/oidc/userinfo"
 	EndSessionEndpoint = "/api/oidc/end-session"
-	JWKSURI            = "/.well-known/jwks.json"
+	IntrospectionEndpoint = "/api/oidc/introspect"
+	// PushedAuthorizationRequestEndpoint is the RFC 9126 PAR endpoint.
+	PushedAuthorizationRequestEndpoint = "/api/oidc/par"
+	// DeviceAuthorizationEndpoint is the RFC 8628 device authorization endpoint.
+	DeviceAuthorizationEndpoint = "/api/oidc/device/authorize"
+	JWKSURI                     = "/.well-known/jwks.json"
 )
 
 // Feature serves the discovery document and JWKS from the shared

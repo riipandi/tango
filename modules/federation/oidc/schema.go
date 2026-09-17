@@ -72,6 +72,27 @@ const (
 	RefreshTokenTTL = 30 * 24 * time.Hour
 	// InteractionSessionTTL bounds the sign-in/consent bridge.
 	InteractionSessionTTL = 15 * time.Minute
+
+	// DeviceCodeTTL bounds the device authorization (RFC 8628 6.1:
+	// the verification_uri_complete window); upstream uses 15m.
+	DeviceCodeTTL = 15 * time.Minute
+	// DevicePollInterval is the minimum seconds between token polls
+	// (RFC 8628 3.5: slow_down backoff baseline).
+	DevicePollInterval = 5
+	// DeviceUserCodeLength is the random part of the user code
+	// (upstream: prefix "E" + 7 unambiguous chars).
+	DeviceUserCodeLength = 7
+	// DeviceUserCodePrefix labels a tango device user code.
+	DeviceUserCodePrefix = "E"
+	// DeviceVerificationPath is the SPA page where the user enters
+	// the user code (upstream: BaseURL + "/device").
+	DeviceVerificationPath = "/device"
+	// PARTTL bounds a pushed authorization request_uri lifetime
+	// (RFC 9126 3.2.2 recommends short; upstream default 30s-ish).
+	PARTTL = 1 * time.Minute
+
+	// GrantDeviceCode is the RFC 8628 token grant type.
+	GrantDeviceCode = "urn:ietf:params:oauth:grant-type:device_code"
 )
 
 // Scopes understood by this provider.
