@@ -83,7 +83,10 @@ CREATE INDEX IF NOT EXISTS idx_grant_permissions_client ON public.oidc_client_ap
 CREATE TABLE IF NOT EXISTS public.app_config (
     key TEXT NOT NULL PRIMARY KEY,
     value TEXT NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Sensitive settings must always be stored sealed (enc: marker).
+    CONSTRAINT chk_app_config_sensitive_enc
+        CHECK (key <> 'smtp_password' OR value LIKE 'enc:%')
 ) USING heap;
 
 CREATE TRIGGER trg_app_config_updated_at
