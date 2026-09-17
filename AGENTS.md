@@ -50,6 +50,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 ## Common Tasks
 
 - Add an endpoint: follow the matching `llms/phase-*.md` task list; create the request in Yaak (via MCP) and send it against the running server before ticking a checkbox. Exported request specs land in `api/specs/*.yaml`.
+- API client SDK (`api/client/`) is part of the API contract for every internal surface (SPA, admin console, future internal modules). Adding a new endpoint feature or adjusting an existing one always ships the SDK sync in the same change: add or extend the namespace method, mirror the Go DTO in the zod schema (including show-once secrets and bare documents), update `client.ts`/`index.ts` when a namespace appears, and cover it with vitest. Run `task typecheck` and the vitest api-client suite. Relying-party OAuth surfaces (`token`, `introspect`, `par`, `device/authorize`, `userinfo`, `.well-known/*`) stay out of typed namespaces; `raw()` is the escape hatch — see `llms/api-client-plan/README.md` for the route-diff workflow.
 - Add a config key: catalog entry in `modules/appconfig/config.go` + env layer in `modules/appconfig/env.go` (`EnvDefaults`); `.env.example` documents the env name.
 - Frontend asset images live in `public/images/` → copied to `web/output/images` by the Vite build; never embed them in Go.
 - LDAP is an excluded upstream feature: no LDAP configuration, services, clients, or schema
