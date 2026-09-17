@@ -117,6 +117,46 @@ store secrets, tokens, recovery codes, seeds, or ciphertext.
 
 Commit: `test: record live remediation verification`
 
+### Evidence (2026-09-18)
+
+Live re-send against a fresh `tango_verify` database (all 11 migrations applied, admin bootstrapped
+via `tango setup --admin-email ... --admin-password ...`, server on :3081). Requests re-sent with
+curl against the same contracts the Yaak collection pins; no secret, token, recovery code, seed,
+or ciphertext is recorded here or in the repo.
+
+- Password/recovery: sign-in 200; wrong password and unknown identity both 401 (indistinguishable);
+  session inspect 200; forgot-password 204 for known and unknown identities; reset via the emailed
+  token (fetched from Mailpit) 200; token reuse 404; sign-in with the new password 200, old
+  password 401.
+- TOTP: enroll 201 (secret + provisioning URI show-once); confirm 200 (8 recovery codes show-once);
+  MFA-bridged sign-in → verify 200 → full session 200; status reveals only `confirmed` +
+  `recovery_codes_remaining` (no seed); recovery-code rotation 200 (show-once); disable 204 with
+  password.
+- OIDC client secret lifecycle: create 201 with `client_secret` shown once; GET omits it;
+  `POST /clients/{id}/secrets` 201 (caller-supplied value echoed once); list secrets is metadata
+  only; `DELETE /secrets/{secretId}` 204; token endpoint authenticates with the shown-once secret.
+- Device flow: `POST /oidc/device/authorize` 200 (device_code, user_code, verification_uri);
+  `POST /oidc/device/verify` (form-encoded `code` + `action=approve`) 204; token exchange 200
+  (access + id token); userinfo 200 (sub/email/preferred_username); introspect 200 `active:true`.
+- PAR: 400 without PKCE, 200 with `code_challenge`/`code_challenge_method=S256`
+  (`request_uri`, `expires_in: 60`).
+- SCIM: create 201 (token show-once); sync against an unreachable provider 502 with the fixed
+  generic message; delete 204.
+- Webhooks: create 201 (secret show-once); list omits secret; rotate-secret 200 (new secret
+  show-once); test 202 with a delivery id queued; deliveries list works. No delivery retry
+  endpoint exists — retries are the internal per-delivery budget (matches the endpoint reference).
+- Excluded-route negative checks: `/api/application-images`, `PUT /api/settings/ldap`,
+  `/api/webauthn/credentials` (upstream self-service) → all 404 as intended.
+
+### Findings
+
+- **`POST /api/signup/setup` does not set the session cookie.** The service issues a session
+  token for the first admin, but `handleSetup` discards `result.Token` and answers 200 without
+  `Set-Cookie` (upstream sets the access-token cookie). The created admin has no password row
+  (matching upstream, which relies on the setup session), so without the cookie the account is
+  unreachable through the API until the CLI setup or a reset flow is used. Needs an owner
+  decision: either set the cookie (upstream parity) or document CLI-only bootstrap.
+
 ## Phase acceptance criteria
 
 - The full gates really run in a matching environment.
