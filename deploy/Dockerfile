@@ -52,7 +52,11 @@ WORKDIR /srv
 # Install dependencies and build the application.
 # ------------------------------------------------------------------------------
 FROM base AS builder
+
 ENV CGO_ENABLED=0 GOOS=linux
+ARG BUILD_VERSION
+ARG BUILD_HASH=dev
+ARG BUILD_DATE
 
 # Copy the source files
 COPY --link . .

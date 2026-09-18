@@ -167,8 +167,13 @@ tasks:
   # ----------------------------------------------------------------------------
   docker:build:
     desc: Build the Docker image
+    vars:
+      BUILD_HASH:
+        sh: git rev-parse --short HEAD 2>/dev/null || echo dev
+      BUILD_DATE:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
     cmds:
-      - docker build -f ./deploy/Dockerfile . --build-arg DISTROLESS_TAG=debug-nonroot -t {{.IMAGE}}:latest-dev -t {{.IMAGE}}:{{.APP_VERSION}}-dev {{.CLI_ARGS}}
+      - docker build -f ./deploy/Dockerfile . --build-arg DISTROLESS_TAG=debug-nonroot --build-arg BUILD_VERSION={{.APP_VERSION}} --build-arg BUILD_HASH={{.BUILD_HASH}} --build-arg BUILD_DATE={{.BUILD_DATE}} -t {{.IMAGE}}:latest-dev -t {{.IMAGE}}:{{.APP_VERSION}}-dev {{.CLI_ARGS}}
       - docker image list --filter reference={{.IMAGE}}:*
 
   docker:push:

@@ -11,6 +11,7 @@ const goModule = 'github.com/riipandi/tango'
 // const isTestOrCI = process.env.CI || process.env.VITEST
 // const isVitest = process.env.VITEST
 const isStorybook = process.env.STORYBOOK === 'true'
+const APP_VERSION = process.env.BUILD_VERSION || pkg.version
 const BUILD_DATE = process.env.BUILD_DATE || new Date().toISOString()
 const BUILD_HASH = process.env.BUILD_HASH || 'dev'
 
@@ -40,7 +41,7 @@ export default defineConfig({
         buildFlags: ['-trimpath', '-buildmode=pie', '-buildvcs=false'],
         ldflags: [
           '-w -s -extldflags -static',
-          `-X ${goModule}/internal/config.AppVersion=${pkg.version}`,
+          `-X ${goModule}/internal/config.AppVersion=${APP_VERSION}`,
           `-X ${goModule}/internal/config.BuildHash=${BUILD_HASH}`,
           `-X ${goModule}/internal/config.BuildDate=${BUILD_DATE}`
         ]
