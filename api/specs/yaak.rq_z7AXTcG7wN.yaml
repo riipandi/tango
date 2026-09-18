@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_z7AXTcG7wN
 createdAt: 2026-09-13T16:08:36.116262
-updatedAt: 2026-09-17T18:45:58.583891
+updatedAt: 2026-09-18T10:25:08.371571
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_R5pypBKj8u
 authentication: {}
@@ -17,7 +17,7 @@ headers:
   id: null
 method: POST
 name: Exchange device login request
-sortPriority: 0.0
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/api/device-login/requests/:id/exchange
 urlParameters:
 - enabled: true
