@@ -40,6 +40,17 @@ export default defineConfig({
           exclude: ['node_modules', 'tests-e2e'],
           globals: true
         }
+      },
+      {
+        extends: true,
+        resolve: { tsconfigPaths: true },
+        test: {
+          name: 'app',
+          environment: 'happy-dom',
+          include: ['./app/**/*.test.ts'],
+          exclude: ['node_modules', 'tests-e2e'],
+          globals: true
+        }
       }
     ]
   }

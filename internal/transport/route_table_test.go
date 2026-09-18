@@ -111,7 +111,7 @@ func TestWellKnownRoutesAreRootMounted(t *testing.T) {
 // "revoked-" prefix, which stands in for expired/revoked sessions.
 type fakeAuth struct{ fail bool }
 
-func (f fakeAuth) ResolveSession(_ context.Context, token string) (kernel.Principal, error) {
+func (f fakeAuth) ResolveAccess(_ context.Context, token string) (kernel.Principal, error) {
 	if f.fail || token == "" || strings.HasPrefix(token, "revoked-") {
 		return kernel.Principal{}, errors.New("session: invalid or expired")
 	}

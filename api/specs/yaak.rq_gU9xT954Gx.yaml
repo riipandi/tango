@@ -1,0 +1,42 @@
+type: http_request
+model: http_request
+id: rq_gU9xT954Gx
+createdAt: 2026-09-18T19:29:24.436944
+updatedAt: 2026-09-18T19:29:40.096310
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_Zg3xFLU2hm
+authentication: {}
+authenticationType: none
+body:
+  bodyType: application/json
+  text: '{"identity":"first_admin","secret":"bench-password-1"}'
+bodyType: null
+description: ''
+headers:
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: Auth SignIn (Connect)
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.AuthService/SignIn
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

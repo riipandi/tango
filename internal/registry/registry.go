@@ -101,9 +101,13 @@ func New(deps Deps) (*Runtime, error) {
 	events := NewEventFanout(deps.Logger)
 	recorder := events.Recorder()
 
+	// The JWKS key service backs both the federation surface and the
+	// internal access-token signer.
+	keyService := newKeyService(deps)
+
 	// Register identity features: sessions first, then the audit
 	// module (its guards need sessions), then the guarded features.
-	idModule, groups, sessions, auditLog, apiAccess, blobStore, err := newIdentityFeatures(deps, rt.Jobs, recorder)
+	idModule, groups, sessions, auditLog, apiAccess, blobStore, err := newIdentityFeatures(deps, rt.Jobs, recorder, keyService)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +133,6 @@ func New(deps Deps) (*Runtime, error) {
 		WithCipher(settingsCipher)
 
 	// Register the identity provider surface.
-	keyService := newKeyService(deps)
 	rt.Federation = federation.New(
 		withOIDC(deps, rt.AuditLog, keyService, sessions, apiAccess, blobStore, rt.AppConfig),
 		withSCIMSync(deps),
@@ -162,7 +165,7 @@ func (rt *Runtime) SessionGuard() kernel.Guard {
 // SessionAuthenticator exposes the session resolver for the RPC
 // bearer contract: `Authorization: Bearer <access-token>` resolves
 // through the same store the cookie session uses.
-func (rt *Runtime) SessionAuthenticator() kernel.Authenticator {
+func (rt *Runtime) SessionAuthenticator() kernel.AccessAuthenticator {
 	return rt.sessions
 }
 
@@ -173,6 +176,11 @@ func (rt *Runtime) MountRPC(r chi.Router) {
 	// the same contract as the REST surface.
 	prefix, handler := rt.Identity.APIKeyRPCService()
 	r.Handle(prefix+"*", middleware.RPCSessionAuth(rt.SessionAuthenticator())(handler))
+
+	// Authentication lifecycle: the service mixes a public method
+	// (SignIn) with protected ones and guards its own procedures.
+	authPrefix, authHandler := rt.sessions.RPCService()
+	r.Handle(authPrefix+"*", authHandler)
 }
 
 // MountAPI mounts API routes in registration order.

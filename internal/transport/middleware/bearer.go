@@ -1,10 +1,14 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	jsonv2 "encoding/json/v2"
+
+	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/rpcerr"
 )
 
 // BearerAuth enforces the first-party RPC authentication contract:
@@ -14,7 +18,7 @@ import (
 // without this guard.
 func BearerAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := bearerToken(r); !ok {
+		if _, ok := BearerFromHeader(r.Header); !ok {
 			writeConnectError(w, "unauthenticated", "bearer token required")
 			return
 		}
@@ -23,20 +27,21 @@ func BearerAuth(next http.Handler) http.Handler {
 }
 
 // RPCSessionAuth authenticates a protected Connect service from the
-// bearer header only: the token is the internal session access token
-// and resolves through the kernel authenticator. Cookies are token
-// storage, never an RPC fallback. The resolved principal lands in the
-// request context; anonymous or invalid tokens answer the Connect
+// bearer header only: the token is the internal short-lived access
+// JWT and resolves through the access authenticator, which
+// re-checks session revocation. Cookies are token storage, never an
+// RPC fallback. The resolved principal lands in the request
+// context; anonymous or invalid tokens answer the Connect
 // unauthenticated error.
-func RPCSessionAuth(auth Authenticator) func(http.Handler) http.Handler {
+func RPCSessionAuth(auth kernel.AccessAuthenticator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token, ok := bearerToken(r)
+			token, ok := BearerFromHeader(r.Header)
 			if !ok {
 				writeConnectError(w, "unauthenticated", "bearer token required")
 				return
 			}
-			principal, err := auth.ResolveSession(r.Context(), token)
+			principal, err := auth.ResolveAccess(r.Context(), token)
 			if err != nil {
 				// Enumeration-safe: expired, revoked, and unknown
 				// tokens are indistinguishable.
@@ -48,10 +53,10 @@ func RPCSessionAuth(auth Authenticator) func(http.Handler) http.Handler {
 	}
 }
 
-// bearerToken extracts the credentials from Authorization: Bearer.
-func bearerToken(r *http.Request) (string, bool) {
-	auth := r.Header.Get("Authorization")
-	scheme, token, found := strings.Cut(auth, " ")
+// BearerFromHeader extracts the credentials from an Authorization:
+// Bearer header, for both middleware and Connect interceptors.
+func BearerFromHeader(h http.Header) (string, bool) {
+	scheme, token, found := strings.Cut(h.Get("Authorization"), " ")
 	if !found || !strings.EqualFold(scheme, "Bearer") {
 		return "", false
 	}
@@ -60,6 +65,21 @@ func bearerToken(r *http.Request) (string, bool) {
 		return "", false
 	}
 	return token, true
+}
+
+// ResolveBearer maps a Connect request's bearer header onto a
+// principal via the access authenticator. Enumeration-safe: expired,
+// revoked, and unknown tokens share one message.
+func ResolveBearer(ctx context.Context, auth kernel.AccessAuthenticator, h http.Header) (kernel.Principal, error) {
+	token, ok := BearerFromHeader(h)
+	if !ok {
+		return kernel.Principal{}, rpcerr.Unauthenticated("bearer token required")
+	}
+	principal, err := auth.ResolveAccess(ctx, token)
+	if err != nil {
+		return kernel.Principal{}, rpcerr.Unauthenticated("invalid or expired token")
+	}
+	return principal, nil
 }
 
 // writeConnectError answers with a Connect protocol error body so RPC

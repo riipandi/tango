@@ -1,6 +1,10 @@
 package rpcerr
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+
 	"connectrpc.com/connect"
 )
 
@@ -55,3 +59,12 @@ func Internal(message string) error {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+// RecoverOption maps panics inside RPC handlers onto Connect
+// internal errors instead of letting the connection die without a
+// response. Every registered service attaches it.
+func RecoverOption() connect.HandlerOption {
+	return connect.WithRecover(func(_ context.Context, _ connect.Spec, _ http.Header, r any) error {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("internal error: %v", r))
+	})
+}

@@ -37,9 +37,11 @@ type signInResponse struct {
 }
 
 // APIRoutes mounts the auth endpoints inside the shared /api group:
-// public sign-in, then cookie-guarded session management.
+// public sign-in and the token bridge, then cookie-guarded session
+// management.
 func (s *Service) APIRoutes(r chi.Router, _ identity.RouteGroups) {
 	r.Post("/auth/sign-in", s.signIn)
+	r.Post("/auth/token", s.tokenBridge)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequireAuth(s, CookieName))
@@ -77,6 +79,13 @@ func (s *Service) signIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteCookie(w, result.Token, result.Session.ExpiresAt, s.cookieSecure)
+	// Best-effort access mirror for the worker bridge; the bridge
+	// mints it during bootstrap when absent.
+	if u, se, err := s.Resolve(r.Context(), result.Token); err == nil {
+		if access, expiresAt, err := s.IssueAccess(r.Context(), principalFromResolve(u, se)); err == nil {
+			writeAccessCookie(w, access, expiresAt, s.cookieSecure)
+		}
+	}
 	responder.Success(w, r, http.StatusOK, signInResponse{
 		User:      result.User,
 		SessionID: result.Session.ID,
@@ -98,6 +107,7 @@ func (s *Service) signOut(w http.ResponseWriter, r *http.Request) {
 		_ = s.mfa.ClearPending(r.Context(), principal.UserID)
 	}
 	ClearCookie(w, s.cookieSecure)
+	clearAccessCookie(w, s.cookieSecure)
 	clearPendingCookie(w, s.cookieSecure)
 	responder.Success(w, r, http.StatusOK, map[string]any{"signed_out": true})
 }

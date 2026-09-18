@@ -3,8 +3,8 @@ model: environment
 id: ev_UvqVACKyGv
 workspaceId: wk_kBiMYTkhPP
 createdAt: 2026-09-17T18:31:24.819966
-updatedAt: 2026-09-18T18:55:16.483408
-name: Proxied
+updatedAt: 2026-09-18T18:57:25.462372
+name: Vite Proxied
 public: true
 base: false
 parentModel: environment
@@ -27,4 +27,4 @@ variables:
   value: sk_dummy
   id: V0FA24jptQ
 color: null
-sortPriority: 0.0
+sortPriority: 2000.0

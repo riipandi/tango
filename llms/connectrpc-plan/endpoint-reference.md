@@ -56,6 +56,17 @@ keep only the short-lived access token in worker memory, and never expose the re
 JavaScript. If a different design makes cookies readable to the worker, its XSS and token-exfiltration
 trade-off must be explicitly documented and approved.
 
+Chosen and delivered (phase 04): the session row is the token family — the opaque 256-bit refresh
+token lives in the `tango_session` HttpOnly cookie and rotates on every refresh (its SHA-256 hash is
+the `sessions.token_hash` lookup; the previous token stops resolving). The access token is a
+10-minute RS256 JWT (`iss: tango:internal`, `aud: tango:rpc`, `sub` user TypeID, `sid` session
+TypeID, `admin`) mirrored in the HttpOnly `tango_access` cookie scoped to `/api/auth`. The bridge is
+`POST /api/auth/token` (credentials: include): a verifiable access cookie is returned as-is;
+otherwise the refresh token rotates and both cookies re-issue. `AuthService/SignIn` mints both
+cookies; `SignOut` revokes the family and clears all three cookies. RPC verification re-checks the
+session by `sid`, so revocation stays exact inside the token TTL. Internal tokens are distinct from
+OIDC relying-party tokens: OIDC tokens pin `iss` to the public issuer URL and `aud` to a client id.
+
 The worker boundary uses `comlink` through `vite-plugin-comlink`: the worker module exports a typed
 auth API and the frontend consumes it through the plugin-generated `ComlinkWorker` proxy. Keep the
 worker API narrow, configure the worker origin explicitly, and release/terminate the worker during
@@ -87,6 +98,7 @@ running server. Request names should use `<METHOD> <path>` for REST and
 | POST | `/api/auth/sign-in` | ConnectRPC | SPA/internal | Sets/rotates token cookies; the worker obtains the access token for bearer injection. |
 | POST | `/api/auth/sign-out` | ConnectRPC | SPA/internal | Revokes token family and clears token cookies; bearer required where applicable. |
 | GET | `/api/auth/session` | ConnectRPC | SPA/internal | Requires bearer metadata; cookie presence alone is insufficient. |
+| POST | `/api/auth/token` | REST | Auth worker | Cookie bridge: access/refresh cookies in, `access_token` + rotation out; HttpOnly channel, never bearer. |
 | PUT | `/api/account/password` | ConnectRPC | SPA/internal | Sensitive operation; retain auth rate limit. |
 | GET | `/api/account/sessions` | ConnectRPC | SPA/internal | |
 | DELETE | `/api/account/sessions/{id}` | ConnectRPC | SPA/internal | |

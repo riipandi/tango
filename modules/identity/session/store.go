@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/huandu/go-sqlbuilder"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.jetify.com/typeid"
 
@@ -73,20 +74,64 @@ func (s *PostgresStore) Create(ctx context.Context, se *Session) error {
 // and revoked rows are invisible (indistinguishable from missing).
 func (s *PostgresStore) ValidByTokenHash(ctx context.Context, tokenHash string) (Session, user.User, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select(
-		"s.id", "s.provider", "s.token_hash", "s.user_agent", "s.device_name", "s.ip_address",
-		"s.created_at", "s.expires_at", "s.refreshed_at", "s.revoked_at",
-		"u.id", "u.username", "u.email", "u.first_name", "u.last_name",
-		"u.display_name", "u.avatar_url", "u.locale", "u.is_admin", "u.disabled",
-		"u.email_verified_at", "u.created_at", "u.updated_at", "u.last_login_at",
-	)
+	sb.Select(sessionUserColumns...)
 	sb.From(sessionsTable + " s")
 	sb.Join("public.users u ON u.id = s.user_id")
 	sb.Where(sb.E("s.token_hash", tokenHash), sb.IsNull("s.revoked_at"),
 		sb.GT("s.expires_at", time.Now().UTC()))
 
 	query, args := sb.Build()
+	return scanSessionRow(s.exec.QueryRow(ctx, query, args...), "")
+}
 
+// ValidByID resolves one live session with its user by ID; expired
+// and revoked rows are invisible (indistinguishable from missing).
+func (s *PostgresStore) ValidByID(ctx context.Context, id string) (Session, user.User, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select(sessionUserColumns...)
+	sb.From(sessionsTable + " s")
+	sb.Join("public.users u ON u.id = s.user_id")
+	sb.Where(sb.E("s.id", sessionUUID(id)), sb.IsNull("s.revoked_at"),
+		sb.GT("s.expires_at", time.Now().UTC()))
+
+	query, args := sb.Build()
+	return scanSessionRow(s.exec.QueryRow(ctx, query, args...), "")
+}
+
+// Rotate replaces the session's refresh token hash and restarts its
+// sliding expiry; the previous token stops resolving.
+func (s *PostgresStore) Rotate(ctx context.Context, id string, tokenHash string, expiresAt time.Time) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(sessionsTable)
+	ub.Set(ub.Assign("token_hash", tokenHash), ub.Assign("expires_at", expiresAt),
+		ub.Assign("refreshed_at", time.Now().UTC()))
+	ub.Where(ub.E("id", sessionUUID(id)), ub.IsNull("revoked_at"))
+
+	query, args := ub.Build()
+	tag, err := s.exec.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("session rotate: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// sessionUserColumns lists the joined session+user projection read
+// by the single-row live-session lookups.
+var sessionUserColumns = []string{
+	"s.id", "s.provider", "s.token_hash", "s.user_agent", "s.device_name", "s.ip_address",
+	"s.created_at", "s.expires_at", "s.refreshed_at", "s.revoked_at",
+	"u.id", "u.username", "u.email", "u.first_name", "u.last_name",
+	"u.display_name", "u.avatar_url", "u.locale", "u.is_admin", "u.disabled",
+	"u.email_verified_at", "u.created_at", "u.updated_at", "u.last_login_at",
+}
+
+// scanSessionRow decodes the joined projection; id is the TypeID the
+// caller already resolved (empty for token-hash lookups, which read
+// it from the row).
+func scanSessionRow(row pgx.Row, id string) (Session, user.User, error) {
 	var (
 		se          Session
 		userAgent   pgtype.Text
@@ -110,7 +155,7 @@ func (s *PostgresStore) ValidByTokenHash(ctx context.Context, tokenHash string) 
 		uUpdatedAt      pgtype.Timestamptz
 		uLastLoginAt    pgtype.Timestamptz
 	)
-	err := s.exec.QueryRow(ctx, query, args...).Scan(
+	err := row.Scan(
 		&se.ID, &se.Provider, &se.TokenHash, &userAgent, &deviceName, &ipAddress,
 		&se.CreatedAt, &se.ExpiresAt, &refreshedAt, &revokedAt,
 		&uid, &username, &email, &firstName, &lastName,
@@ -121,7 +166,11 @@ func (s *PostgresStore) ValidByTokenHash(ctx context.Context, tokenHash string) 
 		return Session{}, user.User{}, mapErr(err)
 	}
 
-	se.ID = sessionTypeID(se.ID)
+	if id != "" {
+		se.ID = id
+	} else {
+		se.ID = sessionTypeID(se.ID)
+	}
 	se.UserID = user.MustID(uid)
 	se.UserAgent = datastore.TextPtr(userAgent)
 	se.DeviceName = datastore.TextPtr(deviceName)

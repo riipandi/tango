@@ -121,7 +121,7 @@ func registerRecurringJobs(deps Deps, reg *jobs.Registry, feed *jobs.VersionFeed
 // audit module second (its guards need sessions), then the guarded
 // features. It also returns the session service, route groups, and
 // API-access store shared with the federation surface.
-func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Recorder) (*identity.Module, identity.RouteGroups, *session.Service, *auditlog.Module, *apiaccess.PostgresStore, storage.Store, error) {
+func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Recorder, keys *jwks.Service) (*identity.Module, identity.RouteGroups, *session.Service, *auditlog.Module, *apiaccess.PostgresStore, storage.Store, error) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	// Share one blob backend across images and client logos.
@@ -158,6 +158,9 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		session.WithLifetime(time.Duration(deps.Config.Auth.SessionLifetime)*time.Second),
 		session.WithCookieSecure(deps.Config.App.Mode != "development"),
 		session.WithMFAPort(totpService),
+		session.WithAccessTokens(session.NewAccessTokenSigner(
+			jwtutils.NewCachedKeyProvider(keys, jwks.CacheTTL),
+		)),
 	)
 	totpService.BindSessions(sessions)
 

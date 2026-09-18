@@ -71,7 +71,13 @@ var (
 type Store interface {
 	Create(ctx context.Context, s *Session) error
 	ValidByTokenHash(ctx context.Context, tokenHash string) (Session, user.User, error)
+	// ValidByID resolves one live session with its user by session
+	// ID — the access-token check anchors on it.
+	ValidByID(ctx context.Context, id string) (Session, user.User, error)
 	Touch(ctx context.Context, id string, expiresAt time.Time) error
+	// Rotate replaces the session's refresh token hash and restarts
+	// its sliding expiry; the previous token stops resolving.
+	Rotate(ctx context.Context, id string, tokenHash string, expiresAt time.Time) error
 	RevokeByTokenHash(ctx context.Context, tokenHash string) error
 	RevokeForUser(ctx context.Context, userID user.UserID, sessionID string) error
 	RevokeAllForUser(ctx context.Context, userID user.UserID, exceptID string) error

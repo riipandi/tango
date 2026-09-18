@@ -1,6 +1,6 @@
 # Tango API Client
 
-TypeScript SDK for the tango API, built on `ofetch`. Supabase-style namespaces:
+TypeScript SDK for the tango REST API, built on `ofetch`. Supabase-style namespaces:
 
 ```ts
 import { apiClient, ApiClientError } from '~/apiclient/index'
@@ -38,6 +38,15 @@ try {
 
 Build a custom client with `createApiClient(options)`; import everything from the package
 entry point. Types mirror the Go DTOs and are inferred from the zod schemas in `schemas/`.
+
+## Scope: REST only
+
+This SDK wraps the retained HTTP surface only — OAuth/OIDC and SCIM protocol endpoints,
+WebAuthn, binary/health/discovery documents, and the `/api` routes not yet migrated. It does
+not wrap ConnectRPC services: first-party application calls use the generated Connect clients
+(`app/generated/rpc/`, produced from `api/connect/*.proto` by `task rpc:generate`) through the
+same-origin `/rpc` transport with bearer access tokens supplied by the auth worker
+(`app/auth.worker.ts`). See `llms/connectrpc-plan/04-client.md` for the split.
 
 Layout: `client.ts` composes namespaces, `http.ts` is the transport executor, `envelope.ts`
 detects and projects the envelope, `error.ts` normalizes failures, `modules/` holds one file

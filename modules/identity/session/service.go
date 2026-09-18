@@ -32,6 +32,9 @@ type Service struct {
 	// mfa is the optional second-factor port: a confirmed enrollment
 	// turns a password sign-in into a pending authentication.
 	mfa identity.MFAPendingIssuer
+	// tokens mints the internal access JWTs for the RPC bearer
+	// bridge; nil in stores-only constructions (tests).
+	tokens *AccessTokenSigner
 }
 
 // Verifier checks an identity + secret pair. Implemented by the
@@ -72,6 +75,12 @@ func WithCookieSecure(secure bool) ServiceOption {
 // WithClock overrides the service clock (tests).
 func WithClock(now func() time.Time) ServiceOption {
 	return func(s *Service) { s.now = now }
+}
+
+// WithAccessTokens wires the internal access-token signer; required
+// for the RPC bearer bridge and the Connect handlers.
+func WithAccessTokens(signer *AccessTokenSigner) ServiceOption {
+	return func(s *Service) { s.tokens = signer }
 }
 
 // NewService builds the session feature.
@@ -259,6 +268,61 @@ func (s *Service) RevokeForUser(ctx context.Context, userID user.UserID, session
 // (the current session during a password change).
 func (s *Service) RevokeAllForUser(ctx context.Context, userID user.UserID, keepID string) error {
 	return s.store.RevokeAllForUser(ctx, userID, keepID)
+}
+
+// Rotate issues the next refresh token for a live session: the new
+// token replaces the hash and restarts the sliding expiry, so the
+// previous token stops resolving immediately.
+func (s *Service) Rotate(ctx context.Context, se Session) (string, Session, error) {
+	token, err := newToken()
+	if err != nil {
+		return "", Session{}, fmt.Errorf("session: token: %w", err)
+	}
+	expiresAt := s.now().Add(s.lifetime)
+	if err := s.store.Rotate(ctx, se.ID, hashToken(token), expiresAt); err != nil {
+		return "", Session{}, err
+	}
+	se.TokenHash = hashToken(token)
+	se.ExpiresAt = expiresAt
+	return token, se, nil
+}
+
+// IssueAccess mints the RPC bearer JWT for a live session.
+func (s *Service) IssueAccess(ctx context.Context, p kernel.Principal) (string, time.Time, error) {
+	if s.tokens == nil {
+		return "", time.Time{}, errors.New("session: access tokens not configured")
+	}
+	return s.tokens.Issue(ctx, p)
+}
+
+// ResolveAccess verifies an RPC bearer access token: signature,
+// issuer, audience, and expiry first, then the owning session — so
+// a revoked or expired session cannot ride out the token TTL.
+func (s *Service) ResolveAccess(ctx context.Context, token string) (kernel.Principal, error) {
+	if s.tokens == nil {
+		return kernel.Principal{}, errors.New("session: access tokens not configured")
+	}
+	verified, err := s.tokens.Verify(ctx, token)
+	if err != nil {
+		return kernel.Principal{}, err
+	}
+
+	se, u, err := s.store.ValidByID(ctx, verified.Private.SessionID)
+	if err != nil {
+		return kernel.Principal{}, err
+	}
+	if u.Disabled {
+		return kernel.Principal{}, ErrInvalidCredentials
+	}
+
+	return kernel.Principal{
+		SessionID: se.ID,
+		UserID:    u.ID.String(),
+		Username:  u.Username,
+		Email:     u.Email,
+		Provider:  se.Provider,
+		IsAdmin:   u.IsAdmin,
+	}, nil
 }
 
 // ResolveSession implements kernel.Authenticator: cookie token

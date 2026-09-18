@@ -33,7 +33,7 @@ type apiKeyRPC struct {
 // the same contract as the REST routes — so the composition root
 // wraps it with the RPC bearer middleware.
 func (s *Service) RPCService() (string, http.Handler) {
-	prefix, handler := adminv1connect.NewApiKeyServiceHandler(&apiKeyRPC{service: s})
+	prefix, handler := adminv1connect.NewApiKeyServiceHandler(&apiKeyRPC{service: s}, rpcerr.RecoverOption())
 	return prefix, handler
 }
 

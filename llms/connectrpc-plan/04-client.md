@@ -1,9 +1,41 @@
 ---
-status: planned
-updated: 2026-09-18
+status: done
+updated: 2026-09-19
 ---
 
 # Phase 04: Authentication Transport, Frontend, REST SDK, and Connect Client
+
+> Completed 2026-09-19 with the SPA skeleton still unmounted (no app entry yet — `index.html`
+> keeps the loader only), so the deliverable is the auth transport plus the worker/client library
+> the SPA will consume:
+>
+> - **Token model** (documented in endpoint-reference): session row = token family; opaque
+>   rotating refresh token in `tango_session` (HttpOnly); 10-minute RS256 access JWT
+>   (`tango:internal`/`tango:rpc`) mirrored in the `tango_access` cookie scoped to `/api/auth`;
+>   bridge `POST /api/auth/token` (REST, retained) returns the bearer and rotates the refresh
+>   token; revocation is exact because RPC verification re-checks the session by `sid`.
+> - **Connect handlers**: `AuthService.SignIn/SignOut/GetSession` live in
+>   `modules/identity/session/handler_rpc.go` with a per-procedure bearer guard (SignIn stays
+>   public); cookies ride `Set-Cookie` on the Connect response; ForgotPassword/ResetPassword stay
+>   `Unimplemented` until the password-flow cutover phase. `rpcerr.RecoverOption` now attaches to
+>   every registered service so panics answer Connect internal errors, not plain text.
+> - **Worker**: `comlink` + `vite-plugin-comlink` + `@connectrpc/connect-web` are pinned; the
+>   comlink plugin registers first with `worker.plugins`; `app/auth.worker.ts` exposes
+>   bootstrap/getAccessToken/refresh/signOut/dispose — bootstrap and refresh use same-origin
+>   `fetch(..., { credentials: 'include' })`, only the access token is held (in memory), refresh
+>   tokens never cross to the UI thread, and sign-out falls back to the cookie channel when the
+>   bearer is already dead. `app/rpc/client.ts` builds the `/rpc` transport with per-request
+>   bearer injection from the worker.
+> - **Codegen**: connect-es v2 removed the separate TS plugin — `protoc-gen-es` emits the service
+>   descriptors; `buf.gen.yaml` drops the connect-es plugin and `*_connect.ts` outputs are gone.
+> - **Tests**: Go bridge/rotation/revocation integration tests (testcontainers) plus 9 vitest
+>   cases (new `app` vitest project) covering bootstrap, silent refresh, typed `AuthError`,
+>   sign-out fallback, header injection, and anonymous calls. Yaak evidence in
+>   `[ConnectRPC] System (smoke)`: SignIn 200 + cookies, bridge 200 + access token, GetSession
+>   (bearer) 200, SignOut 200 + cookie clears, and the revoked bearer answers 401 afterwards.
+> - **Deferred by design**: tasks 11–12 (REST SDK method removal) and 14–16 (TanStack call-site
+>   migration) belong to the domain cutover phases — no SPA exists yet; `api/client` is documented
+>   as REST-only (README) and stays untouched until cutover deletes each route.
 
 ## Outcome
 

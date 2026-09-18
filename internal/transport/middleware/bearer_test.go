@@ -67,7 +67,7 @@ func TestBearerAuthAcceptsToken(t *testing.T) {
 // stubAuth resolves any non-empty token to a fixed principal.
 type stubAuth struct{ err error }
 
-func (s stubAuth) ResolveSession(_ context.Context, token string) (kernel.Principal, error) {
+func (s stubAuth) ResolveAccess(_ context.Context, token string) (kernel.Principal, error) {
 	if s.err != nil || token == "" {
 		return kernel.Principal{}, errors.New("session: invalid or expired")
 	}

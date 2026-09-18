@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"connectrpc.com/connect"
@@ -10,15 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	systemv1 "github.com/riipandi/tango/gen/proto/go/tango/system/v1"
 	"github.com/riipandi/tango/gen/proto/go/tango/system/v1/systemv1connect"
+	"github.com/riipandi/tango/internal/rpcerr"
 )
-
-// rpcRecover maps panics inside RPC handlers onto Connect internal
-// errors instead of letting the connection die without a response.
-func rpcRecover() connect.HandlerOption {
-	return connect.WithRecover(func(_ context.Context, _ connect.Spec, _ http.Header, r any) error {
-		return connect.NewError(connect.CodeInternal, fmt.Errorf("internal error: %v", r))
-	})
-}
 
 // newRPCRouter builds the Connect handler tree served below /rpc/.
 // Module-owned services register exact procedure subtrees via the
@@ -33,7 +25,7 @@ func newRPCRouter(mount func(chi.Router)) chi.Router {
 
 	prefix, smoke := systemv1connect.NewHealthServiceHandler(
 		&healthSmokeService{},
-		rpcRecover(),
+		rpcerr.RecoverOption(),
 	)
 	r.Handle(prefix+"*", smoke)
 

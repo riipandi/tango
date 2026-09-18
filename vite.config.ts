@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import { defineConfig, type ProxyOptions } from 'vite'
+import { comlink } from 'vite-plugin-comlink'
 import pkg from './package.json' with { type: 'json' }
 import email from './plugins/plugin-email.ts'
 import golang from './plugins/plugin-golang.ts'
@@ -27,6 +28,9 @@ const viteProxy: Record<string, string | ProxyOptions> = {
 
 export default defineConfig({
   plugins: [
+    // Comlink owns worker construction and must register first: only
+    // plugins that transform ComlinkWorker call sites may precede it.
+    comlink(),
     // Must be registered before the go plugin: its closeBundle compiles
     // the email templates that web/embed.go pulls into the go binary.
     email({ templateDir: 'email/templates', outputDir: 'web/email' }),
@@ -49,6 +53,7 @@ export default defineConfig({
     })
   ],
   resolve: { tsconfigPaths: true },
+  worker: { plugins: () => [comlink()] },
   build: {
     emptyOutDir: true,
     chunkSizeWarningLimit: 1024 * 4,

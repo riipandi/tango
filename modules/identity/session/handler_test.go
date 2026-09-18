@@ -44,17 +44,23 @@ func signIn(t *testing.T, r chi.Router, identity, secret string) *httptest.Respo
 	return w
 }
 
-// sessionCookie extracts the session token from a sign-in response.
-func sessionCookie(t *testing.T, w *httptest.ResponseRecorder) string {
+// refreshTokenFrom extracts the session token from a sign-in
+// response; the access mirror may add a second cookie, so the
+// assertion targets the refresh cookie by name.
+func refreshTokenFrom(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
-	require.Len(t, w.Result().Cookies(), 1, "sign-in must set exactly one cookie")
-	cookie := w.Result().Cookies()[0]
-	require.Equal(t, CookieName, cookie.Name)
-	assert.True(t, cookie.HttpOnly)
-	assert.Equal(t, http.SameSiteLaxMode, cookie.SameSite)
-	assert.Equal(t, "/", cookie.Path, "the session cookie must span the app")
-	assert.False(t, cookie.Expires.IsZero(), "the session cookie carries its expiry")
-	return cookie.Value
+	for _, cookie := range w.Result().Cookies() {
+		if cookie.Name != CookieName {
+			continue
+		}
+		assert.True(t, cookie.HttpOnly)
+		assert.Equal(t, http.SameSiteLaxMode, cookie.SameSite)
+		assert.Equal(t, "/", cookie.Path, "the session cookie must span the app")
+		assert.False(t, cookie.Expires.IsZero(), "the session cookie carries its expiry")
+		return cookie.Value
+	}
+	t.Fatal("sign-in did not set the refresh cookie")
+	return ""
 }
 
 func TestSignInSessionSignOutRoundTrip(t *testing.T) {
@@ -69,7 +75,7 @@ func TestSignInSessionSignOutRoundTrip(t *testing.T) {
 	// Sign-in → 200 + cookie.
 	w = signIn(t, r, u.Username, "s3cret-p@ss")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	token := sessionCookie(t, w)
+	token := refreshTokenFrom(t, w)
 
 	// Cookie round trip → live session.
 	w = httptest.NewRecorder()
