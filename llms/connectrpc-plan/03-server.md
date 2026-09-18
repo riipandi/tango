@@ -27,15 +27,17 @@ services and stores.
 8. Add focused handler tests for every RPC method and authorization branch, including missing,
    malformed, expired, revoked, and insufficient-scope bearer tokens.
 9. Add integration tests through the real transport, not only direct service calls.
-10. For each service group, create and send Yaak MCP gRPC requests covering success, authentication,
-   validation, and authorization behavior. Update the corresponding Yaak folder/request when the
-   RPC contract changes.
+10. For each service group, create and send Yaak MCP Connect Protocol HTTP requests covering
+   success, authentication, validation, and authorization behavior. Update the corresponding Yaak
+   folder/request when the RPC contract changes.
 11. Add a reflection implementation or descriptor-serving test for the selected development/test
     policy. Do not expose unauthenticated production reflection by accident.
-12. Verify unary gRPC, Connect, and gRPC-Web behavior independently when each is claimed as
-    supported. Document unsupported transports instead of silently accepting them.
+12. Verify unary Connect Protocol behavior as the required transport. Verify native gRPC or
+    gRPC-Web only if explicitly claimed as compatibility surfaces; document unsupported transports
+    instead of silently accepting them.
 13. Verify metadata propagation for cookies, API keys, `Authorization`, request IDs, deadlines,
-    and Connect/gRPC protocol headers through direct and proxied requests.
+    `Connect-Protocol-Version`, `Connect-Timeout-Ms`, and Connect response metadata through direct
+    and proxied requests.
 
 ## Boundaries
 
@@ -44,7 +46,7 @@ independent of ConnectRPC, HTTP handlers, router state, and responder envelopes.
 
 ## Gate
 
-Each pilot module works through `/rpc/`, has auth/error tests, has Yaak MCP gRPC evidence, and
+Each pilot module works through `/rpc/`, has auth/error tests, has Yaak MCP Connect Protocol evidence, and
 has no duplicated domain behavior between its REST and Connect handlers.
 
 ## Commit

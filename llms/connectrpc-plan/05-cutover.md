@@ -28,7 +28,8 @@ For each domain:
 - migrate SPA/admin/CLI callers;
 - run focused Go and vitest suites;
 - create or update the matching Yaak request through Yaak MCP and send it against the running
-  server; use a gRPC request for ConnectRPC services and a REST request for retained HTTP routes;
+  server; use a Connect Protocol HTTP request for ConnectRPC services and a REST request for retained
+  HTTP routes;
 - record the Yaak request/evidence identifier in the phase or endpoint reference;
 - verify the request through the supported direct and HTTPS proxy transport, including TLS and
   HTTP/2 where gRPC is claimed;

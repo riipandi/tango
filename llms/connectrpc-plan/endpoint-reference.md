@@ -16,9 +16,10 @@ marked `REST + ConnectRPC`. It must not expose wrappers for ConnectRPC services;
 generated from `api/connect/*.proto`.
 
 Every entry must have Yaak evidence. Use Yaak MCP to create, update, and send REST requests for
-`REST` entries and gRPC requests for ConnectRPC entries. Do not edit `api/specs/*.yaml` or other
-Yaak export files manually. If a ConnectRPC request's gRPC versus Connect transport details are
-unclear, consult the official ConnectRPC documentation before creating the Yaak request.
+`REST` entries and Connect Protocol HTTP requests for ConnectRPC entries. Do not edit
+`api/specs/*.yaml` or other Yaak export files manually. If a request's Connect Protocol content
+type, GET semantics, streaming, or optional gRPC compatibility details are unclear, consult the
+official Connect Protocol documentation before creating the Yaak request.
 
 This file is an inventory and transport decision record. Before implementation, expand every
 wildcard entry into one row per exact method/path and add the canonical Connect service/method.
@@ -28,7 +29,7 @@ Each row must receive a Yaak request identifier and evidence status after the re
 
 | Protocol | Use for | Primary consumers |
 | --- | --- | --- |
-| ConnectRPC | Typed application API | Tango SPA, admin console, CLI, internal tools |
+| Connect Protocol | Typed application API over `/rpc` | Tango SPA, admin console, CLI, internal tools |
 | REST/HTTP | Standard external protocol and retained HTTP API | OAuth/OIDC RPs, SCIM clients, WebAuthn browser APIs, monitoring, REST SDK consumers, webhook receivers |
 | REST + ConnectRPC | One domain with distinct internal and external contracts | Device login, OIDC administration, webhook administration |
 
@@ -66,12 +67,14 @@ For each route group, the Yaak request must verify the active wire contract:
 
 - REST: HTTP method, URL, query, headers, cookies/API key, body encoding, status, headers, and
   response body.
-- gRPC/ConnectRPC: package/service/method, bearer metadata, credentials, protobuf message, status code,
-  error details, and decoded response.
+- Connect Protocol: HTTP method, `/rpc` routing prefix, package/service/method procedure path,
+  `Connect-Protocol-Version`, content type (`application/json` or `application/proto`), bearer
+  metadata, timeout/compression headers, credentials, protobuf/JSON message, HTTP status, Connect
+  error body, and response metadata.
 
 The endpoint row is not complete until the request has been sent through Yaak MCP against the
-running server. Request names should use `<METHOD> <path>` for REST and the generated
-`<package>.<Service>/<Method>` form for gRPC requests.
+running server. Request names should use `<METHOD> <path>` for REST and
+`<METHOD> /rpc/<package>.<Service>/<Method>` for Connect Protocol requests.
 
 ## Authentication and account
 

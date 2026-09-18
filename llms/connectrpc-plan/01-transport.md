@@ -27,17 +27,18 @@ production paths.
    the SPA handler.
 8. Add a transport smoke RPC such as `HealthService.Check` only if it does not conflict with the
    existing health contract; the public health endpoints remain REST.
-9. Use Yaak MCP to create and send a smoke gRPC request against the generated Connect service.
-   Confirm the selected request protocol, service path, metadata, and response decoding instead
+9. Use Yaak MCP to create and send a smoke Connect Protocol HTTP request against the generated
+   Connect service. Confirm the HTTP method, `/rpc` routing prefix, procedure path, metadata,
+   content type, and response decoding instead
    of manually constructing or editing a Yaak export.
 10. Validate the same request through the proxied HTTPS path provided by the `nginx` service in
    `compose.yaml`. The current compose ports are `3443` for the Vite frontend proxy and `8443`
    for the Go backend proxy; use the applicable path for the test being performed.
-11. Verify whether the Nginx path supports gRPC HTTP/2. If gRPC is required through HTTPS, configure
-    and test the appropriate TLS HTTP/2 listener and gRPC upstream forwarding; ordinary
-    `proxy_pass` over HTTP/1.1 is not sufficient evidence for gRPC.
-12. Keep the Connect protocol and gRPC protocol test cases separate. A Connect JSON/HTTP/1.1 request
-    may pass while a gRPC request fails due to HTTP/2 or proxy configuration.
+11. Verify that unary Connect Protocol requests work through the existing Nginx `proxy_pass` over
+    HTTPS and HTTP/1.1. Configure HTTP/2 forwarding only if the proto declares streaming methods or
+    native gRPC compatibility is explicitly added.
+12. Keep Connect Protocol and optional native gRPC compatibility tests separate. A successful
+    Connect JSON/HTTP/1.1 request is the required baseline; native gRPC is not the baseline.
 13. Define how server reflection is exposed for Yaak development/test requests and ensure production
     reflection is disabled or protected by explicit authorization.
 
@@ -57,7 +58,8 @@ second backend origin for browser clients.
 
 The SPA can call a local `/rpc` Connect endpoint through Vite, cookies are sent correctly, existing REST
 and static-serving tests remain green. Yaak MCP smoke requests succeed for the intended Connect
-and gRPC transports, both directly and through every HTTPS proxy path claimed as supported.
+and Connect Protocol transports, both directly and through every HTTPS proxy path claimed as
+supported.
 
 ## Commit
 

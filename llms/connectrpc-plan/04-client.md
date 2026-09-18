@@ -53,11 +53,11 @@ Make the SPA, admin console, and internal tools use typed ConnectRPC clients whi
    REST method URLs/bodies/headers separately.
 17. Update `api/client/README.md` to state clearly that the SDK is REST-only and document the
    generated Connect client as a separate integration.
-18. Update Yaak requests through Yaak MCP whenever a REST request, gRPC request, auth header,
+18. Update Yaak requests through Yaak MCP whenever a REST request, Connect Protocol request, auth header,
     metadata field, message, expected status, or response shape changes. Do not edit Yaak export
     files manually.
-19. Decide and test the browser transport explicitly: same-origin Connect, Connect-Web, or another
-    supported mode. Do not assume a browser can use native gRPC merely because Yaak can send gRPC.
+19. Use same-origin Connect Protocol as the browser transport. Connect-Web or native gRPC are
+    optional compatibility transports and require a separate explicit decision.
 20. Test session cookies, API-key metadata, `Authorization`, CSRF behavior, and request IDs through
    both Vite's `/rpc` proxy and the Nginx HTTPS proxy.
 21. Test the plugin-generated worker API and lifecycle: login, access-token injection, refresh rotation,
@@ -70,7 +70,8 @@ Make the SPA, admin console, and internal tools use typed ConnectRPC clients whi
 
 The SPA and admin console have no calls to internal `/api` routes, `api/client` contains only
 retained REST methods, generated Connect clients cover all internal RPC namespaces, and the
-protocol client still passes OAuth/OIDC and WebAuthn tests. Yaak MCP REST and gRPC requests match
+protocol client still passes OAuth/OIDC and WebAuthn tests. Yaak MCP REST and Connect Protocol
+requests match
 the active contracts.
 
 ## Commit

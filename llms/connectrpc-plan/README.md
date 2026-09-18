@@ -52,11 +52,14 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
 - Internal application access/refresh tokens are distinct from OAuth/OIDC tokens issued to external
   relying parties. The OIDC protocol contract and its bearer/form/Basic authentication rules remain
   unchanged.
-- The gRPC transport path is a separate decision from the Connect protocol path. A successful
-  HTTP/1.1 Connect request does not prove that Yaak gRPC requests work.
+- The Connect Protocol is the canonical `/rpc` wire protocol. It uses ordinary HTTP semantics and
+  does not require gRPC framing or HTTP/2 for unary RPCs.
+- Native gRPC compatibility is optional and must not drive the primary browser, Vite, Nginx, or Yaak
+  design. If streaming or external gRPC clients are later required, verify that transport separately.
 - HTTPS proxy validation must cover the Nginx paths in `compose.yaml`: `3443` through Vite and
-  `8443` directly to the Go server. gRPC requires an explicitly verified HTTP/2 forwarding path.
-- The Vite and Nginx paths must forward `Authorization` and relevant Connect/gRPC metadata without
+  `8443` directly to the Go server. Unary Connect Protocol requests must work through HTTP/1.1;
+  HTTP/2 is required only for Connect streaming modes or separately supported gRPC compatibility.
+- The Vite and Nginx paths must forward `Authorization` and relevant Connect metadata without
   falling back to cookie authentication for RPCs.
 - Development/test reflection is allowed only under an explicit policy; production reflection must
   be disabled or access-controlled.
@@ -84,11 +87,11 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
 - Preserve the existing module boundaries: `identity`, `federation`, `admin`, and `webhook`.
 - Define every Connect service and RPC method before implementation. The old REST path is a
   migration reference, not the canonical ConnectRPC contract.
-- Treat Yaak requests as executable contract evidence. Create, update, and send REST and gRPC
+- Treat Yaak requests as executable contract evidence. Create, update, and send REST and Connect Protocol
   requests through the Yaak MCP integration; never edit exported Yaak request files manually.
-- ConnectRPC endpoints may be tested through Yaak's gRPC request support when the server exposes
-  the gRPC protocol. If the correct Connect, gRPC, or gRPC-Web transport is unclear, consult the
-  official ConnectRPC documentation before choosing the Yaak request type or content type.
+- ConnectRPC endpoints must be tested through Yaak as Connect Protocol HTTP requests. If a request
+  involves streaming or optional gRPC compatibility and the transport is unclear, consult the
+  official Connect Protocol documentation before choosing the request type or content type.
 - Each completed phase must be delivered as one atomic conventional commit. The commit includes
   the implementation, generated code, tests, Yaak evidence updates, and documentation for that
   phase; it must not contain unrelated work or a partial phase. Do not push commits unless the

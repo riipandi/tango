@@ -37,9 +37,9 @@ more focused files. Do not create nested contract directories under `api/connect
 10. Decide whether generated TypeScript protobuf types are consumed directly by the Connect client
    or adapted by a thin generated transport layer; do not maintain hand-written RPC DTOs beside
    the protobuf messages.
-11. Create or update Yaak gRPC requests through Yaak MCP for representative generated services.
-    Use the generated service and method names from the proto contract; never hand-edit exported
-    Yaak request YAML.
+11. Create or update Yaak Connect Protocol HTTP requests through Yaak MCP for representative
+    generated services. Use the generated service and method names from the proto contract; never
+    hand-edit exported Yaak request YAML.
 
 ## Contract rules
 
@@ -56,8 +56,8 @@ more focused files. Do not create nested contract directories under `api/connect
 ## Gate
 
 Generation works from a clean checkout, generated Go and TypeScript compile, and one representative
-RPC has a request/response compatibility test plus a Yaak MCP gRPC request that uses the generated
-service contract.
+RPC has a request/response compatibility test plus a Yaak MCP Connect Protocol request that uses
+the generated service contract.
 
 ## Commit
 

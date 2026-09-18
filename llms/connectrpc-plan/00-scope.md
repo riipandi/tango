@@ -33,7 +33,7 @@ Freeze the transport split before implementation. The route matrix in
 - Approved endpoint reference.
 - Route inventory and caller inventory.
 - `api/connect/*.proto` package and generated-code layout decision.
-- Yaak folder/request mapping for retained REST and new gRPC/ConnectRPC coverage.
+- Yaak folder/request mapping for retained REST and new Connect Protocol coverage.
 - Exact Connect service/method matrix, including authorization and message ownership.
 - A list of REST routes that may be deleted after cutover.
 
