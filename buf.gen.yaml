@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://json.schemastore.org/buf.gen.json
+
+# This file defines the generation configuration for buf.
+# For detailed information, see https://buf.build/docs/configuration/v2/buf-gen-yaml
+
+version: v2
+
+clean: true
+
+plugins:
+  - local:
+      - go
+      - run
+      - google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+    out: gen/proto/go
+    opt: module=github.com/riipandi/tango/gen/proto/go
+  - local:
+      - go
+      - run
+      - connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.21.0
+    out: gen/proto/go
+    opt: module=github.com/riipandi/tango/gen/proto/go

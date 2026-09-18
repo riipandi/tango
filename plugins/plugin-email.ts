@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { ReactElement, ReactNode } from 'react'
-import { render, pretty } from 'react-email'
+import { render } from 'react-email'
 import type { Plugin } from 'vite'
 
 type EmailTemplate = ((props: unknown) => ReactNode) & { TemplateProps?: unknown }
@@ -45,9 +45,6 @@ const C = {
 } as const
 
 const PREFIX = `${C.cyan}[email]${C.reset}`
-
-const isProduction = () =>
-  process.env.APP_MODE === 'production' || process.env.NODE_ENV === 'production'
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`
@@ -93,15 +90,9 @@ async function buildTemplateFile(
   const element = Component(templateProps) as ReactElement
 
   // `plainText` is a discriminated union, so it must be a literal, not a boolean.
-  let rendered = isPlainText
+  const rendered = isPlainText
     ? await render(element, { plainText: true })
     : await render(element, { plainText: false })
-
-  // Pretty-print HTML in development, keep minified in production
-  // (plain text is never pretty-printed)
-  if (!isPlainText && !isProduction()) {
-    rendered = await pretty(rendered)
-  }
 
   // Normalize quotes
   const normalized = rendered.replace(/&quot;/g, '"')

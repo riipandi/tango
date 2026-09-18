@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -96,4 +97,48 @@ func TestWellKnownRoutesAreRootMounted(t *testing.T) {
 	for _, route := range collectRouterRoutes(t, srv.Router) {
 		assert.NotContains(t, route, "/api/.well-known", "well-known routes must not double under /api")
 	}
+}
+
+// TestRPCSmokeCall pins the Connect Protocol contract of the /rpc
+// mount: procedure path, protocol-version metadata, JSON content
+// negotiation, and the smoke response document.
+func TestRPCSmokeCall(t *testing.T) {
+	srv := testServer(t, testConfig())
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/rpc/tango.system.v1.HealthService/Check", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Connect-Protocol-Version", "1")
+	srv.Router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"status":"ok"}`, w.Body.String())
+	assert.NotEmpty(t, w.Header().Get("X-Request-Id"), "request ID middleware must cover /rpc")
+}
+
+// TestRPCMountDoesNotFallThroughToSPA pins that unknown /rpc paths
+// answer Connect protocol errors, never the SPA document.
+func TestRPCMountDoesNotFallThroughToSPA(t *testing.T) {
+	srv := testServer(t, testConfig())
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/rpc/tango.system.v1.Unknown/Call", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Connect-Protocol-Version", "1")
+	srv.Router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
+	assert.Contains(t, w.Body.String(), "not_found", "must be a Connect error, not the SPA index")
+}
+
+// TestRPCRejectsWrongMethods pins that the Connect handler only
+// accepts unary POST procedure calls.
+func TestRPCRejectsWrongMethods(t *testing.T) {
+	srv := testServer(t, testConfig())
+
+	w := httptest.NewRecorder()
+	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/rpc/tango.system.v1.HealthService/Check", nil))
+	require.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	assert.Equal(t, "POST", w.Header().Get("Allow"), "GET on a non-idempotent unary RPC must advertise POST")
 }

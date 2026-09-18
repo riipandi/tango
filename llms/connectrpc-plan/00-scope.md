@@ -1,9 +1,14 @@
 ---
-status: planned
-updated: 2026-09-18
+status: done
+updated: 2026-09-19
 ---
 
 # Phase 00: Scope and Route Decisions
+
+> Completed 2026-09-19. The decision record lives in
+> [endpoint-reference.md](./endpoint-reference.md): live route inventory, Connect service/method
+> matrix, generated-code layout, Yaak coverage map, and ambiguities A1–A5. A1–A5 must be resolved
+> before the corresponding protos are frozen in phase 02; they do not gate phase 01.
 
 ## Outcome
 

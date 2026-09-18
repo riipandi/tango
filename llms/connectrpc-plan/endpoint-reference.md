@@ -5,6 +5,10 @@ updated: 2026-09-18
 
 # ConnectRPC Refactor Endpoint Reference
 
+> Scope addendum (2026-09-19): sections below `Connect service and method matrix` are the phase-00
+> decision record. The route tables above predate that record; where they disagree with the live
+> route inventory, the matrix tables and the inventory diff are authoritative.
+
 This is the transport decision list for the refactor. `ConnectRPC` means the first-party API is
 served under `/rpc/`. `REST` means the existing HTTP route remains authoritative under `/api/` or
 its documented root path. `REST +
@@ -211,3 +215,232 @@ When a `ConnectRPC` entry is cut over, its old `/api` route is deleted after the
 server handler, first-party callers, and focused tests are complete. Entries marked `REST` remain
 HTTP even if a Connect implementation would be technically possible, because their wire contract
 belongs to an external standard or an infrastructure consumer.
+
+## Live route inventory (phase 00, 2026-09-19)
+
+Extracted from the running composition root with `chi.Walk` (`MountAPI` + `MountRoot`), 150
+method+pattern pairs. Differences against the route tables above — these rows are real and must
+appear in the service matrix below:
+
+- `GET /api/account`, `PATCH /api/account` — account profile surface; the tables above only listed
+  `/api/account/{password,sessions}`.
+- `GET/POST/DELETE /api/signup-tokens*` — signup token management; missing from the tables above.
+- `GET /api/oidc/authorized-clients` — admin-wide authorized-client listing; missing above.
+- `GET /api/oidc/clients/{id}/scim-service-provider` — per-client SCIM binding lookup; missing above.
+- `GET /api/oidc/clients/{clientId}/meta`, `POST /api/oidc/clients/{clientId}/refresh`,
+  `GET /api/oidc/clients/{clientId}/preview/{userId}`, `GET/POST/DELETE .../secrets*` — the
+  `/api/oidc/clients*` wildcard above under-specified these.
+- `POST /api/webhooks/{id}/rotate-secret` — missing above (tables listed `/api/webhooks*` only).
+- `GET /api/user-groups/{id}/users` — companion of `PUT` (replace); missing above.
+- `GET/POST /api/custom-claims/user/{userId}` and the `user-group` variants, including per-claim
+  `PUT/DELETE .../{claimId}` — tables above showed `PUT` only.
+- `POST /authorize` — live alongside `GET /authorize`; tables above listed `GET` only.
+- `GET /api/apis/{id}` and `GET/PUT/DELETE` register with a trailing-slash chi pattern (`/apis/{id}/`);
+  the ambiguity list below resolves how these are recorded.
+
+Transport-owned routes (`/api/`, `/api/healthz`, `/api/version/current`, `/api/version/latest`,
+`/healthz`, `/.well-known/version`, `/static/*`) mount outside `MountAPI` and are covered by the
+health/version tables above.
+
+## Connect service and method matrix
+
+Canonical protobuf contract for every ConnectRPC entry. Packages express module ownership; every
+first-party route maps to exactly one service method. Auth column: `bearer` = protected RPC
+(`Authorization: Bearer <internal-access-token>` required), `public` = anonymous, `pending` =
+pending-auth cookie ceremony as today. Yaak request names follow `<METHOD> /rpc/<package>.<Service>/<Method>`;
+they are created via Yaak MCP in the implementing phase and the row is not complete until sent.
+
+### Package `tango.system.v1` — `api/connect/system.proto`
+
+| Service.Method | Replaces (method + path) | Auth | Notes |
+| --- | --- | --- | --- |
+| `VersionService.Current` | GET `/api/version/current` | bearer | |
+| `VersionService.Latest` | GET `/api/version/latest` | public | |
+| `HealthService.Check` | — (smoke RPC, no REST replacement) | public | Transport smoke target only; `/healthz` and `/api/healthz` stay REST. |
+
+### Package `tango.identity.v1` — `api/connect/identity.proto`
+
+| Service.Method | Replaces (method + path) | Auth | Notes |
+| --- | --- | --- | --- |
+| `AuthService.SignIn` | POST `/api/auth/sign-in` | public | Rate-limited; sets/rotates token cookies. |
+| `AuthService.SignOut` | POST `/api/auth/sign-out` | bearer | Revokes token family, clears cookies. |
+| `AuthService.GetSession` | GET `/api/auth/session` | bearer | |
+| `AuthService.ForgotPassword` | POST `/api/auth/forgot-password` | public | `REST + ConnectRPC`; rate-limited. |
+| `AuthService.ResetPassword` | POST `/api/auth/reset-password` | public | `REST + ConnectRPC`; rate-limited. |
+| `AccountService.GetAccount` | GET `/api/account` | bearer | |
+| `AccountService.UpdateAccount` | PATCH `/api/account` | bearer | |
+| `AccountService.ChangePassword` | PUT `/api/account/password` | bearer | Rate-limited. |
+| `AccountService.ListSessions` | GET `/api/account/sessions` | bearer | |
+| `AccountService.RevokeSession` | DELETE `/api/account/sessions/{session_id}` | bearer | |
+| `SignupService.Signup` | POST `/api/signup` | public | `REST + ConnectRPC`; rate-limited. |
+| `SignupService.GetSetupAvailability` | GET `/api/signup/setup` | public | |
+| `SignupService.SetupInitialAdmin` | POST `/api/signup/setup` | public | Rate-limited. |
+| `SignupService.ListSignupTokens` | GET `/api/signup-tokens` | bearer | |
+| `SignupService.CreateSignupToken` | POST `/api/signup-tokens` | bearer | |
+| `SignupService.DeleteSignupToken` | DELETE `/api/signup-tokens/{token_id}` | bearer | |
+| `MfaService.EnrollTotp` | POST `/api/mfa/totp/enroll` | bearer | Show-once secret. Rate-limited. |
+| `MfaService.ConfirmTotp` | POST `/api/mfa/totp/confirm` | bearer | Show-once recovery codes. Rate-limited. |
+| `MfaService.GetTotpStatus` | GET `/api/mfa/totp/status` | bearer | |
+| `MfaService.VerifyPending` | POST `/api/mfa/totp/verify` | pending | Pending-auth cookie unchanged. Rate-limited. |
+| `MfaService.RotateRecoveryCodes` | POST `/api/mfa/totp/recovery-codes` | bearer | Show-once. Rate-limited. |
+| `MfaService.DisableTotp` | DELETE `/api/mfa/totp` | bearer | Rate-limited. |
+| `OneTimeAccessService.RequestEmail` | POST `/api/one-time-access-email` | public | `REST + ConnectRPC`; rate-limited. |
+| `OneTimeAccessService.ExchangeToken` | POST `/api/one-time-access-token/{token}` | — | Stays `REST` (email link). |
+| `OneTimeAccessService.AdminSendEmail` | POST `/api/users/{user_id}/one-time-access-email` | bearer | |
+| `OneTimeAccessService.AdminIssueToken` | POST `/api/users/{user_id}/one-time-access-token` | bearer | Show-once token. |
+| `EmailVerificationService.SendEmail` | POST `/api/users/me/send-email-verification` | bearer | `REST + ConnectRPC`; rate-limited. |
+| `EmailVerificationService.VerifyEmail` | POST `/api/users/me/verify-email` | — | Stays `REST` (email link). |
+| `UserService.ListUsers` | GET `/api/users` | bearer | |
+| `UserService.CreateUser` | POST `/api/users` | bearer | Show-once password. |
+| `UserService.GetUser` | GET `/api/users/{user_id}` | bearer | |
+| `UserService.UpdateUser` | PUT `/api/users/{user_id}` | bearer | |
+| `UserService.DeleteUser` | DELETE `/api/users/{user_id}` | bearer | |
+| `UserService.UpdateMe` | PUT `/api/users/me` | bearer | |
+| `UserService.UpdateMyProfilePicture` | PUT `/api/users/me/profile-picture` | bearer | `bytes` payload. |
+| `UserService.DeleteMyProfilePicture` | DELETE `/api/users/me/profile-picture` | bearer | |
+| `UserService.UpdateProfilePicture` | PUT `/api/users/{user_id}/profile-picture` | bearer | `bytes` payload. |
+| `UserService.DeleteProfilePicture` | DELETE `/api/users/{user_id}/profile-picture` | bearer | |
+| `UserService.ListUserGroups` | GET `/api/users/{user_id}/groups` | bearer | |
+| `UserService.ReplaceUserGroups` | PUT `/api/users/{user_id}/user-groups` | bearer | Atomic replacement. |
+| `UserService.ListWebAuthnCredentials` | GET `/api/users/{user_id}/webauthn-credentials` | bearer | |
+| `UserService.UpdateWebAuthnCredential` | PUT `/api/users/{user_id}/webauthn-credentials/{credential_id}` | bearer | |
+| `UserService.DeleteWebAuthnCredential` | DELETE `/api/users/{user_id}/webauthn-credentials/{credential_id}` | bearer | |
+| `UserGroupService.ListGroups` | GET `/api/user-groups` | bearer | |
+| `UserGroupService.CreateGroup` | POST `/api/user-groups` | bearer | |
+| `UserGroupService.GetGroup` | GET `/api/user-groups/{group_id}` | bearer | |
+| `UserGroupService.UpdateGroup` | PUT `/api/user-groups/{group_id}` | bearer | |
+| `UserGroupService.DeleteGroup` | DELETE `/api/user-groups/{group_id}` | bearer | |
+| `UserGroupService.ListGroupUsers` | GET `/api/user-groups/{group_id}/users` | bearer | |
+| `UserGroupService.ReplaceGroupUsers` | PUT `/api/user-groups/{group_id}/users` | bearer | Atomic replacement. |
+| `UserGroupService.ReplaceAllowedOidcClients` | PUT `/api/user-groups/{group_id}/allowed-oidc-clients` | bearer | |
+| `DeviceApprovalService.GetPendingRequest` | POST `/api/device-login/verification` | bearer | |
+| `DeviceApprovalService.DecideRequest` | POST `/api/device-login/verification/decision` | bearer | |
+| `CustomClaimService.Suggest` | GET `/api/custom-claims/suggestions` | bearer | |
+| `CustomClaimService.ListUserClaims` | GET `/api/custom-claims/user/{user_id}` | bearer | |
+| `CustomClaimService.CreateUserClaim` | POST `/api/custom-claims/user/{user_id}` | bearer | |
+| `CustomClaimService.UpdateUserClaim` | PUT `/api/custom-claims/user/{user_id}/{claim_id}` | bearer | |
+| `CustomClaimService.DeleteUserClaim` | DELETE `/api/custom-claims/user/{user_id}/{claim_id}` | bearer | |
+| `CustomClaimService.ListGroupClaims` | GET `/api/custom-claims/user-group/{group_id}` | bearer | |
+| `CustomClaimService.CreateGroupClaim` | POST `/api/custom-claims/user-group/{group_id}` | bearer | |
+| `CustomClaimService.UpdateGroupClaim` | PUT `/api/custom-claims/user-group/{group_id}/{claim_id}` | bearer | |
+| `CustomClaimService.DeleteGroupClaim` | DELETE `/api/custom-claims/user-group/{group_id}/{claim_id}` | bearer | |
+
+### Package `tango.admin.v1` — `api/connect/admin.proto`
+
+| Service.Method | Replaces (method + path) | Auth | Notes |
+| --- | --- | --- | --- |
+| `ApiKeyService.List` | GET `/api/api-keys` | bearer | |
+| `ApiKeyService.Create` | POST `/api/api-keys` | bearer | Show-once secret. |
+| `ApiKeyService.Renew` | POST `/api/api-keys/{id}/renew` | bearer | Show-once secret. |
+| `ApiKeyService.Delete` | DELETE `/api/api-keys/{id}` | bearer | |
+| `ApiService.ListApis` | GET `/api/apis` | bearer | |
+| `ApiService.CreateApi` | POST `/api/apis` | bearer | |
+| `ApiService.GetApi` | GET `/api/apis/{id}` | bearer | See ambiguity A3 (trailing slash). |
+| `ApiService.UpdateApi` | PUT `/api/apis/{id}` | bearer | See ambiguity A3. |
+| `ApiService.DeleteApi` | DELETE `/api/apis/{id}` | bearer | See ambiguity A3. |
+| `ApiService.SetPermissions` | PUT `/api/apis/{id}/permissions` | bearer | |
+| `ApiService.SetCimdAccess` | PUT `/api/apis/{id}/cimd-access` | bearer | |
+| `ApiService.ListAssignableClients` | GET `/api/apis/{id}/assignable-clients` | bearer | |
+| `ApiService.ListClients` | GET `/api/apis/{id}/clients` | bearer | |
+| `ApiService.GrantClient` | PUT `/api/apis/{id}/clients/{client_id}` | bearer | |
+| `ApiService.RevokeClient` | DELETE `/api/apis/{id}/clients/{client_id}` | bearer | |
+| `ApplicationConfigurationService.Get` | GET `/api/application-configuration` | bearer | Sensitive values redacted. |
+| `ApplicationConfigurationService.GetAll` | GET `/api/application-configuration/all` | bearer | |
+| `ApplicationConfigurationService.Update` | PUT `/api/application-configuration` | bearer | |
+| `ApplicationConfigurationService.TestEmail` | POST `/api/application-configuration/test-email` | bearer | |
+| `AuditLogService.List` | GET `/api/audit-logs` | bearer | |
+| `AuditLogService.ListAll` | GET `/api/audit-logs/all` | bearer | |
+| `AuditLogService.FilterOptions` | GET `/api/audit-logs/filters/{kind}` | bearer | `kind` ∈ `client-names`, `users`. |
+
+### Package `tango.federation.v1` — `api/connect/federation.proto`
+
+| Service.Method | Replaces (method + path) | Auth | Notes |
+| --- | --- | --- | --- |
+| `OidcClientService.ListClients` | GET `/api/oidc/clients/` | bearer | |
+| `OidcClientService.CreateClient` | POST `/api/oidc/clients/` | bearer | Show-once secret. |
+| `OidcClientService.GetClient` | GET `/api/oidc/clients/{client_id}` | bearer | |
+| `OidcClientService.UpdateClient` | PUT `/api/oidc/clients/{client_id}` | bearer | |
+| `OidcClientService.DeleteClient` | DELETE `/api/oidc/clients/{client_id}` | bearer | |
+| `OidcClientService.UpdateAllowedUserGroups` | PUT `/api/oidc/clients/{client_id}/allowed-user-groups` | bearer | |
+| `OidcClientService.GetClientMeta` | GET `/api/oidc/clients/{client_id}/meta` | bearer | |
+| `OidcClientService.PreviewClient` | GET `/api/oidc/clients/{client_id}/preview/{user_id}` | bearer | |
+| `OidcClientService.RefreshClient` | POST `/api/oidc/clients/{client_id}/refresh` | bearer | |
+| `OidcClientService.UploadLogo` | POST `/api/oidc/clients/{client_id}/logo` | bearer | `bytes` payload. |
+| `OidcClientService.DeleteLogo` | DELETE `/api/oidc/clients/{client_id}/logo` | bearer | |
+| `OidcClientService.ListSecrets` | GET `/api/oidc/clients/{client_id}/secrets` | bearer | |
+| `OidcClientService.CreateSecret` | POST `/api/oidc/clients/{client_id}/secrets` | bearer | Show-once. |
+| `OidcClientService.DeleteSecret` | DELETE `/api/oidc/clients/{client_id}/secrets/{secret_id}` | bearer | |
+| `OidcClientService.GetScimProvider` | GET `/api/oidc/clients/{client_id}/scim-service-provider` | bearer | See ambiguity A2. |
+| `OidcConsentService.ListMyAuthorizedClients` | GET `/api/oidc/users/me/authorized-clients` | bearer | |
+| `OidcConsentService.RevokeMyAuthorizedClient` | DELETE `/api/oidc/users/me/authorized-clients/{client_id}` | bearer | |
+| `OidcConsentService.ListMyClients` | GET `/api/oidc/users/me/clients` | bearer | |
+| `OidcConsentService.ListUserAuthorizedClients` | GET `/api/oidc/users/{user_id}/authorized-clients` | bearer | See ambiguity A1. |
+| `OidcConsentService.ListAllAuthorizedClients` | GET `/api/oidc/authorized-clients` | bearer | Admin-wide listing. See ambiguity A1. |
+| `ScimProviderService.Upsert` | POST `/api/scim/service-provider` | bearer | |
+| `ScimProviderService.Update` | PUT `/api/scim/service-provider/{id}` | bearer | |
+| `ScimProviderService.Delete` | DELETE `/api/scim/service-provider/{id}` | bearer | |
+| `ScimProviderService.Sync` | POST `/api/scim/service-provider/{id}/sync` | bearer | Queues outbound sync. |
+
+### Package `tango.webhook.v1` — `api/connect/webhook.proto`
+
+| Service.Method | Replaces (method + path) | Auth | Notes |
+| --- | --- | --- | --- |
+| `WebhookService.List` | GET `/api/webhooks` | bearer | |
+| `WebhookService.Create` | POST `/api/webhooks` | bearer | Show-once signing secret. |
+| `WebhookService.Get` | GET `/api/webhooks/{id}` | bearer | |
+| `WebhookService.Update` | PUT `/api/webhooks/{id}` | bearer | |
+| `WebhookService.Delete` | DELETE `/api/webhooks/{id}` | bearer | |
+| `WebhookService.RotateSecret` | POST `/api/webhooks/{id}/rotate-secret` | bearer | Show-once. |
+| `WebhookService.Test` | POST `/api/webhooks/{id}/test` | bearer | Queues delivery. |
+| `WebhookService.ListDeliveries` | GET `/api/webhooks/{id}/deliveries` | bearer | |
+| `WebhookService.ListAllDeliveries` | GET `/api/webhook-deliveries` | bearer | |
+
+### REST routes that never move (recap)
+
+WebAuthn ceremonies (`/api/webauthn/*`), device-login request/exchange
+(`/api/device-login/requests*`), all `/api/oidc` protocol surfaces (token, introspect, par,
+device/authorize, device/info, device/verify, userinfo, end-session, interaction, authorize),
+`/api/one-time-access-token/{token}`, `/api/users/me/verify-email`,
+`/api/users/{id}/profile-picture.png`, `/healthz`, `/api/healthz`, `/.well-known/*`, `/static/*`.
+Their old REST routes are deleted after cutover; everything else in the matrices above is removed
+from `/api` once its replacement and callers are verified.
+
+## Generated code layout (decision)
+
+- Contracts: `api/connect/*.proto` — hand-written only, committed, never generated into.
+- Go generated: `gen/proto/go/` — committed; package option
+  `github.com/riipandi/tango/gen/proto/go/tango/<module>/v1` (module ∈ `identity`, `admin`,
+  `federation`, `webhook`, `system`); Go package suffix `<module>v1`. Stale-generated detection in CI.
+- TypeScript generated: `app/generated/rpc/` — not committed (already covered by `/app/generated/`
+  in `.gitignore`); produced by the generation task before dev/build/typecheck from a clean checkout.
+- Generation: buf with pinned plugin versions (`buf.yaml` + `buf.gen.yaml` added in phase 02);
+  task targets `rpc:generate`, `rpc:lint`, `rpc:breaking`.
+
+## Yaak coverage map (phase 00 inventory)
+
+Workspace `Tango` (`wk_kBiMYTkhPP`), environment `ev_h36MaRumeq`. Existing REST coverage (~100
+requests, ~30 folders): Session & Password, TOTP (MFA), OAuth & Device Flows, Account [Tango],
+Webhooks [Tango], Sign-up & Setup, User Management, Account (me), One-Time Access, Email
+Verification, Passkeys (admin), User Groups, OIDC (Clients/Secrets/Logo/Authorizations/Protocol/
+SCIM Providers/CIMD Access), APIs (API Management/Client Grants/CIMD), API Keys, Application
+Configuration, Device Login, WebAuthn, SCIM, Version, Health Check, Well Known, OAuth.
+Connect Protocol requests do not exist yet; each implementing phase creates
+`POST /rpc/<package>.<Service>/<Method>` requests under a new `[ConnectRPC] <Module>` folder tree
+via Yaak MCP. A matrix row without a sent Yaak request is not complete.
+
+## Ambiguities to resolve before implementation
+
+- **A1 — `GET /api/oidc/authorized-clients`**: live admin-wide listing, absent from the route
+  tables. Owner module (federation) is clear; confirm intended consumer and pagination before the
+  `OidcConsentService` proto is frozen.
+- **A2 — `GET /api/oidc/clients/{id}/scim-service-provider`**: per-client binding lookup distinct
+  from `/api/scim/service-provider` CRUD. Confirm response shape ownership (federation vs webhook
+  scimsync) before the proto split.
+- **A3 — `/api/apis/{id}` trailing-slash chi pattern**: `chi.Walk` reports `GET/PUT/DELETE
+  /api/apis/{id}/` (trailing slash) while sibling subpaths register without it. Confirm the handler
+  registration is intentional before recording the canonical path shape.
+- **A4 — `PATCH /api/account` vs `PUT /api/users/me`**: two update surfaces for overlapping
+  profile data. Confirm which fields each owns before `AccountService.UpdateAccount` and
+  `UserService.UpdateMe` protos are frozen.
+- **A5 — `POST /authorize`**: live but undocumented in the tables above (upstream parity for
+  form-post authorize?). Protocol surface stays REST either way; document the method set.

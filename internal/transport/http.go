@@ -18,6 +18,10 @@ type HTTPServer struct {
 	Server *http.Server
 }
 
+// RPC deadline budget: every RPC request gets a hard context
+// deadline so a stalled handler cannot pin a connection.
+const rpcRequestTimeout = 30 * time.Second
+
 // RouteSet carries the explicit route-mount callbacks from the
 // application runtime so the transport boundary needs no registry.
 type RouteSet struct {
@@ -63,6 +67,17 @@ func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limit
 		if routes.MountAPI != nil {
 			routes.MountAPI(r)
 		}
+	})
+
+	// Mount the ConnectRPC surface. Shares the global request-ID,
+	// logger, recovery, and CORS middleware; adds a per-request
+	// deadline. The mount happens before the SPA fallback so unknown
+	// /rpc paths answer Connect 404s, never the SPA document. chi's
+	// Mount only shifts its route context, never r.URL.Path, so the
+	// Connect mux needs an explicit StripPrefix.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.RequestTimeout(rpcRequestTimeout))
+		r.Mount("/rpc", http.StripPrefix("/rpc", rpcHandler()))
 	})
 
 	// Mount the SPA fallback last.

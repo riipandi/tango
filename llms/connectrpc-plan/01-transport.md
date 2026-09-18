@@ -1,9 +1,29 @@
 ---
-status: planned
-updated: 2026-09-18
+status: done
+updated: 2026-09-19
 ---
 
 # Phase 01: Transport and Vite Proxy Foundation
+
+> Completed 2026-09-19. Delivered: `/rpc/` mount in `internal/transport/http.go` (chi `Group` +
+> `Mount("/rpc", http.StripPrefix("/rpc", rpcHandler()))` — chi's `Mount` shifts only its route
+> context, never `r.URL.Path`, so the Connect mux needs an explicit `StripPrefix`), smoke RPC
+> `tango.system.v1.HealthService/Check` (`api/connect/system.proto`, buf-generated Go in
+> `gen/proto/go/`, committed), `middleware.RequestTimeout` (30s RPC deadline), and
+> `middleware.BearerAuth` (Connect-shaped 401; wired to protected services in phase 03). Route-table
+> tests pin the smoke call, Connect 404 fallthrough, and 405 on GET. Vite proxy: `/rpc` already in
+> `viteProxy` — verified through dev (:3000) and preview (:4173); Storybook stays explicit
+> (`server: undefined`). Yaak evidence: folder `[ConnectRPC] System (smoke)`, requests
+> `POST /rpc/tango.system.v1.HealthService/Check` (`rq_PWa9yMokFq`, direct :3080) and
+> `…(nginx HTTPS)` (`rq_yPfrPo7huW`, :8443 over HTTP/1.1) — both 200.
+>
+> RPC transport policy (decided before handlers are added): bearer-only authentication for
+> protected RPCs — cookies never authorize an RPC, so CSRF does not apply below `/rpc/`; CORS and
+> request-ID ride the global root middleware; panic recovery via `connect.WithRecover`; content
+> negotiation is Connect JSON and proto over HTTP/1.1. Server reflection: none served — Connect
+> Protocol needs no reflection and production reflection stays disabled; Yaak requests use explicit
+> procedure paths. Nginx needed no changes: the catch-all `location /` on :8443 already forwards
+> `/rpc` with `Authorization` in its allowlist.
 
 ## Outcome
 
