@@ -3,11 +3,27 @@
 name: Test
 
 on:
-  push:
-    branches: ["**"]
+  # push:
+  #   branches: ["**"]
+  #   tags: ["v*.*.*"]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: Platform to test
+        required: false
+        type: choice
+        options:
+          - all
+          - linux
+          - macos
+        default: all
 
 permissions: read-all
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CI: true
@@ -29,7 +45,14 @@ jobs:
         # failing them. To restore full macOS coverage, host the runner on
         # real hardware with OrbStack/Docker (labels: [self-hosted, macOS])
         # and drop this distinction — no QEMU needed there.
-        os: [ubuntu-24.04, macos-15]
+        # Empty on push/pull_request; on workflow_dispatch the `os` input
+        # restricts the matrix to a single platform.
+        os: >-
+          ${{
+            (inputs.os || 'all') == 'linux' && '["ubuntu-24.04"]' ||
+            (inputs.os || 'all') == 'macos' && '["macos-15"]' ||
+            '["ubuntu-24.04", "macos-15"]'
+          }}
         go-version: ["1.27.1"]
       fail-fast: false
 
