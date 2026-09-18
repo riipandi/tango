@@ -103,6 +103,7 @@ sbom-*
 /api/swagger.yaml
 /app/generated/
 /specs/
+/gen/
 *.gen.ts
 
 # TanStack Router
