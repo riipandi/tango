@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_ec8TojUzzD
 createdAt: 2026-09-13T07:28:34.829631
-updatedAt: 2026-09-14T09:46:02.025742
+updatedAt: 2026-09-18T10:13:27.484926
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -12,8 +12,8 @@ bodyType: null
 description: Tango alias of GET /api/oidc/users/me/authorized-clients
 headers: []
 method: GET
-name: List authorized clients for current user (alias)
-sortPriority: 0.0
+name: '[Tango] List authorized clients for current user (alias)'
+sortPriority: 3000.0
 url: ${[ apiBaseURL ]}/api/oidc/authorized-clients
 urlParameters: []
 settingSendCookies:

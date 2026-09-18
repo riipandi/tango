@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_HHGDUQMDNG
 createdAt: 2026-09-14T09:48:05.961042
-updatedAt: 2026-09-14T12:19:16.795509
+updatedAt: 2026-09-18T10:07:47.599703
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tw8Gigobcd
 authentication: {}
@@ -20,7 +20,7 @@ description: Update application configuration settings — partial body; snake_c
 headers: []
 method: PUT
 name: Update application configurations
-sortPriority: 0.0
+sortPriority: 333.3333333333333
 url: ${[ apiBaseURL ]}/api/application-configuration
 urlParameters: []
 settingSendCookies:

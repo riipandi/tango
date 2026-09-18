@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_kkbUAih6qm
 createdAt: 2026-09-14T09:49:09.596585
-updatedAt: 2026-09-14T09:49:09.596586
+updatedAt: 2026-09-18T10:09:37.582378
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sc8ridEHPT
 authentication: {}
@@ -21,12 +21,12 @@ description: Update or create custom claims for a specific user group (full list
 headers: []
 method: PUT
 name: Update custom claims for a user group
-sortPriority: 0.0
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/api/custom-claims/user-group/:userGroupId
 urlParameters:
 - enabled: true
-  name: ':userGroupId'
-  value: 'dummy'
+  name: :userGroupId
+  value: dummy
   id: qf22nmb7fm
 settingSendCookies:
   enabled: false

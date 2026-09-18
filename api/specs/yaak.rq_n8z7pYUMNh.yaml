@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_n8z7pYUMNh
 createdAt: 2026-09-14T09:52:10.386630
-updatedAt: 2026-09-14T09:52:10.386631
+updatedAt: 2026-09-18T10:14:33.936023
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -17,8 +17,8 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/users/:userId/one-time-access-email
 urlParameters:
 - enabled: true
-  name: ':userId'
-  value: 'dummy'
+  name: :userId
+  value: dummy
   id: yge97bqdfe
 settingSendCookies:
   enabled: false

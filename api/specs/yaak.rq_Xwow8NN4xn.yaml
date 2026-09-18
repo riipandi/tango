@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_Xwow8NN4xn
 createdAt: 2026-09-14T09:50:32.377791
-updatedAt: 2026-09-14T09:50:32.377792
+updatedAt: 2026-09-18T10:11:37.751683
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -13,12 +13,12 @@ description: Force a re-fetch of the OAuth Client ID Metadata Document for a CIM
 headers: []
 method: POST
 name: Refresh client metadata document
-sortPriority: 0.0
+sortPriority: 988.4389800561116
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/refresh
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
+  name: :clientId
+  value: dummy
   id: kqq80klah9
 settingSendCookies:
   enabled: false

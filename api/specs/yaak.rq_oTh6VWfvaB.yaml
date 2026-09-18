@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_oTh6VWfvaB
 createdAt: 2026-09-16T11:28:54.499803
-updatedAt: 2026-09-16T11:28:54.499803
+updatedAt: 2026-09-18T10:14:33.947511
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -19,7 +19,7 @@ description: Sign up the initial admin — 200 + session cookie while no user ex
 headers: []
 method: POST
 name: Initial admin setup
-sortPriority: 0.0
+sortPriority: 29000.0
 url: ${[ apiBaseURL ]}/api/signup/setup
 urlParameters: []
 settingSendCookies:

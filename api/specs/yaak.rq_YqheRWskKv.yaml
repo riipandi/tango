@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_YqheRWskKv
 createdAt: 2026-09-12T06:27:47.763631
-updatedAt: 2026-09-15T19:31:15.645236
+updatedAt: 2026-09-18T10:01:24.421026
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_RCex2QKoSF
 authentication: {}
@@ -13,7 +13,7 @@ description: Responds with a successful status code to healthcheck requests
 headers: []
 method: GET
 name: Responds to healthchecks
-sortPriority: -1789194467762.0
+sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/healthz
 urlParameters: []
 settingSendCookies:

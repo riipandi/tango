@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_HWnmEUe2gj
 createdAt: 2026-09-14T09:51:49.363135
-updatedAt: 2026-09-14T10:32:44.366224
+updatedAt: 2026-09-18T10:14:33.947844
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,11 +13,11 @@ description: Delete a specific user by ID
 headers:
 - enabled: false
   name: X-API-KEY
-  value: 'dummy'
+  value: dummy
   id: null
 method: DELETE
 name: Delete user
-sortPriority: 0.0
+sortPriority: 21000.0
 url: ${[ apiBaseURL ]}/api/users/:userId
 urlParameters:
 - enabled: true

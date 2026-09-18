@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_MumkfTS7fn
 createdAt: 2026-09-14T09:49:59.972647
-updatedAt: 2026-09-14T10:00:02.324455
+updatedAt: 2026-09-18T10:10:49.804179
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -25,12 +25,12 @@ description: Update an existing OIDC client (tango snake_case fields; nil/omitte
 headers: []
 method: PUT
 name: Update OIDC client
-sortPriority: 0.0
+sortPriority: 802.4691358024692
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
+  name: :clientId
+  value: dummy
   id: vvmptumznj
 settingSendCookies:
   enabled: false

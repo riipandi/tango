@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_L622sv9BWe
 createdAt: 2026-09-14T09:48:13.016832
-updatedAt: 2026-09-14T09:48:13.016833
+updatedAt: 2026-09-18T10:07:44.320284
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tw8Gigobcd
 authentication: {}
@@ -18,7 +18,7 @@ description: Send a test email to verify email configuration — body is the tan
 headers: []
 method: POST
 name: Send test email
-sortPriority: 0.0
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/api/application-configuration/test-email
 urlParameters: []
 settingSendCookies:

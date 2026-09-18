@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_4p6hxqyTFT
 createdAt: 2026-09-14T09:50:36.527223
-updatedAt: 2026-09-14T12:41:41.394447
+updatedAt: 2026-09-18T10:11:18.135100
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -13,7 +13,7 @@ description: Get a client's logo — bare image bytes, public route, 404 when un
 headers: []
 method: GET
 name: Get client logo
-sortPriority: 0.0
+sortPriority: 941.472336534065
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/logo
 urlParameters:
 - enabled: true

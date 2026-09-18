@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_4v7ngujKFK
 createdAt: 2026-09-14T00:56:33.669410
-updatedAt: 2026-09-14T09:46:19.409762
+updatedAt: 2026-09-18T10:03:25.712539
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GcYUAQ7Dkf
 authentication: {}
@@ -13,12 +13,12 @@ description: Trigger synchronization for a SCIM service provider
 headers: []
 method: POST
 name: Sync SCIM service provider
-sortPriority: 0.0
+sortPriority: 2333.3333333333335
 url: ${[ apiBaseURL ]}/api/scim/service-provider/:id/sync
 urlParameters:
 - enabled: true
-  name: ':id'
-  value: 'dummy'
+  name: :id
+  value: dummy
   id: a3b5l5af2a
 settingSendCookies:
   enabled: false

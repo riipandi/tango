@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_9LMkBBiP45
 createdAt: 2026-09-14T09:49:51.617821
-updatedAt: 2026-09-14T09:59:56.288098
+updatedAt: 2026-09-18T10:10:29.486473
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -27,7 +27,7 @@ description: 'Create a new OIDC client (tango snake_case fields: callback_urls, 
 headers: []
 method: POST
 name: Create OIDC client
-sortPriority: 0.0
+sortPriority: 333.3333333333333
 url: ${[ apiBaseURL ]}/api/oidc/clients
 urlParameters: []
 settingSendCookies:

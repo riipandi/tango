@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_JdxrQT2WuM
 createdAt: 2026-09-13T16:08:43.616852
-updatedAt: 2026-09-15T10:21:35.608684
+updatedAt: 2026-09-18T10:14:33.945760
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,7 +13,7 @@ description: Retrieve all WebAuthn credentials for a specific user
 headers: []
 method: GET
 name: List user passkeys
-sortPriority: 0.0
+sortPriority: 27000.0
 url: ${[ apiBaseURL ]}/api/users/:id/webauthn-credentials
 urlParameters:
 - enabled: true

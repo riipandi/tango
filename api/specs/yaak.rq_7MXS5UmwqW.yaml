@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_7MXS5UmwqW
 createdAt: 2026-09-13T07:28:40.996909
-updatedAt: 2026-09-14T09:43:38.409238
+updatedAt: 2026-09-18T10:10:21.320842
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -17,7 +17,7 @@ headers:
   id: 7Y7KfjiQ9x
 method: GET
 name: Get user information
-sortPriority: 0.0
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/api/oidc/userinfo
 urlParameters: []
 settingSendCookies:

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_FFMM5KP3qs
 createdAt: 2026-09-14T09:49:55.107099
-updatedAt: 2026-09-14T09:49:55.107099
+updatedAt: 2026-09-18T10:10:39.716471
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -13,12 +13,12 @@ description: Get detailed information about an OIDC client
 headers: []
 method: GET
 name: Get OIDC client
-sortPriority: 0.0
+sortPriority: 703.7037037037037
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
+  name: :clientId
+  value: dummy
   id: re4ci80iyx
 settingSendCookies:
   enabled: false

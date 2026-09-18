@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_yTVWiDBNgt
 createdAt: 2026-09-13T05:47:32.108867
-updatedAt: 2026-09-14T09:45:23.371178
+updatedAt: 2026-09-18T10:08:51.169818
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_7wm4R7MYfg
 authentication: {}
@@ -13,7 +13,7 @@ description: Get a list of all usernames with their IDs for audit log filtering
 headers: []
 method: GET
 name: List users with IDs
-sortPriority: 0.0
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/api/audit-logs/filters/users
 urlParameters: []
 settingSendCookies:

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_SR9Hay5sx2
 createdAt: 2026-09-13T16:11:52.758749
-updatedAt: 2026-09-14T09:44:02.503896
+updatedAt: 2026-09-18T10:14:33.939242
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,12 +13,12 @@ description: Delete a signup token by ID
 headers: []
 method: DELETE
 name: Delete signup token
-sortPriority: 0.0
+sortPriority: 6000.0
 url: ${[ apiBaseURL ]}/api/signup-tokens/:id
 urlParameters:
 - enabled: true
-  name: ':id'
-  value: 'dummy'
+  name: :id
+  value: dummy
   id: i8l00evp6n
 settingSendCookies:
   enabled: false

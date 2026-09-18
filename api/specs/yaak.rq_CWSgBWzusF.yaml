@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_CWSgBWzusF
 createdAt: 2026-09-14T09:50:40.731391
-updatedAt: 2026-09-14T12:41:46.316767
+updatedAt: 2026-09-18T10:11:22.168992
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -19,7 +19,7 @@ description: Update a client's logo — multipart file; stored as-is (png/jpg/sv
 headers: []
 method: POST
 name: Update client logo
-sortPriority: 0.0
+sortPriority: 960.9815576893768
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/logo
 urlParameters:
 - enabled: true

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_VCXNShUEkx
 createdAt: 2026-09-13T19:22:58.293516
-updatedAt: 2026-09-15T09:27:04.546175
+updatedAt: 2026-09-18T10:07:18.847681
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
@@ -12,8 +12,8 @@ bodyType: null
 description: List users using machine auth via X-API-KEY header — tango demo for the API key flow
 headers: []
 method: GET
-name: List users via X-API-KEY
-sortPriority: 1000.0
+name: '[Tango] List users via X-API-KEY'
+sortPriority: 2000.0
 url: ${[ apiBaseURL ]}/api/users
 urlParameters: []
 settingSendCookies:

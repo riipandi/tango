@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_FVEQ24NJj6
 createdAt: 2026-09-14T09:50:28.169990
-updatedAt: 2026-09-14T12:06:25.968624
+updatedAt: 2026-09-18T10:11:33.368104
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -13,7 +13,7 @@ description: 'Get a preview of the OIDC data (ID token, access token, userinfo) 
 headers: []
 method: GET
 name: Preview OIDC client data for user
-sortPriority: 0.0
+sortPriority: 982.6584700841674
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/preview/:userId
 urlParameters:
 - enabled: true

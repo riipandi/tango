@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_DuWj6Us6Zh
 createdAt: 2026-09-14T09:52:24.668816
-updatedAt: 2026-09-14T12:41:36.503571
+updatedAt: 2026-09-18T10:14:33.946754
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,7 +13,7 @@ description: Retrieve a specific user's profile picture — bare image bytes wit
 headers: []
 method: GET
 name: Get user profile picture
-sortPriority: 0.0
+sortPriority: 26000.0
 url: ${[ apiBaseURL ]}/api/users/:userId/profile-picture.png
 urlParameters:
 - enabled: true

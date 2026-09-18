@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_vGKt7CfDmj
 createdAt: 2026-09-13T16:10:03.029522
-updatedAt: 2026-09-14T10:24:27.005053
+updatedAt: 2026-09-18T10:14:33.948163
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,7 +13,7 @@ description: Exchange a one-time access token for a session token
 headers: []
 method: POST
 name: Exchange one-time access token
-sortPriority: 0.0
+sortPriority: 16000.0
 url: ${[ apiBaseURL ]}/api/one-time-access-token/:token
 urlParameters:
 - enabled: true

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_tgpJ2n2cno
 createdAt: 2026-09-14T09:52:28.703284
-updatedAt: 2026-09-14T09:52:28.703285
+updatedAt: 2026-09-18T10:14:33.943427
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -18,12 +18,12 @@ description: Update the groups a specific user belongs to
 headers: []
 method: PUT
 name: Update user groups
-sortPriority: 0.0
+sortPriority: 15000.0
 url: ${[ apiBaseURL ]}/api/users/:userId/user-groups
 urlParameters:
 - enabled: true
-  name: ':userId'
-  value: 'dummy'
+  name: :userId
+  value: dummy
   id: n9fzh5zhal
 settingSendCookies:
   enabled: false

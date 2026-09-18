@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_zXUjUECXuh
 createdAt: 2026-09-14T09:48:09.233647
-updatedAt: 2026-09-14T12:19:49.073456
+updatedAt: 2026-09-18T10:07:49.234255
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tw8Gigobcd
 authentication: {}
@@ -13,7 +13,7 @@ description: Get all application configurations including private ones — admin
 headers: []
 method: GET
 name: List all application configurations
-sortPriority: 0.0
+sortPriority: 555.5555555555555
 url: ${[ apiBaseURL ]}/api/application-configuration/all
 urlParameters: []
 settingSendCookies:

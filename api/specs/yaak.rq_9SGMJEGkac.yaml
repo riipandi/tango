@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_9SGMJEGkac
 createdAt: 2026-09-14T09:51:09.196554
-updatedAt: 2026-09-14T09:51:09.196554
+updatedAt: 2026-09-18T10:03:20.353641
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GcYUAQ7Dkf
 authentication: {}
@@ -20,12 +20,12 @@ description: Update an existing SCIM service provider
 headers: []
 method: PUT
 name: Update SCIM service provider
-sortPriority: 0.0
+sortPriority: 2000.0
 url: ${[ apiBaseURL ]}/api/scim/service-provider/:scimProviderId
 urlParameters:
 - enabled: true
-  name: ':scimProviderId'
-  value: 'dummy'
+  name: :scimProviderId
+  value: dummy
   id: p152pi5odg
 settingSendCookies:
   enabled: false

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_meyEEDLkdp
 createdAt: 2026-09-14T09:51:38.869768
-updatedAt: 2026-09-14T10:32:35.051689
+updatedAt: 2026-09-18T10:14:33.945430
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,11 +13,11 @@ description: Retrieve detailed information about a specific user
 headers:
 - enabled: false
   name: X-API-KEY
-  value: 'dummy'
+  value: dummy
   id: null
 method: GET
 name: Get user by ID
-sortPriority: 0.0
+sortPriority: 19000.0
 url: ${[ apiBaseURL ]}/api/users/:userId
 urlParameters:
 - enabled: true

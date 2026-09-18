@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_VEGtt34t6J
 createdAt: 2026-09-14T00:56:46.076249
-updatedAt: 2026-09-14T09:46:16.121256
+updatedAt: 2026-09-18T10:03:46.479614
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GcYUAQ7Dkf
 authentication: {}
@@ -12,8 +12,8 @@ bodyType: null
 description: List all configured SCIM service providers — tango-only list endpoint, not in the upstream swagger
 headers: []
 method: GET
-name: List SCIM service providers
-sortPriority: 0.0
+name: '[Tango] List SCIM service providers'
+sortPriority: 3000.0
 url: ${[ apiBaseURL ]}/api/scim/service-provider
 urlParameters: []
 settingSendCookies:

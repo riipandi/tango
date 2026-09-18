@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_BdV7uSQcqq
 createdAt: 2026-09-14T09:50:16.286313
-updatedAt: 2026-09-14T09:50:16.286314
+updatedAt: 2026-09-18T10:11:54.134965
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -19,12 +19,12 @@ description: Add a new secret to an OIDC client, leaving the existing ones usabl
 headers: []
 method: POST
 name: Create client secret
-sortPriority: 0.0
+sortPriority: 996.5745126092182
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/secrets
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
+  name: :clientId
+  value: dummy
   id: cz4a2n4m44
 settingSendCookies:
   enabled: false

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_F6CnFaDEDg
 createdAt: 2026-09-14T09:50:07.374176
-updatedAt: 2026-09-14T09:50:07.374177
+updatedAt: 2026-09-18T10:11:07.952513
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -18,12 +18,12 @@ description: Update the user groups allowed to access an OIDC client
 headers: []
 method: PUT
 name: Update allowed user groups
-sortPriority: 0.0
+sortPriority: 868.3127572016461
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/allowed-user-groups
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
+  name: :clientId
+  value: dummy
   id: fgeckcgzsb
 settingSendCookies:
   enabled: false

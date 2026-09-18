@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_2CWv5MApih
 createdAt: 2026-09-12T06:54:07.608088
-updatedAt: 2026-09-14T10:32:24.953541
+updatedAt: 2026-09-18T10:14:33.946030
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,11 +13,11 @@ description: 'Get a paginated list of users with optional search and sorting —
 headers:
 - enabled: false
   name: X-API-KEY
-  value: 'dummy'
+  value: dummy
   id: null
 method: GET
 name: List users (anonymous, guarded)
-sortPriority: 0.0
+sortPriority: 17000.0
 url: ${[ apiBaseURL ]}/api/users
 urlParameters:
 - enabled: true

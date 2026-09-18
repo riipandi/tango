@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_GeuGNqRbFY
 createdAt: 2026-09-13T16:10:14.895151
-updatedAt: 2026-09-14T09:46:44.456368
+updatedAt: 2026-09-18T10:14:33.940052
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,7 +13,7 @@ description: Send an email verification to the currently authenticated user
 headers: []
 method: POST
 name: Send email verification
-sortPriority: 0.0
+sortPriority: 8000.0
 url: ${[ apiBaseURL ]}/api/users/me/send-email-verification
 urlParameters: []
 settingSendCookies:

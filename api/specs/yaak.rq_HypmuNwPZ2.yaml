@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_HypmuNwPZ2
 createdAt: 2026-09-14T09:52:06.384720
-updatedAt: 2026-09-14T09:52:06.384721
+updatedAt: 2026-09-18T10:14:33.943021
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,12 +13,12 @@ description: Retrieve all groups a specific user belongs to
 headers: []
 method: GET
 name: Get user groups
-sortPriority: 0.0
+sortPriority: 14000.0
 url: ${[ apiBaseURL ]}/api/users/:userId/groups
 urlParameters:
 - enabled: true
-  name: ':userId'
-  value: 'dummy'
+  name: :userId
+  value: dummy
   id: ncwiqztanh
 settingSendCookies:
   enabled: false

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_sKkys3qjj3
 createdAt: 2026-09-13T08:49:24.197394
-updatedAt: 2026-09-14T09:59:35.962880
+updatedAt: 2026-09-18T10:08:53.600531
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_7wm4R7MYfg
 authentication: {}
@@ -15,7 +15,7 @@ description: 'Get a paginated list of all audit logs (admin only; tango filters:
 headers: []
 method: GET
 name: List all audit logs
-sortPriority: 0.0
+sortPriority: 333.3333333333333
 url: ${[ apiBaseURL ]}/api/audit-logs/all
 urlParameters:
 - enabled: true

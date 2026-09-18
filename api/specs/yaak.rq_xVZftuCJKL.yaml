@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_xVZftuCJKL
 createdAt: 2026-09-14T00:57:10.460483
-updatedAt: 2026-09-14T09:46:12.890980
+updatedAt: 2026-09-18T10:03:20.353021
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GcYUAQ7Dkf
 authentication: {}
@@ -13,12 +13,12 @@ description: Delete a SCIM service provider by ID
 headers: []
 method: DELETE
 name: Delete SCIM service provider
-sortPriority: 0.0
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/api/scim/service-provider/:id
 urlParameters:
 - enabled: true
-  name: ':id'
-  value: 'dummy'
+  name: :id
+  value: dummy
   id: glfbucwh99
 settingSendCookies:
   enabled: false

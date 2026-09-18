@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_pPdkMDLJAc
 createdAt: 2026-09-14T09:50:44.525368
-updatedAt: 2026-09-14T12:41:50.697094
+updatedAt: 2026-09-18T10:11:14.684935
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -13,7 +13,7 @@ description: Delete a client's logo — clears the blob and the has_logo flag
 headers: []
 method: DELETE
 name: Delete client logo
-sortPriority: 0.0
+sortPriority: 912.2085048010974
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/logo
 urlParameters:
 - enabled: true

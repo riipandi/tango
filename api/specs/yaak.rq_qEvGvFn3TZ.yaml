@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_qEvGvFn3TZ
 createdAt: 2026-09-14T09:50:56.164645
-updatedAt: 2026-09-14T09:50:56.164646
+updatedAt: 2026-09-18T10:13:38.683318
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -13,7 +13,7 @@ description: Get a list of OIDC clients that the current user can access
 headers: []
 method: GET
 name: List accessible OIDC clients for current user
-sortPriority: 0.0
+sortPriority: 2604.938271604938
 url: ${[ apiBaseURL ]}/api/oidc/users/me/clients
 urlParameters: []
 settingSendCookies:

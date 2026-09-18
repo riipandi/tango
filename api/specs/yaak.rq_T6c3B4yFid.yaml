@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_T6c3B4yFid
 createdAt: 2026-09-13T16:10:31.063932
-updatedAt: 2026-09-14T09:46:47.980912
+updatedAt: 2026-09-18T10:14:33.940346
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -18,7 +18,7 @@ description: Verify the currently authenticated user's email using a verificatio
 headers: []
 method: POST
 name: Verify email
-sortPriority: 0.0
+sortPriority: 9000.0
 url: ${[ apiBaseURL ]}/api/users/me/verify-email
 urlParameters: []
 settingSendCookies:

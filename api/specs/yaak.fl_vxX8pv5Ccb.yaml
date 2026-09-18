@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_vxX8pv5Ccb
 createdAt: 2026-09-12T07:01:00.934518
-updatedAt: 2026-09-15T09:26:36.793409
+updatedAt: 2026-09-18T10:06:26.500556
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: 'Upstream tag: Users — /api/users*, profile, webauthn-credentials, one-time access, email verification'
 headers: []
 name: Users
-sortPriority: 15000.0
+sortPriority: 13111.111111111111
 settingSendCookies:
   enabled: false
   value: true

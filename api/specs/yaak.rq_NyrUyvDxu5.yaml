@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_NyrUyvDxu5
 createdAt: 2026-09-14T09:49:25.777929
-updatedAt: 2026-09-14T09:49:25.777930
+updatedAt: 2026-09-18T10:09:54.054722
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sc8ridEHPT
 authentication: {}
@@ -12,17 +12,17 @@ bodyType: null
 description: Delete one custom claim for a user — tango-only single-claim CRUD extension
 headers: []
 method: DELETE
-name: Delete a custom claim for a user
-sortPriority: 0.0
+name: '[Tango] Delete a custom claim for a user'
+sortPriority: 6000.0
 url: ${[ apiBaseURL ]}/api/custom-claims/user/:userId/:claimId
 urlParameters:
 - enabled: true
-  name: ':userId'
-  value: 'dummy'
+  name: :userId
+  value: dummy
   id: 90bqobbas8
 - enabled: true
-  name: ':claimId'
-  value: 'dummy'
+  name: :claimId
+  value: dummy
   id: 70xqadd1vy
 settingSendCookies:
   enabled: false

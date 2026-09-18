@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_tmHxezcWuY
 createdAt: 2026-09-13T08:47:56.195463
-updatedAt: 2026-09-14T09:59:51.215163
+updatedAt: 2026-09-18T10:11:59.982151
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -24,7 +24,7 @@ description: Pass a token to verify if it is considered valid — RFC 7662, form
 headers: []
 method: POST
 name: Introspect OIDC tokens
-sortPriority: 0.0
+sortPriority: 998.4775611596524
 url: ${[ apiBaseURL ]}/api/oidc/introspect
 urlParameters: []
 settingSendCookies:

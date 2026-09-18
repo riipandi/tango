@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_9G9e5GtSWL
 createdAt: 2026-09-14T09:50:24.268094
-updatedAt: 2026-09-14T12:06:22.007515
+updatedAt: 2026-09-18T10:11:28.916987
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -13,7 +13,7 @@ description: 'Get OIDC client metadata for discovery and configuration — trimm
 headers: []
 method: GET
 name: Get client metadata
-sortPriority: 0.0
+sortPriority: 973.9877051262512
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/meta
 urlParameters:
 - enabled: true

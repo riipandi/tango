@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_RKFQFN6DMq
 createdAt: 2026-09-14T09:49:05.587171
-updatedAt: 2026-09-14T09:49:05.587171
+updatedAt: 2026-09-18T10:09:37.583057
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sc8ridEHPT
 authentication: {}
@@ -21,12 +21,12 @@ description: Update or create custom claims for a specific user (full list repla
 headers: []
 method: PUT
 name: Update custom claims for a user
-sortPriority: 0.0
+sortPriority: 2000.0
 url: ${[ apiBaseURL ]}/api/custom-claims/user/:userId
 urlParameters:
 - enabled: true
-  name: ':userId'
-  value: 'dummy'
+  name: :userId
+  value: dummy
   id: xjl8aze2lx
 settingSendCookies:
   enabled: false

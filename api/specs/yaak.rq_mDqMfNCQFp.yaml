@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_mDqMfNCQFp
 createdAt: 2026-09-14T00:56:20.849421
-updatedAt: 2026-09-14T09:43:41.267876
+updatedAt: 2026-09-18T10:11:42.869098
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -13,12 +13,12 @@ description: Get the SCIM service provider configuration for an OIDC client
 headers: []
 method: GET
 name: Get SCIM service provider
-sortPriority: 0.0
+sortPriority: 992.292653370741
 url: ${[ apiBaseURL ]}/api/oidc/clients/:id/scim-service-provider
 urlParameters:
 - enabled: true
-  name: ':id'
-  value: 'dummy'
+  name: :id
+  value: dummy
   id: tkfy1g7qcg
 settingSendCookies:
   enabled: false

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_D9SADio28m
 createdAt: 2026-09-13T19:22:15.294354
-updatedAt: 2026-09-15T09:26:54.226646
+updatedAt: 2026-09-18T10:07:09.765915
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5dL7rZY8Un
 authentication: {}
@@ -20,7 +20,7 @@ description: 'Create a new API key for the current user (tango: name + expires_a
 headers: []
 method: POST
 name: Create API key
-sortPriority: 2000.0
+sortPriority: 333.3333333333333
 url: ${[ apiBaseURL ]}/api/api-keys
 urlParameters: []
 settingSendCookies:

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_4N8aHMsDwL
 createdAt: 2026-09-14T09:50:03.353703
-updatedAt: 2026-09-14T09:50:03.353704
+updatedAt: 2026-09-18T10:10:35.442264
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -13,12 +13,12 @@ description: Delete an OIDC client by ID
 headers: []
 method: DELETE
 name: Delete OIDC client
-sortPriority: 0.0
+sortPriority: 555.5555555555555
 url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
+  name: :clientId
+  value: dummy
   id: v81hlbpg9z
 settingSendCookies:
   enabled: false

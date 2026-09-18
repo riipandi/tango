@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_fyMPampwjx
 createdAt: 2026-09-14T09:50:48.213338
-updatedAt: 2026-09-14T09:50:48.213338
+updatedAt: 2026-09-18T10:13:00.935962
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_GfrmzYcuVx
 authentication: {}
@@ -13,7 +13,7 @@ description: Get a paginated list of OIDC clients that the current user has auth
 headers: []
 method: GET
 name: List authorized clients for current user
-sortPriority: 0.0
+sortPriority: 2111.111111111111
 url: ${[ apiBaseURL ]}/api/oidc/users/me/authorized-clients
 urlParameters: []
 settingSendCookies:

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_vpKXu8r7Qb
 createdAt: 2026-09-13T16:08:56.960163
-updatedAt: 2026-09-14T09:46:59.248261
+updatedAt: 2026-09-18T10:14:33.941004
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -18,16 +18,16 @@ description: Rename a specific WebAuthn credential for a user
 headers: []
 method: PUT
 name: Rename user passkey
-sortPriority: 0.0
+sortPriority: 11000.0
 url: ${[ apiBaseURL ]}/api/users/:id/webauthn-credentials/:credentialId
 urlParameters:
 - enabled: true
-  name: ':id'
-  value: 'dummy'
+  name: :id
+  value: dummy
   id: z04eq7qn0u
 - enabled: true
-  name: ':credentialId'
-  value: 'dummy'
+  name: :credentialId
+  value: dummy
   id: 3wnsz2c3ek
 settingSendCookies:
   enabled: false

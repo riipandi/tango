@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_KPKF3NBfWw
 createdAt: 2026-09-14T09:51:43.957859
-updatedAt: 2026-09-14T10:32:39.844653
+updatedAt: 2026-09-18T10:14:33.944269
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -21,11 +21,11 @@ description: Update an existing user by ID
 headers:
 - enabled: false
   name: X-API-KEY
-  value: 'dummy'
+  value: dummy
   id: null
 method: PUT
 name: Update user
-sortPriority: 0.0
+sortPriority: 20000.0
 url: ${[ apiBaseURL ]}/api/users/:userId
 urlParameters:
 - enabled: true

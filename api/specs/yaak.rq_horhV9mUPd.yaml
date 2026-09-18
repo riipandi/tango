@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_horhV9mUPd
 createdAt: 2026-09-14T09:51:33.622165
-updatedAt: 2026-09-14T10:32:29.996845
+updatedAt: 2026-09-18T10:14:33.944973
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -23,11 +23,11 @@ description: Create a new user
 headers:
 - enabled: false
   name: X-API-KEY
-  value: 'dummy'
+  value: dummy
   id: null
 method: POST
 name: Create user
-sortPriority: 0.0
+sortPriority: 18000.0
 url: ${[ apiBaseURL ]}/api/users
 urlParameters: []
 settingSendCookies:
