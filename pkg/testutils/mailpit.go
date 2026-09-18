@@ -26,7 +26,7 @@ type Mailpit struct {
 }
 
 // mailpitImage is the Mailpit image used by integration tests.
-const mailpitImage = "axllent/mailpit:latest"
+const mailpitImage = "docker.io/axllent/mailpit:latest"
 
 var (
 	mailpitOnce   sync.Once

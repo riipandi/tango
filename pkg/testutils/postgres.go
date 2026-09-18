@@ -24,7 +24,7 @@ type Postgres struct {
 }
 
 // postgresImage is the Postgres image used by integration tests.
-const postgresImage = "postgres:18-alpine"
+const postgresImage = "docker.io/postgres:18-alpine"
 
 var (
 	postgresOnce   sync.Once
