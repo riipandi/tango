@@ -47,12 +47,7 @@ jobs:
         # and drop this distinction — no QEMU needed there.
         # Empty on push/pull_request; on workflow_dispatch the `os` input
         # restricts the matrix to a single platform.
-        os: >-
-          ${{
-            (inputs.os || 'all') == 'linux' && '["ubuntu-24.04"]' ||
-            (inputs.os || 'all') == 'macos' && '["macos-15"]' ||
-            '["ubuntu-24.04", "macos-15"]'
-          }}
+        os: ${{ fromJson((inputs.os || 'all') == 'linux' && '["ubuntu-24.04"]' || (inputs.os || 'all') == 'macos' && '["macos-15"]' || '["ubuntu-24.04", "macos-15"]') }}
         go-version: ["1.27.1"]
       fail-fast: false
 
