@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_mdBPWHL2xi
 createdAt: 2026-09-14T09:47:54.459917
-updatedAt: 2026-09-18T10:23:54.001216
+updatedAt: 2026-09-18T10:39:41.308886
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_LY5TXMhFfG
+folderId: fl_xMPwre9Zts
 authentication: {}
 authenticationType: null
 body:
