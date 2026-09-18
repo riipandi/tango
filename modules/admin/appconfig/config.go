@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	jsonv2 "encoding/json/v2"
 )
 
 // valueType constrains the stored string form of a key.
@@ -37,6 +39,9 @@ type configKey struct {
 	OneOf []string
 	// Sensitive marks values that must be hidden in admin responses.
 	Sensitive bool
+	// ValidateJSON, when set, checks the stored string form against
+	// the named JSON shape (the reader of this key parses it).
+	ValidateJSON func(value string) error
 }
 
 // configKeys is the full catalog; keep Default in sync with
@@ -71,12 +76,14 @@ var configKeys = []configKey{
 	{Key: "smtp_password", Type: typeString, Sensitive: true},
 	{Key: "smtp_secure", Type: typeBool},
 
-	// SMTP relay (defaults fold from MAILER_* env; password redacted)
+	// WebAuthn policy
 	{Key: "webauthn_user_verification", Type: typeString, Default: "preferred", OneOf: webauthnVerifications},
 	{Key: "webauthn_allow_synced_passkeys", Type: typeBool, Default: "true"},
 	{Key: "webauthn_authenticator_attachment", Type: typeString, Default: "any", OneOf: webauthnAttachments},
 
-	{Key: "cimd_url_allowlist", Type: typeString},
+	// CIMD allowlist is a JSON array of URL prefixes; the reader
+	// fails closed on a malformed value, so writes validate the JSON.
+	{Key: "cimd_url_allowlist", Type: typeString, ValidateJSON: jsonArrayOfStrings},
 }
 
 // lookup finds a catalog entry by key.
@@ -103,15 +110,25 @@ func validateValue(entry configKey, value string) error {
 			return fmt.Errorf("%s must be true or false", entry.Key)
 		}
 	case typeString:
-		if len(entry.OneOf) > 0 && value != "" && !slicesContains(entry.OneOf, value) {
+		if len(entry.OneOf) > 0 && value != "" && !slices.Contains(entry.OneOf, value) {
 			return fmt.Errorf("%s must be one of: %s", entry.Key, strings.Join(entry.OneOf, ", "))
+		}
+		if entry.ValidateJSON != nil && value != "" {
+			if err := entry.ValidateJSON(value); err != nil {
+				return fmt.Errorf("%s is invalid: %w", entry.Key, err)
+			}
 		}
 	}
 	return nil
 }
 
-func slicesContains(list []string, want string) bool {
-	return slices.Contains(list, want)
+// jsonArrayOfStrings requires a JSON array of strings.
+func jsonArrayOfStrings(value string) error {
+	var items []string
+	if err := jsonv2.Unmarshal([]byte(value), &items); err != nil {
+		return fmt.Errorf("must be a JSON array of strings")
+	}
+	return nil
 }
 
 // variable is the wire shape of one setting.

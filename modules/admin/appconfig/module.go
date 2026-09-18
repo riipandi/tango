@@ -30,8 +30,6 @@ type Module struct {
 	cipher      *crypto.Cipher
 }
 
-var _ = (*Module)(nil)
-
 // MailSender queues transactional email; internal/jobs implements it.
 type MailSender interface {
 	EnqueueEmail(ctx context.Context, msg mailer.Message) error
@@ -216,18 +214,31 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only catalog keys persist; the rest never reach the store.
-	// Sensitive values are sealed before they hit the disk.
+	// Sensitive values are sealed before they hit the disk; an empty
+	// sensitive value clears the stored secret (the enc: check
+	// rejects empty rows, so clearing means deleting).
 	known := map[string]string{}
+	var clear []string
 	for key, value := range req {
-		if _, ok := lookup(key); ok {
-			known[key] = value
+		entry, ok := lookup(key)
+		if !ok {
+			continue
 		}
+		if entry.Sensitive && value == "" {
+			clear = append(clear, key)
+			continue
+		}
+		known[key] = value
 	}
 	if err := m.sealSensitive(known); err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if err := m.store.Upsert(r.Context(), known); err != nil {
+		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if err := m.store.Delete(r.Context(), clear); err != nil {
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -246,7 +257,8 @@ func (m *Module) update(w http.ResponseWriter, r *http.Request) {
 }
 
 // sealSensitive encrypts every sensitive value in place. Empty
-// values stay empty (clearing a setting).
+// values never reach this path: the update handler routes them to
+// the store's Delete (clearing).
 func (m *Module) sealSensitive(values map[string]string) error {
 	if m.cipher == nil {
 		for key, value := range values {

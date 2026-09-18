@@ -115,11 +115,13 @@ func TestConfigCRUD(t *testing.T) {
 	}
 	assert.True(t, found, "app_name in public view")
 
-	// Bad enum + bad int → 422.
+	// Bad enum + bad int + bad JSON → 422.
 	for _, body := range []string{
 		`{"allow_user_signups":"sometimes"}`,
 		`{"session_duration":"soon"}`,
 		`{"webauthn_user_verification":"optional"}`,
+		`{"cimd_url_allowlist":"not-json"}`,
+		`{"cimd_url_allowlist":"[\"ok\", 4]"}`,
 	} {
 		w = httptest.NewRecorder()
 		req = httptest.NewRequest(http.MethodPut, "/api/application-configuration", strings.NewReader(body))
@@ -192,6 +194,43 @@ func TestEnvDefaultsAndSensitiveRedaction(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(stored["smtp_password"], "enc:"),
 		"stored sensitive value must carry the enc: marker, got %q", stored["smtp_password"])
+}
+
+// TestClearSensitiveValue deletes the stored secret instead of
+// storing an empty row: the enc: check rejects empty sensitive
+// values, so clearing means deleting the row.
+func TestClearSensitiveValue(t *testing.T) {
+	store, _, module := newStoreStack(t)
+	router := mount(t, module)
+	ctx := t.Context()
+
+	// Set a real secret first.
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/application-configuration",
+		strings.NewReader(`{"smtp_password":"db-secret"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	// Clearing it answers 200 and removes the row.
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPut, "/api/application-configuration",
+		strings.NewReader(`{"smtp_password":""}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	stored, err := store.List(ctx)
+	require.NoError(t, err)
+	assert.NotContains(t, stored, "smtp_password", "cleared secret must not leave a row")
+
+	// Clearing again is a no-op, not an error.
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPut, "/api/application-configuration",
+		strings.NewReader(`{"smtp_password":""}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 // TestSensitiveSealFailClosed covers undecryptable stored values:
