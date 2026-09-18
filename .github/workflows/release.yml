@@ -29,8 +29,10 @@ env:
 jobs:
   create-release:
     name: Create Release
-    runs-on: macos-15
-    timeout-minutes: 15
+    # Intel image: tests use testcontainers, which needs QEMU (the ARM
+    # image lacks nested virtualization for VZ).
+    runs-on: macos-15-intel
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -67,12 +69,13 @@ jobs:
           echo "/usr/lib/postgresql/18/bin" >> $GITHUB_PATH
 
       # macOS runner images ship neither Docker nor the Postgres client; the
-      # integration tests need both (testcontainers + pg_dump 18).
+      # integration tests need both (testcontainers + pg_dump 18). The Intel
+      # image runs colima through QEMU (no nested virtualization required).
       - name: Setup Docker and PostgreSQL client (macOS)
         if: runner.os == 'macOS'
         run: |
           brew install docker colima postgresql@18
-          colima start --cpu 2 --memory 4
+          colima start --cpu 2 --memory 4 --vm-type qemu
           echo "$(brew --prefix postgresql@18)/bin" >> $GITHUB_PATH
           echo "DOCKER_HOST=unix://$HOME/.colima/default/docker.sock" >> $GITHUB_ENV
 
