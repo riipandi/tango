@@ -58,21 +58,27 @@ ARG BUILD_VERSION
 ARG BUILD_HASH=dev
 ARG BUILD_DATE
 
-# Copy the source files
-COPY --link . .
+# Copy dependency manifests first so the dependency layers below stay cached
+# across source-only changes (buildkit layer cache).
+COPY --link package.json pnpm-lock.yaml go.mod go.sum ./
 
 # Bash will load fnm function via .bashrc. Since we're starting non-interactive
 # shell, we wil need to tell bash to load .bashrc manually.
 SHELL ["/usr/bin/bash", "-c"]
 ENV BASH_ENV=$HOME/.bashrc
 
-# Install dependencies and build the application
-RUN --mount=type=cache,id=go-mod,target=/go/pkg/mod \
-    --mount=type=cache,id=go-build,target=/root/.cache/go-build \
-    --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install \
-    --ignore-scripts --frozen-lockfile --stream && go mod download \
-    && go install github.com/go-task/task/v3/cmd/task@latest \
-    && GOARCH=$(dpkg --print-architecture) NODE_ENV=production task typecheck build \
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install \
+    --ignore-scripts --frozen-lockfile --stream
+
+RUN --mount=type=cache,id=go-mod,target=/go/pkg/mod go mod download
+
+# Copy the remaining source files and build the application (typecheck,
+# email templates, SPA bundle, and the Go binary are all driven by Vite).
+COPY --link . .
+
+RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build \
+    NODE_ENV=production pnpm exec tsc -b --noEmit \
+    && NODE_ENV=production pnpm exec vite build \
     && strip /srv/build/release/$(jq -r '.name' package.json) \
     && chmod +x /srv/build/release/$(jq -r '.name' package.json)
 

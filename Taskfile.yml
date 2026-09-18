@@ -173,23 +173,33 @@ tasks:
       BUILD_DATE:
         sh: date -u +%Y-%m-%dT%H:%M:%SZ
     cmds:
-      - docker build -f ./deploy/Dockerfile . --build-arg DISTROLESS_TAG=debug-nonroot --build-arg BUILD_VERSION={{.APP_VERSION}} --build-arg BUILD_HASH={{.BUILD_HASH}} --build-arg BUILD_DATE={{.BUILD_DATE}} -t {{.IMAGE}}:latest-dev -t {{.IMAGE}}:{{.APP_VERSION}}-dev {{.CLI_ARGS}}
+      - |
+          docker build -f ./deploy/Dockerfile . \
+          --build-arg DISTROLESS_TAG=debug-nonroot \
+          --build-arg BUILD_VERSION={{.APP_VERSION}} \
+          --build-arg BUILD_HASH={{.BUILD_HASH}} \
+          --build-arg BUILD_DATE={{.BUILD_DATE}} \
+          -t {{.IMAGE}}:{{.APP_VERSION}}-dev \
+          -t {{.IMAGE}}:latest-dev {{.CLI_ARGS}}
       - docker image list --filter reference={{.IMAGE}}:*
-
-  docker:push:
-    desc: Push the Docker image
-    cmd: docker push {{.IMAGE}}:latest-dev && docker push {{.IMAGE}}:{{.APP_VERSION}}-dev
 
   docker:run:
     desc: Run the Docker image
-    cmd: docker run --network=host --rm -it --env-file=.env.local -v $(pwd)/storage:/srv/storage {{.CLI_ARGS}}
+    cmd: |
+      docker run --network=host --rm -it \
+      --env-file=.env.local -v $(pwd)/storage:/srv/storage \
+      {{.CLI_ARGS}} {{.IMAGE}}:latest-dev
 
   docker:shell:
     desc: Open a shell in the Docker image
     cmds:
       - task: docker:run
         vars:
-          CLI_ARGS: --entrypoint sh {{.IMAGE}}:latest-dev
+          CLI_ARGS: --entrypoint /busybox/sh
+
+  docker:push:
+    desc: Push the Docker image
+    cmd: docker push {{.IMAGE}}:latest-dev && docker push {{.IMAGE}}:{{.APP_VERSION}}-dev
 
   docker:prune:
     desc: Remove the Docker image
