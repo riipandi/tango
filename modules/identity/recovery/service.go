@@ -121,6 +121,7 @@ func (r *Recovery) ForgotPassword(ctx context.Context, identityText string) erro
 		Subject:  "Reset your password",
 		Template: "password-reset",
 		Data: map[string]any{
+			"Email":     u.Email,
 			"ResetLink": r.appURL + "/reset-password?token=" + raw,
 		},
 	})

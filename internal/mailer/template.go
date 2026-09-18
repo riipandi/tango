@@ -77,3 +77,19 @@ func (s *templateStore) pair(name string) (*templatePair, error) {
 	s.mu.Unlock()
 	return pair, nil
 }
+
+// Warm parses every compiled template at startup so a broken or
+// half-compiled template pair fails the boot, not the first send.
+func (s *templateStore) Warm() error {
+	matches, err := fs.Glob(s.fs, "*_html.tmpl")
+	if err != nil {
+		return fmt.Errorf("list templates: %w", err)
+	}
+	for _, match := range matches {
+		name := strings.TrimSuffix(match, "_html.tmpl")
+		if _, err := s.pair(name); err != nil {
+			return err
+		}
+	}
+	return nil
+}

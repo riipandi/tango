@@ -29,7 +29,9 @@ type smtpMailer struct {
 	sendTimeout time.Duration
 }
 
-// New builds a mailer from SMTP settings.
+// New builds a mailer from SMTP settings. Every compiled template
+// is parsed eagerly so a broken template fails the boot, not the
+// first send.
 func New(cfg config.MailerConfig, opts Options) Mailer {
 	if opts.Logger == nil {
 		opts.Logger = loglayer.NewMock()
@@ -37,9 +39,13 @@ func New(cfg config.MailerConfig, opts Options) Mailer {
 	if opts.SendTimeout <= 0 {
 		opts.SendTimeout = DefaultSendTimeout
 	}
+	store := newTemplateStore(opts.Templates, opts.LogoURL)
+	if err := store.Warm(); err != nil {
+		panic("mailer: " + err.Error())
+	}
 	return &smtpMailer{
 		cfg:         cfg,
-		store:       newTemplateStore(opts.Templates, opts.LogoURL),
+		store:       store,
 		log:         opts.Logger,
 		sendTimeout: opts.SendTimeout,
 	}

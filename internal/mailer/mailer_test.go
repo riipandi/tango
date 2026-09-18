@@ -52,6 +52,16 @@ func TestRenderUnknownTemplate(t *testing.T) {
 	require.ErrorContains(t, err, "parse template")
 }
 
+// TestWarmRejectsIncompletePair fails the boot when a template pair
+// is missing its text variant.
+func TestWarmRejectsIncompletePair(t *testing.T) {
+	fs := fstest.MapFS{
+		"broken_html.tmpl": &fstest.MapFile{Data: []byte(`{{define "root"}}x{{end}}`)},
+	}
+	store := newTemplateStore(fs, "")
+	assert.ErrorContains(t, store.Warm(), "parse template broken")
+}
+
 func TestTemplateCacheParsesOnce(t *testing.T) {
 	store := newTemplateStore(testFS(), "")
 

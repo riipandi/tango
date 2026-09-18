@@ -97,6 +97,9 @@ func TestForgotPasswordServiceQueuesOneEmail(t *testing.T) {
 	require.Len(t, mail.messages, 1)
 	assert.Equal(t, u.Email, mail.messages[0].To)
 	assert.Contains(t, mail.messages[0].Data["ResetLink"], "/reset-password?token=")
+	// The template greets with the address; a missing key renders an
+	// empty <strong> in the HTML body.
+	assert.Equal(t, u.Email, mail.messages[0].Data["Email"])
 	require.Len(t, *events, 1)
 	assert.Equal(t, "password.reset_requested", (*events)[0].Action)
 }
