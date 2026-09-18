@@ -6,9 +6,11 @@
 // and refresh POST to the same-origin /api/auth/token endpoint with
 // credentials: include, so the browser attaches the HttpOnly cookies
 // and the worker keeps just the short-lived access token in memory.
+import { ofetch } from 'ofetch'
 
 const tokenEndpoint = '/api/auth/token'
 const signOutEndpoint = '/rpc/tango.identity.v1.AuthService/SignOut'
+const signOutFallbackEndpoint = '/api/auth/sign-out'
 
 export interface AuthSnapshot {
   accessToken: string
@@ -32,6 +34,11 @@ export class AuthError extends Error {
   }
 }
 
+// Same-origin instance: ofetch attaches cookies via credentials;
+// ignoreResponseError surfaces status through `.raw` without
+// throwing, so every branch maps onto AuthError explicitly.
+const http = ofetch.create({ credentials: 'include', ignoreResponseError: true })
+
 let accessToken: string | null = null
 let expiresAtMs = 0
 
@@ -45,24 +52,16 @@ function reset(): void {
 // callBridge posts to the token endpoint; the browser attaches the
 // HttpOnly cookies, the answer carries the access token only.
 async function callBridge(): Promise<AuthSnapshot> {
-  const response = await fetch(tokenEndpoint, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' }
-  })
+  const response = await http.raw<BridgeResponse>(tokenEndpoint, { method: 'POST' })
   if (response.status === 401) {
     reset()
     throw new AuthError('session expired', 401)
   }
-  if (!response.ok) {
-    throw new AuthError(`token bridge failed with ${response.status}`, response.status)
-  }
-  const body = (await response.json()) as BridgeResponse
-  if (!body.access_token || body.token_type !== 'Bearer') {
+  if (!response.ok || !response._data || response._data.token_type !== 'Bearer') {
     throw new AuthError('token bridge returned an unexpected payload', response.status)
   }
-  accessToken = body.access_token
-  expiresAtMs = Date.parse(body.expires_at)
+  accessToken = response._data.access_token
+  expiresAtMs = Date.parse(response._data.expires_at)
   return { accessToken, expiresAtMs }
 }
 
@@ -112,28 +111,21 @@ export async function refresh(): Promise<AuthSnapshot> {
 export async function signOut(): Promise<void> {
   try {
     const token = await getAccessToken()
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      'connect-protocol-version': '1'
-    }
-    if (token) {
-      headers.authorization = `Bearer ${token}`
-    }
-    const response = await fetch(signOutEndpoint, {
+    const response = await http.raw(signOutEndpoint, {
       method: 'POST',
-      credentials: 'include',
-      headers
+      headers: token
+        ? {
+            'connect-protocol-version': '1',
+            authorization: `Bearer ${token}`
+          }
+        : { 'connect-protocol-version': '1' }
     })
     if (response.ok) return
     if (response.status !== 401) {
       throw new AuthError(`sign out failed with ${response.status}`, response.status)
     }
-    // Cookie fallback: the refresh cookie still identifies the
-    // family even though the bearer died.
-    const fallback = await fetch('/api/auth/sign-out', {
-      method: 'POST',
-      credentials: 'include'
-    })
+    // Cookie fallback: the refresh cookie still identifies the family even though the bearer died.
+    const fallback = await http.raw(signOutFallbackEndpoint, { method: 'POST' })
     if (!fallback.ok) {
       throw new AuthError(`sign out failed with ${fallback.status}`, fallback.status)
     }

@@ -8,13 +8,16 @@ import * as worker from './auth.worker'
 const { AuthError } = worker
 
 // bridgeBody renders the Go tokenBridgeResponse shape.
-function bridgeBody(accessToken: string, expiresInSeconds = 600): string {
-  return JSON.stringify({
-    access_token: accessToken,
-    token_type: 'Bearer',
-    expires_in: expiresInSeconds,
-    expires_at: new Date(Date.now() + expiresInSeconds * 1000).toISOString()
-  })
+function bridgeBody(accessToken: string, expiresInSeconds = 600): Response {
+  return new Response(
+    JSON.stringify({
+      access_token: accessToken,
+      token_type: 'Bearer',
+      expires_in: expiresInSeconds,
+      expires_at: new Date(Date.now() + expiresInSeconds * 1000).toISOString()
+    }),
+    { status: 200, headers: { 'content-type': 'application/json' } }
+  )
 }
 
 // One shared fetch spy for the whole file: re-implications reset the
@@ -43,7 +46,7 @@ describe('auth worker', () => {
   it('bootstraps from the cookie bridge and caches the token', async () => {
     const fetchMock = mockFetch((url) => {
       expect(url).toBe('/api/auth/token')
-      return new Response(bridgeBody('tok-1'), { status: 200 })
+      return bridgeBody('tok-1')
     })
 
     const snapshot = await worker.bootstrap()
@@ -63,12 +66,11 @@ describe('auth worker', () => {
   })
 
   it('refreshes through the bridge when the cached token passes its window', async () => {
-    mockFetch(() => new Response(bridgeBody('tok-short', 1), { status: 200 }))
+    mockFetch(() => bridgeBody('tok-short', 1))
     await worker.bootstrap()
 
-    // The 1s token is inside the 5s safety window → immediate
-    // refresh on the next request.
-    mockFetch(() => new Response(bridgeBody('tok-2'), { status: 200 }))
+    // The 1s token is inside the 5s safety window → immediate efresh on the next request.
+    mockFetch(() => bridgeBody('tok-2'))
     await expect(worker.getAccessToken()).resolves.toBe('tok-2')
   })
 
@@ -85,16 +87,18 @@ describe('auth worker', () => {
   })
 
   it('signs out over Connect with bearer injection and clears memory', async () => {
-    mockFetch(() => new Response(bridgeBody('tok-3'), { status: 200 }))
+    mockFetch(() => bridgeBody('tok-3'))
     await worker.bootstrap()
 
     const fetchMock = mockFetch((url, init) => {
       expect(url).toBe('/rpc/tango.identity.v1.AuthService/SignOut')
-      expect(init?.headers).toMatchObject({
-        authorization: 'Bearer tok-3',
-        'connect-protocol-version': '1'
+      const headers = new Headers(init?.headers)
+      expect(headers.get('authorization')).toBe('Bearer tok-3')
+      expect(headers.get('connect-protocol-version')).toBe('1')
+      return new Response('{"status":"ok"}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
       })
-      return new Response('{"status":"ok"}', { status: 200 })
     })
 
     await worker.signOut()
@@ -106,7 +110,7 @@ describe('auth worker', () => {
   })
 
   it('falls back to the REST sign-out when the bearer died', async () => {
-    mockFetch(() => new Response(bridgeBody('tok-4'), { status: 200 }))
+    mockFetch(() => bridgeBody('tok-4'))
     await worker.bootstrap()
 
     mockFetch((url) => {
@@ -114,14 +118,17 @@ describe('auth worker', () => {
         return new Response('{"code":"unauthenticated"}', { status: 401 })
       }
       expect(url).toBe('/api/auth/sign-out')
-      return new Response('{"signed_out":true}', { status: 200 })
+      return new Response('{"signed_out":true}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
     })
 
     await worker.signOut()
   })
 
   it('never exposes a refresh token in any payload it returns', async () => {
-    mockFetch(() => new Response(bridgeBody('tok-5'), { status: 200 }))
+    mockFetch(() => bridgeBody('tok-5'))
     const snapshot = await worker.bootstrap()
     expect(Object.keys(snapshot ?? {})).toEqual(['accessToken', 'expiresAtMs'])
   })

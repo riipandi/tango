@@ -105,6 +105,7 @@ sbom-*
  /specs/
  /gen/
  *.gen.ts
+.rpc-gen.stamp
 
 # TanStack Router
 .tanstack/

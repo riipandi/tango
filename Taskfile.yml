@@ -154,7 +154,9 @@ tasks:
     desc: Fail when generated code is out of date with the contracts
     cmds:
       - sh -c 'find api/connect buf.yaml buf.gen.yaml -type f | LC_ALL=C sort | xargs shasum -a 256 > /tmp/rpc-stamp.now'
+      - sh -c 'test -f .rpc-gen.stamp || (echo "no contract stamp yet — run task rpc:generate" && exit 1)'
       - sh -c 'diff .rpc-gen.stamp /tmp/rpc-stamp.now || (echo "contracts changed — run task rpc:generate" && exit 1)'
+
   # ----------------------------------------------------------------------------
   # Dependencies
   # ----------------------------------------------------------------------------
