@@ -36,6 +36,8 @@ var (
 func StartMailpit(ctx context.Context, t testing.TB) *Mailpit {
 	t.Helper()
 
+	SkipWithoutDocker(t)
+
 	mailpitOnce.Do(func() {
 		container, startErr := tcmp.Run(ctx, mailpitImage,
 			tcmp.WithSMTPAuth("maileruser1", "mailerpass1"),

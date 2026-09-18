@@ -3,6 +3,9 @@ package testutils
 import (
 	"context"
 	"fmt"
+	"testing"
+
+	tc "github.com/testcontainers/testcontainers-go"
 )
 
 // Paths used inside the container for dump/restore/import file exchange.
@@ -84,4 +87,29 @@ func (e *ContainerExecutor) PSQL(ctx context.Context, _ []string, args []string)
 	}
 	args = stripHostPort(args)
 	return e.PG.execPSQL(ctx, args)
+}
+
+// SkipWithoutDocker skips the test when no healthy Docker provider is
+// available. This lets container-based integration tests skip on hosts
+// without a daemon — e.g. GitHub-hosted macOS runners, which lack
+// nested virtualization and cannot run a Linux VM for Docker. It
+// mirrors testcontainers.SkipIfProviderIsNotHealthy but accepts
+// testing.TB.
+func SkipWithoutDocker(t testing.TB) {
+	t.Helper()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Skipf("docker provider unavailable: %v", r)
+		}
+	}()
+
+	provider, err := tc.ProviderDocker.GetProvider()
+	if err != nil {
+		t.Skipf("docker is not running, skipping container test: %s", err)
+	}
+	err = provider.Health(context.Background())
+	if err != nil {
+		t.Skipf("docker is not running, skipping container test: %s", err)
+	}
 }

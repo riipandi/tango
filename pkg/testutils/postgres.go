@@ -34,6 +34,8 @@ var (
 func StartPostgres(ctx context.Context, t testing.TB) *Postgres {
 	t.Helper()
 
+	SkipWithoutDocker(t)
+
 	postgresOnce.Do(func() {
 		sharedPostgres, sharedPGErr = startPostgres(ctx)
 	})
@@ -89,7 +91,8 @@ func (p *Postgres) CopyFileFromContainer(ctx context.Context, containerPath, hos
 	}
 	defer reader.Close()
 
-	if err := os.MkdirAll(filepath.Dir(hostPath), 0o755); err != nil {
+	err = os.MkdirAll(filepath.Dir(hostPath), 0o755)
+	if err != nil {
 		return fmt.Errorf("create host dir: %w", err)
 	}
 
@@ -99,8 +102,10 @@ func (p *Postgres) CopyFileFromContainer(ctx context.Context, containerPath, hos
 	}
 	defer f.Close()
 
-	_, err = io.Copy(f, reader)
-	return err
+	if _, err := io.Copy(f, reader); err != nil {
+		return fmt.Errorf("write host file: %w", err)
+	}
+	return nil
 }
 
 // execPGDump runs pg_dump inside the container, writing to a container

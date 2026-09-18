@@ -19,7 +19,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 - `task test` — full gate: Go release-tag suite + debug-tag suite + frontend. Run one package with `task test:go -- ./modules/identity/...`.
 - `task test:go:debug` covers `cmd/...` + `database/...`; the release-tag suite is `go test -tags release ./...`. The full gate is all three suites.
 - `task lint` — golangci-lint + oxlint. `task check` — go vet + format check. `task format` — gofmt + oxfmt. `task typecheck` — `tsc -b --noEmit`.
-- Integration tests use testcontainers (Postgres 18, Mailpit) and fail fast without a Docker daemon.
+- Integration tests use testutils.StartPostgres/StartMailpit/StartMinIO (testcontainers; Postgres 18, Mailpit). They fail fast on a broken daemon, and skip via `testutils.SkipWithoutDocker` when no Docker daemon is available — the macOS CI job has none (GitHub-hosted macOS runners lack nested virtualization; container tests only run on Linux).
 
 ## Architecture
 

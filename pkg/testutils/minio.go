@@ -33,6 +33,8 @@ var (
 func StartMinIO(ctx context.Context, t testing.TB) *MinIO {
 	t.Helper()
 
+	SkipWithoutDocker(t)
+
 	minioOnce.Do(func() {
 		container, startErr := tcminio.Run(ctx, minioImage,
 			tcminio.WithUsername("minioadmin"),
