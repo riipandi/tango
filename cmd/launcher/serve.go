@@ -116,8 +116,12 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	if err != nil {
 		return fmt.Errorf("mount email templates: %w", err)
 	}
+	// The email logo is the bundled static asset; application image
+	// uploads are excluded, so templates need an absolute URL.
+	logoURL := strings.TrimRight(cfg.Public.BaseURL, "/") + "/static/images/logoEmail.svg"
 	ml := mailer.New(cfg.Mailer, mailer.Options{
 		Templates: templates,
+		LogoURL:   logoURL,
 		Logger:    lg,
 	})
 
