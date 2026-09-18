@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_ogRYcyMGKD
+createdAt: 2026-09-17T09:39:30.596574
+updatedAt: 2026-09-18T10:49:42.348635
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_FRoYxGubpu
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: application/json
+description: List all webhook deliveries — event filter; redacted response metadata only
+headers: []
+method: GET
+name: List all webhook deliveries
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/webhook-deliveries?page=1&limit=20
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

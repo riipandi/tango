@@ -8,13 +8,13 @@ description: Prepare development environment
 
 inputs:
   nodeVersion:
-    description: 'Nodejs version'
+    description: "Nodejs version"
     required: false
-    default: '24'
+    default: "24"
   goVersion:
-    description: 'Golang version'
+    description: "Golang version"
     required: false
-    default: '>=1.26.1'
+    default: ">=1.27.0"
 
 runs:
   using: composite
@@ -45,5 +45,5 @@ runs:
       with:
         token: ${{ github.token }}
         go-version: ${{ inputs.goVersion }}
-        cache-dependency-path: 'go.sum'
+        cache-dependency-path: "go.sum"
         cache: true

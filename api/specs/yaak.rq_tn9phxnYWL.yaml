@@ -1,0 +1,42 @@
+type: http_request
+model: http_request
+id: rq_tn9phxnYWL
+createdAt: 2026-09-13T16:08:25.491751
+updatedAt: 2026-09-18T10:25:08.372881
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_R5pypBKj8u
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "code": "PXXXXXXX",
+      "decision": "approve"
+    }
+bodyType: application/json
+description: Approve or deny a device login request; approval requires fresh passkey reauthentication
+headers: []
+method: POST
+name: Decide device login request
+sortPriority: 3000.0
+url: ${[ apiBaseURL ]}/api/device-login/verification/decision
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

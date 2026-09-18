@@ -1,0 +1,44 @@
+type: http_request
+model: http_request
+id: rq_b782ehHnny
+createdAt: 2026-09-14T09:51:54.756324
+updatedAt: 2026-09-18T10:40:12.206032
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_A9UqA9T6sM
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "first_name": "Admin",
+      "last_name": "Sistem",
+      "display_name": "Admin",
+      "locale": "id-ID"
+    }
+bodyType: application/json
+description: 'Update the currently authenticated user''s information — tango deviation: profile fields only, email stays admin-gated'
+headers: []
+method: PUT
+name: Update current user
+sortPriority: 17000.0
+url: ${[ apiBaseURL ]}/api/users/me
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

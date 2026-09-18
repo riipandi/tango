@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_ykxJHjw3fT
+createdAt: 2026-09-13T16:07:52.475216
+updatedAt: 2026-09-18T10:25:08.370366
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_R5pypBKj8u
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '{}'
+bodyType: null
+description: Create a short-lived request that can be approved from another authenticated device
+headers: []
+method: POST
+name: Create device login request
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/device-login/requests
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

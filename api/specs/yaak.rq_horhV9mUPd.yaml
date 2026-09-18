@@ -1,0 +1,50 @@
+type: http_request
+model: http_request
+id: rq_horhV9mUPd
+createdAt: 2026-09-14T09:51:33.622165
+updatedAt: 2026-09-18T10:35:03.321719
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_yV4ETyEgLP
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "username": "jane",
+      "email": "jane@example.com",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "display_name": "Jane D",
+      "is_admin": false
+    }
+bodyType: application/json
+description: Create a new user
+headers:
+- enabled: false
+  name: X-API-KEY
+  value: dummy
+  id: null
+method: POST
+name: Create user
+sortPriority: 8000.0
+url: ${[ apiBaseURL ]}/api/users
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

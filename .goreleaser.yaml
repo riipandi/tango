@@ -8,7 +8,7 @@ report_sizes: true
 dist: ./release
 
 metadata:
-  mod_timestamp: '{{ .CommitTimestamp }}'
+  mod_timestamp: "{{ .CommitTimestamp }}"
 
 env:
   - CGO_ENABLED=0
@@ -28,24 +28,24 @@ before:
 builds:
   - id: build_noncgo
     main: ./cmd
-    binary: '{{.Os}}_{{.Arch}}/{{.ProjectName}}'
+    binary: "{{.Os}}_{{.Arch}}/{{.ProjectName}}"
     no_main_check: true
     no_unique_dist_dir: true
-    goos: ['darwin', 'linux', 'windows']
-    goarch: ['amd64', 'arm64']
+    goos: ["darwin", "linux", "windows"]
+    goarch: ["amd64", "arm64"]
     buildmode: pie
-    tags: ['release']
-    flags: ['-trimpath', '-buildvcs=false']
+    tags: ["release"]
+    flags: ["-trimpath", "-buildvcs=false"]
     ldflags:
       - -w -s -extldflags '-static'
-      - -X 'tango/internal/config.AppVersion={{.Tag}}'
-      - -X 'tango/internal/config.BuildHash={{.ShortCommit}}'
-      - -X 'tango/internal/config.BuildDate={{.Date}}'
+      - -X 'github.com/riipandi/tango/internal/config.AppVersion={{.Tag}}'
+      - -X 'github.com/riipandi/tango/internal/config.BuildHash={{.ShortCommit}}'
+      - -X 'github.com/riipandi/tango/internal/config.BuildDate={{.Date}}'
 
 archives:
   - formats: [tar.gz]
     ids: [build_noncgo]
-    name_template: '{{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}'
+    name_template: "{{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}"
     format_overrides:
       - goos: windows
         formats: [zip]
@@ -54,19 +54,19 @@ archives:
       - CHANGELOG.md
 
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "checksums.txt"
 
 snapshot:
-  version_template: 'v{{ incpatch .Version }}'
+  version_template: "v{{ incpatch .Version }}"
 
 changelog:
   use: github
   sort: asc
   filters:
     exclude:
-      - '^examples:'
-      - '^docs:'
-      - '^test:'
+      - "^examples:"
+      - "^docs:"
+      - "^test:"
 
 release:
   prerelease: auto

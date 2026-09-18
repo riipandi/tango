@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_ec8TojUzzD
+createdAt: 2026-09-13T07:28:34.829631
+updatedAt: 2026-09-18T10:37:04.235358
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_qdmCW3Pvmg
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Tango alias of GET /api/oidc/users/me/authorized-clients
+headers: []
+method: GET
+name: '[Tango] List authorized clients for current user (alias)'
+sortPriority: 3000.0
+url: ${[ apiBaseURL ]}/api/oidc/authorized-clients
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

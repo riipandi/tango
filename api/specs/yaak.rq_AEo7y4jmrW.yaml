@@ -1,0 +1,53 @@
+type: http_request
+model: http_request
+id: rq_AEo7y4jmrW
+createdAt: 2026-09-14T09:47:31.055467
+updatedAt: 2026-09-18T10:35:42.713298
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_7TmJKrJSNV
+authentication: {}
+authenticationType: null
+body:
+  text: ''
+bodyType: null
+description: 'Get a paginated list of APIs the OIDC client cannot already reach (tango: search + page/limit)'
+headers: []
+method: GET
+name: List APIs a client can still be granted access to
+sortPriority: 333.3333333333333
+url: ${[ apiBaseURL ]}/api/api-access/:clientId/assignable-apis
+urlParameters:
+- enabled: true
+  name: :clientId
+  value: dummy
+  id: s9co0bx5n7
+- enabled: true
+  name: search
+  value: ''
+  id: null
+- enabled: true
+  name: page
+  value: '1'
+  id: null
+- enabled: true
+  name: limit
+  value: '25'
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

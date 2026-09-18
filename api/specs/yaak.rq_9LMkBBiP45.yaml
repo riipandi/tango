@@ -1,0 +1,50 @@
+type: http_request
+model: http_request
+id: rq_9LMkBBiP45
+createdAt: 2026-09-14T09:49:51.617821
+updatedAt: 2026-09-18T10:38:09.641585
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_R6d4r5Gm2S
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "name": "RP",
+      "description": "Demo relying party",
+      "callback_urls": ["https://rp.example/callback"],
+      "logout_callback_urls": ["https://rp.example/logout"],
+      "launch_url": "https://rp.example",
+      "is_public": false,
+      "pkce_enabled": true,
+      "skip_consent": false,
+      "access_token_duration_minutes": 60,
+      "refresh_token_duration_minutes": 10080
+    }
+bodyType: application/json
+description: 'Create a new OIDC client (tango snake_case fields: callback_urls, pkce_enabled, access_token_duration_minutes, allowed_user_group_ids, ...)'
+headers: []
+method: POST
+name: Create OIDC client
+sortPriority: 333.3333333333333
+url: ${[ apiBaseURL ]}/api/oidc/clients
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

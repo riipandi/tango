@@ -10,7 +10,7 @@
         "isolatedModules": true,
         "jsx": "react-jsx",
         "lib": ["ESNext", "DOM", "DOM.Iterable"],
-        "module": "preserve",
+        "module": "esnext",
         "moduleDetection": "force",
         "moduleResolution": "bundler",
         "noEmit": true,
@@ -26,15 +26,15 @@
         "strict": true,
         "strictPropertyInitialization": true,
         "target": "esnext",
-        "tsBuildInfoFile": ".tanstack/tsbuildinfo",
-        "types": ["vite/client"],
+        "tsBuildInfoFile": ".output/tsbuildinfo",
+        "types": ["vite/client", "vitest/config"],
         "useDefineForClassFields": true,
         "verbatimModuleSyntax": true,
         "paths": {
             "#/*": ["./app/*"],
-            "~/*": ["./*"]
+            "~/apiclient/*": ["./api/client/*"]
         }
     },
     "include": ["**/*.ts", "**/*.tsx"],
-    "exclude": ["node_modules", "build", "web/dist", "tests-results"]
+    "exclude": [".output", ".tanstack", "build", "dist", "public", "temp", "web"]
 }

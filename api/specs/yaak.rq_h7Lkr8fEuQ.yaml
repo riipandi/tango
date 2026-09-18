@@ -1,0 +1,42 @@
+type: http_request
+model: http_request
+id: rq_h7Lkr8fEuQ
+createdAt: 2026-09-17T09:37:43.088473
+updatedAt: 2026-09-18T10:49:20.707688
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_FRoYxGubpu
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "name": "my-endpoint-renamed",
+      "enabled": true
+    }
+bodyType: application/json
+description: Update a webhook endpoint — partial update, nil fields keep values; never returns the secret
+headers: []
+method: PUT
+name: Update webhook endpoint
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/webhooks/${[ webhookId ]}
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

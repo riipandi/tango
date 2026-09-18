@@ -1,0 +1,40 @@
+type: http_request
+model: http_request
+id: rq_9G9e5GtSWL
+createdAt: 2026-09-14T09:50:24.268094
+updatedAt: 2026-09-18T10:40:12.200025
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_R6d4r5Gm2S
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: 'Get OIDC client metadata for discovery and configuration — trimmed view: has_logo, client_type, launch_url'
+headers: []
+method: GET
+name: Get client metadata
+sortPriority: 973.9877051262512
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/meta
+urlParameters:
+- enabled: true
+  name: :clientId
+  value: oidc_client_01m2fww2nvedt9phzwpxknwem2
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

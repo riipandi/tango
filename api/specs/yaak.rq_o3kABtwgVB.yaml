@@ -1,0 +1,40 @@
+type: http_request
+model: http_request
+id: rq_o3kABtwgVB
+createdAt: 2026-09-14T09:49:14.220557
+updatedAt: 2026-09-18T10:09:49.572730
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_sc8ridEHPT
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: List custom claims for a user — tango-only single-claim CRUD extension
+headers: []
+method: GET
+name: '[Tango] List custom claims for a user'
+sortPriority: 3000.0
+url: ${[ apiBaseURL ]}/api/custom-claims/user/:userId
+urlParameters:
+- enabled: true
+  name: :userId
+  value: dummy
+  id: iztfczbueq
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

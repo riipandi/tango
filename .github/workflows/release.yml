@@ -9,7 +9,7 @@ name: Release
 
 on:
   push:
-    tags: ['v*.*.*']
+    tags: ["v*.*.*"]
 
 permissions:
   contents: write
@@ -29,7 +29,7 @@ env:
 jobs:
   create-release:
     name: Create Release
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -47,18 +47,11 @@ jobs:
           # go install github.com/pressly/goose/v3/cmd/goose@latest
           # go install github.com/a-h/templ/cmd/templ@latest
 
-      - name: Setup Protobuf toolchain
-        uses: bufbuild/buf-action@v1
-        with:
-          github_token: ${{ github.token }}
-          setup_only: true
-
       - if: ${{ steps.pnpm-cache.outputs.cache-hit != 'true' }}
         name: Install dependencies
         run: |
           pnpm install --ignore-scripts --frozen-lockfile
           go mod download && go mod tidy
-          pnpm run generate:proto
           # templ generate
 
       - name: Setup golangci-lint toolchain

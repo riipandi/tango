@@ -1,0 +1,34 @@
+type: folder
+model: folder
+id: fl_YNuU3gaJNQ
+createdAt: 2026-09-13T06:23:01.744642
+updatedAt: 2026-09-18T10:05:28.913195
+workspaceId: wk_kBiMYTkhPP
+folderId: null
+authentication: {}
+authenticationType: null
+description: Discovery endpoints for OpenID Connect (RFC 8615)
+headers: []
+name: Well Known
+sortPriority: 14000.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

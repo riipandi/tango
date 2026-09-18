@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_DYnMQXNcK2
+createdAt: 2026-09-17T11:48:50.346107
+updatedAt: 2026-09-18T10:48:55.183300
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_vBTBVedf8J
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: 'Approve or deny a device code — browser session cookie; body: code, action=deny optional; 204 on success'
+headers: []
+method: POST
+name: Verify device code
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/oidc/device/verify
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

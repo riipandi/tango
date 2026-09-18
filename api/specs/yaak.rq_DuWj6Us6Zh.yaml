@@ -1,0 +1,40 @@
+type: http_request
+model: http_request
+id: rq_DuWj6Us6Zh
+createdAt: 2026-09-14T09:52:24.668816
+updatedAt: 2026-09-18T10:39:12.897604
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_yV4ETyEgLP
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Retrieve a specific user's profile picture — bare image bytes with the bundled-default fallback (no envelope)
+headers: []
+method: GET
+name: Get user profile picture
+sortPriority: 16333.333333333334
+url: ${[ apiBaseURL ]}/api/users/:userId/profile-picture.png
+urlParameters:
+- enabled: true
+  name: :userId
+  value: user_01m2fqda34fe585yz997htpkfk
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

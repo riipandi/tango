@@ -1,0 +1,43 @@
+type: http_request
+model: http_request
+id: rq_HHGDUQMDNG
+createdAt: 2026-09-14T09:48:05.961042
+updatedAt: 2026-09-18T10:07:47.599703
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_tw8Gigobcd
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "app_name": "Tango",
+      "allow_user_signups": "open",
+      "session_duration": "43200"
+    }
+bodyType: application/json
+description: Update application configuration settings — partial body; snake_case keys (upstream camelCase); sensitive values redact in the admin view
+headers: []
+method: PUT
+name: Update application configurations
+sortPriority: 333.3333333333333
+url: ${[ apiBaseURL ]}/api/application-configuration
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

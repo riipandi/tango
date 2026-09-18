@@ -1,0 +1,34 @@
+type: folder
+model: folder
+id: fl_sc8ridEHPT
+createdAt: 2026-09-13T05:45:23.469011
+updatedAt: 2026-09-18T10:14:49.936455
+workspaceId: wk_kBiMYTkhPP
+folderId: null
+authentication: {}
+authenticationType: null
+description: 'Upstream tag: Custom Claims — /api/custom-claims/{user,user-group}/*'
+headers: []
+name: Custom Claims
+sortPriority: 13010.21185794848
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

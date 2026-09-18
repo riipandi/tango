@@ -7,6 +7,7 @@
 .DS_Store?
 .memelord/
 /coverage
+/coverage.out
 /[Tt]emp/
 /[Tt]mp/
 /vendor/
@@ -82,10 +83,11 @@ compose.env*
 storybook-static/
 
 # Application data
+/.storage/
 /storage/
-web/dist/*
+web/output/*
 web/email/*
-!web/dist/.gitkeep
+!web/output/.gitkeep
 !web/email/.gitkeep
 
 # Miscellaneous

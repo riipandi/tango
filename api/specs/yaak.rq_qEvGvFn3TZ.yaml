@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_qEvGvFn3TZ
+createdAt: 2026-09-14T09:50:56.164645
+updatedAt: 2026-09-18T10:35:11.060477
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_qdmCW3Pvmg
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Get a list of OIDC clients that the current user can access
+headers: []
+method: GET
+name: List accessible OIDC clients for current user
+sortPriority: 2604.938271604938
+url: ${[ apiBaseURL ]}/api/oidc/users/me/clients
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

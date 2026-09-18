@@ -1,0 +1,44 @@
+type: http_request
+model: http_request
+id: rq_5DFq9abXwM
+createdAt: 2026-09-14T09:51:25.168774
+updatedAt: 2026-09-18T10:22:09.991509
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_hQjdk2nbAg
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: List the member user IDs of a user group — tango-only companion of PUT /users
+headers: []
+method: GET
+name: Get user groups
+sortPriority: 3000.0
+url: ${[ apiBaseURL ]}/api/users/:userId/groups
+urlParameters:
+- enabled: true
+  name: :userId
+  value: dummy
+  id: path-placeholder:0
+- enabled: true
+  name: ''
+  value: ''
+  id: FaTKZ8bZt9
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

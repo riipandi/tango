@@ -1,0 +1,46 @@
+type: http_request
+model: http_request
+id: rq_mdBPWHL2xi
+createdAt: 2026-09-14T09:47:54.459917
+updatedAt: 2026-09-18T10:39:41.308886
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_xMPwre9Zts
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "enabled": false,
+      "permission_ids": []
+    }
+bodyType: application/json
+description: Replace which permissions of an API every client registered through a Client ID Metadata Document may request
+headers: []
+method: PUT
+name: Update metadata document client access
+sortPriority: 1802.469135802469
+url: ${[ apiBaseURL ]}/api/apis/:apiId/cimd-access
+urlParameters:
+- enabled: true
+  name: :apiId
+  value: dummy
+  id: hroj865ko2
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

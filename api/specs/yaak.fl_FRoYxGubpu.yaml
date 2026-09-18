@@ -1,0 +1,34 @@
+type: folder
+model: folder
+id: fl_FRoYxGubpu
+createdAt: 2026-09-14T09:41:01.492031
+updatedAt: 2026-09-18T10:05:28.901704
+workspaceId: wk_kBiMYTkhPP
+folderId: null
+authentication: {}
+authenticationType: null
+description: 'Tango-only: /api/webhooks* and /api/webhook-logs outbound webhook surface'
+headers: []
+name: '[Tango] Webhooks'
+sortPriority: 2000.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

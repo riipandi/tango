@@ -10,25 +10,23 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-
-	"tango/internal/transport/responder"
+	"github.com/riipandi/tango/pkg/responder"
 )
 
-//go:embed all:dist
-var distFS embed.FS
+//go:embed all:output
+var webFS embed.FS
 
 func SetupStatic(r chi.Router) {
 	r.NotFound(spaHandler())
 }
 
 func spaHandler() http.HandlerFunc {
-	distSub, _ := fs.Sub(distFS, "dist")
-	fileServer := http.FileServer(http.FS(distSub))
+	webArtifact, _ := fs.Sub(webFS, "output")
+	fileServer := http.FileServer(http.FS(webArtifact))
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		// API, RPC, Well-Known, and Static endpoints should return JSON 404
+		// API, Well-Known, and Static endpoints should return JSON 404
 		if strings.HasPrefix(r.URL.Path, "/api") ||
-			strings.HasPrefix(r.URL.Path, "/rpc") ||
 			strings.HasPrefix(r.URL.Path, "/.well-known") ||
 			strings.HasPrefix(r.URL.Path, "/static") {
 			responder.NotFoundJSON(w, r)
@@ -40,7 +38,7 @@ func spaHandler() http.HandlerFunc {
 		if reqPath != "" {
 			cleanPath := filepath.Clean(reqPath)
 			if !strings.HasPrefix(cleanPath, ".") {
-				if f, err := distSub.Open(cleanPath); err == nil {
+				if f, err := webArtifact.Open(cleanPath); err == nil {
 					f.Close()
 					fileServer.ServeHTTP(w, r)
 					return
@@ -48,6 +46,6 @@ func spaHandler() http.HandlerFunc {
 			}
 		}
 
-		http.ServeFileFS(w, r, distSub, "index.html")
+		http.ServeFileFS(w, r, webArtifact, "index.html")
 	}
 }

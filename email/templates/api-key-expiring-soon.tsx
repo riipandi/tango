@@ -47,7 +47,9 @@ ApiKeyExpiringEmail.TemplateProps = {
   data: {
     name: '{{.Data.Name}}',
     apiKeyName: '{{.Data.ApiKeyName}}',
-    expiresAt: '{{.Data.ExpiresAt.Format "2006-01-02 15:04:05 MST"}}'
+    // The sender pre-formats the date: template data travels the task
+    // queue as JSON, where a time.Time would arrive as a string.
+    expiresAt: '{{.Data.ExpiresAt}}'
   }
 }
 

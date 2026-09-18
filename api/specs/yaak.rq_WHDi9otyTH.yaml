@@ -1,0 +1,40 @@
+type: http_request
+model: http_request
+id: rq_WHDi9otyTH
+createdAt: 2026-09-13T16:09:34.699095
+updatedAt: 2026-09-18T10:38:45.273647
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_iPK4Rr3SP7
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Generate a one-time access token for a specific user (admin only)
+headers: []
+method: POST
+name: Create one-time access token for user (admin)
+sortPriority: 14000.0
+url: ${[ apiBaseURL ]}/api/users/:id/one-time-access-token
+urlParameters:
+- enabled: true
+  name: :id
+  value: dummy
+  id: me91nbnqkm
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -8,6 +8,7 @@ fly apps create tango --org personal
 ```
 
 ## Attach Postgres database
+
 ```sh
 # Create volume for the data.
 fly postgres create --name tango-db --region sjc --password $(openssl rand -hex 8)

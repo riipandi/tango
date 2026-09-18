@@ -1,7 +1,15 @@
 package main
 
-import "tango/cmd/launcher"
+import (
+	"fmt"
+	"os"
+
+	"github.com/riipandi/tango/cmd/launcher"
+)
 
 func main() {
-	launcher.Execute()
+	if err := launcher.RunCLI(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

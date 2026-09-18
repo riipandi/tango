@@ -1,0 +1,42 @@
+type: http_request
+model: http_request
+id: rq_dumogyHx8S
+createdAt: 2026-09-14T09:51:58.968209
+updatedAt: 2026-09-18T10:39:33.500525
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_A9UqA9T6sM
+authentication: {}
+authenticationType: null
+body:
+  bodyType: multipart/form-data
+  form:
+  - enabled: true
+    file: /Users/ariss/Developer/github.com/riipandi/tango/web/output/images/logoEmail.svg
+    name: file
+    value: logoEmail.svg
+bodyType: multipart/form-data
+description: Update the currently authenticated user's profile picture — multipart file; stored as-is behind the MIME allowlist (upstream squares to PNG)
+headers: []
+method: PUT
+name: Update current user's profile picture
+sortPriority: 18111.111111111113
+url: ${[ apiBaseURL ]}/api/users/me/profile-picture
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

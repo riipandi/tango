@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_nSP7XyStag
+createdAt: 2026-09-13T08:48:44.907010
+updatedAt: 2026-09-18T10:37:04.228996
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_A9UqA9T6sM
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Retrieve information about the currently authenticated user
+headers: []
+method: GET
+name: Get current user
+sortPriority: 16868.312757201646
+url: ${[ apiBaseURL ]}/api/users/me
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

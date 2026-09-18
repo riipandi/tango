@@ -4,7 +4,7 @@
 # Platform options: linux/amd64 or linux/arm64
 # ARG PLATFORM=linux/amd64
 ARG DISTROLESS_TAG=nonroot
-ARG GO_VERSION=1.26.1
+ARG GO_VERSION=1.27
 
 # ------------------------------------------------------------------------------
 # Base image Go + Node.js with pnpm package manager.
@@ -14,7 +14,7 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 COREPACK_INTEGRITY_KEYS=0 DO_NOT_TRACK=1
 ENV LEFTHOOK=0 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=true CI=true
 ENV FNM_PATH=/usr/bin PNPM_HOME=/pnpm HOME=/root
 ENV PATH="$HOME/.local/share/fnm:$PNPM_HOME:$PATH"
-ARG NODE_VERSION=24.14
+ARG NODE_VERSION=24.21
 
 # Install system dependencies (optional tools for building and debugging)
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
@@ -32,12 +32,7 @@ RUN echo -e "Installing Node.js $NODE_VERSION" && touch $HOME/.bashrc \
     && echo 'eval "$(fnm env --use-on-cd --shell bash)"' >> $HOME/.bashrc && . $HOME/.bashrc \
     && fnm install ${NODE_VERSION} --corepack-enabled \
     && fnm default ${NODE_VERSION} --corepack-enabled \
-    && corepack prepare pnpm@latest-10 --activate
-
-# Install required SDK and toolchain
-RUN --mount=type=cache,id=go-sdk,target=/root/.cache/go-sdk \
-    go install github.com/swaggo/swag/cmd/swag@latest \
-    && go install github.com/bufbuild/buf/cmd/buf@latest
+    && corepack enable pnpm
 
 # Add tini for signal handling and zombie reaping
 RUN set -eux; \
@@ -57,26 +52,23 @@ WORKDIR /srv
 # Install dependencies and build the application.
 # ------------------------------------------------------------------------------
 FROM base AS builder
-ENV CGO_ENABLED=0 GOOS=linux GOEXPERIMENT=jsonv2
+ENV CGO_ENABLED=0 GOOS=linux
 
 # Copy the source files
 COPY --link . .
 
-# Bash will load fnm function via .bashrc. Since we're starting non-interactive shell,
-# we wil need to tell bash to load .bashrc manually.
+# Bash will load fnm function via .bashrc. Since we're starting non-interactive
+# shell, we wil need to tell bash to load .bashrc manually.
 SHELL ["/usr/bin/bash", "-c"]
 ENV BASH_ENV=$HOME/.bashrc
 
 # Install dependencies and build the application
 RUN --mount=type=cache,id=go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=go-build,target=/root/.cache/go-build \
-    --mount=type=cache,id=go-sdk,target=/root/.cache/go-sdk \
     --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install \
-    --ignore-scripts --frozen-lockfile --stream && go mod download && go mod tidy \
-    && go get -tool google.golang.org/protobuf/cmd/protoc-gen-go@latest \
-    && go get -tool connectrpc.com/connect/cmd/protoc-gen-connect-go@latest \
-    && pnpm run generate:proto && pnpm exec tsc -b --noEmit --extendedDiagnostics \
-    && GOARCH=$(dpkg --print-architecture) NODE_ENV=production pnpm exec vite build \
+    --ignore-scripts --frozen-lockfile --stream && go mod download \
+    && go install github.com/go-task/task/v3/cmd/task@latest \
+    && GOARCH=$(dpkg --print-architecture) NODE_ENV=production task typecheck build \
     && strip /srv/build/release/$(jq -r '.name' package.json) \
     && chmod +x /srv/build/release/$(jq -r '.name' package.json)
 
@@ -89,7 +81,7 @@ FROM base AS pruner
 COPY --from=builder /srv/build/release /srv
 
 # Create necessary data directories and set permissions
-RUN mkdir -p /srv/storage/{backup,certs,data,logs,uploads} && chmod -R 0775 /srv/storage
+RUN mkdir -p /srv/storage/{backup,certs,data,keys,logs,uploads} && chmod -R 0775 /srv/storage
 
 # ------------------------------------------------------------------------------
 # Production image, copy build output files and run the application.
@@ -100,42 +92,6 @@ FROM gcr.io/distroless/cc-debian13:${DISTROLESS_TAG} AS runner
 ARG APP_MODE=production
 ARG APP_LOG_LEVEL=info
 ARG APP_LOG_TRANSPORT=console
-
-# Read application environment variables
-ARG APP_SECRET_KEY
-ARG AUTH_PRIVATE_KEY
-ARG AUTH_PUBLIC_KEY
-ARG AUTH_SECRET_KEY
-ARG AUTH_ACCESS_TOKEN_EXPIRY
-ARG AUTH_REFRESH_TOKEN_EXPIRY
-ARG AUTH_GITHUB_CLIENT_ID
-ARG AUTH_GITHUB_CLIENT_SECRET
-ARG AUTH_GOOGLE_CLIENT_ID
-ARG AUTH_GOOGLE_CLIENT_SECRET
-ARG DATABASE_URL
-ARG MAILER_FROM_EMAIL
-ARG MAILER_FROM_NAME
-ARG MAILER_SMTP_HOST
-ARG MAILER_SMTP_PORT
-ARG MAILER_SMTP_USERNAME
-ARG MAILER_SMTP_PASSWORD
-ARG MAILER_SMTP_SECURE
-ARG PUBLIC_BASE_URL
-ARG PUBLIC_S3_ASSETS_URL
-ARG PUBLIC_TRUSTED_ORIGINS
-ARG PUBLIC_JWT_ACCESS_TOKEN_EXPIRY
-ARG PUBLIC_JWT_REFRESH_TOKEN_EXPIRY
-ARG PUBLIC_RATE_LIMIT_DEFAULT_MAX
-ARG PUBLIC_RATE_LIMIT_DEFAULT_WINDOW
-ARG STORAGE_MAX_UPLOAD_SIZE
-ARG STORAGE_S3_ACCESS_KEY_ID
-ARG STORAGE_S3_BUCKET_DEFAULT
-ARG STORAGE_S3_ENDPOINT_URL
-ARG STORAGE_S3_FORCE_PATH_STYLE
-ARG STORAGE_S3_PATH_PREFIX
-ARG STORAGE_S3_REGION
-ARG STORAGE_S3_SECRET_ACCESS_KEY
-ARG STORAGE_S3_SIGNED_URL_EXPIRES
 
 # Copy the build output files and some necessary system utilities from previous stage.
 # To enhance security, consider avoiding the copying of sysutils.

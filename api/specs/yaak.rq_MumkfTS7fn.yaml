@@ -1,0 +1,52 @@
+type: http_request
+model: http_request
+id: rq_MumkfTS7fn
+createdAt: 2026-09-14T09:49:59.972647
+updatedAt: 2026-09-18T10:37:53.731359
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_R6d4r5Gm2S
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "name": "RP updated",
+      "description": "Demo relying party",
+      "callback_urls": ["https://rp.example/callback"],
+      "logout_callback_urls": ["https://rp.example/logout"],
+      "launch_url": "https://rp.example",
+      "is_public": false,
+      "pkce_enabled": true,
+      "skip_consent": true
+    }
+bodyType: application/json
+description: Update an existing OIDC client (tango snake_case fields; nil/omitted fields keep current values)
+headers: []
+method: PUT
+name: Update OIDC client
+sortPriority: 802.4691358024692
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId
+urlParameters:
+- enabled: true
+  name: :clientId
+  value: dummy
+  id: vvmptumznj
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

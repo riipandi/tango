@@ -18,16 +18,16 @@
             }
         }
     ],
-    "experimentalSortImports": {
+    "sortImports": {
         "order": "asc",
         "groups": [["builtin", "external"], ["internal"], ["parent", "sibling", "index"]],
-        "internalPattern": ["#/", "~/"],
+        "internalPattern": ["#/", "~/apiclient/"],
         "partitionByComment": false,
         "partitionByNewline": false,
         "newlinesBetween": false,
         "ignoreCase": true
     },
-    "experimentalSortPackageJson": {
+    "sortPackageJson": {
         "sortScripts": false
     },
     "ignorePatterns": [
@@ -36,15 +36,12 @@
         ".wrangler",
         "**/*.md",
         "**/*.mdx",
-        "**/*.go",
         "**/*.yml",
         "**/*.yaml",
         "**/*.toml",
-        "generated/**",
-        "/api/**",
-        "/assets/**",
-        "/build/**",
+        "**/*.tmpl",
         "/public/**",
-        "/web/dist/**"
+        "/temp/**",
+        "/index.html"
     ]
 }

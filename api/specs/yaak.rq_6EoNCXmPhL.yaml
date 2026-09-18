@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_6EoNCXmPhL
+createdAt: 2026-09-17T11:49:07.684603
+updatedAt: 2026-09-18T10:48:55.188574
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_vBTBVedf8J
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: 'Device grant token poll — Basic client auth; body: grant_type=urn:ietf:params:oauth:grant-type:device_code, device_code; answers authorization_pending/slow_down/expired_token/access_denied per RFC 8628 §3.5'
+headers: []
+method: POST
+name: Device grant token poll
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/oidc/token
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

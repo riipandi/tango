@@ -1,0 +1,43 @@
+type: http_request
+model: http_request
+id: rq_D9SADio28m
+createdAt: 2026-09-13T19:22:15.294354
+updatedAt: 2026-09-18T10:07:09.765915
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_5dL7rZY8Un
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "name": "CI Deploy Key",
+      "description": "Created from Yaak",
+      "expires_at": "2027-01-01T00:00:00Z"
+    }
+bodyType: application/json
+description: 'Create a new API key for the current user (tango: name + expires_at required, description optional)'
+headers: []
+method: POST
+name: Create API key
+sortPriority: 333.3333333333333
+url: ${[ apiBaseURL ]}/api/api-keys
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -1,0 +1,48 @@
+type: http_request
+model: http_request
+id: rq_z7AXTcG7wN
+createdAt: 2026-09-13T16:08:36.116262
+updatedAt: 2026-09-18T10:25:08.371571
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_R5pypBKj8u
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Wait for a device login decision and create a browser session after it has been approved — the polling device authenticates with the X-Device-Token header (or tango_device_login cookie) from create
+headers:
+- enabled: true
+  name: X-Device-Token
+  value: REPLACE_DEVICE_TOKEN
+  id: null
+method: POST
+name: Exchange device login request
+sortPriority: 1000.0
+url: ${[ apiBaseURL ]}/api/device-login/requests/:id/exchange
+urlParameters:
+- enabled: true
+  name: :id
+  value: dummy
+  id: l83g0a99dx
+- enabled: true
+  name: ''
+  value: ''
+  id: qWppdWPDXK
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

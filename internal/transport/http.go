@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-
-	"tango/internal/transport/handler"
-	"tango/internal/transport/middleware"
-	"tango/internal/transport/routes"
-	"tango/web"
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/web"
 )
 
 type HTTPServer struct {
@@ -18,22 +18,54 @@ type HTTPServer struct {
 	Server *http.Server
 }
 
-func NewHTTPServer() *HTTPServer {
+// RouteSet carries the explicit route-mount callbacks from the
+// application runtime so the transport boundary needs no registry.
+type RouteSet struct {
+	MountRoot func(chi.Router)
+	MountAPI  func(chi.Router)
+	// RequireSession protects metadata endpoints that upstream serves
+	// to any signed-in user; nil leaves those routes unmounted.
+	RequireSession kernel.Guard
+}
+
+// NewHTTPServer wires middleware, core routes, and runtime routes.
+// The checks back the API readiness endpoint; each check is owned by
+// the composition root.
+func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limiter func(http.Handler) http.Handler, latest LatestVersionSource, checks []HealthCheck) *HTTPServer {
 	r := chi.NewRouter()
 
-	r.Use(middleware.Logger())
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RequestLogger(log))
 	r.Use(middleware.JSONRecoverer)
 	r.Use(middleware.CORS())
 
-	// Well Known: Discovery endpoints for OpenID Connect, etc.
-	r.Get("/.well-known/jwks.json", handler.NotImplementedHandler) // Get JSON Web Key Set (JWKS)
-	r.Get("/.well-known/version", handler.NotImplementedHandler)   // Get current application version
+	r.Get("/static/*", StaticAssetsHandler)
+	// Root healthz is liveness: the process is up, dependencies are
+	// not touched so a broken database cannot restart the pod loop.
+	r.Get("/healthz", RootHealthzHandler)
+	r.Get("/.well-known/version", VersionHandler)
 
-	r.Route("/api", routes.RegisterAPI)
-	r.Mount("/rpc", http.StripPrefix("/rpc", DefineRPCHandler()))
-	r.Get("/static/*", handler.StaticAssetsHandler)
+	if routes.MountRoot != nil {
+		routes.MountRoot(r)
+	}
 
-	// Render frontend SPA (must be last)
+	// Mount the shared /api group.
+	r.Route("/api", func(r chi.Router) {
+		if limiter != nil {
+			r.Use(limiter)
+		}
+		r.Get("/", APIRootHandler)
+		r.Get("/healthz", newHealthHandler(checks).ServeHTTP)
+		if routes.RequireSession != nil {
+			r.Get("/version/current", routes.RequireSession(http.HandlerFunc(VersionCurrentHandler)).ServeHTTP)
+		}
+		r.Get("/version/latest", VersionLatestHandler(latest))
+		if routes.MountAPI != nil {
+			routes.MountAPI(r)
+		}
+	})
+
+	// Mount the SPA fallback last.
 	web.SetupStatic(r)
 
 	return &HTTPServer{Router: r}
@@ -49,11 +81,16 @@ func (s *HTTPServer) ListenAndServe(addr string) error {
 		Handler:           s.Router,
 		Protocols:         protocols,
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	return s.Server.ListenAndServe()
 }
 
 func (s *HTTPServer) Shutdown(ctx context.Context) error {
+	if s.Server == nil {
+		return nil
+	}
 	return s.Server.Shutdown(ctx)
 }

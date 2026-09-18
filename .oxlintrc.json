@@ -1,8 +1,11 @@
 {
     "$schema": "./node_modules/oxlint/configuration_schema.json",
-    "plugins": ["unicorn", "typescript", "oxc"],
-    "rules": {
-        "typescript/triple-slash-reference": "allow"
+    "options": {
+        "typeAware": true,
+        "typeCheck": true
     },
-    "ignorePatterns": ["**/generated/**"]
+    "rules": {
+        "typescript/no-floating-promises": "error",
+        "typescript/no-misused-promises": "error"
+    }
 }

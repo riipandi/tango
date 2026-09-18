@@ -1,0 +1,42 @@
+type: http_request
+model: http_request
+id: rq_wkd7no2vQC
+createdAt: 2026-09-16T12:54:38.441037
+updatedAt: 2026-09-18T10:47:38.582922
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_EXN58WXkQn
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "token": "REPLACE_RESET_TOKEN",
+      "new_password": "NewS3cret!"
+    }
+bodyType: null
+description: Reset with a reset token — hashed single-use token; revokes sessions; sets a fresh session cookie
+headers: []
+method: POST
+name: Reset password
+sortPriority: 3000.0
+url: ${[ apiBaseURL ]}/api/auth/reset-password
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

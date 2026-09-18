@@ -1,0 +1,47 @@
+type: http_request
+model: http_request
+id: rq_9SGMJEGkac
+createdAt: 2026-09-14T09:51:09.196554
+updatedAt: 2026-09-18T10:03:20.353641
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_GcYUAQ7Dkf
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "endpoint": "https://scim.example.com/v2",
+      "token": "demo-token",
+      "oidc_client_id": "REPLACE_CLIENT_ID"
+    }
+bodyType: application/json
+description: Update an existing SCIM service provider
+headers: []
+method: PUT
+name: Update SCIM service provider
+sortPriority: 2000.0
+url: ${[ apiBaseURL ]}/api/scim/service-provider/:scimProviderId
+urlParameters:
+- enabled: true
+  name: :scimProviderId
+  value: dummy
+  id: p152pi5odg
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

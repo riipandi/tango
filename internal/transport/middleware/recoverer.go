@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"tango/internal/transport/responder"
+	"github.com/riipandi/tango/pkg/responder"
 )
 
 func JSONRecoverer(next http.Handler) http.Handler {
@@ -12,9 +12,7 @@ func JSONRecoverer(next http.Handler) http.Handler {
 		defer func() {
 			if rec := recover(); rec != nil {
 				if strings.HasPrefix(r.URL.Path, "/api") {
-					responder.WriteJSON(w, http.StatusInternalServerError, map[string]string{
-						"error": "internal server error",
-					})
+					responder.Fail(w, r, http.StatusInternalServerError, "internal server error")
 					return
 				}
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

@@ -1,0 +1,222 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+vars:
+  APP_NAME:
+    sh: jq -r .name package.json 2>/dev/null || echo tango
+  APP_VERSION:
+    sh: jq -r .version package.json 2>/dev/null || echo 0.0.0
+  IMAGE:
+    sh: jq -r .config.image package.json 2>/dev/null || echo ghcr.io/riipandi/tango
+
+tasks:
+  default:
+    desc: List all available tasks
+    cmd: task --list --sort none
+    silent: true
+
+  # ----------------------------------------------------------------------------
+  # Development
+  # ----------------------------------------------------------------------------
+  dev:
+    desc: Run Vite dev server (frontend :3000 + Go API :3080)
+    cmd: pnpm exec vite dev {{.CLI_ARGS}}
+
+  run:
+    desc: Run the Go backend directly (debug build)
+    cmd: go run -tags debug ./cmd --env-file=.env.local {{.CLI_ARGS}}
+
+  email:dev:
+    desc: Run React Email dev UI (:3030)
+    cmd: pnpm exec email dev --dir ./email/templates --port 3030
+
+  # ----------------------------------------------------------------------------
+  # Build & release
+  # ----------------------------------------------------------------------------
+  build:
+    desc: Build frontend + Go binary (single file)
+    cmd: pnpm exec vite build {{.CLI_ARGS}}
+
+  build:release:
+    desc: Build release binaries via goreleaser
+    cmd: goreleaser build --clean --auto-snapshot
+
+  release:
+    desc: Publish a release via goreleaser
+    cmd: goreleaser release --clean --auto-snapshot
+
+  start:
+    desc: Run the release binary on :3000
+    cmds:
+      - pnpm exec kill-port 3000
+      - ./build/release/{{.APP_NAME}} serve --port 3000 {{.CLI_ARGS}}
+
+  # ----------------------------------------------------------------------------
+  # Database & keys
+  # ----------------------------------------------------------------------------
+  db:migrate:
+    desc: Run database migrations
+    cmd: go run -tags debug ./cmd --env-file=.env.local db migrate:up {{.CLI_ARGS}}
+
+  secrets:generate:
+    desc: Generate application secrets (dev only)
+    cmd: go run -tags debug ./cmd secrets {{.CLI_ARGS}}
+
+  # ----------------------------------------------------------------------------
+  # Test
+  # ----------------------------------------------------------------------------
+  test:
+    desc: Run all tests (Go + frontend)
+    cmds:
+      - task: test:go
+      - task: test:ui
+
+  test:go:
+    desc: Run Go unit tests (pass packages or flags after `--`)
+    cmd: gotestsum --format testname {{.CLI_ARGS | default "./..."}}
+
+  test:go:debug:
+    desc: Run Go unit tests for the debug build (migrate create/fix/validate included)
+    cmd: gotestsum --format testname -- -tags debug {{.CLI_ARGS | default "./cmd/... ./database/..."}}
+
+  test:ui:
+    desc: Run frontend unit tests
+    cmd: pnpm exec vitest run {{.CLI_ARGS}}
+
+  test:sdk:
+    desc: Run unit tests for API Client
+    cmd: pnpm exec vitest run --project api-client {{.CLI_ARGS}}
+
+  coverage:
+    desc: Run Go tests with coverage report
+    cmds:
+      - gotestsum --format testname -- -coverprofile=coverage.out ./...
+      - go tool cover -func=coverage.out | tail -1
+
+  # ----------------------------------------------------------------------------
+  # Format, check, lint
+  # ----------------------------------------------------------------------------
+  format:
+    desc: Format all files (Go + JS)
+    cmds:
+      - gofmt -w .
+      - pnpm exec oxfmt --write .
+
+  check:
+    desc: Run all checks (go vet + JS formatting)
+    cmds:
+      - go vet ./...
+      - pnpm exec oxfmt --check
+      - pnpm exec oxlint
+
+  lint:
+    desc: Run all linters (Go + JS)
+    cmds:
+      - golangci-lint run -c .golangci.yml ./...
+      - pnpm exec oxlint --fix .
+
+  typecheck:
+    desc: Run TypeScript type checking
+    cmd: pnpm exec tsc -b --noEmit
+
+  # ----------------------------------------------------------------------------
+  # Dependencies
+  # ----------------------------------------------------------------------------
+  deps:
+    desc: Install Go toolchain binaries (golangci-lint, goose, etc)
+    cmds:
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+      - go install github.com/pressly/goose/v3/cmd/goose@latest
+      - go install github.com/goreleaser/goreleaser/v2@latest
+      - go install github.com/anchore/grype/cmd/grype@latest
+      - go install github.com/swaggo/swag/cmd/swag@latest
+      - go install github.com/bufbuild/buf/cmd/buf@latest
+      - go get -tool google.golang.org/protobuf/cmd/protoc-gen-go@latest
+      - go get -tool connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
+
+  # ----------------------------------------------------------------------------
+  # Cleanup
+  # ----------------------------------------------------------------------------
+  cleanup:
+    desc: Remove build artifacts and dependencies
+    cmds:
+      - task: cleanup:dist
+      - task: cleanup:deps
+
+  cleanup:dist:
+    desc: Remove build artifacts
+    cmd: pnpm dlx del-cli .{tanstack,wrangler} build web/output storybook-static
+
+  cleanup:deps:
+    desc: Remove dependencies
+    cmd: pnpm dlx del-cli pnpm-lock.yaml node_modules vendor
+
+  update-deps:
+    desc: Update dependencies
+    cmds:
+      - pnpm exec npm-check-updates --configFileName .ncurc.json
+      - go mod download && go mod tidy
+
+  # ----------------------------------------------------------------------------
+  # Docker
+  # ----------------------------------------------------------------------------
+  docker:build:
+    desc: Build the Docker image
+    cmd: docker build -f ./deploy/Dockerfile . --build-arg DISTROLESS_TAG=debug-nonroot {{.CLI_ARGS}}
+
+  docker:push:
+    desc: Push the Docker image
+    cmd: docker push {{.IMAGE}}:latest-dev && docker push {{.IMAGE}}:{{.APP_VERSION}}-dev
+
+  docker:run:
+    desc: Run the Docker image
+    cmd: docker run --network=host --rm -it --env-file=.env.local -v $(pwd)/storage:/srv/storage {{.CLI_ARGS}}
+
+  docker:shell:
+    desc: Open a shell in the Docker image
+    cmds:
+      - task: docker:run
+        vars:
+          CLI_ARGS: --entrypoint sh {{.IMAGE}}:latest-dev
+
+  docker:prune:
+    desc: Remove the Docker image
+    cmd: docker image rm --force $(docker image list --filter reference={{.IMAGE}}:* -q)
+
+  docker:images:
+    desc: List project Docker images
+    cmd: docker image list --filter reference={{.IMAGE}}:*
+
+  docker:check:
+    desc: Scan the Docker image for vulnerabilities
+    cmd: grype --scope all-layers {{.IMAGE}}:latest-dev
+
+  # ----------------------------------------------------------------------------
+  # Docker compose
+  # ----------------------------------------------------------------------------
+  compose:up:
+    desc: Start docker compose services
+    cmd: docker-compose -f compose.yaml up --detach --remove-orphans
+
+  compose:down:
+    desc: Stop docker compose services
+    cmd: docker-compose -f compose.yaml down --remove-orphans
+
+  compose:cleanup:
+    desc: Stop services and remove volumes
+    cmds:
+      - docker-compose -f compose.yaml down --remove-orphans --volumes
+      - pnpm dlx del-cli .storage/{mailpit_data,pgsql_data,redis_data,silo_data}
+
+  compose:restart:
+    desc: Restart docker compose services
+    cmds:
+      - task: compose:down
+      - task: compose:up
+
+  compose:reset:
+    desc: Reset docker compose services
+    cmds:
+      - task: compose:cleanup
+      - task: compose:up

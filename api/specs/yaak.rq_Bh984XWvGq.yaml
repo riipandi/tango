@@ -1,0 +1,36 @@
+type: http_request
+model: http_request
+id: rq_Bh984XWvGq
+createdAt: 2026-09-17T11:48:56.147677
+updatedAt: 2026-09-18T10:48:44.509069
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_vBTBVedf8J
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: 'Device code info for the consent page — query: code; returns client and scope summary'
+headers: []
+method: GET
+name: Device code info
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/api/oidc/device/info?code=REPLACE_USER_CODE
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -1,0 +1,54 @@
+type: http_request
+model: http_request
+id: rq_rXo5WJp9J6
+createdAt: 2026-09-13T19:23:45.436032
+updatedAt: 2026-09-18T10:38:35.359059
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_8ZDswehDm4
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "permissions": [
+        {
+          "key": "read",
+          "name": "Read"
+        },
+        {
+          "key": "write",
+          "name": "Write"
+        }
+      ]
+    }
+bodyType: application/json
+description: Replace the full set of permissions for an API
+headers: []
+method: PUT
+name: Update API permissions
+sortPriority: 2000.0
+url: ${[ apiBaseURL ]}/api/apis/:apiId/permissions
+urlParameters:
+- enabled: true
+  name: :apiId
+  value: dummy
+  id: y8augwnzfg
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

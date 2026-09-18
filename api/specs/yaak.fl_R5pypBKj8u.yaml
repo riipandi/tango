@@ -1,0 +1,34 @@
+type: folder
+model: folder
+id: fl_R5pypBKj8u
+createdAt: 2026-09-13T16:07:30.592905
+updatedAt: 2026-09-18T10:06:03.116951
+workspaceId: wk_kBiMYTkhPP
+folderId: null
+authentication: {}
+authenticationType: null
+description: 'Upstream tag: Device Login — pairing flow (create request, verification inspect/decision, long-poll exchange)'
+headers: []
+name: Device Login
+sortPriority: 14333.333333333334
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

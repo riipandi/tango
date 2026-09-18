@@ -1,0 +1,40 @@
+type: http_request
+model: http_request
+id: rq_FFMM5KP3qs
+createdAt: 2026-09-14T09:49:55.107099
+updatedAt: 2026-09-18T10:36:43.866518
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_R6d4r5Gm2S
+authentication: {}
+authenticationType: null
+body: {}
+bodyType: null
+description: Get detailed information about an OIDC client
+headers: []
+method: GET
+name: Get OIDC client
+sortPriority: 703.7037037037037
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId
+urlParameters:
+- enabled: true
+  name: :clientId
+  value: dummy
+  id: re4ci80iyx
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto
