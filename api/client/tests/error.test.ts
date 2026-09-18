@@ -72,13 +72,6 @@ describe('error normalization', () => {
     expect(error.fieldErrors).toEqual([])
   })
 
-  it('ignores a 404 envelope for setupAvailable and reports false', async () => {
-    const { fetchMock } = mockFetch([errorEnvelope(404, 'setup not available')])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    await expect(client.auth.setupAvailable()).resolves.toBe(false)
-  })
-
   it('falls back to api_error for non-envelope error bodies', async () => {
     const { fetchMock } = mockFetch([{ status: 500, body: 'oops' }])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })

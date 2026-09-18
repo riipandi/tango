@@ -94,19 +94,6 @@ func signIn(t *testing.T, r chi.Router, users *user.PostgresStore, passwords *pa
 	return cookies[0].Value, u
 }
 
-func TestSendDoesNotLeakToken(t *testing.T) {
-	r, users, passwords, _ := newTestRouter(t)
-	cookie, _ := signIn(t, r, users, passwords)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/users/me/send-email-verification", nil)
-	req.Header.Set("Cookie", session.CookieName+"="+cookie)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusNoContent, w.Code)
-	assert.NotContains(t, w.Body.String(), "token")
-}
-
 func TestVerifyConsumesScopedToken(t *testing.T) {
 	r, users, passwords, tokens := newTestRouter(t)
 	cookie, u := signIn(t, r, users, passwords)

@@ -196,6 +196,26 @@ func (rt *Runtime) MountRPC(r chi.Router) {
 	// (SignIn) with protected ones and guards its own procedures.
 	authPrefix, authHandler := rt.sessions.RPCService()
 	r.Handle(authPrefix+"*", authHandler)
+
+	// Signup: anonymous procedures plus admin token administration —
+	// the service resolves the bearer per protected procedure, so it
+	// mounts bare.
+	signupPrefix, signupHandler := rt.Identity.SignupRPCService()
+	r.Handle(signupPrefix+"*", signupHandler)
+
+	// MFA: the pending verification is anonymous (cookie credential);
+	// the lifecycle procedures resolve the bearer per procedure.
+	mfaPrefix, mfaHandler := rt.Identity.MfaRPCService()
+	r.Handle(mfaPrefix+"*", mfaHandler)
+
+	// One-time access: the anonymous email request plus admin minting
+	// and delivery, guarded per procedure.
+	otaPrefix, otaHandler := rt.Identity.OneTimeAccessRPCService()
+	r.Handle(otaPrefix+"*", otaHandler)
+
+	// Email verification: every procedure is self-service.
+	emailvPrefix, emailvHandler := rt.Identity.EmailVerificationRPCService()
+	r.Handle(emailvPrefix+"*", middleware.RPCSessionAuth(auth)(emailvHandler))
 }
 
 // MountAPI mounts API routes in registration order.

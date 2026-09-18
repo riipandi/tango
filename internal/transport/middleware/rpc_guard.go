@@ -52,6 +52,35 @@ func (i rpcGuardInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc
 	}
 }
 
+// RPCAdminProcedureGuard rejects procedures named in admin unless
+// the request context already carries an admin principal — pair it
+// with RPCSessionAuth so authentication happens once at the mount.
+func RPCAdminProcedureGuard(admin map[string]bool) connect.Interceptor {
+	return adminProcedureGuard{admin: admin}
+}
+
+type adminProcedureGuard struct{ admin map[string]bool }
+
+func (g adminProcedureGuard) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
+	return next
+}
+
+func (g adminProcedureGuard) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return next
+}
+
+func (g adminProcedureGuard) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
+	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		if g.admin[req.Spec().Procedure] {
+			principal, ok := PrincipalFromContext(ctx)
+			if !ok || !principal.IsAdmin {
+				return nil, rpcerr.PermissionDenied("admin access required")
+			}
+		}
+		return next(ctx, req)
+	}
+}
+
 // RPCAdminGuard wraps a whole Connect service behind the admin check:
 // every procedure authenticates from the bearer access token and the
 // principal must be an admin.

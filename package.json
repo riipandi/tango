@@ -17,6 +17,7 @@
         "postinstall": "go mod download"
     },
     "dependencies": {
+        "@simplewebauthn/browser": "^14.0.0",
         "comlink": "^4.4.2",
         "ofetch": "^1.5.1",
         "react": "^19.3.0",

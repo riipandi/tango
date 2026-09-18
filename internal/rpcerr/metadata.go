@@ -16,19 +16,19 @@ func PageMetadata(page, limit, total int) *commonv1.PageMetadata {
 		first = 0
 	}
 	return &commonv1.PageMetadata{
-		Page:           toInt32(page),
-		Limit:          toInt32(limit),
-		TotalPages:     toInt32(totalPages),
-		TotalItems:     toInt32(total),
-		FirstItemIndex: toInt32(first),
-		LastItemIndex:  toInt32(last),
+		Page:           ToInt32(page),
+		Limit:          ToInt32(limit),
+		TotalPages:     ToInt32(totalPages),
+		TotalItems:     ToInt32(total),
+		FirstItemIndex: ToInt32(first),
+		LastItemIndex:  ToInt32(last),
 	}
 }
 
-// toInt32 saturates a pagination value into the proto int32 range;
+// ToInt32 saturates a pagination value into the proto int32 range;
 // counts beyond the cap are unreachable in practice but must not
 // overflow the wire type.
-func toInt32(v int) int32 {
+func ToInt32(v int) int32 {
 	switch {
 	case v > math.MaxInt32:
 		return math.MaxInt32

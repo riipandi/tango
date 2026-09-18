@@ -34,8 +34,7 @@ export type {
   ResetPasswordParams,
   SessionView,
   SignInParams,
-  SignInResult,
-  SignUpParams
+  SignInResult
 } from './schemas/session.schema'
 export type {
   AdminUpdateUserParams,
@@ -46,11 +45,6 @@ export type {
 } from './schemas/user.schema'
 export type { WebAuthnBeginResult, WebAuthnCredential } from './schemas/webauthn.schema'
 export type { DeviceCodeInfo, DeviceVerifyAction } from './schemas/device.schema'
-export type {
-  CreateSignupTokenParams,
-  SignupToken,
-  SignupTokenSecret
-} from './schemas/signuptoken.schema'
 export type {
   DeviceLoginExchangeResult,
   DeviceLoginPending,

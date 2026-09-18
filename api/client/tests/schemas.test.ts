@@ -5,8 +5,7 @@ import {
   ResetPasswordSchema,
   SessionViewSchema,
   SignInResultSchema,
-  SignInSchema,
-  SignUpSchema
+  SignInSchema
 } from '../schemas/session.schema'
 import {
   AdminUpdateUserSchema,
@@ -67,11 +66,7 @@ describe('schema contracts', () => {
     expect(ForgotPasswordSchema.safeParse({ identity: 'abbey' }).success).toBe(true)
   })
 
-  it('validates signup, profile, and password change payloads', () => {
-    expect(SignUpSchema.safeParse({ username: 'abbey', email: 'abbey@tango.local' }).success).toBe(
-      true
-    )
-    expect(SignUpSchema.safeParse({ username: 'abbey', email: 'nope' }).success).toBe(false)
+  it('validates profile and password change payloads', () => {
     expect(UpdateProfileSchema.safeParse({ display_name: 'Abbey R.' }).success).toBe(true)
     expect(
       ChangePasswordSchema.safeParse({ current_password: 'x', new_password: 'short' }).success

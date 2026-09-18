@@ -456,35 +456,6 @@ describe('system module', () => {
   })
 })
 
-describe('signupTokens module', () => {
-  const token = {
-    id: 'st_01j',
-    usage_limit: 5,
-    usage_count: 0,
-    created_at: 'x',
-    expires_at: 'y',
-    user_groups: ['ug_1']
-  }
-
-  it('lists, issues (secret shown once), and revokes tokens', async () => {
-    const { fetchMock, calls } = mockFetch([
-      envelope([token]),
-      envelope({ ...token, token: 'raw-token' }, {}, 201),
-      envelope(null, {}, 204)
-    ])
-    const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    await expect(c.signupTokens.list()).resolves.toHaveLength(1)
-    await expect(
-      c.signupTokens.create({ ttl: '24h', usage_limit: 5, user_group_ids: ['ug_1'] })
-    ).resolves.toMatchObject({ token: 'raw-token' })
-    await expect(c.signupTokens.remove('st_01j')).resolves.toBeUndefined()
-
-    expect(expectCall(calls, 1).path).toBe('/api/signup-tokens')
-    expect(expectCall(calls, 2).path).toBe('/api/signup-tokens/st_01j')
-  })
-})
-
 describe('deviceApproval module', () => {
   it('reads consent info and posts the decision form-encoded', async () => {
     const { fetchMock, calls } = mockFetch([

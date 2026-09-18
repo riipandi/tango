@@ -45,11 +45,11 @@ type Module struct {
 	devices   APIFeature
 	onetime   APIFeature
 	emailv    APIFeature
-	signup    APIFeature
+	signup    Feature
 	apiaccess APIFeature
 	apikeys   APIFeature
 	recovery  APIFeature
-	totp      APIFeature
+	totp      Feature
 }
 
 // New wires the identity surface. The user core is mandatory; a nil
@@ -65,11 +65,11 @@ func New(
 	devices APIFeature,
 	onetime APIFeature,
 	emailv APIFeature,
-	signup APIFeature,
+	signup Feature,
 	apiaccess APIFeature,
 	apikeys APIFeature,
 	recovery APIFeature,
-	totp APIFeature,
+	totp Feature,
 ) *Module {
 	if core == nil {
 		panic("identity: nil user core")
@@ -136,6 +136,43 @@ func (m *Module) AccountRPCService() (string, http.Handler) {
 	return notFoundRPC()
 }
 
+// SignupRPCService returns the signup Connect registration; the
+// composition root authenticates the mount and the service guards
+// its admin procedures per procedure.
+func (m *Module) SignupRPCService() (string, http.Handler) {
+	if provider, ok := m.signup.(rpcServiceProvider); ok {
+		return provider.RPCService()
+	}
+	return notFoundRPC()
+}
+
+// MfaRPCService returns the MFA Connect registration; the service
+// mixes the anonymous pending verification with self procedures.
+func (m *Module) MfaRPCService() (string, http.Handler) {
+	if provider, ok := m.totp.(rpcServiceProvider); ok {
+		return provider.RPCService()
+	}
+	return notFoundRPC()
+}
+
+// OneTimeAccessRPCService returns the one-time access Connect
+// registration; the admin procedures guard themselves.
+func (m *Module) OneTimeAccessRPCService() (string, http.Handler) {
+	if provider, ok := m.onetime.(rpcServiceProvider); ok {
+		return provider.RPCService()
+	}
+	return notFoundRPC()
+}
+
+// EmailVerificationRPCService returns the email verification Connect
+// registration; every procedure is self-service.
+func (m *Module) EmailVerificationRPCService() (string, http.Handler) {
+	if provider, ok := m.emailv.(rpcServiceProvider); ok {
+		return provider.RPCService()
+	}
+	return notFoundRPC()
+}
+
 // APIKeyRPCService returns the API key Connect registration, or the
 // not-found stub when the feature is unwired.
 func (m *Module) APIKeyRPCService() (string, http.Handler) {
@@ -169,9 +206,6 @@ func (m *Module) APIRoutes(r chi.Router, g RouteGroups) {
 	if m.emailv != nil {
 		m.emailv.APIRoutes(r, g)
 	}
-	if m.signup != nil {
-		m.signup.APIRoutes(r, g)
-	}
 	if m.apiaccess != nil {
 		m.apiaccess.APIRoutes(r, g)
 	}
@@ -180,8 +214,5 @@ func (m *Module) APIRoutes(r chi.Router, g RouteGroups) {
 	}
 	if m.recovery != nil {
 		m.recovery.APIRoutes(r, g)
-	}
-	if m.totp != nil {
-		m.totp.APIRoutes(r, g)
 	}
 }

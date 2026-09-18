@@ -14,13 +14,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/token"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/validate"
 )
 
 // Service orchestrates one-time access tokens.
@@ -100,6 +100,7 @@ type Feature struct {
 	service      *Service
 	cookieName   string
 	cookieSecure bool
+	access       kernel.AccessAuthenticator
 }
 
 // New wires the feature to its service.
@@ -114,91 +115,26 @@ func (f Feature) WithCookie(name string, secure bool) Feature {
 	return f
 }
 
-// APIRoutes mounts the one-time access endpoints relative to the
-// /api group.
-func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
-	// Anonymous: email request + token exchange.
-	r.Post("/one-time-access-email", f.service.handleEmailRequest)
+// WithAccessAuthenticator wires the bearer resolver the admin
+// procedures guard with.
+func (f Feature) WithAccessAuthenticator(access kernel.AccessAuthenticator) Feature {
+	f.access = access
+	return f
+}
+
+// RPCService returns the Connect registration for the one-time
+// access surface.
+func (f Feature) RPCService() (string, http.Handler) {
+	return f.service.RPCService(f.access)
+}
+
+// APIRoutes mounts the retained one-time access endpoints relative
+// to the /api group: only the email-link token exchange. The email
+// request and the admin surface serve ConnectRPC below /rpc.
+func (f Feature) APIRoutes(r chi.Router, _ identity.RouteGroups) {
 	r.Post("/one-time-access-token/{token}", func(w http.ResponseWriter, req *http.Request) {
 		f.service.handleExchange(w, req, f.cookieName, f.cookieSecure)
 	})
-
-	if g.Admin == nil {
-		return
-	}
-	admin := r.With(g.Admin)
-	admin.Post("/users/{id}/one-time-access-token", f.service.handleAdminMintToken)
-	admin.Post("/users/{id}/one-time-access-email", f.service.handleAdminSendEmail)
-}
-
-// handleAdminMintToken serves POST /users/{id}/one-time-access-token
-// (admin): returns the raw token once.
-func (s *Service) handleAdminMintToken(w http.ResponseWriter, r *http.Request) {
-	userID, ok := parseUserIDParam(r)
-	if !ok {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-
-	raw, err := s.mint(r.Context(), userID)
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to create token")
-		return
-	}
-	s.record(r.Context(), "one_time_access.token_created", userID.String())
-	responder.Success(w, r, http.StatusCreated, map[string]any{"token": raw})
-}
-
-// handleAdminSendEmail serves POST /users/{id}/one-time-access-email
-// (admin): mints the token and queues the email.
-func (s *Service) handleAdminSendEmail(w http.ResponseWriter, r *http.Request) {
-	userID, ok := parseUserIDParam(r)
-	if !ok {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-
-	u, err := s.users.GetByID(r.Context(), userID)
-	if err != nil {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-
-	raw, err := s.mint(r.Context(), userID)
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to create token")
-		return
-	}
-	if err := s.sendAccessEmail(r.Context(), u, raw, ""); err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to queue email")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// emailRequest is the POST /one-time-access-email body
-// (unauthenticated; requires the target address).
-type emailRequest struct {
-	Email        string `json:"email"`
-	RedirectPath string `json:"redirect_path,omitzero"`
-}
-
-func (r emailRequest) Validate() error {
-	return validateEmail(r.Email)
-}
-
-// handleEmailRequest serves POST /one-time-access-email
-// (unauthenticated): always 204. The policy that decides whether a
-// token is minted belongs to appconfig; answering 204
-// unconditionally avoids account enumeration.
-func (s *Service) handleEmailRequest(w http.ResponseWriter, r *http.Request) {
-	var req emailRequest
-	if verr := validate.Request(r.Body, &req); verr != nil {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(verr)))
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleExchange serves POST /one-time-access-token/{token}
@@ -279,11 +215,6 @@ func setSessionCookie(w http.ResponseWriter, name, value string, secure bool) {
 }
 
 // parseUserIDParam resolves the {id} path segment.
-func parseUserIDParam(r *http.Request) (user.UserID, bool) {
-	id, err := identity.ParseID[user.UserID](chi.URLParam(r, "id"))
-	return id, err == nil
-}
-
 // validateEmail checks the address shape (mirrors user module).
 func validateEmail(email string) error {
 	if email == "" {

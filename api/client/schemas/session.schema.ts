@@ -15,14 +15,6 @@ export const ResetPasswordSchema = z.object({
   new_password: z.string().min(8)
 })
 
-export const SignUpSchema = z.object({
-  username: z.string(),
-  email: z.email(),
-  first_name: z.string().optional(),
-  last_name: z.string().optional(),
-  token: z.string().optional()
-})
-
 export const SignInResultSchema = z.object({
   user: UserSchema,
   session_id: z.string(),
@@ -46,6 +38,5 @@ export const SessionViewSchema = z.object({
 export type SignInParams = z.infer<typeof SignInSchema>
 export type ForgotPasswordParams = z.infer<typeof ForgotPasswordSchema>
 export type ResetPasswordParams = z.infer<typeof ResetPasswordSchema>
-export type SignUpParams = z.infer<typeof SignUpSchema>
 export type SignInResult = z.infer<typeof SignInResultSchema>
 export type SessionView = z.infer<typeof SessionViewSchema>

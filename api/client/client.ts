@@ -13,7 +13,6 @@ import { createDeviceApprovalModule, type DeviceApprovalModule } from './modules
 import { createDeviceLoginModule, type DeviceLoginModule } from './modules/devicelogin.mod'
 import { createOidcClientsModule, type OidcClientsModule } from './modules/oidcclients.mod'
 import { createScimModule, type ScimModule } from './modules/scim.mod'
-import { createSignupTokensModule, type SignupTokensModule } from './modules/signuptokens.mod'
 import { createSystemModule, type SystemModule } from './modules/system.mod'
 import { createWebhooksModule, type WebhooksModule } from './modules/webhooks.mod'
 import type { CallInit, CallResult, HttpMethod } from './types'
@@ -54,8 +53,6 @@ export interface ApiClient {
   deviceLogin: DeviceLoginModule
   /** Browser side of the OAuth device flow: consent info + decision. */
   deviceApproval: DeviceApprovalModule
-  /** Admin signup-token registry (token-gated account creation). */
-  signupTokens: SignupTokensModule
   /** Version metadata and the readiness probe. */
   system: SystemModule
   /**
@@ -92,7 +89,6 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     webhooks: createWebhooksModule(exec),
     deviceLogin: createDeviceLoginModule(exec),
     deviceApproval: createDeviceApprovalModule(exec),
-    signupTokens: createSignupTokensModule(exec),
     system: createSystemModule(exec),
     raw: (method, path, init) => exec.request(method, path, init),
     setApiKey: (apiKey) => exec.setApiKey(apiKey)

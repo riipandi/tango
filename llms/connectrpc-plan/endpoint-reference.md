@@ -104,18 +104,18 @@ running server. Request names should use `<METHOD> <path>` for REST and
 | DELETE | `/api/account/sessions/{id}` | ConnectRPC | SPA/internal | REST route removed in phase 05. |
 | POST | `/api/auth/forgot-password` | REST + ConnectRPC | Browser/email bootstrap | ConnectRPC for SPA; retain HTTP option for unauthenticated email flows if needed. |
 | POST | `/api/auth/reset-password` | REST + ConnectRPC | Browser/email bootstrap | Do not expose reset secrets in logs or generic RPC errors. |
-| POST | `/api/mfa/totp/enroll` | ConnectRPC | SPA/internal | Show-once secret in typed response. |
-| POST | `/api/mfa/totp/confirm` | ConnectRPC | SPA/internal | Recovery codes are show-once. |
-| GET | `/api/mfa/totp/status` | ConnectRPC | SPA/internal | |
-| POST | `/api/mfa/totp/verify` | ConnectRPC | SPA/internal | Pending-auth cookie/session behavior remains unchanged. |
-| POST | `/api/mfa/totp/recovery-codes` | ConnectRPC | SPA/internal | Show-once codes. |
-| DELETE | `/api/mfa/totp` | ConnectRPC | SPA/internal | |
-| POST | `/api/signup` | REST + ConnectRPC | Signup UI / email link | ConnectRPC for first-party UI; retain HTTP if signup is reached without the SPA client. |
+| POST | `/api/mfa/totp/enroll` | ConnectRPC | SPA/internal | Show-once secret in typed response; REST route removed in phase 05. |
+| POST | `/api/mfa/totp/confirm` | ConnectRPC | SPA/internal | Recovery codes are show-once; REST route removed in phase 05. |
+| GET | `/api/mfa/totp/status` | ConnectRPC | SPA/internal | REST route removed in phase 05. |
+| POST | `/api/mfa/totp/verify` | ConnectRPC | SPA/internal | Pending-auth cookie/session behavior remains unchanged; REST route removed in phase 05. |
+| POST | `/api/mfa/totp/recovery-codes` | ConnectRPC | SPA/internal | Show-once codes; REST route removed in phase 05. |
+| DELETE | `/api/mfa/totp` | ConnectRPC | SPA/internal | REST route removed in phase 05. |
+| POST | `/api/signup` | ConnectRPC | Signup UI / email link | REST route removed in phase 05. |
 | GET | `/api/signup/setup` | ConnectRPC | Initial setup UI | Public but owned by the Tango UI. |
 | POST | `/api/signup/setup` | ConnectRPC | Initial setup UI | |
-| POST | `/api/one-time-access-email` | REST + ConnectRPC | Browser/email bootstrap | Keep HTTP semantics available for email-driven flows. |
+| POST | `/api/one-time-access-email` | ConnectRPC | Browser/email bootstrap | REST route removed in phase 05; the token exchange stays REST. |
 | POST | `/api/one-time-access-token/{token}` | REST | Email link | Token-in-path exchange is an externalized browser link; keep simple HTTP behavior. |
-| POST | `/api/users/me/send-email-verification` | REST + ConnectRPC | SPA/email flow | ConnectRPC for the action; email verification link remains HTTP-compatible. |
+| POST | `/api/users/me/send-email-verification` | ConnectRPC | SPA/email flow | REST route removed in phase 05; the verify link stays HTTP. |
 | POST | `/api/users/me/verify-email` | REST | Email link | Single-use link endpoint; keep HTTP. |
 
 ## Users and groups
@@ -300,23 +300,23 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `AccountService.ChangePassword` | PUT `/api/account/password` | bearer | Self; rate-limited; revokes other sessions. |
 | `AccountService.ListSessions` | GET `/api/account/sessions` | bearer | Self. |
 | `AccountService.RevokeSession` | DELETE `/api/account/sessions/{id}` | bearer | Self. |
-| `SignupService.Signup` | POST `/api/signup` | public | `REST + ConnectRPC`; rate-limited. |
-| `SignupService.GetSetupAvailability` | GET `/api/signup/setup` | public | |
-| `SignupService.SetupInitialAdmin` | POST `/api/signup/setup` | public | Rate-limited. |
-| `SignupService.ListSignupTokens` | GET `/api/signup-tokens` | bearer | |
-| `SignupService.CreateSignupToken` | POST `/api/signup-tokens` | bearer | |
-| `SignupService.DeleteSignupToken` | DELETE `/api/signup-tokens/{token_id}` | bearer | |
-| `MfaService.EnrollTotp` | POST `/api/mfa/totp/enroll` | bearer | Show-once secret. Rate-limited. |
-| `MfaService.ConfirmTotp` | POST `/api/mfa/totp/confirm` | bearer | Show-once recovery codes. Rate-limited. |
-| `MfaService.GetTotpStatus` | GET `/api/mfa/totp/status` | bearer | |
-| `MfaService.VerifyPending` | POST `/api/mfa/totp/verify` | pending | Pending-auth cookie unchanged. Rate-limited. |
-| `MfaService.RotateRecoveryCodes` | POST `/api/mfa/totp/recovery-codes` | bearer | Show-once. Rate-limited. |
-| `MfaService.DisableTotp` | DELETE `/api/mfa/totp` | bearer | Rate-limited. |
-| `OneTimeAccessService.RequestEmail` | POST `/api/one-time-access-email` | public | `REST + ConnectRPC`; rate-limited. |
+| `SignupService.Signup` | POST `/api/signup` | public | Cutover phase 05; REST route removed. |
+| `SignupService.GetSetupAvailability` | GET `/api/signup/setup` | public | Cutover phase 05; REST route removed. |
+| `SignupService.SetupInitialAdmin` | POST `/api/signup/setup` | public | Cutover phase 05; REST route removed. |
+| `SignupService.ListSignupTokens` | GET `/api/signup-tokens` | bearer | Admin; cutover phase 05. |
+| `SignupService.CreateSignupToken` | POST `/api/signup-tokens` | bearer | Admin; show-once; cutover phase 05. |
+| `SignupService.DeleteSignupToken` | DELETE `/api/signup-tokens/{token_id}` | bearer | Admin; cutover phase 05. |
+| `MfaService.EnrollTotp` | POST `/api/mfa/totp/enroll` | bearer | Show-once secret; cutover phase 05. |
+| `MfaService.ConfirmTotp` | POST `/api/mfa/totp/confirm` | bearer | Show-once recovery codes; cutover phase 05. |
+| `MfaService.GetTotpStatus` | GET `/api/mfa/totp/status` | bearer | Cutover phase 05. |
+| `MfaService.VerifyPending` | POST `/api/mfa/totp/verify` | pending | Pending-auth cookie unchanged; cutover phase 05. |
+| `MfaService.RotateRecoveryCodes` | POST `/api/mfa/totp/recovery-codes` | bearer | Show-once; cutover phase 05. |
+| `MfaService.DisableTotp` | DELETE `/api/mfa/totp` | bearer | Cutover phase 05. |
+| `OneTimeAccessService.RequestEmail` | POST `/api/one-time-access-email` | public | Cutover phase 05; REST route removed. |
 | `OneTimeAccessService.ExchangeToken` | POST `/api/one-time-access-token/{token}` | — | Stays `REST` (email link). |
-| `OneTimeAccessService.AdminSendEmail` | POST `/api/users/{user_id}/one-time-access-email` | bearer | |
-| `OneTimeAccessService.AdminIssueToken` | POST `/api/users/{user_id}/one-time-access-token` | bearer | Show-once token. |
-| `EmailVerificationService.SendEmail` | POST `/api/users/me/send-email-verification` | bearer | `REST + ConnectRPC`; rate-limited. |
+| `OneTimeAccessService.AdminSendEmail` | POST `/api/users/{user_id}/one-time-access-email` | bearer | Cutover phase 05. |
+| `OneTimeAccessService.AdminIssueToken` | POST `/api/users/{user_id}/one-time-access-token` | bearer | Show-once token; cutover phase 05. |
+| `EmailVerificationService.SendEmail` | POST `/api/users/me/send-email-verification` | bearer | Cutover phase 05; REST route removed. |
 | `EmailVerificationService.VerifyEmail` | POST `/api/users/me/verify-email` | — | Stays `REST` (email link). |
 | `UserService.ListUsers` | GET `/api/users` | bearer | |
 | `UserService.CreateUser` | POST `/api/users` | bearer | Show-once password. |
@@ -355,10 +355,10 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 
 ### Package `tango.admin.v1` — `api/connect/admin.proto`
 
+> ApiKeyService is session-authenticated and scoped to the caller — the same self-scoped contract as the REST routes.
+
 | Service.Method | Replaces (method + path) | Auth | Notes |
 | --- | --- | --- | --- |
-// ApiKeyService is session-authenticated and scoped to the caller —
-// the same self-scoped contract as the REST routes.
 | `ApiKeyService.List` | GET `/api/api-keys` | bearer | Self-scoped. |
 | `ApiKeyService.Create` | POST `/api/api-keys` | bearer | Self-scoped; show-once secret. |
 | `ApiKeyService.Renew` | POST `/api/api-keys/{id}/renew` | bearer | Self-scoped; show-once secret. |

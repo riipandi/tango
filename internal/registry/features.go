@@ -223,20 +223,20 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 			sessions,
 			recorder,
 			onetimeaccess.WithMail(jobsReg, deps.Config.Public.BaseURL),
-		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
+		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development").WithAccessAuthenticator(sessions),
 		emailverification.New(emailverification.NewService(
 			token.NewStore(deps.DB, token.PurposeEmailVerification),
 			emailVerificationAdapter(user.NewPostgresStore(deps.DB)),
 			recorder,
 			emailverification.WithMail(jobsReg, user.NewPostgresStore(deps.DB), deps.Config.Public.BaseURL),
-		)),
+		)).WithAccessAuthenticator(sessions),
 		signup.New(signup.NewService(
 			signup.NewPostgresStore(deps.DB),
 			user.NewPostgresStore(deps.DB),
 			usergroup.NewPostgresStore(deps.DB),
 			sessions,
 			recorder,
-		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
+		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development").WithAccessAuthenticator(sessions),
 		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), recorder),
 		apiKeys,
 		recovery.NewFeature(recovery.New(
@@ -248,7 +248,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 			recorder,
 			recovery.WithMail(jobsReg, deps.Config.Public.BaseURL),
 		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
-		totp.NewFeature(totpService).WithCookie(deps.Config.App.Mode != "development"),
+		totp.NewFeature(totpService).WithCookie(deps.Config.App.Mode != "development").WithAccessAuthenticator(sessions),
 	)
 
 	return module, groups, sessions, audit, apiaccess.NewPostgresStore(deps.DB), blobStore, nil
