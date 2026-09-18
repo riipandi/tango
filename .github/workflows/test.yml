@@ -45,12 +45,16 @@ jobs:
           go install gotest.tools/gotestsum@latest
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
+      - name: Generate email template
+        run: pnpm exec vite build
+        env:
+          TANGO_SKIP_GO: 1
+
       - name: Setup golangci-lint toolchain
         uses: golangci/golangci-lint-action@v9
         with:
           github-token: ${{ github.token }}
           install-mode: binary
-          # Must be built with Go >= the version targeted by go.mod (1.27).
           version: v2.13
 
       # Mirrors `task check lint` (Taskfile.yml).

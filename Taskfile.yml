@@ -31,6 +31,10 @@ tasks:
     desc: Run React Email dev UI (:3030)
     cmd: pnpm exec email dev --dir ./email/templates --port 3030
 
+  email:build:
+    desc: Compile email templates only (no Go binary, no SPA bundle)
+    cmd: TANGO_SKIP_GO=1 pnpm exec vite build
+
   # ----------------------------------------------------------------------------
   # Build & release
   # ----------------------------------------------------------------------------
@@ -163,7 +167,9 @@ tasks:
   # ----------------------------------------------------------------------------
   docker:build:
     desc: Build the Docker image
-    cmd: docker build -f ./deploy/Dockerfile . --build-arg DISTROLESS_TAG=debug-nonroot {{.CLI_ARGS}}
+    cmds:
+      - docker build -f ./deploy/Dockerfile . --build-arg DISTROLESS_TAG=debug-nonroot -t {{.IMAGE}}:latest-dev -t {{.IMAGE}}:{{.APP_VERSION}}-dev {{.CLI_ARGS}}
+      - docker image list --filter reference={{.IMAGE}}:*
 
   docker:push:
     desc: Push the Docker image
