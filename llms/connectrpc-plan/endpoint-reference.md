@@ -6,7 +6,8 @@ updated: 2026-09-18
 # ConnectRPC Refactor Endpoint Reference
 
 This is the transport decision list for the refactor. `ConnectRPC` means the first-party API is
-served under `/connect/`. `REST` means the existing HTTP route remains authoritative. `REST +
+served under `/rpc/`. `REST` means the existing HTTP route remains authoritative under `/api/` or
+its documented root path. `REST +
 ConnectRPC` means the same capability has separate protocol-specific and first-party surfaces;
 the two contracts must not be merged.
 
@@ -18,6 +19,10 @@ Every entry must have Yaak evidence. Use Yaak MCP to create, update, and send RE
 `REST` entries and gRPC requests for ConnectRPC entries. Do not edit `api/specs/*.yaml` or other
 Yaak export files manually. If a ConnectRPC request's gRPC versus Connect transport details are
 unclear, consult the official ConnectRPC documentation before creating the Yaak request.
+
+This file is an inventory and transport decision record. Before implementation, expand every
+wildcard entry into one row per exact method/path and add the canonical Connect service/method.
+Each row must receive a Yaak request identifier and evidence status after the request is sent.
 
 ## Protocol rules
 
@@ -130,6 +135,8 @@ running server. Request names should use `<METHOD> <path>` for REST and the gene
 | GET, DELETE | `/api/oidc/users/me/authorized-clients*` | ConnectRPC | SPA/internal | User consent/revocation management. |
 | GET | `/api/oidc/users/me/clients` | ConnectRPC | SPA/internal | |
 | GET | `/api/oidc/users/{id}/authorized-clients` | ConnectRPC | Admin console/internal | |
+| GET | `/api/oidc/interaction/{id}` | REST | Tango authorization UI | OIDC interaction state is part of the browser protocol flow. |
+| POST | `/api/oidc/interaction/{id}/approve` | REST | Tango authorization UI | Preserve browser session and redirect behavior. |
 | GET | `/authorize` | REST | External OIDC RP/browser | Redirect and OAuth error contract. |
 | POST | `/api/oidc/token` | REST | External OIDC RP | Form encoding, client authentication, and RFC errors. |
 | POST | `/api/oidc/introspect` | REST | External OIDC RP/resource server | RFC 7662 contract. |

@@ -27,6 +27,12 @@ services and stores.
 9. For each service group, create and send Yaak MCP gRPC requests covering success, authentication,
    validation, and authorization behavior. Update the corresponding Yaak folder/request when the
    RPC contract changes.
+10. Add a reflection implementation or descriptor-serving test for the selected development/test
+    policy. Do not expose unauthenticated production reflection by accident.
+11. Verify unary gRPC, Connect, and gRPC-Web behavior independently when each is claimed as
+    supported. Document unsupported transports instead of silently accepting them.
+12. Verify metadata propagation for cookies, API keys, `Authorization`, request IDs, deadlines,
+    and Connect/gRPC protocol headers through direct and proxied requests.
 
 ## Boundaries
 
@@ -35,5 +41,12 @@ independent of ConnectRPC, HTTP handlers, router state, and responder envelopes.
 
 ## Gate
 
-Each pilot module works through `/connect/`, has auth/error tests, has Yaak MCP gRPC evidence, and
+Each pilot module works through `/rpc/`, has auth/error tests, has Yaak MCP gRPC evidence, and
 has no duplicated domain behavior between its REST and Connect handlers.
+
+## Commit
+
+Commit each completed server service group as one atomic conventional commit. Include the Connect
+handler, middleware/interceptors, authorization tests, reflection policy/tests, transport tests,
+and Yaak evidence in the same commit. Do not commit generated server code without its matching
+proto and handler changes.

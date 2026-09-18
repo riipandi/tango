@@ -27,13 +27,17 @@ more focused files. Do not create nested contract directories under `api/connect
 6. Configure deterministic generation for Go and TypeScript from `api/connect/*.proto`. Generated
    output must be reproducible in CI and must not be edited manually or written back into the
    contract directory.
-7. Add a task target for generation and a check that fails when generated output is stale.
-8. Keep `api/client` schemas and methods limited to retained REST endpoints. Do not make the REST
+7. Add and pin `buf.yaml`/`buf.gen.yaml` (or the selected equivalent), generator versions, Go
+   package options, TypeScript runtime/plugin, and generated output directories.
+8. Add task targets for generation, formatting, linting, breaking checks, and stale-generated-file
+   detection. Generation must work from a clean checkout without relying on globally installed
+   binaries beyond the declared task setup.
+9. Keep `api/client` schemas and methods limited to retained REST endpoints. Do not make the REST
    SDK wrap generated ConnectRPC clients or duplicate protobuf service contracts.
-9. Decide whether generated TypeScript protobuf types are consumed directly by the Connect client
+10. Decide whether generated TypeScript protobuf types are consumed directly by the Connect client
    or adapted by a thin generated transport layer; do not maintain hand-written RPC DTOs beside
    the protobuf messages.
-10. Create or update Yaak gRPC requests through Yaak MCP for representative generated services.
+11. Create or update Yaak gRPC requests through Yaak MCP for representative generated services.
     Use the generated service and method names from the proto contract; never hand-edit exported
     Yaak request YAML.
 
@@ -42,6 +46,8 @@ more focused files. Do not create nested contract directories under `api/connect
 - RPC messages use protobuf naming and generated JSON mapping; they do not use the REST envelope.
 - `api/connect/*.proto` contains contracts only: no generated code, server implementation, client
   wrappers, or transport-specific helper logic.
+- Every Connect service has an explicit package and method name. The mapping is recorded in the
+  endpoint reference before generated code is committed.
 - Pagination has one shared message shape across internal list RPCs.
 - Empty success responses use `google.protobuf.Empty` or an explicit result only when metadata is
   needed; do not encode HTTP 204 semantics into every RPC.
@@ -52,3 +58,8 @@ more focused files. Do not create nested contract directories under `api/connect
 Generation works from a clean checkout, generated Go and TypeScript compile, and one representative
 RPC has a request/response compatibility test plus a Yaak MCP gRPC request that uses the generated
 service contract.
+
+## Commit
+
+Commit this phase as one atomic conventional commit containing `api/connect/*.proto`, generation
+configuration, generated output, codegen tasks/checks, tests, and Yaak contract evidence.

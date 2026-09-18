@@ -30,6 +30,8 @@ For each domain:
 - create or update the matching Yaak request through Yaak MCP and send it against the running
   server; use a gRPC request for ConnectRPC services and a REST request for retained HTTP routes;
 - record the Yaak request/evidence identifier in the phase or endpoint reference;
+- verify the request through the supported direct and HTTPS proxy transport, including TLS and
+  HTTP/2 where gRPC is claimed;
 - remove the old internal REST route and its dead DTO/client code;
 - update the endpoint reference and route inventory.
 
@@ -37,3 +39,10 @@ For each domain:
 
 Each completed domain has one active first-party transport, no compatibility route, and a passing
 focused test suite before the next domain starts.
+
+## Commit
+
+Each domain cutover must be one atomic conventional commit. Include proto changes, generated code,
+server/client changes, caller migration, REST route removal, tests, Yaak evidence, and endpoint
+reference updates together. If a domain is too large, split it into independently complete
+service-level atomic commits and document the boundary before implementation.

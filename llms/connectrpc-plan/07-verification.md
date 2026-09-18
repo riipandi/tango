@@ -23,10 +23,15 @@ updated: 2026-09-18
    forwarding). Do not treat direct Go-port success as sufficient proxy validation.
 8. If the gRPC request behavior or protocol mapping is unclear, consult the official ConnectRPC
    documentation and record the selected transport in the Yaak request description.
-9. Run the repository gates: `task test`, `task lint`, `task check`, `task format`, and
+9. Verify the server reflection policy, generated descriptor availability, and Yaak behavior with
+   and without reflection as applicable.
+10. Verify CORS and credentials explicitly. The current middleware's wildcard origin and disabled
+    credentials must not be assumed compatible with cookie-authenticated browser RPCs.
+11. Run the repository gates: `task test`, `task lint`, `task check`, `task format`, and
    `task typecheck`.
-10. Run a production build and verify that the embedded SPA calls the same-origin Connect prefix.
-11. Update the main endpoint reference only if the active contract changed; this plan's reference
+12. Run a production build and verify that the embedded SPA calls the same-origin `/rpc` prefix,
+    while retained REST calls continue using `/api`.
+13. Update the main endpoint reference only if the active contract changed; this plan's reference
    remains the transport decision record.
 
 ## Completion criteria
@@ -38,3 +43,9 @@ updated: 2026-09-18
 - Yaak requests are created, updated, and sent through Yaak MCP; no manual Yaak export edits are
   used as contract evidence.
 - Full test, lint, format, vet, and typecheck gates pass.
+
+## Commit
+
+Commit the final verification and documentation updates as one atomic conventional commit only
+after all phase commits are present and the complete gate passes. Do not fold unrelated fixes into
+the verification commit.

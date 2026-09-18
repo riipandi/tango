@@ -30,3 +30,9 @@ Remove obsolete internal REST infrastructure without touching public protocol co
 The route table contains only intended REST routes and ConnectRPC routes; stale internal REST calls
 are absent; production builds do not include deleted handlers; Yaak MCP requests cover the retained
 REST and gRPC/ConnectRPC surfaces.
+
+## Commit
+
+Commit REST retirement as one atomic conventional commit containing route deletion, dead client/DTO
+cleanup, Vite proxy cleanup, route tests, documentation, and Yaak updates. Do not delete an internal
+REST route in a commit that lacks its verified ConnectRPC replacement.
