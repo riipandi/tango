@@ -12,6 +12,26 @@ service HealthService {
   rpc Check(CheckRequest) returns (CheckResponse);
 }
 
+// VersionService exposes the deployed build metadata. Current mirrors
+// the REST route's session requirement; Latest answers the cached
+// release tag anonymously.
+service VersionService {
+  rpc Current(CurrentRequest) returns (CurrentResponse);
+  rpc Latest(LatestRequest) returns (LatestResponse);
+}
+
+message CurrentRequest {}
+
+message CurrentResponse {
+  string current_version = 1;
+}
+
+message LatestRequest {}
+
+message LatestResponse {
+  string latest_version = 1;
+}
+
 message CheckRequest {}
 
 message CheckResponse {

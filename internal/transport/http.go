@@ -27,6 +27,9 @@ const rpcRequestTimeout = 30 * time.Second
 type RouteSet struct {
 	MountRoot func(chi.Router)
 	MountAPI  func(chi.Router)
+	// MountRPC registers module-owned Connect services into the
+	// shared /rpc handler tree; nil leaves only the smoke service.
+	MountRPC func(r chi.Router)
 	// RequireSession protects metadata endpoints that upstream serves
 	// to any signed-in user; nil leaves those routes unmounted.
 	RequireSession kernel.Guard
@@ -74,10 +77,12 @@ func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limit
 	// deadline. The mount happens before the SPA fallback so unknown
 	// /rpc paths answer Connect 404s, never the SPA document. chi's
 	// Mount only shifts its route context, never r.URL.Path, so the
-	// Connect mux needs an explicit StripPrefix.
+	// Connect tree needs an explicit StripPrefix — the generated
+	// handlers match procedure paths exactly.
+	rpcRouter := newRPCRouter(routes.MountRPC)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.RequestTimeout(rpcRequestTimeout))
-		r.Mount("/rpc", http.StripPrefix("/rpc", rpcHandler()))
+		r.Mount("/rpc", http.StripPrefix("/rpc", rpcRouter))
 	})
 
 	// Mount the SPA fallback last.

@@ -1,4 +1,4 @@
-package transport
+package rpcerr
 
 import (
 	"connectrpc.com/connect"
@@ -15,40 +15,40 @@ import (
 // 401 → unauthenticated, 403 → permission_denied, 404 → not_found,
 // 409 → already_exists, 429 → resource_exhausted, 5xx → internal.
 
-// RPCInvalidArgument reports rejected input (REST 400/422).
-func RPCInvalidArgument(message string) error {
+// InvalidArgument reports rejected input (REST 400/422).
+func InvalidArgument(message string) error {
 	return connect.NewError(connect.CodeInvalidArgument, errString(message))
 }
 
-// RPCUnauthenticated reports missing or invalid credentials (REST 401).
-func RPCUnauthenticated(message string) error {
+// Unauthenticated reports missing or invalid credentials (REST 401).
+func Unauthenticated(message string) error {
 	return connect.NewError(connect.CodeUnauthenticated, errString(message))
 }
 
-// RPCPermissionDenied reports an authenticated caller without access
+// PermissionDenied reports an authenticated caller without access
 // (REST 403).
-func RPCPermissionDenied(message string) error {
+func PermissionDenied(message string) error {
 	return connect.NewError(connect.CodePermissionDenied, errString(message))
 }
 
-// RPCNotFound reports a missing resource (REST 404).
-func RPCNotFound(message string) error {
+// NotFound reports a missing resource (REST 404).
+func NotFound(message string) error {
 	return connect.NewError(connect.CodeNotFound, errString(message))
 }
 
-// RPCAlreadyExists reports a conflicting write (REST 409).
-func RPCAlreadyExists(message string) error {
+// AlreadyExists reports a conflicting write (REST 409).
+func AlreadyExists(message string) error {
 	return connect.NewError(connect.CodeAlreadyExists, errString(message))
 }
 
-// RPCResourceExhausted reports a rejected budget (rate limit, quota;
+// ResourceExhausted reports a rejected budget (rate limit, quota;
 // REST 429).
-func RPCResourceExhausted(message string) error {
+func ResourceExhausted(message string) error {
 	return connect.NewError(connect.CodeResourceExhausted, errString(message))
 }
 
-// RPCInternal reports an unexpected server failure (REST 500).
-func RPCInternal(message string) error {
+// Internal reports an unexpected server failure (REST 500).
+func Internal(message string) error {
 	return connect.NewError(connect.CodeInternal, errString(message))
 }
 

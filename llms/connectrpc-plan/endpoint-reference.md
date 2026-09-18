@@ -329,10 +329,12 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 
 | Service.Method | Replaces (method + path) | Auth | Notes |
 | --- | --- | --- | --- |
-| `ApiKeyService.List` | GET `/api/api-keys` | bearer | |
-| `ApiKeyService.Create` | POST `/api/api-keys` | bearer | Show-once secret. |
-| `ApiKeyService.Renew` | POST `/api/api-keys/{id}/renew` | bearer | Show-once secret. |
-| `ApiKeyService.Delete` | DELETE `/api/api-keys/{id}` | bearer | |
+// ApiKeyService is session-authenticated and scoped to the caller —
+// the same self-scoped contract as the REST routes.
+| `ApiKeyService.List` | GET `/api/api-keys` | bearer | Self-scoped. |
+| `ApiKeyService.Create` | POST `/api/api-keys` | bearer | Self-scoped; show-once secret. |
+| `ApiKeyService.Renew` | POST `/api/api-keys/{id}/renew` | bearer | Self-scoped; show-once secret. |
+| `ApiKeyService.Delete` | DELETE `/api/api-keys/{id}` | bearer | Self-scoped. |
 | `ApiService.ListApis` | GET `/api/apis` | bearer | |
 | `ApiService.CreateApi` | POST `/api/apis` | bearer | |
 | `ApiService.GetApi` | GET `/api/apis/{id}` | bearer | See ambiguity A3 (trailing slash). |

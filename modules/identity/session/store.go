@@ -154,7 +154,7 @@ func (s *PostgresStore) Touch(ctx context.Context, id string, expiresAt time.Tim
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(sessionsTable)
 	ub.Set(ub.Assign("expires_at", expiresAt), ub.Assign("refreshed_at", time.Now().UTC()))
-	ub.Where(ub.E("id", id), ub.IsNull("revoked_at"))
+	ub.Where(ub.E("id", sessionUUID(id)), ub.IsNull("revoked_at"))
 
 	query, args := ub.Build()
 	_, err := s.exec.Exec(ctx, query, args...)

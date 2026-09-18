@@ -6,15 +6,23 @@ package transport
 // security/CORS headers land on API responses.
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	systemv1 "github.com/riipandi/tango/gen/proto/go/tango/system/v1"
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/transport/middleware"
 )
 
 // TestNoDoubleAPIPrefix fails when a handler registers a path that
@@ -99,10 +107,111 @@ func TestWellKnownRoutesAreRootMounted(t *testing.T) {
 	}
 }
 
-// TestRPCSmokeCall pins the Connect Protocol contract of the /rpc
-// mount: procedure path, protocol-version metadata, JSON content
-// negotiation, and the smoke response document.
-func TestRPCSmokeCall(t *testing.T) {
+// fakeAuth resolves any bearer token to an admin principal except the
+// "revoked-" prefix, which stands in for expired/revoked sessions.
+type fakeAuth struct{ fail bool }
+
+func (f fakeAuth) ResolveSession(_ context.Context, token string) (kernel.Principal, error) {
+	if f.fail || token == "" || strings.HasPrefix(token, "revoked-") {
+		return kernel.Principal{}, errors.New("session: invalid or expired")
+	}
+	return kernel.Principal{SessionID: "sess_test", UserID: "user_test", Username: "tester", IsAdmin: true}, nil
+}
+
+// rpcTestServer mounts the version surface with the fake
+// authenticator so the mixed public/protected behavior runs through
+// the real transport.
+func rpcTestServer(t *testing.T) *HTTPServer {
+	t.Helper()
+	srv := NewHTTPServer(RouteSet{
+		MountRPC: func(r chi.Router) {
+			prefix, handler := VersionRPCService(nil, fakeAuth{})
+			r.Handle(prefix+"*", handler)
+		},
+	}, testConfig(), testLogger(), nil, nil, nil)
+	t.Cleanup(func() {
+		if srv.Server != nil {
+			_ = srv.Server.Close()
+		}
+	})
+	return srv
+}
+
+// TestRPCVersionAuthBranches pins the mixed public/protected contract
+// of VersionService through the real transport: anonymous Current
+// answers the Connect unauthenticated error, a resolvable bearer
+// succeeds, and Latest stays public.
+func TestRPCVersionAuthBranches(t *testing.T) {
+	srv := rpcTestServer(t)
+
+	post := func(path, token string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}"))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Connect-Protocol-Version", "1")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		srv.Router.ServeHTTP(w, req)
+		return w
+	}
+
+	w := post("/rpc/tango.system.v1.VersionService/Current", "")
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "bearer token required")
+
+	w = post("/rpc/tango.system.v1.VersionService/Current", "token-1")
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), config.AppVersion)
+
+	w = post("/rpc/tango.system.v1.VersionService/Latest", "")
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "latestVersion")
+
+	// Expired/revoked tokens are indistinguishable from unknown ones.
+	w = post("/rpc/tango.system.v1.VersionService/Current", "revoked-token")
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid or expired token")
+}
+
+// TestRPCVersionCurrentWithoutInterceptor pins the defense-in-depth
+// branch: a raw handler call without a resolved principal still
+// refuses.
+func TestRPCVersionCurrentWithoutInterceptor(t *testing.T) {
+	svc := &versionRPCService{}
+	req := connect.NewRequest(&systemv1.CurrentRequest{})
+	res, err := svc.Current(middleware.WithPrincipal(context.Background(), kernel.Principal{UserID: "user_test", IsAdmin: true}), req)
+	require.NoError(t, err)
+	assert.Equal(t, config.AppVersion, res.Msg.GetCurrentVersion())
+
+	_, err = svc.Current(context.Background(), req)
+	var cerr *connect.Error
+	require.True(t, errors.As(err, &cerr))
+	assert.Equal(t, connect.CodeUnauthenticated, cerr.Code())
+}
+
+// TestRPCRejectsReflection pins the reflection policy: no reflection
+// or descriptor service is mounted — production reflection stays
+// disabled, and Yaak uses explicit procedure paths.
+func TestRPCRejectsReflection(t *testing.T) {
+	srv := testServer(t, testConfig())
+
+	for _, path := range []string{
+		"/rpc/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
+		"/rpc/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+	} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}"))
+		req.Header.Set("Content-Type", "application/grpc-web+json")
+		srv.Router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusNotFound, w.Code, "%s must not be served", path)
+		assert.Contains(t, w.Body.String(), "not_found")
+	}
+}
+
+// TestRPCRouteTable tests the /rpc mount contract end to end.
+func TestRPCRouteTable(t *testing.T) {
 	srv := testServer(t, testConfig())
 
 	w := httptest.NewRecorder()

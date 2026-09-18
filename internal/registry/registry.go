@@ -20,10 +20,12 @@ import (
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/admin/appconfig"
 	"github.com/riipandi/tango/modules/admin/auditlog"
 	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/webhook"
 	"github.com/riipandi/tango/pkg/crypto"
@@ -63,6 +65,9 @@ type Runtime struct {
 	// Route groups shared by the identity and federation surfaces.
 	identityGroups   identity.RouteGroups
 	federationGroups federation.RouteGroups
+
+	// sessions backs the RPC bearer authentication contract.
+	sessions *session.Service
 }
 
 // New builds the runtime in registration order.
@@ -103,6 +108,7 @@ func New(deps Deps) (*Runtime, error) {
 		return nil, err
 	}
 	rt.Identity = idModule
+	rt.sessions = sessions
 	rt.AuditLog = auditLog
 	events.audit = rt.AuditLog
 
@@ -151,6 +157,22 @@ func (rt *Runtime) MountRoot(r chi.Router) {
 // routes upstream serves to any signed-in user.
 func (rt *Runtime) SessionGuard() kernel.Guard {
 	return rt.identityGroups.Self
+}
+
+// SessionAuthenticator exposes the session resolver for the RPC
+// bearer contract: `Authorization: Bearer <access-token>` resolves
+// through the same store the cookie session uses.
+func (rt *Runtime) SessionAuthenticator() kernel.Authenticator {
+	return rt.sessions
+}
+
+// MountRPC registers module-owned Connect services into the shared
+// /rpc handler tree. Registration order mirrors MountAPI.
+func (rt *Runtime) MountRPC(r chi.Router) {
+	// API keys: always session-authenticated, scoped to the caller —
+	// the same contract as the REST surface.
+	prefix, handler := rt.Identity.APIKeyRPCService()
+	r.Handle(prefix+"*", middleware.RPCSessionAuth(rt.SessionAuthenticator())(handler))
 }
 
 // MountAPI mounts API routes in registration order.

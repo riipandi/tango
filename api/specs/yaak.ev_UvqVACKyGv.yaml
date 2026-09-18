@@ -1,0 +1,30 @@
+type: environment
+model: environment
+id: ev_UvqVACKyGv
+workspaceId: wk_kBiMYTkhPP
+createdAt: 2026-09-17T18:31:24.819966
+updatedAt: 2026-09-18T18:55:16.483408
+name: Proxied
+public: true
+base: false
+parentModel: environment
+parentId: null
+variables:
+- enabled: true
+  name: apiBaseURL
+  value: http://localhost:3000
+  id: Gmppngg85G
+- enabled: true
+  name: accessToken
+  value: dummy
+  id: U9jHzVGUr2
+- enabled: true
+  name: refreshToken
+  value: dummy
+  id: 2d0PbHm4V3
+- enabled: true
+  name: apiKey
+  value: sk_dummy
+  id: V0FA24jptQ
+color: null
+sortPriority: 0.0

@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
@@ -61,6 +63,17 @@ func latestVersion(feed *jobs.Registry) transport.LatestVersionSource {
 		return nil
 	}
 	return feed
+}
+
+// mountRPC composes the module-owned Connect services: the version
+// surface (mixed public/protected methods) plus every module RPC
+// registration.
+func mountRPC(rt *registry.Runtime) func(chi.Router) {
+	return func(r chi.Router) {
+		prefix, handler := transport.VersionRPCService(latestVersion(rt.Jobs), rt.SessionAuthenticator())
+		r.Handle(prefix+"*", handler)
+		rt.MountRPC(r)
+	}
 }
 
 // Run starts the server and shuts it down on signal.
@@ -153,7 +166,12 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		{Name: "database", Check: db.HealthCheck},
 	}
 
-	srv := transport.NewHTTPServer(transport.RouteSet{MountRoot: rt.MountRoot, MountAPI: rt.MountAPI, RequireSession: rt.SessionGuard()}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs), healthChecks)
+	srv := transport.NewHTTPServer(transport.RouteSet{
+		MountRoot:      rt.MountRoot,
+		MountAPI:       rt.MountAPI,
+		MountRPC:       mountRPC(rt),
+		RequireSession: rt.SessionGuard(),
+	}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs), healthChecks)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	serveErr := make(chan error, 1)
 	go func() {

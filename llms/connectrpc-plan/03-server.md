@@ -1,9 +1,25 @@
 ---
-status: planned
-updated: 2026-09-18
+status: done
+updated: 2026-09-19
 ---
 
 # Phase 03: Go ConnectRPC Server
+
+> Completed 2026-09-19 (pilot groups: system.VersionService + admin.ApiKeyService). Delivered:
+> `MountRPC` on the route set (module services register into the shared /rpc chi tree; unknown
+> procedures answer Connect 404s, reflection is not mounted and a test pins that); bearer-only RPC
+> authentication — `middleware.RPCSessionAuth` resolves `Authorization: Bearer` through the same
+> session store (cookies never authorize an RPC, expired/revoked/unknown tokens share one
+> enumeration-safe message), and the version surface applies it per-procedure via a unary
+> interceptor (Current protected, Latest public); `pkg/validate` failures map to structured
+> invalid-argument errors via `internal/rpcerr`; TypeID-only path IDs; show-once secrets ride the
+> create/renew responses only. Integration tests run through the real transport with
+> testcontainers, covering every ApiKeyService method plus the missing/malformed/expired/revoked
+> bearer branches. Yaak evidence (folder `[ConnectRPC] System (smoke)`): Latest anonymous 200,
+> Current anonymous 401, Current with bearer 200, ApiKey Create 200 (show-once), ApiKey List 200,
+> ApiKey Create with a malformed expiry → invalid_argument 400. Unsupported transports (native
+> gRPC, gRPC-Web) are not mounted and answer not_found; unary Connect over HTTP/1.1 is the only
+> claimed transport. Remaining service groups follow in their cutover phases with the same shape.
 
 ## Outcome
 

@@ -4,6 +4,8 @@
 package identity
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 
 	"github.com/riipandi/tango/internal/kernel"
@@ -88,6 +90,21 @@ func New(
 		recovery:  recovery,
 		totp:      totp,
 	}
+}
+
+// rpcServiceProvider is implemented by features that expose a Connect
+// service beside their REST routes.
+type rpcServiceProvider interface {
+	RPCService() (string, http.Handler)
+}
+
+// APIKeyRPCService returns the API key Connect registration, or the
+// not-found stub when the feature is unwired.
+func (m *Module) APIKeyRPCService() (string, http.Handler) {
+	if provider, ok := m.apikeys.(rpcServiceProvider); ok && m.apikeys != nil {
+		return provider.RPCService()
+	}
+	return "", http.NotFoundHandler()
 }
 
 // APIRoutes mounts the user core, then every wired feature's
