@@ -11,6 +11,17 @@ modules:
 lint:
   use:
     - STANDARD
+  # The plan pins contracts flat in api/connect/*.proto — one folder,
+  # module-owning package names — and shared request messages
+  # (PageRequest, Get*Request) are reused across RPCs. The directory
+  # rules below contradict that flat layout by design.
+  except:
+    - PACKAGE_DIRECTORY_MATCH
+    - PACKAGE_SAME_DIRECTORY
+    - DIRECTORY_SAME_PACKAGE
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
 
 breaking:
   use:

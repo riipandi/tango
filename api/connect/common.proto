@@ -1,0 +1,24 @@
+// Shared contract messages for every internal list RPC.
+syntax = "proto3";
+
+package tango.common.v1;
+
+option go_package = "github.com/riipandi/tango/gen/proto/go/tango/common/v1;commonv1";
+
+// PageRequest bounds one list call. `page` starts at 1; `limit` caps
+// the result size. List responses echo the effective values in
+// PageMetadata.
+message PageRequest {
+  int32 page = 1;
+  int32 limit = 2;
+}
+
+// PageMetadata carries the pagination block shared by list responses.
+message PageMetadata {
+  int32 page = 1;
+  int32 limit = 2;
+  int32 total_pages = 3;
+  int32 total_items = 4;
+  int32 first_item_index = 5;
+  int32 last_item_index = 6;
+}

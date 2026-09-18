@@ -21,6 +21,7 @@ tasks:
   # ----------------------------------------------------------------------------
   dev:
     desc: Run Vite dev server (frontend :3000 + Go API :3080)
+    deps: [rpc:generate]
     cmd: pnpm exec vite dev {{.CLI_ARGS}}
 
   run:
@@ -40,6 +41,7 @@ tasks:
   # ----------------------------------------------------------------------------
   build:
     desc: Build frontend + Go binary (single file)
+    deps: [rpc:generate]
     cmd: pnpm exec vite build {{.CLI_ARGS}}
 
   build:release:
@@ -72,6 +74,7 @@ tasks:
   # ----------------------------------------------------------------------------
   test:
     desc: Run all tests (Go + frontend)
+    deps: [rpc:generate]
     cmds:
       - task: test:go
       - task: test:ui
@@ -122,8 +125,36 @@ tasks:
 
   typecheck:
     desc: Run TypeScript type checking
+    deps: [rpc:generate]
     cmd: pnpm exec tsc -b --noEmit
 
+  # ----------------------------------------------------------------------------
+  # ConnectRPC contracts
+  # ----------------------------------------------------------------------------
+  rpc:generate:
+    desc: Generate Go + TypeScript from api/connect/*.proto
+    cmds:
+      - buf generate
+      - gofmt -w gen/proto/go
+      - task: rpc:stamp
+
+  rpc:lint:
+    desc: Lint protobuf contracts
+    cmd: buf lint
+
+  rpc:breaking:
+    desc: Check protobuf contracts for breaking changes
+    cmd: buf breaking --against '.git#ref=HEAD~1,subdir=api/connect'
+
+  rpc:stamp:
+    desc: Refresh the contract stamp used by stale detection
+    cmd: sh -c 'find api/connect buf.yaml buf.gen.yaml -type f | LC_ALL=C sort | xargs shasum -a 256 > .rpc-gen.stamp'
+
+  rpc:stale:
+    desc: Fail when generated code is out of date with the contracts
+    cmds:
+      - sh -c 'find api/connect buf.yaml buf.gen.yaml -type f | LC_ALL=C sort | xargs shasum -a 256 > /tmp/rpc-stamp.now'
+      - sh -c 'diff .rpc-gen.stamp /tmp/rpc-stamp.now || (echo "contracts changed — run task rpc:generate" && exit 1)'
   # ----------------------------------------------------------------------------
   # Dependencies
   # ----------------------------------------------------------------------------

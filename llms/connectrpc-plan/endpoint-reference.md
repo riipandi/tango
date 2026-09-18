@@ -407,14 +407,40 @@ from `/api` once its replacement and callers are verified.
 
 ## Generated code layout (decision)
 
-- Contracts: `api/connect/*.proto` — hand-written only, committed, never generated into.
-- Go generated: `gen/proto/go/` — committed; package option
-  `github.com/riipandi/tango/gen/proto/go/tango/<module>/v1` (module ∈ `identity`, `admin`,
-  `federation`, `webhook`, `system`); Go package suffix `<module>v1`. Stale-generated detection in CI.
-- TypeScript generated: `app/generated/rpc/` — not committed (already covered by `/app/generated/`
-  in `.gitignore`); produced by the generation task before dev/build/typecheck from a clean checkout.
-- Generation: buf with pinned plugin versions (`buf.yaml` + `buf.gen.yaml` added in phase 02);
-  task targets `rpc:generate`, `rpc:lint`, `rpc:breaking`.
+- Contracts: `api/connect/*.proto` — hand-written only, flat layout with module-owning packages
+  (`tango.<module>.v1`); committed, never generated into. The buf directory rules
+  (`PACKAGE_DIRECTORY_MATCH`, `PACKAGE_SAME_DIRECTORY`, `DIRECTORY_SAME_PACKAGE`) and the RPC
+  request/response naming rules (shared `PageRequest`/`Get*Request` reuse) are excluded in
+  `buf.yaml` for that reason.
+- Generated output is **never committed** (see `8e515d2`): Go lands in `gen/proto/go/` (package
+  option `github.com/riipandi/tango/gen/proto/go/tango/<module>/v1`, Go package suffix
+  `<module>v1`), TypeScript lands in `app/generated/rpc/` — both untracked. `task rpc:generate`
+  produces both and refreshes `.rpc-gen.stamp` (hash of contracts + buf configs, committed);
+  `test`, `dev`, `build`, and `typecheck` depend on it, so a clean checkout always generates
+  before compiling. `task rpc:stale` fails when the stamp no longer matches the contracts.
+- TypeScript runtime: `@bufbuild/protobuf` + `@connectrpc/connect` (pinned devDeps; plugins
+  `protoc-gen-es` / `protoc-gen-connect-es` resolve through `pnpm exec`).
+- Task targets: `rpc:generate`, `rpc:lint`, `rpc:breaking`, `rpc:stale`.
+
+## Connect error mapping (contract)
+
+First-party RPC failures use Connect codes; REST equivalents listed for the cutover. Helper
+constructors live in `internal/transport/rpcerr.go` and are the only approved call sites.
+
+| REST status | Connect code | Constructor |
+| --- | --- | --- |
+| 400 / 422 (validation) | `invalid_argument` | `RPCInvalidArgument` |
+| 401 | `unauthenticated` | `RPCUnauthenticated` |
+| 403 | `permission_denied` | `RPCPermissionDenied` |
+| 404 | `not_found` | `RPCNotFound` |
+| 409 | `already_exists` | `RPCAlreadyExists` |
+| 429 | `resource_exhausted` | `RPCResourceExhausted` |
+| 5xx | `internal` | `RPCInternal` |
+
+Wire notes: proto JSON omits default-valued scalars (`disabled: false` is never emitted — RPC
+consumers apply proto default semantics, not the REST "always present" convention); field-level
+validation detail rides the error message until a details message type is frozen; TypeIDs are
+strings at the wire boundary; timestamps are RFC 3339 strings, matching the REST DTOs.
 
 ## Yaak coverage map (phase 00 inventory)
 
