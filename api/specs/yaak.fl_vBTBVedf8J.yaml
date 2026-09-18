@@ -1,21 +1,16 @@
-type: http_request
-model: http_request
-id: rq_f5tKpWWR9L
-createdAt: 2026-09-12T06:54:37.488500
-updatedAt: 2026-09-18T10:47:28.968913
+type: folder
+model: folder
+id: fl_vBTBVedf8J
+createdAt: 2026-09-18T10:46:57.274238
+updatedAt: 2026-09-18T10:46:57.274239
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_EXN58WXkQn
+folderId: fl_t3sGoeSaUF
 authentication: {}
 authenticationType: null
-body: {}
-bodyType: null
-description: 'Tango extension: returns the current session principal'
+description: 'Browser-facing OAuth extension endpoints: PAR, device authorization grant (RFC 8628)'
 headers: []
-method: GET
-name: Get current session
-sortPriority: 333.3333333333333
-url: ${[ apiBaseURL ]}/api/auth/session
-urlParameters: []
+name: OAuth & Device Flows
+sortPriority: 3000.0
 settingSendCookies:
   enabled: false
   value: true
@@ -31,6 +26,9 @@ settingFollowRedirects:
 settingRequestTimeout:
   enabled: false
   value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
 settingHttpVersion:
   enabled: false
   value: auto
