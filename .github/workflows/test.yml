@@ -29,7 +29,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -38,42 +38,58 @@ jobs:
         with:
           goVersion: ${{ matrix.go-version }}
 
-      - if: ${{ steps.pnpm-cache.outputs.cache-hit != 'true' }}
-        name: Install dependencies
+      - name: Install dependencies
         run: |
           pnpm install --ignore-scripts --frozen-lockfile
           go mod download && go mod tidy
-          go install github.com/go-task/task/v3/cmd/task@latest
           go install gotest.tools/gotestsum@latest
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-          # templ generate
 
       - name: Setup golangci-lint toolchain
         uses: golangci/golangci-lint-action@v9
         with:
           github-token: ${{ github.token }}
           install-mode: binary
-          version: v2.11
+          # Must be built with Go >= the version targeted by go.mod (1.27).
+          version: v2.13
 
+      # Mirrors `task check lint` (Taskfile.yml).
       - name: Check code quality
-        run: task check lint
+        run: |
+          go vet ./...
+          pnpm exec oxfmt --check
+          pnpm exec oxlint
+          golangci-lint run -c .golangci.yml ./...
+          pnpm exec oxlint --fix .
         env:
-          GOEXPERIMENT: jsonv2
           NODE_ENV: production
 
+      # Mirrors `task typecheck` (Taskfile.yml).
+      - name: Type check (TypeScript)
+        run: pnpm exec tsc -b --noEmit
+        env:
+          NODE_ENV: production
+
+      # Mirrors `task test:ui` (Taskfile.yml).
       - name: Run unit tests (frontend)
-        run: task test:ui
+        run: pnpm exec vitest run
         env:
           NODE_ENV: production
 
+      # Mirrors `task test:go` (Taskfile.yml).
       - name: Run unit tests (backend)
-        run: task test:go
+        run: gotestsum --format testname ./...
         env:
-          GOEXPERIMENT: jsonv2
           NODE_ENV: production
 
-      - name: Build application binaries
-        run: task build
+      # Mirrors `task test:go:debug` (Taskfile.yml).
+      - name: Run unit tests (backend, debug tags)
+        run: gotestsum --format testname -- -tags debug ./cmd/... ./database/...
         env:
-          GOEXPERIMENT: jsonv2
+          NODE_ENV: production
+
+      # Mirrors `task build` (Taskfile.yml).
+      - name: Build application binaries
+        run: pnpm exec vite build
+        env:
           NODE_ENV: production

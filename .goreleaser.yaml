@@ -12,7 +12,6 @@ metadata:
 
 env:
   - CGO_ENABLED=0
-  - GOEXPERIMENT=jsonv2
   - NODE_ENV=production
   - VITEST=true
 
@@ -21,7 +20,7 @@ before:
     - go mod download
     - go mod tidy
     - pnpm install --ignore-scripts --frozen-lockfile
-    - pnpm run build
+    - pnpm exec vite build
     # - swag init --output ./api -d cmd,internal,modules,pkg -g tango/main.go --quiet
     # - swag fmt --dir ./api
 
