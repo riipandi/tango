@@ -110,7 +110,7 @@ services:
 
   silo:
     <<: *common
-    image: docker.io/pgsty/silo:${MINIO_VERSION:-latest}
+    image: docker.io/pgsty/silo:${SILO_VERSION:-latest}
     hostname: silo
     ports: ["9100:9100", "9101:9101"]
     environment:

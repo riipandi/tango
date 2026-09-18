@@ -117,8 +117,8 @@ tasks:
   lint:
     desc: Run all linters (Go + JS)
     cmds:
-      - golangci-lint run -c .golangci.yml ./...
       - pnpm exec oxlint --fix .
+      - golangci-lint run -c .golangci.yml ./...
 
   typecheck:
     desc: Run TypeScript type checking

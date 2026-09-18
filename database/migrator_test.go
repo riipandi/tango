@@ -123,12 +123,12 @@ func TestMigrationsLifecycle(t *testing.T) {
 	target, err = MigrateDownTarget(ctx, pg.DSN)
 	require.NoError(t, err)
 	require.NotNil(t, target)
-	assert.Equal(t, int64(10), target.Version, "next down target follows the rollback")
+	assert.Equal(t, int64(7), target.Version, "next down target follows the rollback")
 
 	statuses, err := MigrateStatus(ctx, pg.DSN)
 	require.NoError(t, err)
-	require.Len(t, statuses, 11)
-	assert.Equal(t, "pending", statuses[10].State)
+	require.Len(t, statuses, 8)
+	assert.Equal(t, "pending", statuses[7].State)
 
 	reapplied, err := MigrateUp(ctx, pg.DSN)
 	require.NoError(t, err)

@@ -21,8 +21,9 @@ type MinIO struct {
 	Secret    string
 }
 
-// minioImage is the MinIO image used by integration tests.
-const minioImage = "minio/minio:latest"
+// minioImage is the S3-compatible object store used by integration tests.
+// pgsty/silo is a drop-in MinIO replacement.
+const minioImage = "docker.io/pgsty/silo:latest"
 
 var (
 	minioOnce   sync.Once
