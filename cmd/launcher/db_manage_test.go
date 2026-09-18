@@ -2,10 +2,10 @@ package launcher
 
 import (
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 
+	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,11 +15,16 @@ import (
 // against the shared testcontainer database: dump, a failing mode,
 // and the gated restore/import paths. Runs in both build variants.
 func TestDBLifecycle(t *testing.T) {
-	requirePGTools(t)
 	chdirRepoRoot(t)
 
 	pg := testutils.StartPostgres(t.Context(), t)
 	t.Setenv("DATABASE_URL", pg.DSN)
+	// The CLI runs client tools through the container, so no host
+	// PostgreSQL installation is required.
+	prevExecutor := database.DefaultExecutor
+	database.DefaultExecutor = &testutils.ContainerExecutor{PG: pg}
+	t.Cleanup(func() { database.DefaultExecutor = prevExecutor })
+
 	// Isolate on-disk state: backups land in a temp data root.
 	dataDir := t.TempDir()
 	t.Setenv("APP_DATA_DIR", dataDir)
@@ -88,15 +93,4 @@ func backupPathFromOutput(t *testing.T, out string) string {
 	fields := strings.Fields(line)
 	require.NotEmpty(t, fields, "output must contain the backup path: %q", out)
 	return strings.TrimSpace(fields[len(fields)-1])
-}
-
-// requirePGTools skips the test when PostgreSQL client tools are unavailable.
-func requirePGTools(t *testing.T) {
-	t.Helper()
-
-	for _, tool := range []string{"pg_dump", "pg_restore", "psql"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf("%s not in PATH; install the PostgreSQL client tools", tool)
-		}
-	}
 }

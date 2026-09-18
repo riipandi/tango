@@ -35,13 +35,33 @@ const (
 	systemSchemaExcludes = "-N information_schema -N pg_catalog -N pg_toast"
 )
 
-// pgTool resolves a client binary from PATH.
-func pgTool(name string) (string, error) {
-	path, err := exec.LookPath(name)
-	if err != nil {
-		return "", fmt.Errorf("%s not found in PATH; install the PostgreSQL client tools", name)
-	}
-	return path, nil
+// Executor runs PostgreSQL client commands. env carries the process
+// environment (including PGPASSWORD, which must never appear in argv).
+// The default implementation uses host binaries; tests can provide a
+// container-backed implementation.
+type Executor interface {
+	PGDump(ctx context.Context, env []string, args []string, outputPath string) error
+	PGRestore(ctx context.Context, env []string, args []string) error
+	PSQL(ctx context.Context, env []string, args []string) error
+}
+
+// DefaultExecutor is the executor used by the package-level Dump,
+// Export, Restore, and Import helpers. Tests override it.
+var DefaultExecutor Executor = LocalExecutor{}
+
+// LocalExecutor runs commands using host binaries.
+type LocalExecutor struct{}
+
+func (LocalExecutor) PGDump(ctx context.Context, env []string, args []string, outputPath string) error {
+	return runTool(ctx, env, "pg_dump", append(args, "-f", outputPath)...)
+}
+
+func (LocalExecutor) PGRestore(ctx context.Context, env []string, args []string) error {
+	return runTool(ctx, env, "pg_restore", args...)
+}
+
+func (LocalExecutor) PSQL(ctx context.Context, env []string, args []string) error {
+	return runTool(ctx, env, "psql", args...)
 }
 
 // connParts holds parsed DSN fields for the client binaries.
@@ -86,15 +106,17 @@ func (c connParts) env() []string {
 	return append(os.Environ(), "PGPASSWORD="+c.Password)
 }
 
-// run executes a client binary, streaming to process stdio.
-func runTool(ctx context.Context, parts connParts, name string, args ...string) error {
-	bin, err := pgTool(name)
+// runTool executes a client binary on the host. env must carry
+// PGPASSWORD when the DSN has one; without it the binary prompts on
+// the terminal and blocks the caller.
+func runTool(ctx context.Context, env []string, name string, args ...string) error {
+	bin, err := exec.LookPath(name)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s not found in PATH; install the PostgreSQL client tools", name)
 	}
 
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = parts.env()
+	cmd.Env = env
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -134,6 +156,11 @@ func restrictBackupFile(target string) error {
 // Dump writes a custom-format backup. all = schema+data,
 // data = data only. Returns the file path.
 func Dump(ctx context.Context, dsn, mode, dir string) (string, error) {
+	return DumpWithExecutor(ctx, DefaultExecutor, dsn, mode, dir)
+}
+
+// DumpWithExecutor writes a custom-format backup using the provided executor.
+func DumpWithExecutor(ctx context.Context, exec Executor, dsn, mode, dir string) (string, error) {
 	if mode != "all" && mode != "data" {
 		return "", fmt.Errorf("unknown dump mode %q (want all or data)", mode)
 	}
@@ -157,12 +184,11 @@ func Dump(ctx context.Context, dsn, mode, dir string) (string, error) {
 	}
 	args = append(args,
 		"-F", "c",
-		"-f", target,
 	)
 	args = append(args, strings.Fields(systemSchemaExcludes)...)
 	args = append(args, "--no-owner", "--no-acl")
 
-	if err := runTool(ctx, parts, "pg_dump", args...); err != nil {
+	if err := exec.PGDump(ctx, parts.env(), args, target); err != nil {
 		return "", err
 	}
 	return target, restrictBackupFile(target)
@@ -171,6 +197,11 @@ func Dump(ctx context.Context, dsn, mode, dir string) (string, error) {
 // Export writes a plain-SQL backup. all = schema+data with clean
 // statements, data = inserts only. Returns the file path.
 func Export(ctx context.Context, dsn, mode, dir string) (string, error) {
+	return ExportWithExecutor(ctx, DefaultExecutor, dsn, mode, dir)
+}
+
+// ExportWithExecutor writes a plain-SQL backup using the provided executor.
+func ExportWithExecutor(ctx context.Context, exec Executor, dsn, mode, dir string) (string, error) {
 	if mode != "all" && mode != "data" {
 		return "", fmt.Errorf("unknown export mode %q (want all or data)", mode)
 	}
@@ -194,13 +225,10 @@ func Export(ctx context.Context, dsn, mode, dir string) (string, error) {
 	} else {
 		args = append(args, "--clean", "--if-exists")
 	}
-	args = append(args,
-		"-f", target,
-	)
 	args = append(args, strings.Fields(systemSchemaExcludes)...)
 	args = append(args, "--no-owner", "--no-acl")
 
-	if err := runTool(ctx, parts, "pg_dump", args...); err != nil {
+	if err := exec.PGDump(ctx, parts.env(), args, target); err != nil {
 		return "", err
 	}
 	return target, restrictBackupFile(target)
@@ -209,34 +237,43 @@ func Export(ctx context.Context, dsn, mode, dir string) (string, error) {
 // Restore loads a custom-format dump. all = schema+data (--clean),
 // data = data only, schema = schema only. Destructive.
 func Restore(ctx context.Context, dsn, mode, dumpFile string) error {
-	bin, parts, args, err := restoreArgs(dsn, mode, dumpFile)
+	return RestoreWithExecutor(ctx, DefaultExecutor, dsn, mode, dumpFile)
+}
+
+// RestoreWithExecutor loads a custom-format dump using the provided executor.
+func RestoreWithExecutor(ctx context.Context, exec Executor, dsn, mode, dumpFile string) error {
+	args, err := restoreArgs(dsn, mode, dumpFile)
 	if err != nil {
 		return err
 	}
-	return runToolWith(ctx, bin, parts, args...)
+	parts, err := parseDSN(dsn)
+	if err != nil {
+		return err
+	}
+	return exec.PGRestore(ctx, parts.env(), args)
 }
 
 // RestoreCommand renders the pg_restore call for --dry-run.
 func RestoreCommand(dsn, mode, dumpFile string) (string, error) {
-	bin, parts, args, err := restoreArgs(dsn, mode, dumpFile)
+	args, err := restoreArgs(dsn, mode, dumpFile)
 	if err != nil {
 		return "", err
 	}
-	return commandString(bin, parts, args), nil
+	return commandString("pg_restore", args), nil
 }
 
 // restoreArgs validates and builds pg_restore arguments.
-func restoreArgs(dsn, mode, dumpFile string) (string, connParts, []string, error) {
+func restoreArgs(dsn, mode, dumpFile string) ([]string, error) {
 	if mode != "all" && mode != "data" && mode != "schema" {
-		return "", connParts{}, nil, fmt.Errorf("unknown restore mode %q (want all, data, or schema)", mode)
+		return nil, fmt.Errorf("unknown restore mode %q (want all, data, or schema)", mode)
 	}
 	if _, err := os.Stat(dumpFile); err != nil {
-		return "", connParts{}, nil, fmt.Errorf("dump file: %w", err)
+		return nil, fmt.Errorf("dump file: %w", err)
 	}
 
 	parts, err := parseDSN(dsn)
 	if err != nil {
-		return "", connParts{}, nil, err
+		return nil, err
 	}
 
 	args := parts.baseArgs()
@@ -252,41 +289,46 @@ func restoreArgs(dsn, mode, dumpFile string) (string, connParts, []string, error
 	args = append(args, strings.Fields(systemSchemaExcludes)...)
 	args = append(args, dumpFile)
 
-	bin, err := pgTool("pg_restore")
-	if err != nil {
-		return "", connParts{}, nil, err
-	}
-	return bin, parts, args, nil
+	return args, nil
 }
 
 // Import runs a SQL file with ON_ERROR_STOP=on: the first failure
 // aborts, so partial imports never report success. Destructive.
 func Import(ctx context.Context, dsn, sqlFile string) error {
-	bin, parts, args, err := importArgs(dsn, sqlFile)
+	return ImportWithExecutor(ctx, DefaultExecutor, dsn, sqlFile)
+}
+
+// ImportWithExecutor runs a SQL file using the provided executor.
+func ImportWithExecutor(ctx context.Context, exec Executor, dsn, sqlFile string) error {
+	args, err := importArgs(dsn, sqlFile)
 	if err != nil {
 		return err
 	}
-	return runToolWith(ctx, bin, parts, args...)
+	parts, err := parseDSN(dsn)
+	if err != nil {
+		return err
+	}
+	return exec.PSQL(ctx, parts.env(), args)
 }
 
 // ImportCommand renders the psql call for --dry-run.
 func ImportCommand(dsn, sqlFile string) (string, error) {
-	bin, parts, args, err := importArgs(dsn, sqlFile)
+	args, err := importArgs(dsn, sqlFile)
 	if err != nil {
 		return "", err
 	}
-	return commandString(bin, parts, args), nil
+	return commandString("psql", args), nil
 }
 
 // importArgs validates and builds psql arguments.
-func importArgs(dsn, sqlFile string) (string, connParts, []string, error) {
+func importArgs(dsn, sqlFile string) ([]string, error) {
 	if _, err := os.Stat(sqlFile); err != nil {
-		return "", connParts{}, nil, fmt.Errorf("sql file: %w", err)
+		return nil, fmt.Errorf("sql file: %w", err)
 	}
 
 	parts, err := parseDSN(dsn)
 	if err != nil {
-		return "", connParts{}, nil, err
+		return nil, err
 	}
 
 	args := parts.baseArgs()
@@ -296,26 +338,10 @@ func importArgs(dsn, sqlFile string) (string, connParts, []string, error) {
 		"--quiet",
 	)
 
-	bin, err := pgTool("psql")
-	if err != nil {
-		return "", connParts{}, nil, err
-	}
-	return bin, parts, args, nil
-}
-
-// runToolWith executes a resolved client binary.
-func runToolWith(ctx context.Context, bin string, parts connParts, args ...string) error {
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = parts.env()
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s failed: %w", filepath.Base(bin), err)
-	}
-	return nil
+	return args, nil
 }
 
 // commandString renders a --dry-run line; password stays in env.
-func commandString(bin string, _ connParts, args []string) string {
-	return fmt.Sprintf("%s %s", filepath.Base(bin), strings.Join(args, " "))
+func commandString(bin string, args []string) string {
+	return fmt.Sprintf("%s %s", bin, strings.Join(args, " "))
 }

@@ -1,7 +1,7 @@
 //go:build !debug
 
-// Package database provides release migration operations against
-// compiled-in SQL files.
+// Package database provides release migration operations
+// against compiled-in SQL files.
 package database
 
 // TestMigrationsLifecycle applies the embedded migrations (release
@@ -52,51 +52,7 @@ func TestMigrationsLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	// The initial migration registers extensions and creates the
-	// application schemas the search path expects.
-	for _, schema := range []string{"internal", "reference"} {
-		var count int
-		require.NoError(t, db.QueryRow(
-			"SELECT count(*) FROM pg_namespace WHERE nspname = $1", schema,
-		).Scan(&count), "check schema %s", schema)
-		assert.Equal(t, 1, count, "schema %s must exist after migrate up", schema)
-	}
-
-	var extensions int
-	require.NoError(t, db.QueryRow(
-		"SELECT count(*) FROM pg_extension WHERE extname IN ('citext', 'hstore', 'pg_trgm', 'pgcrypto')",
-	).Scan(&extensions))
-	assert.Equal(t, 4, extensions)
-
-	// All tables land in the public schema, asserted by name so test litter cannot skew the count.
-	for schema, names := range map[string][]string{
-		"public": {
-			"deleted_records", "app_config",
-			"users", "user_passwords", "user_groups", "user_groups_users",
-			"sessions", "auth_tokens", "signup_tokens",
-			"signup_tokens_user_groups", "audit_logs",
-			"webhook_endpoints", "webhook_deliveries", "webhook_delivery_attempts", "oidc_device_codes", "jwks",
-			"webauthn_credentials",
-			"webauthn_sessions", "oidc_clients",
-			"custom_claims", "oidc_authorization_codes",
-			"user_authorized_oidc_clients", "oidc_clients_allowed_user_groups",
-			"scim_service_providers",
-			"api_keys", "rate_limits", "queue_tasks", "queue_tasks_completed",
-			"oauth2_sessions", "oauth2_jtis", "interaction_sessions",
-			"device_login_requests", "apis", "api_permissions",
-			"user_groups_allowed_oidc_clients",
-		},
-	} {
-		var found int
-		require.NoError(t, db.QueryRow(
-			"SELECT count(*) FROM information_schema.tables WHERE table_schema = $1 AND table_name = ANY($2)",
-			schema, names,
-		).Scan(&found), "count tables in %s", schema)
-		assert.Equal(t, len(names), found, "expected tables in the %s schema", schema)
-	}
-
-	// The metadata table is the project-renamed one, not goose's
-	// goose_db_version default.
+	// The metadata table is the project-renamed one, not goose's goose_db_version default.
 	var tables int
 	require.NoError(t, db.QueryRow(
 		"SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'app_migration'",

@@ -22,10 +22,8 @@ jobs:
     strategy:
       matrix:
         # @ref: https://github.com/actions/runner-images
-        # macos-15 ARM runners lack nested virtualization, so testcontainers
-        # needs the Intel image (QEMU works without nested virt).
-        os: [ubuntu-24.04, macos-15-intel]
-        go-version: ["1.27.x"]
+        os: [ubuntu-24.04, macos-15]
+        go-version: ["1.27.1"]
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -50,24 +48,13 @@ jobs:
           go install gotest.tools/gotestsum@latest
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
-      # The integration tests run Postgres 18 containers; the distro pg_dump
-      # (16) refuses to talk to an 18 server, so install a matching client.
-      - name: Install PostgreSQL 18 client (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo install -d /usr/share/postgresql-common/pgdg
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo dd of=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
-          . /etc/os-release
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $VERSION_CODENAME-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends postgresql-client-18
-          echo "/usr/lib/postgresql/18/bin" >> $GITHUB_PATH
+      # The integration tests run pg_dump/pg_restore/psql inside the Postgres
+      # container, so no host PostgreSQL client tools are needed.
 
-      # macOS runner images ship neither Docker nor the Postgres client; the
-      # integration tests need both (testcontainers + pg_dump 18). The Intel
-      # image runs colima through QEMU (no nested virtualization required);
-      # colima needs the qemu formula for qemu-img. Homebrew downloads are
-      # cached because installing qemu/colima is slow.
+      # macOS runner images ship neither Docker nor a VM runtime for it. Colima
+      # with the Apple Virtualization framework (vz) runs the Linux VM without
+      # QEMU emulation. Homebrew downloads are cached because installing
+      # colima is slow.
       - name: Cache Homebrew downloads
         if: runner.os == 'macOS'
         uses: actions/cache@v6
@@ -78,7 +65,7 @@ jobs:
           key: homebrew-${{ runner.os }}-${{ hashFiles('.github/workflows/*.yml') }}
           restore-keys: homebrew-${{ runner.os }}-
 
-      # Homebrew auto-update and unpacking the qemu/colima bottles dominate
+      # Homebrew auto-update and unpacking the colima bottles dominate
       # the macOS setup time. Cache the installed Cellar so `brew install`
       # becomes a no-op after the first run; the downloads cache above only
       # helps a cold Cellar miss.
@@ -89,22 +76,22 @@ jobs:
           path: |
             /usr/local/Cellar
             /usr/local/opt
-          key: homebrew-cellar-${{ runner.os }}-v1-${{ hashFiles('.github/workflows/*.yml') }}
+          key: homebrew-cellar-${{ runner.os }}-v2-${{ hashFiles('.github/workflows/*.yml') }}
 
-      - name: Setup Docker and PostgreSQL client (macOS)
+      - name: Setup Docker (macOS)
         if: runner.os == 'macOS'
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: |
-          brew install --quiet docker colima qemu postgresql@18
-          brew link --force --overwrite docker colima qemu postgresql@18 || true
-          colima start --cpu 3 --memory 6 --vm-type qemu
-          echo "$(brew --prefix postgresql@18)/bin" >> $GITHUB_PATH
+          brew install --quiet docker colima
+          brew link --force --overwrite docker colima || true
+          colima start --cpu 3 --memory 6 --vm-type vz
           echo "DOCKER_HOST=unix://$HOME/.colima/default/docker.sock" >> $GITHUB_ENV
 
-      # Pulling images through QEMU networking is slow; persist them between
-      # runs. Linux skips this — direct pulls are faster than save/load.
+      # Pulling images through the colima VM networking is slow; persist them
+      # between runs. Linux skips this — direct pulls are faster than
+      # save/load.
       - name: Cache testcontainers images (macOS)
         if: runner.os == 'macOS'
         uses: actions/cache@v6

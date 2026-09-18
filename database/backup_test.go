@@ -3,7 +3,6 @@ package database
 import (
 	"database/sql"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -12,27 +11,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// requirePGTools skips the backup tests when the PostgreSQL client
-// binaries are not installed locally — the tools run on the host,
-// against the container's published port.
-func requirePGTools(t *testing.T) {
-	t.Helper()
-
-	for _, tool := range []string{"pg_dump", "pg_restore", "psql"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf("%s not in PATH; install the PostgreSQL client tools", tool)
-		}
-	}
-}
-
 // TestBackupRoundTrip covers the full dump → modify → restore
 // cycle plus export and import, against the shared container.
 func TestBackupRoundTrip(t *testing.T) {
-	requirePGTools(t)
 	chdirRepoRoot(t)
 
 	pg := testutils.StartPostgres(t.Context(), t)
 	ctx := t.Context()
+	exec := &testutils.ContainerExecutor{PG: pg}
 
 	// Deterministic starting state: everything applied.
 	freshMigratedDB(ctx, t, pg.DSN)
@@ -44,26 +30,26 @@ func TestBackupRoundTrip(t *testing.T) {
 	// --- Dump (custom format), all and data. Empty dir selects the
 	// default backup directory; the dir-override case is covered
 	// below in the same round trip.
-	fullDump, err := Dump(ctx, pg.DSN, "all", "")
+	fullDump, err := DumpWithExecutor(ctx, exec, pg.DSN, "all", "")
 	require.NoError(t, err)
 	info, err := os.Stat(fullDump)
 	require.NoError(t, err)
 	assert.Greater(t, info.Size(), int64(100), "custom dump must not be empty")
 
-	_, err = Dump(ctx, pg.DSN, "data", t.TempDir())
+	_, err = DumpWithExecutor(ctx, exec, pg.DSN, "data", t.TempDir())
 	require.NoError(t, err)
 
-	_, err = Dump(ctx, pg.DSN, "bogus", "")
+	_, err = DumpWithExecutor(ctx, exec, pg.DSN, "bogus", "")
 	assert.ErrorContains(t, err, "unknown dump mode")
 
 	// --- Export (plain SQL), all and data.
-	fullSQL, err := Export(ctx, pg.DSN, "all", "")
+	fullSQL, err := ExportWithExecutor(ctx, exec, pg.DSN, "all", "")
 	require.NoError(t, err)
 	exported, err := os.ReadFile(fullSQL)
 	require.NoError(t, err)
 	assert.Contains(t, string(exported), "app_migration", "export must contain the metadata table")
 
-	_, err = Export(ctx, pg.DSN, "data", t.TempDir())
+	_, err = ExportWithExecutor(ctx, exec, pg.DSN, "data", t.TempDir())
 	require.NoError(t, err)
 
 	// --- Restore (custom format): objects captured in the dump
@@ -73,12 +59,12 @@ func TestBackupRoundTrip(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE backup_marker_test (id int)")
 	require.NoError(t, err)
 
-	fullDump, err = Dump(ctx, pg.DSN, "all", "")
+	fullDump, err = DumpWithExecutor(ctx, exec, pg.DSN, "all", "")
 	require.NoError(t, err)
 	_, err = db.Exec("ALTER TABLE backup_marker_test ADD COLUMN extra int")
 	require.NoError(t, err)
 
-	require.NoError(t, Restore(ctx, pg.DSN, "all", fullDump))
+	require.NoError(t, RestoreWithExecutor(ctx, exec, pg.DSN, "all", fullDump))
 
 	var columns int
 	require.NoError(t, db.QueryRow(
@@ -95,7 +81,7 @@ func TestBackupRoundTrip(t *testing.T) {
 	require.NoError(t, os.WriteFile(sqlFile, []byte(
 		"CREATE TABLE import_marker_test (id int);\nINSERT INTO import_marker_test VALUES (42);\n",
 	), 0o644))
-	require.NoError(t, Import(ctx, pg.DSN, sqlFile))
+	require.NoError(t, ImportWithExecutor(ctx, exec, pg.DSN, sqlFile))
 
 	var value int
 	require.NoError(t, db.QueryRow("SELECT id FROM import_marker_test LIMIT 1").Scan(&value))
@@ -106,7 +92,7 @@ func TestBackupRoundTrip(t *testing.T) {
 
 	badFile := filepath.Join(t.TempDir(), "bad.sql")
 	require.NoError(t, os.WriteFile(badFile, []byte("SELECT * FROM missing_table_xyz;\n"), 0o644))
-	assert.Error(t, Import(ctx, pg.DSN, badFile), "failing statement must abort the import")
+	assert.Error(t, ImportWithExecutor(ctx, exec, pg.DSN, badFile), "failing statement must abort the import")
 }
 
 // TestRestoreDryRunCommands verifies the command renderers used by
