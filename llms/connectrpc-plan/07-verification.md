@@ -25,8 +25,9 @@ updated: 2026-09-18
    documentation and record the selected transport in the Yaak request description.
 9. Verify the server reflection policy, generated descriptor availability, and Yaak behavior with
    and without reflection as applicable.
-10. Verify CORS and credentials explicitly. The current middleware's wildcard origin and disabled
-    credentials must not be assumed compatible with cookie-authenticated browser RPCs.
+10. Verify CORS, `Authorization`, and credentials explicitly. The current middleware's wildcard
+    origin and disabled credentials must not be assumed compatible with the chosen worker/token
+    bridge. Protected RPCs must fail without a bearer header even when an access-token cookie exists.
 11. Run the repository gates: `task test`, `task lint`, `task check`, `task format`, and
    `task typecheck`.
 12. Run a production build and verify that the embedded SPA calls the same-origin `/rpc` prefix,

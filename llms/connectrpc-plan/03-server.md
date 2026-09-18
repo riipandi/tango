@@ -19,19 +19,22 @@ services and stores.
 3. Reuse the existing principal, session, API-key, admin, and rate-limit authorization contracts.
 4. Add shared middleware/interceptors for request IDs, authentication, authorization, panic
    recovery, logging, deadlines, and error conversion.
-5. Map `pkg/validate` failures to structured Connect invalid-argument errors.
-6. Preserve security invariants: enumeration-safe auth responses, secret redaction, show-once
+5. Authenticate protected RPCs only from the `Authorization: Bearer` header. Treat access and
+   refresh cookies as token storage and refresh/session state, not as an RPC auth fallback.
+6. Map `pkg/validate` failures to structured Connect invalid-argument errors.
+7. Preserve security invariants: enumeration-safe auth responses, secret redaction, show-once
    values, TypeID validation, and transaction boundaries.
-7. Add focused handler tests for every RPC method and authorization branch.
-8. Add integration tests through the real transport, not only direct service calls.
-9. For each service group, create and send Yaak MCP gRPC requests covering success, authentication,
+8. Add focused handler tests for every RPC method and authorization branch, including missing,
+   malformed, expired, revoked, and insufficient-scope bearer tokens.
+9. Add integration tests through the real transport, not only direct service calls.
+10. For each service group, create and send Yaak MCP gRPC requests covering success, authentication,
    validation, and authorization behavior. Update the corresponding Yaak folder/request when the
    RPC contract changes.
-10. Add a reflection implementation or descriptor-serving test for the selected development/test
+11. Add a reflection implementation or descriptor-serving test for the selected development/test
     policy. Do not expose unauthenticated production reflection by accident.
-11. Verify unary gRPC, Connect, and gRPC-Web behavior independently when each is claimed as
+12. Verify unary gRPC, Connect, and gRPC-Web behavior independently when each is claimed as
     supported. Document unsupported transports instead of silently accepting them.
-12. Verify metadata propagation for cookies, API keys, `Authorization`, request IDs, deadlines,
+13. Verify metadata propagation for cookies, API keys, `Authorization`, request IDs, deadlines,
     and Connect/gRPC protocol headers through direct and proxied requests.
 
 ## Boundaries

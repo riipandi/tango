@@ -41,10 +41,20 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
   admin console, CLI, and other first-party internal tools.
 - The REST SDK keeps a small raw HTTP escape hatch for OAuth/OIDC operations that need form
   encoding, redirects, Basic authentication, or bare protocol errors.
+- First-party application RPCs authenticate with `Authorization: Bearer <access-token>`. Cookies
+  are storage for the access and refresh tokens, not the primary RPC authentication transport.
+- The browser token lifecycle is handled by a dedicated web worker. The implementation must resolve
+  the browser security boundary before coding: web workers cannot read `HttpOnly` cookies, so the
+  plan must not assume that a worker can extract tokens from secure cookies.
+- Internal application access/refresh tokens are distinct from OAuth/OIDC tokens issued to external
+  relying parties. The OIDC protocol contract and its bearer/form/Basic authentication rules remain
+  unchanged.
 - The gRPC transport path is a separate decision from the Connect protocol path. A successful
   HTTP/1.1 Connect request does not prove that Yaak gRPC requests work.
 - HTTPS proxy validation must cover the Nginx paths in `compose.yaml`: `3443` through Vite and
   `8443` directly to the Go server. gRPC requires an explicitly verified HTTP/2 forwarding path.
+- The Vite and Nginx paths must forward `Authorization` and relevant Connect/gRPC metadata without
+  falling back to cookie authentication for RPCs.
 - Development/test reflection is allowed only under an explicit policy; production reflection must
   be disabled or access-controlled.
 
@@ -54,7 +64,7 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
 2. [Transport and proxy foundation](./01-transport.md)
 3. [Protobuf and code generation](./02-protobuf.md)
 4. [Go ConnectRPC server](./03-server.md)
-5. [Frontend and internal client](./04-client.md)
+5. [Authentication transport and web worker](./04-client.md)
 6. [Domain-by-domain cutover](./05-cutover.md)
 7. [REST retirement and cleanup](./06-retirement.md)
 8. [Verification and release gate](./07-verification.md)

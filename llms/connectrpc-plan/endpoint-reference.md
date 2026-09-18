@@ -32,13 +32,35 @@ Each row must receive a Yaak request identifier and evidence status after the re
 | REST/HTTP | Standard external protocol and retained HTTP API | OAuth/OIDC RPs, SCIM clients, WebAuthn browser APIs, monitoring, REST SDK consumers, webhook receivers |
 | REST + ConnectRPC | One domain with distinct internal and external contracts | Device login, OIDC administration, webhook administration |
 
+## Internal bearer-token model
+
+Protected ConnectRPC methods require:
+
+```http
+Authorization: Bearer <internal-access-token>
+```
+
+Access and refresh tokens remain stored in secure cookies. Cookie presence alone must not authorize
+an RPC. The frontend worker is responsible for obtaining/refreshing the access token and injecting
+the bearer metadata, but the implementation must resolve the browser boundary first: a web worker
+cannot read `HttpOnly` cookies directly.
+
+The plan must choose and test a token bridge before implementation. The preferred security shape is
+for the worker to call a narrowly scoped same-origin bootstrap/refresh operation with credentials,
+keep only the short-lived access token in worker memory, and never expose the refresh token to
+JavaScript. If a different design makes cookies readable to the worker, its XSS and token-exfiltration
+trade-off must be explicitly documented and approved.
+
+Internal access/refresh tokens are not OIDC relying-party tokens. OIDC token, UserInfo, introspection,
+PAR, and device-flow authentication remains governed by the external protocol contract.
+
 ## Yaak evidence
 
 For each route group, the Yaak request must verify the active wire contract:
 
 - REST: HTTP method, URL, query, headers, cookies/API key, body encoding, status, headers, and
   response body.
-- gRPC/ConnectRPC: package/service/method, metadata, credentials, protobuf message, status code,
+- gRPC/ConnectRPC: package/service/method, bearer metadata, credentials, protobuf message, status code,
   error details, and decoded response.
 
 The endpoint row is not complete until the request has been sent through Yaak MCP against the
@@ -49,9 +71,9 @@ running server. Request names should use `<METHOD> <path>` for REST and the gene
 
 | Method | Endpoint | Protocol | Consumer | Notes |
 | --- | --- | --- | --- | --- |
-| POST | `/api/auth/sign-in` | ConnectRPC | SPA/internal | Session cookie may be set by the RPC response. |
-| POST | `/api/auth/sign-out` | ConnectRPC | SPA/internal | Keep cookie/session middleware shared. |
-| GET | `/api/auth/session` | ConnectRPC | SPA/internal | Replace with `SessionService.GetCurrent`. |
+| POST | `/api/auth/sign-in` | ConnectRPC | SPA/internal | Sets/rotates token cookies; the worker obtains the access token for bearer injection. |
+| POST | `/api/auth/sign-out` | ConnectRPC | SPA/internal | Revokes token family and clears token cookies; bearer required where applicable. |
+| GET | `/api/auth/session` | ConnectRPC | SPA/internal | Requires bearer metadata; cookie presence alone is insufficient. |
 | PUT | `/api/account/password` | ConnectRPC | SPA/internal | Sensitive operation; retain auth rate limit. |
 | GET | `/api/account/sessions` | ConnectRPC | SPA/internal | |
 | DELETE | `/api/account/sessions/{id}` | ConnectRPC | SPA/internal | |

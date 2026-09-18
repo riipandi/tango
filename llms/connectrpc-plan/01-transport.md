@@ -19,24 +19,26 @@ production paths.
 3. Update `vite.config.ts` so `/rpc` is proxied to the Go server with the same origin and cookie
    behavior as `/api`.
 4. Make the proxy work in both Vite development and preview modes; keep Storybook behavior explicit.
-5. Define CORS, credentials, CSRF, request-ID, panic recovery, timeout, and content negotiation
-   behavior for ConnectRPC before adding RPC handlers.
-6. Add route-table tests proving the `/rpc` prefix is mounted once and does not fall through to
+5. Define CORS, `Authorization` metadata, cookie credentials, CSRF, request-ID, panic recovery,
+   timeout, and content negotiation behavior for ConnectRPC before adding RPC handlers.
+6. Make the RPC authentication middleware require `Authorization: Bearer` for protected RPCs.
+   Do not silently fall back to access-token cookies for RPC authorization.
+7. Add route-table tests proving the `/rpc` prefix is mounted once and does not fall through to
    the SPA handler.
-7. Add a transport smoke RPC such as `HealthService.Check` only if it does not conflict with the
+8. Add a transport smoke RPC such as `HealthService.Check` only if it does not conflict with the
    existing health contract; the public health endpoints remain REST.
-8. Use Yaak MCP to create and send a smoke gRPC request against the generated Connect service.
+9. Use Yaak MCP to create and send a smoke gRPC request against the generated Connect service.
    Confirm the selected request protocol, service path, metadata, and response decoding instead
    of manually constructing or editing a Yaak export.
-9. Validate the same request through the proxied HTTPS path provided by the `nginx` service in
+10. Validate the same request through the proxied HTTPS path provided by the `nginx` service in
    `compose.yaml`. The current compose ports are `3443` for the Vite frontend proxy and `8443`
    for the Go backend proxy; use the applicable path for the test being performed.
-10. Verify whether the Nginx path supports gRPC HTTP/2. If gRPC is required through HTTPS, configure
+11. Verify whether the Nginx path supports gRPC HTTP/2. If gRPC is required through HTTPS, configure
     and test the appropriate TLS HTTP/2 listener and gRPC upstream forwarding; ordinary
     `proxy_pass` over HTTP/1.1 is not sufficient evidence for gRPC.
-11. Keep the Connect protocol and gRPC protocol test cases separate. A Connect JSON/HTTP/1.1 request
+12. Keep the Connect protocol and gRPC protocol test cases separate. A Connect JSON/HTTP/1.1 request
     may pass while a gRPC request fails due to HTTP/2 or proxy configuration.
-12. Define how server reflection is exposed for Yaak development/test requests and ensure production
+13. Define how server reflection is exposed for Yaak development/test requests and ensure production
     reflection is disabled or protected by explicit authorization.
 
 ## Vite proxy target
