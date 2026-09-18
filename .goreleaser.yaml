@@ -72,16 +72,6 @@ release:
   mode: prepend
   draft: true
 
-# kos:
-#   - repositories:
-#       - ghcr.io/riipandi/tango
-#     tags:
-#       - "v{{.Version}}"
-#     bare: true
-#     platforms:
-#       - linux/amd64
-#       - linux/arm64
-
 # dockers_v2:
 #   - id: distroless
 #     dockerfile: ./deploy/Dockerfile
