@@ -293,6 +293,26 @@ func TestAdminGuardProtectsListing(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+// TestListRejectsMalformedUserID pins the 400 boundary: a garbage
+// user_id never reaches the store as a Postgres type error.
+func TestListRejectsMalformedUserID(t *testing.T) {
+	mod := New(newTestStore(t))
+	router := mountWithGuards(t, mod)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs/all?user_id=not-a-uuid", nil)
+	req.Header.Set("X-Admin", "1")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// A typed user ID and a bare UUID are both accepted.
+	req = httptest.NewRequest(http.MethodGet, "/api/audit-logs/all?user_id="+fixedPrincipal.UserID, nil)
+	req.Header.Set("X-Admin", "1")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestListFiltersByUserAndEvent(t *testing.T) {
 	ctx := t.Context()
 

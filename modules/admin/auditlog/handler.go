@@ -5,6 +5,7 @@ package auditlog
 import (
 	"net/http"
 	"time"
+	"uuid"
 
 	"github.com/go-chi/chi/v5"
 	"go.jetify.com/typeid"
@@ -57,6 +58,10 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request, scope ListFilters)
 	filters := scope
 	filters.Event = r.URL.Query().Get("event")
 	if raw := r.URL.Query().Get("user_id"); scope.UserID == "" && raw != "" {
+		if !validUUID(raw) {
+			responder.BadRequestJSON(w, r, "user_id must be a UUID or typed user ID")
+			return
+		}
 		filters.UserID = m.uuidUserID(raw)
 	}
 	if raw := r.URL.Query().Get("from"); raw != "" {
@@ -114,4 +119,14 @@ func (m *Module) uuidUserID(raw string) string {
 		return id.UUID()
 	}
 	return raw
+}
+
+// validUUID reports whether raw parses as a bare UUID or a typed ID;
+// anything else is rejected before it reaches the store.
+func validUUID(raw string) bool {
+	if _, err := uuid.Parse(raw); err == nil {
+		return true
+	}
+	id, err := typeid.FromString(raw)
+	return err == nil && !id.IsZero()
 }

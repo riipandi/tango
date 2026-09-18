@@ -57,11 +57,11 @@ func (s *PostgresStore) Record(ctx context.Context, entry *Entry, exec ...datast
 		string(orDefault(entry.Trigger, TriggerUser)),
 		string(orDefault(entry.Status, StatusPending)),
 		payload,
-		valueOrNull(entry.ResourceType),
-		uuidOrNull(entry.ResourceID),
-		uuidOrNull(entry.UserID),
-		uuidOrNull(entry.IPAddress),
-		uuidOrNull(entry.UserAgent),
+		textOrNullValue(entry.ResourceType),
+		textOrNull(entry.ResourceID),
+		textOrNull(entry.UserID),
+		textOrNull(entry.IPAddress),
+		textOrNull(entry.UserAgent),
 		createdAtOrNull(entry),
 	)
 	ib.Returning("id", "created_at")
@@ -119,9 +119,12 @@ func (s *PostgresStore) List(ctx context.Context, filters ListFilters, params Pa
 	for rows.Next() {
 		entry, scanErr := scanEntry(rows)
 		if scanErr != nil {
-			continue
+			return nil, 0, scanErr
 		}
 		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("auditlog store: list: %w", err)
 	}
 	return entries, total, nil
 }
@@ -146,7 +149,7 @@ func (s *PostgresStore) UserFilterValues(ctx context.Context) ([]string, error) 
 	for rows.Next() {
 		var id, username string
 		if scanErr := rows.Scan(&id, &username); scanErr != nil {
-			continue
+			return nil, fmt.Errorf("auditlog store: user filters: %w", scanErr)
 		}
 		out = append(out, id+":"+username)
 	}
@@ -172,7 +175,10 @@ func (s *PostgresStore) ClientNameFilterValues(ctx context.Context) ([]string, e
 	out := []string{}
 	for rows.Next() {
 		var name string
-		if scanErr := rows.Scan(&name); scanErr != nil || name == "" {
+		if scanErr := rows.Scan(&name); scanErr != nil {
+			return nil, fmt.Errorf("auditlog store: client name filters: %w", scanErr)
+		}
+		if name == "" {
 			continue
 		}
 		out = append(out, name)
@@ -238,6 +244,9 @@ func scanEntry(row scanner) (Entry, error) {
 	}, nil
 }
 
+// mustEntryID converts a stored UUID to the typed audit_log ID; the
+// column default guarantees the format, so a failure is a schema
+// defect, not a runtime condition.
 func mustEntryID(uuidText string) AuditLogID {
 	id, err := typeid.FromUUID[AuditLogID](uuidText)
 	if err != nil {
@@ -267,15 +276,16 @@ func orDefault[T ~string](value, fallback T) T {
 	return value
 }
 
-func uuidOrNull(s *string) any {
+// textOrNull maps empty strings to SQL NULL; the pointer form covers
+// the nullable Entry fields, the value form the plain ones.
+func textOrNull(s *string) any {
 	if s == nil || *s == "" {
 		return nil
 	}
 	return *s
 }
 
-// valueOrNull maps empty strings to SQL NULL.
-func valueOrNull(s string) any {
+func textOrNullValue(s string) any {
 	if s == "" {
 		return nil
 	}

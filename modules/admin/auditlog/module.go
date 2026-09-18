@@ -52,7 +52,6 @@ func New(store Store, opts ...Option) *Module {
 
 func (m *Module) Name() string { return ModuleName }
 
-// Record stores an audit entry through the configured store.
 // Record stores an audit entry through the configured store; a
 // non-nil exec joins the caller's transaction.
 func (m *Module) Record(ctx context.Context, entry *Entry, exec ...datastore.Executor) error {
