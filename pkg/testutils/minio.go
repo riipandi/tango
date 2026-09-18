@@ -4,14 +4,12 @@ import (
 	"context"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
-	tcre "github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
+	tcminio "github.com/testcontainers/testcontainers-go/modules/minio"
 )
 
-// MinIO is a running MinIO container.
+// MinIO is a running S3-compatible object store container.
 type MinIO struct {
 	// Endpoint is the S3 API address (http://host:port).
 	Endpoint string
@@ -31,33 +29,26 @@ var (
 	minioErr    error
 )
 
-// StartMinIO returns the shared MinIO container for the test binary.
+// StartMinIO returns the shared object store container for the test binary.
 func StartMinIO(ctx context.Context, t testing.TB) *MinIO {
 	t.Helper()
 
 	minioOnce.Do(func() {
-		container, startErr := tcre.Run(ctx, minioImage,
-			tcre.WithEnv(map[string]string{
-				"MINIO_ROOT_USER":     "minioadmin",
-				"MINIO_ROOT_PASSWORD": "minioadmin",
-			}),
-			tcre.WithCmd("server", "/data"),
-			tcre.WithAdditionalWaitStrategy(
-				wait.ForHTTP("/minio/health/ready").
-					WithPort("9000/tcp").
-					WithStartupTimeout(60*time.Second),
-			),
+		container, startErr := tcminio.Run(ctx, minioImage,
+			tcminio.WithUsername("minioadmin"),
+			tcminio.WithPassword("minioadmin"),
 		)
 		if startErr != nil {
 			minioErr = startErr
 			return
 		}
-		endpoint, endpointErr := container.PortEndpoint(ctx, "9000/tcp", "http")
+		endpoint, endpointErr := container.ConnectionString(ctx)
 		if endpointErr != nil {
 			minioErr = endpointErr
 			return
 		}
-		sharedMinio = &MinIO{Endpoint: endpoint, AccessKey: "minioadmin", Secret: "minioadmin"}
+		// ConnectionString is host:port; consumers expect a full HTTP URL.
+		sharedMinio = &MinIO{Endpoint: "http://" + endpoint, AccessKey: "minioadmin", Secret: "minioadmin"}
 	})
 
 	require.NoError(t, minioErr, "start minio container (docker daemon required)")

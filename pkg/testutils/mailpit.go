@@ -5,11 +5,9 @@ import (
 	"context"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
-	tcre "github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
+	tcmp "github.com/testcontainers/testcontainers-go/modules/mailpit"
 )
 
 // Mailpit is a running Mailpit container.
@@ -39,27 +37,20 @@ func StartMailpit(ctx context.Context, t testing.TB) *Mailpit {
 	t.Helper()
 
 	mailpitOnce.Do(func() {
-		container, startErr := tcre.Run(ctx, mailpitImage,
-			tcre.WithEnv(map[string]string{
-				"MP_SMTP_AUTH":                "maileruser1:mailerpass1",
-				"MP_SMTP_AUTH_ALLOW_INSECURE": "true",
-			}),
-			tcre.WithAdditionalWaitStrategy(
-				wait.ForListeningPort("1025/tcp").
-					WithStartupTimeout(30*time.Second),
-			),
+		container, startErr := tcmp.Run(ctx, mailpitImage,
+			tcmp.WithSMTPAuth("maileruser1", "mailerpass1"),
 		)
 		if startErr != nil {
 			sharedErr = startErr
 			return
 		}
 
-		smtpAddr, endpointErr := container.PortEndpoint(ctx, "1025/tcp", "")
+		smtpAddr, endpointErr := container.SMTPEndpoint(ctx)
 		if endpointErr != nil {
 			sharedErr = endpointErr
 			return
 		}
-		apiURL, endpointErr := container.PortEndpoint(ctx, "8025/tcp", "http")
+		apiURL, endpointErr := container.HTTPURL(ctx)
 		if endpointErr != nil {
 			sharedErr = endpointErr
 			return
