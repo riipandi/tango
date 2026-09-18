@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_LHMCsHN2Ec
 createdAt: 2026-09-13T05:46:29.228891
-updatedAt: 2026-09-14T09:43:28.191746
+updatedAt: 2026-09-18T10:20:23.637014
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_hQjdk2nbAg
 authentication: {}
@@ -19,7 +19,7 @@ description: Create a new user group
 headers: []
 method: POST
 name: Create user group
-sortPriority: 0.0
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/api/user-groups
 urlParameters: []
 settingSendCookies:

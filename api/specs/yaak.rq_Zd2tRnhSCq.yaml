@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_Zd2tRnhSCq
 createdAt: 2026-09-14T09:47:58.203047
-updatedAt: 2026-09-14T09:47:58.203048
+updatedAt: 2026-09-18T10:24:02.235456
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -13,16 +13,16 @@ description: Remove every permission of this API a single OIDC client was allowe
 headers: []
 method: DELETE
 name: Revoke a client's access to an API
-sortPriority: 0.0
+sortPriority: 1912.2085048010977
 url: ${[ apiBaseURL ]}/api/apis/:apiId/clients/:clientId
 urlParameters:
 - enabled: true
-  name: ':apiId'
-  value: 'dummy'
+  name: :apiId
+  value: dummy
   id: jz7gm997it
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
+  name: :clientId
+  value: dummy
   id: jk4896zdxi
 settingSendCookies:
   enabled: false

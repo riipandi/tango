@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_yLjeffCaeM
 createdAt: 2026-09-13T19:24:07.584944
-updatedAt: 2026-09-14T09:44:59.409491
+updatedAt: 2026-09-18T10:23:19.117848
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -17,8 +17,8 @@ sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/api-access/:clientId/apis
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
+  name: :clientId
+  value: dummy
   id: ine7e0uz26
 settingSendCookies:
   enabled: false

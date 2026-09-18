@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_ptNUWgEnDr
 createdAt: 2026-09-14T09:47:38.098730
-updatedAt: 2026-09-14T09:47:38.098731
+updatedAt: 2026-09-18T10:23:40.583010
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -18,12 +18,12 @@ description: Update an existing API by ID
 headers: []
 method: PUT
 name: Update API
-sortPriority: 0.0
+sortPriority: 1555.5555555555554
 url: ${[ apiBaseURL ]}/api/apis/:apiId
 urlParameters:
 - enabled: true
-  name: ':apiId'
-  value: 'dummy'
+  name: :apiId
+  value: dummy
   id: t3geznasn7
 settingSendCookies:
   enabled: false

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_57UnPSbSk7
 createdAt: 2026-09-13T19:23:55.616302
-updatedAt: 2026-09-14T09:44:55.227527
+updatedAt: 2026-09-18T10:24:04.617963
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -21,16 +21,16 @@ description: Replace the permissions of this API a single OIDC client may reques
 headers: []
 method: PUT
 name: Update a client's access to an API
-sortPriority: 0.0
+sortPriority: 1941.472336534065
 url: ${[ apiBaseURL ]}/api/apis/:apiId/clients/:clientId
 urlParameters:
 - enabled: true
-  name: ':apiId'
-  value: 'dummy'
+  name: :apiId
+  value: dummy
   id: 3va7z3nfbk
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
+  name: :clientId
+  value: dummy
   id: frru06x808
 settingSendCookies:
   enabled: false

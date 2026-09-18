@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_a5uCHFxgHT
 createdAt: 2026-09-14T09:47:42.002286
-updatedAt: 2026-09-14T09:47:42.002287
+updatedAt: 2026-09-18T10:23:38.738567
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -13,12 +13,12 @@ description: Delete an API by ID
 headers: []
 method: DELETE
 name: Delete API
-sortPriority: 0.0
+sortPriority: 1333.3333333333333
 url: ${[ apiBaseURL ]}/api/apis/:apiId
 urlParameters:
 - enabled: true
-  name: ':apiId'
-  value: 'dummy'
+  name: :apiId
+  value: dummy
   id: 641o02j9k5
 settingSendCookies:
   enabled: false

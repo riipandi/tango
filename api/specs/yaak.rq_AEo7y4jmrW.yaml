@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_AEo7y4jmrW
 createdAt: 2026-09-14T09:47:31.055467
-updatedAt: 2026-09-14T09:59:07.556747
+updatedAt: 2026-09-18T10:23:28.752919
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -14,12 +14,12 @@ description: 'Get a paginated list of APIs the OIDC client cannot already reach 
 headers: []
 method: GET
 name: List APIs a client can still be granted access to
-sortPriority: 0.0
+sortPriority: 333.3333333333333
 url: ${[ apiBaseURL ]}/api/api-access/:clientId/assignable-apis
 urlParameters:
 - enabled: true
-  name: ':clientId'
-  value: 'dummy'
+  name: :clientId
+  value: dummy
   id: s9co0bx5n7
 - enabled: true
   name: search

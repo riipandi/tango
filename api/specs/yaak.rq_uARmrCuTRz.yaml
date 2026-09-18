@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_uARmrCuTRz
 createdAt: 2026-09-14T09:47:50.020360
-updatedAt: 2026-09-14T09:59:17.250171
+updatedAt: 2026-09-18T10:23:59.184040
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -13,12 +13,12 @@ description: 'Get a paginated list of OIDC clients that may reach the API, with 
 headers: []
 method: GET
 name: List clients with access to an API
-sortPriority: 0.0
+sortPriority: 1868.312757201646
 url: ${[ apiBaseURL ]}/api/apis/:apiId/clients
 urlParameters:
 - enabled: true
-  name: ':apiId'
-  value: 'dummy'
+  name: :apiId
+  value: dummy
   id: 5kt0dnso2q
 - enabled: true
   name: search

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_Yatbd9MemA
 createdAt: 2026-09-13T19:23:31.940854
-updatedAt: 2026-09-14T09:59:02.542915
+updatedAt: 2026-09-18T10:23:33.317379
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -13,7 +13,7 @@ description: 'Get a paginated list of APIs with optional search and sorting (tan
 headers: []
 method: GET
 name: List APIs
-sortPriority: 0.0
+sortPriority: 555.5555555555555
 url: ${[ apiBaseURL ]}/api/apis
 urlParameters:
 - enabled: true

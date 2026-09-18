@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_rXo5WJp9J6
 createdAt: 2026-09-13T19:23:45.436032
-updatedAt: 2026-09-14T09:44:51.041086
+updatedAt: 2026-09-18T10:23:19.119530
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LY5TXMhFfG
 authentication: {}
@@ -27,12 +27,12 @@ description: Replace the full set of permissions for an API
 headers: []
 method: PUT
 name: Update API permissions
-sortPriority: 0.0
+sortPriority: 2000.0
 url: ${[ apiBaseURL ]}/api/apis/:apiId/permissions
 urlParameters:
 - enabled: true
-  name: ':apiId'
-  value: 'dummy'
+  name: :apiId
+  value: dummy
   id: y8augwnzfg
 settingSendCookies:
   enabled: false

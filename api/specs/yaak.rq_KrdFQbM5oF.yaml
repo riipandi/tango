@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_KrdFQbM5oF
 createdAt: 2026-09-14T09:51:14.013260
-updatedAt: 2026-09-15T09:35:45.457077
+updatedAt: 2026-09-18T10:20:26.186385
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_hQjdk2nbAg
 authentication: {}
@@ -13,7 +13,7 @@ description: Retrieve detailed information about a specific user group including
 headers: []
 method: GET
 name: Get user group by ID
-sortPriority: 0.0
+sortPriority: 2333.3333333333335
 url: ${[ apiBaseURL ]}/api/user-groups/:userGroupId
 urlParameters:
 - enabled: true

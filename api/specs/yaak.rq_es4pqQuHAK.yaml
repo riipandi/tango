@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_es4pqQuHAK
 createdAt: 2026-09-13T05:47:03.867624
-updatedAt: 2026-09-14T09:43:25.173233
+updatedAt: 2026-09-18T10:20:23.635750
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_hQjdk2nbAg
 authentication: {}
@@ -19,12 +19,15 @@ urlParameters:
 - enabled: true
   name: query
   value: ''
+  id: null
 - enabled: true
   name: page
   value: '1'
+  id: null
 - enabled: true
   name: limit
   value: '25'
+  id: null
 settingSendCookies:
   enabled: false
   value: true
