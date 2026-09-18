@@ -79,7 +79,7 @@ jobs:
       # cached because installing qemu/colima is slow.
       - name: Cache Homebrew downloads
         if: runner.os == 'macOS'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/Library/Caches/Homebrew/downloads
@@ -99,7 +99,7 @@ jobs:
       # runs. Linux skips this — direct pulls are faster than save/load.
       - name: Cache testcontainers images (macOS)
         if: runner.os == 'macOS'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/tc-images
           key: tc-images-${{ runner.os }}-${{ hashFiles('pkg/testutils/*.go') }}

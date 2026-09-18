@@ -37,7 +37,7 @@ runs:
     # the pnpm store cache above only accelerates a cold install.
     - name: Cache node_modules
       id: node-cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: node_modules
         key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
