@@ -58,6 +58,16 @@ jobs:
           sudo apt-get install -y --no-install-recommends postgresql-client-18
           echo "/usr/lib/postgresql/18/bin" >> $GITHUB_PATH
 
+      # macOS runner images ship neither Docker nor the Postgres client; the
+      # integration tests need both (testcontainers + pg_dump 18).
+      - name: Setup Docker and PostgreSQL client (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install docker colima postgresql@18
+          colima start --cpu 2 --memory 4
+          echo "$(brew --prefix postgresql@18)/bin" >> $GITHUB_PATH
+          echo "DOCKER_HOST=unix://$HOME/.colima/default/docker.sock" >> $GITHUB_ENV
+
       - name: Generate email template
         run: pnpm exec vite build
         env:
