@@ -84,7 +84,7 @@ jobs:
       # helps a cold Cellar miss.
       - name: Cache Homebrew packages (macOS)
         if: runner.os == 'macOS'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             /usr/local/Cellar
