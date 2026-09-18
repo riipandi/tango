@@ -218,11 +218,11 @@ tasks:
   # ----------------------------------------------------------------------------
   compose:up:
     desc: Start docker compose services
-    cmd: docker-compose -f compose.yaml up --detach --remove-orphans
+    cmd: docker compose -f compose.yaml up --detach --remove-orphans
 
   compose:down:
     desc: Stop docker compose services
-    cmd: docker-compose -f compose.yaml down --remove-orphans
+    cmd: docker compose -f compose.yaml down --remove-orphans
 
   compose:cleanup:
     desc: Stop services and remove volumes
