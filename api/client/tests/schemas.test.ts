@@ -15,7 +15,6 @@ import {
   UpdateProfileSchema,
   UserSchema
 } from '../schemas/user.schema'
-import { CreateUserGroupSchema, UserGroupSchema } from '../schemas/usergroup.schema'
 import { WebAuthnBeginSchema, WebAuthnCredentialSchema } from '../schemas/webauthn.schema'
 
 const user = {
@@ -81,12 +80,7 @@ describe('schema contracts', () => {
     expect(AdminUpdateUserSchema.safeParse({ disabled: true }).success).toBe(true)
   })
 
-  it('validates groups, config variables, and webauthn begin payloads', () => {
-    expect(
-      UserGroupSchema.safeParse({ id: 'ug_1', name: 'a', display_name: 'A', created_at: 'x' })
-        .success
-    ).toBe(true)
-    expect(CreateUserGroupSchema.safeParse({ name: 'a' }).success).toBe(false)
+  it('validates config variables and webauthn begin payloads', () => {
     expect(ConfigVariableSchema.safeParse({ key: 'k', type: 'int', value: '1' }).success).toBe(true)
     expect(ConfigVariableSchema.safeParse({ key: 'k', type: 'float', value: '1' }).success).toBe(
       false

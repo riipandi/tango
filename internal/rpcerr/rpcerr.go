@@ -56,6 +56,12 @@ func Internal(message string) error {
 	return connect.NewError(connect.CodeInternal, errString(message))
 }
 
+// Unimplemented reports a contract method the server has not
+// migrated yet; the REST surface keeps serving it meanwhile.
+func Unimplemented(message string) error {
+	return connect.NewError(connect.CodeUnimplemented, errString(message))
+}
+
 type errString string
 
 func (e errString) Error() string { return string(e) }

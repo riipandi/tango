@@ -44,11 +44,6 @@ export type {
   UpdateProfileParams,
   User
 } from './schemas/user.schema'
-export type {
-  CreateUserGroupParams,
-  UpdateUserGroupParams,
-  UserGroup
-} from './schemas/usergroup.schema'
 export type { WebAuthnBeginResult, WebAuthnCredential } from './schemas/webauthn.schema'
 export type { DeviceCodeInfo, DeviceVerifyAction } from './schemas/device.schema'
 export type {

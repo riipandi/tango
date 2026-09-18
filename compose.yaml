@@ -161,6 +161,25 @@ services:
     depends_on:
       pgsql: { condition: service_healthy }
 
+  oidc-tester:
+    <<: *common
+    image: ghcr.io/beryju/oidc-test-client:latest
+    hostname: oidc-tester
+    ports: ["9009:9009"]
+    environment:
+      OIDC_BIND: 0.0.0.0:9009
+      OIDC_CLIENT_ID: test-id
+      OIDC_CLIENT_SECRET: test-secret
+      OIDC_DO_INTROSPECTION: true
+      OIDC_DO_REFRESH: true
+      OIDC_DO_USER_INFO: true
+      OIDC_PROVIDER: https://host.docker.internal:8443
+      OIDC_ROOT_URL: http://localhost:9009
+      OIDC_SCOPES: "openid,offline_access,profile,email"
+      OIDC_TLS_VERIFY: false
+    depends_on:
+      nginx: { condition: service_healthy }
+
   nginx:
     <<: *common
     image: docker.io/nginx:${NGINX_VERSION:-mainline-alpine-slim}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -170,43 +169,13 @@ func apiKeyView(k APIKey) *adminv1.APIKey {
 	return view
 }
 
-// toInt32 saturates a pagination value into the proto int32 range;
-// counts beyond the cap are unreachable in practice but must not
-// overflow the wire type.
-func toInt32(v int) int32 {
-	switch {
-	case v > math.MaxInt32:
-		return math.MaxInt32
-	case v < math.MinInt32:
-		return math.MinInt32
-	default:
-		return int32(v)
-	}
-}
-
 // metadataFrom builds the shared pagination block. An unpaged or
 // all-marker page returns nil, so only paged responses carry metadata.
 func metadataFrom(page Page, total int) *commonv1.PageMetadata {
 	if page.Page < 1 || page.Limit < 1 {
 		return nil
 	}
-	totalPages := (total + page.Limit - 1) / page.Limit
-	first := (page.Page-1)*page.Limit + 1
-	last := page.Page * page.Limit
-	if last > total {
-		last = total
-	}
-	if first > total {
-		first = 0
-	}
-	return &commonv1.PageMetadata{
-		Page:           toInt32(page.Page),
-		Limit:          toInt32(page.Limit),
-		TotalPages:     toInt32(totalPages),
-		TotalItems:     toInt32(total),
-		FirstItemIndex: toInt32(first),
-		LastItemIndex:  toInt32(last),
-	}
+	return rpcerr.PageMetadata(page.Page, page.Limit, total)
 }
 
 // parseRPCTime parses an RFC 3339 timestamp from the wire.

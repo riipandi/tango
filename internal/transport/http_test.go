@@ -2,15 +2,11 @@ package transport
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
-
-	jsonv2 "encoding/json/v2"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/database"
@@ -97,7 +93,7 @@ func TestNewHTTPServerRoutes(t *testing.T) {
 	}{
 		{"/api/healthz", http.StatusOK, true},                   // moved under the /api group
 		{"/api", http.StatusOK, true},                           // identity apiRoot
-		{"/api/users", http.StatusOK, true},                     // identity list
+		{"/api/users", http.StatusNotFound, true},               // users cutover: ConnectRPC only
 		{"/api/version/current", http.StatusUnauthorized, true}, // session-guarded
 		{"/api/version/latest", http.StatusOK, true},            // public release feed
 		{"/api/nope", http.StatusNotFound, true},
@@ -144,24 +140,15 @@ func TestNewHTTPServerMountsModules(t *testing.T) {
 	cfg := testConfig()
 	srv := testServer(t, cfg)
 
-	// Use a unique username because the container may be shared.
-	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
-	body := fmt.Sprintf(`{"username":"transport_%s","email":"transport-%s@example.com"}`, stamp, stamp)
-
+	// The module mount is exercised through the retained bare-bytes
+	// user route; the CRUD surfaces answer Connect 404 documents.
 	w := httptest.NewRecorder()
-	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/users", strings.NewReader(body)))
+	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/users/user_01m2v03pcxe5m850f9098vgaeq/profile-picture.png", nil))
+	assert.Equal(t, http.StatusNotFound, w.Code)
 
-	require.Equal(t, http.StatusCreated, w.Code)
-
-	var payload struct {
-		Status string `json:"status"`
-		Data   struct {
-			Username string `json:"username"`
-		} `json:"data"`
-	}
-	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &payload))
-	assert.Equal(t, "success", payload.Status)
-	assert.True(t, strings.HasPrefix(payload.Data.Username, "transport_"))
+	w = httptest.NewRecorder()
+	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/users", strings.NewReader("{}")))
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestRequestIDMiddleware(t *testing.T) {

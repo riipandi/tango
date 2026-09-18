@@ -65,7 +65,7 @@ describe('error normalization', () => {
     const { fetchMock } = mockFetch([errorEnvelope(401, 'authentication required')])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.account.getProfile())
+    const error = await catchError(client.auth.getSession())
 
     expect(error.message).toBe('authentication required')
     expect(error.status).toBe(401)
@@ -83,7 +83,7 @@ describe('error normalization', () => {
     const { fetchMock } = mockFetch([{ status: 500, body: 'oops' }])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.users.get('user_01j'))
+    const error = await catchError(client.system.versionLatest())
 
     expect(error.code).toBe('api_error')
     expect(error.status).toBe(500)
@@ -95,7 +95,7 @@ describe('error normalization', () => {
     }) as unknown as typeof globalThis.fetch
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.users.list())
+    const error = await catchError(client.system.health())
 
     expect(error.code).toBe('network_error')
     expect(error.status).toBeUndefined()
@@ -109,7 +109,7 @@ describe('error normalization', () => {
     }) as unknown as typeof globalThis.fetch
     const client = createApiClient({ baseUrl: BASE_URL, fetch: abortingFetch })
 
-    const error = await catchError(client.users.list())
+    const error = await catchError(client.system.health())
 
     expect(error.code).toBe('aborted')
   })

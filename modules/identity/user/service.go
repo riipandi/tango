@@ -18,6 +18,11 @@ type Service struct {
 
 	images         ImageStore
 	defaultPicture DefaultPictureFunc
+
+	// groupPort and credentialPort back the cross-feature sections
+	// of the Connect surface; wired by the composition root.
+	groupPort      GroupBindingPort
+	credentialPort CredentialAdminPort
 }
 
 // ServiceOption configures the user core.

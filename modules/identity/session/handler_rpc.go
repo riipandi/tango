@@ -26,40 +26,15 @@ import (
 // interceptor, because a service-wide middleware would lock out the
 // anonymous entry point.
 func (s *Service) RPCService() (string, http.Handler) {
-	prefix, handler := identityv1connect.NewAuthServiceHandler(&authRPC{service: s}, connect.WithInterceptors(authGuard{service: s}), rpcerr.RecoverOption())
-	return prefix, handler
-}
-
-// authGuard lands the principal in context for the protected
-// procedures; SignIn stays anonymous. Streaming hooks are absent by
-// design: the first-party surface is unary only.
-type authGuard struct {
-	service *Service
-}
-
-func (g authGuard) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
-	return next
-}
-
-func (g authGuard) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
-	return next
-}
-
-func (g authGuard) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	protected := map[string]bool{
 		identityv1connect.AuthServiceSignOutProcedure:    true,
 		identityv1connect.AuthServiceGetSessionProcedure: true,
 	}
-	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		if !protected[req.Spec().Procedure] {
-			return next(ctx, req)
-		}
-		principal, err := middleware.ResolveBearer(ctx, g.service, req.Header())
-		if err != nil {
-			return nil, err
-		}
-		return next(middleware.WithPrincipal(ctx, principal), req)
-	}
+	prefix, handler := identityv1connect.NewAuthServiceHandler(&authRPC{service: s},
+		connect.WithInterceptors(middleware.RPCPrincipalGuard(s, protected, nil)),
+		rpcerr.RecoverOption(),
+	)
+	return prefix, handler
 }
 
 type authRPC struct {

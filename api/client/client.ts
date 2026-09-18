@@ -1,7 +1,6 @@
 // Public SDK factory: composes the feature namespaces over one executor.
 
 import { createHttp } from './http'
-import { createAccountModule, type AccountModule } from './modules/account.mod'
 import { createApiAccessModule, type ApiAccessModule } from './modules/apiaccess.mod'
 import { createAPIKeysModule, type APIKeysModule } from './modules/apikeys.mod'
 import { createApisModule, type ApisModule } from './modules/apis.mod'
@@ -16,8 +15,6 @@ import { createOidcClientsModule, type OidcClientsModule } from './modules/oidcc
 import { createScimModule, type ScimModule } from './modules/scim.mod'
 import { createSignupTokensModule, type SignupTokensModule } from './modules/signuptokens.mod'
 import { createSystemModule, type SystemModule } from './modules/system.mod'
-import { createUserGroupsModule, type UserGroupsModule } from './modules/usergroups.mod'
-import { createUsersModule, type UsersModule } from './modules/users.mod'
 import { createWebhooksModule, type WebhooksModule } from './modules/webhooks.mod'
 import type { CallInit, CallResult, HttpMethod } from './types'
 
@@ -36,11 +33,6 @@ export interface ApiClientOptions {
 export interface ApiClient {
   /** Sign-in, recovery, signup, MFA, WebAuthn, one-time access. */
   auth: AuthModule
-  /** Self-service profile, password, sessions, email verification. */
-  account: AccountModule
-  /** Admin user CRUD, membership, credentials, one-time access. */
-  users: UsersModule
-  userGroups: UserGroupsModule
   /** Public bootstrap payload plus the admin settings surface. */
   appConfig: AppConfigModule
   /** Admin relying-party registry. */
@@ -88,9 +80,6 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
   return {
     auth: createAuthModule(exec),
-    account: createAccountModule(exec),
-    users: createUsersModule(exec),
-    userGroups: createUserGroupsModule(exec),
     appConfig: createAppConfigModule(exec),
     oidcClients: createOidcClientsModule(exec),
     consent: createConsentModule(exec),

@@ -61,7 +61,7 @@ func withAPIKeys(deps Deps, sessions *session.Service, audit *auditlog.Module) *
 }
 
 // withWebAuthn builds the passkey feature.
-func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service) identity.APIFeature {
+func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service) (identity.APIFeature, *webauthn.Service) {
 	appURL := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service, err := webauthn.NewService(
 		webauthn.NewPostgresStore(deps.DB),
@@ -77,7 +77,7 @@ func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service) 
 	if err != nil {
 		panic("registry: webauthn init: " + err.Error())
 	}
-	return webauthn.New(service)
+	return webauthn.New(service), service
 }
 
 // newWebhookModule builds the webhook service and queue processor.
@@ -188,13 +188,28 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		user.WithImages(blobStore, defaultPictureProvider(bundled)),
 	)
 
+	groupService := usergroup.NewService(
+		usergroup.NewPostgresStore(deps.DB),
+		recorder,
+		usergroup.WithUserStore(user.NewPostgresStore(deps.DB)),
+	)
+
+	passkeys, webauthnService := withWebAuthn(deps, audit, sessions)
+
+	// The user-core Connect surface binds group memberships and
+	// passkey management through the neutral ports.
+	core.BindRPCPorts(
+		usergroup.NewUserRPCPort(groupService),
+		webauthn.NewUserRPCPort(webauthnService),
+	)
+
 	module := identity.New(
 		core,
 		account.NewService(user.NewPostgresStore(deps.DB), passwords, sessions, recorder),
 		sessions,
-		usergroup.NewService(usergroup.NewPostgresStore(deps.DB), recorder),
+		groupService,
 		customclaim.NewService(customclaim.NewPostgresStore(deps.DB), recorder),
-		withWebAuthn(deps, audit, sessions),
+		passkeys,
 		devicelogin.New(devicelogin.NewService(
 			devicelogin.NewPostgresStore(deps.DB),
 			sessions,

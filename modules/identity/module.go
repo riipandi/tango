@@ -37,9 +37,9 @@ type APIFeature interface {
 // discovery or late registration.
 type Module struct {
 	core      APIFeature
-	account   APIFeature
+	account   Feature
 	sessions  APIFeature
-	groups    APIFeature
+	groups    Feature
 	claims    APIFeature
 	passkeys  APIFeature
 	devices   APIFeature
@@ -57,9 +57,9 @@ type Module struct {
 // routes.
 func New(
 	core APIFeature,
-	account APIFeature,
+	account Feature,
 	sessions APIFeature,
-	groups APIFeature,
+	groups Feature,
 	claims APIFeature,
 	passkeys APIFeature,
 	devices APIFeature,
@@ -98,6 +98,44 @@ type rpcServiceProvider interface {
 	RPCService() (string, http.Handler)
 }
 
+// userRPCProvider is the user core's Connect registration; it takes
+// the shared access authenticator because the surface mixes admin
+// and self procedures.
+type userRPCProvider interface {
+	RPCService(auth kernel.AccessAuthenticator) (string, http.Handler)
+}
+
+// notFoundRPC is the stub for unwired surfaces; unknown procedures
+// already answer Connect 404s at the mount.
+func notFoundRPC() (string, http.Handler) {
+	return "", http.NotFoundHandler()
+}
+
+// UserRPCService returns the user-core Connect registration.
+func (m *Module) UserRPCService(auth kernel.AccessAuthenticator) (string, http.Handler) {
+	if provider, ok := m.core.(userRPCProvider); ok {
+		return provider.RPCService(auth)
+	}
+	return notFoundRPC()
+}
+
+// GroupRPCService returns the group Connect registration.
+func (m *Module) GroupRPCService() (string, http.Handler) {
+	if provider, ok := m.groups.(rpcServiceProvider); ok {
+		return provider.RPCService()
+	}
+	return notFoundRPC()
+}
+
+// AccountRPCService returns the self-service account Connect
+// registration.
+func (m *Module) AccountRPCService() (string, http.Handler) {
+	if provider, ok := m.account.(rpcServiceProvider); ok {
+		return provider.RPCService()
+	}
+	return notFoundRPC()
+}
+
 // APIKeyRPCService returns the API key Connect registration, or the
 // not-found stub when the feature is unwired.
 func (m *Module) APIKeyRPCService() (string, http.Handler) {
@@ -109,16 +147,12 @@ func (m *Module) APIKeyRPCService() (string, http.Handler) {
 
 // APIRoutes mounts the user core, then every wired feature's
 // endpoints, in construction order. Unwired features stay unmounted.
+// Account and groups carry no REST routes anymore — they serve
+// ConnectRPC exclusively.
 func (m *Module) APIRoutes(r chi.Router, g RouteGroups) {
 	m.core.APIRoutes(r, g)
-	if m.account != nil {
-		m.account.APIRoutes(r, g)
-	}
 	if m.sessions != nil {
 		m.sessions.APIRoutes(r, g)
-	}
-	if m.groups != nil {
-		m.groups.APIRoutes(r, g)
 	}
 	if m.claims != nil {
 		m.claims.APIRoutes(r, g)

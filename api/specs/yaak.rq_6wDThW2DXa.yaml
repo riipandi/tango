@@ -1,0 +1,50 @@
+type: http_request
+model: http_request
+id: rq_6wDThW2DXa
+createdAt: 2026-09-18T20:58:00.984820
+updatedAt: 2026-09-18T20:58:00.984821
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_Zg3xFLU2hm
+authentication: {}
+authenticationType: none
+body:
+  bodyType: application/json
+  text: '{"name":"yaak_group_1","display_name":"Yaak Group"}'
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+- enabled: true
+  name: Authorization
+  value: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6Imp3a18wMW0ydHp3czFwZXE4c2U1MjUzY2N0emZ2biIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1ZSwiYXVkIjpbInRhbmdvOnJwYyJdLCJleHAiOjE3ODk3NjU1MzcsImlhdCI6MTc4OTc2NDkzNywiaXNzIjoidGFuZ286aW50ZXJuYWwiLCJzaWQiOiJzZXNzaW9uXzAxbTJ2NHY5cXplbnc5cnFqMHpkejYwODF0Iiwic3ViIjoidXNlcl8wMW0ydHp3aGgwZmc1OTJteGM1OHljM3BnZCJ9.Xu2osfsTRrqKT-Sx1_TqZ3NBb-gQWRRwKo_0DyGEyU5W38i-57gqDJrL9jYhCXX9o8-Lpo_cL4POF5hPOzI7m7jMm6BWKis2gtWECdbkWRT9tHEHhb6-io2YbDvQV0-huz02XSLH_tnzUAhfvVtYDArrkNB6N2AH88lYzIkQSoirH4mq5JBIgABVT9gY2t7aMMxt7SsyO9t1OdFoAY8RbPb1u6r0nSV4hMvU0abNjzrr4ijW2jnEIWYQUlHRV_ihN_k9G0fbuIjGCXrki7LxIjN975UWWj7XgDZYTrnHXR6QZtXvEoYPel0YT_FExVSmVbvsK5U9k9Is3xFoASHn_w
+  id: null
+method: POST
+name: UserGroupService CreateGroup
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/CreateGroup
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

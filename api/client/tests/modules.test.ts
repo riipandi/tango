@@ -456,31 +456,6 @@ describe('system module', () => {
   })
 })
 
-describe('users/me self-service', () => {
-  const user = {
-    id: 'user_01j',
-    username: 'abbey',
-    email: 'a@t.local',
-    display_name: 'A',
-    is_admin: false,
-    disabled: false,
-    created_at: 'x'
-  }
-
-  it('reads and updates the own profile', async () => {
-    const { fetchMock, calls } = mockFetch([envelope(user), envelope(user)])
-    const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    await expect(c.users.me()).resolves.toMatchObject({ id: 'user_01j' })
-    await expect(c.users.updateMe({ display_name: 'Abbey', locale: 'id' })).resolves.toMatchObject({
-      username: 'abbey'
-    })
-
-    expect(expectCall(calls, 0).path).toBe('/api/users/me')
-    expect(expectCall(calls, 1).body).toBe(JSON.stringify({ display_name: 'Abbey', locale: 'id' }))
-  })
-})
-
 describe('signupTokens module', () => {
   const token = {
     id: 'st_01j',
@@ -553,9 +528,9 @@ describe('apiKey auth handling', () => {
     const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock, apiKey: 'old' })
 
     c.setApiKey('new')
-    await c.users.list()
+    await c.apis.list()
     c.setApiKey(undefined)
-    await c.users.list()
+    await c.apis.list()
 
     expect(expectCall(calls, 0).headers.get('x-api-key')).toBe('new')
     expect(expectCall(calls, 1).headers.get('x-api-key')).toBeNull()

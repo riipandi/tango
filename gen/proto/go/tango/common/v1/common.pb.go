@@ -24,12 +24,14 @@ const (
 )
 
 // PageRequest bounds one list call. `page` starts at 1; `limit` caps
-// the result size. List responses echo the effective values in
-// PageMetadata.
+// the result size; `query` is the free-text filter (ILIKE over the
+// names the domain lists). List responses echo the effective values
+// in PageMetadata.
 type PageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
 	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Query         string                 `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -76,6 +78,13 @@ func (x *PageRequest) GetLimit() int32 {
 		return x.Limit
 	}
 	return 0
+}
+
+func (x *PageRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
 }
 
 // PageMetadata carries the pagination block shared by list responses.
@@ -167,10 +176,11 @@ var File_common_proto protoreflect.FileDescriptor
 
 const file_common_proto_rawDesc = "" +
 	"\n" +
-	"\fcommon.proto\x12\x0ftango.common.v1\"7\n" +
+	"\fcommon.proto\x12\x0ftango.common.v1\"M\n" +
 	"\vPageRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\xcc\x01\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x14\n" +
+	"\x05query\x18\x03 \x01(\tR\x05query\"\xcc\x01\n" +
 	"\fPageMetadata\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x1f\n" +

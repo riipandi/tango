@@ -99,9 +99,9 @@ running server. Request names should use `<METHOD> <path>` for REST and
 | POST | `/api/auth/sign-out` | ConnectRPC | SPA/internal | Revokes token family and clears token cookies; bearer required where applicable. |
 | GET | `/api/auth/session` | ConnectRPC | SPA/internal | Requires bearer metadata; cookie presence alone is insufficient. |
 | POST | `/api/auth/token` | REST | Auth worker | Cookie bridge: access/refresh cookies in, `access_token` + rotation out; HttpOnly channel, never bearer. |
-| PUT | `/api/account/password` | ConnectRPC | SPA/internal | Sensitive operation; retain auth rate limit. |
-| GET | `/api/account/sessions` | ConnectRPC | SPA/internal | |
-| DELETE | `/api/account/sessions/{id}` | ConnectRPC | SPA/internal | |
+| PUT | `/api/account/password` | ConnectRPC | SPA/internal | Sensitive operation; retain auth rate limit; REST route removed in phase 05. |
+| GET | `/api/account/sessions` | ConnectRPC | SPA/internal | REST route removed in phase 05. |
+| DELETE | `/api/account/sessions/{id}` | ConnectRPC | SPA/internal | REST route removed in phase 05. |
 | POST | `/api/auth/forgot-password` | REST + ConnectRPC | Browser/email bootstrap | ConnectRPC for SPA; retain HTTP option for unauthenticated email flows if needed. |
 | POST | `/api/auth/reset-password` | REST + ConnectRPC | Browser/email bootstrap | Do not expose reset secrets in logs or generic RPC errors. |
 | POST | `/api/mfa/totp/enroll` | ConnectRPC | SPA/internal | Show-once secret in typed response. |
@@ -122,21 +122,21 @@ running server. Request names should use `<METHOD> <path>` for REST and
 
 | Methods | Endpoint | Protocol | Consumer | Notes |
 | --- | --- | --- | --- | --- |
-| GET, POST | `/api/users` | ConnectRPC | Admin console/internal | `UserService.List` and `Create`. |
-| GET, PUT, DELETE | `/api/users/{id}` | ConnectRPC | Admin console/internal | |
-| GET, PUT | `/api/users/me` | ConnectRPC | SPA/internal | |
-| PUT, DELETE | `/api/users/me/profile-picture` | ConnectRPC | SPA/internal | Multipart/image encoding needs a deliberate RPC bytes message. |
-| GET | `/api/users/{id}/profile-picture.png` | REST | Browser/assets | Bare binary response. |
-| PUT, DELETE | `/api/users/{id}/profile-picture` | ConnectRPC | Admin console/internal | Use bytes in the RPC message, not a REST multipart envelope. |
-| GET | `/api/users/{id}/groups` | ConnectRPC | Admin console/internal | |
-| PUT | `/api/users/{id}/user-groups` | ConnectRPC | Admin console/internal | Atomic replacement. |
-| GET, POST, DELETE | `/api/user-groups` | ConnectRPC | Admin console/internal | |
-| GET, PUT | `/api/user-groups/{id}` | ConnectRPC | Admin console/internal | |
-| PUT | `/api/user-groups/{id}/users` | ConnectRPC | Admin console/internal | |
-| PUT | `/api/user-groups/{id}/allowed-oidc-clients` | ConnectRPC | Admin console/internal | |
+| GET, POST | `/api/users` | ConnectRPC | Admin console/internal | `UserService.List` and `Create`; REST route removed in phase 05. |
+| GET, PUT, DELETE | `/api/users/{id}` | ConnectRPC | Admin console/internal | REST route removed in phase 05. |
+| GET, PUT | `/api/users/me` | ConnectRPC | SPA/internal | REST route removed in phase 05. |
+| PUT, DELETE | `/api/users/me/profile-picture` | ConnectRPC | SPA/internal | Raw bytes in the RPC message; REST route removed in phase 05. |
+| GET | `/api/users/{id}/profile-picture.png` | REST | Browser/assets | Bare binary response; retained. |
+| PUT, DELETE | `/api/users/{id}/profile-picture` | ConnectRPC | Admin console/internal | Raw bytes in the RPC message; REST route removed in phase 05. |
+| GET | `/api/users/{id}/groups` | ConnectRPC | Admin console/internal | REST route removed in phase 05. |
+| PUT | `/api/users/{id}/user-groups` | ConnectRPC | Admin console/internal | Atomic replacement; REST route removed in phase 05. |
+| GET, POST, DELETE | `/api/user-groups` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| GET, PUT | `/api/user-groups/{id}` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| GET, PUT | `/api/user-groups/{id}/users` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| PUT | `/api/user-groups/{id}/allowed-oidc-clients` | ConnectRPC | Admin console/internal | REST route removed in phase 05. |
 | GET, PUT, DELETE | `/api/users/{id}/webauthn-credentials/*` | ConnectRPC | Admin console/internal | Management CRUD is internal; ceremony endpoints remain REST. |
-| POST | `/api/users/{id}/one-time-access-email` | ConnectRPC | Admin console/internal | Admin action. |
-| POST | `/api/users/{id}/one-time-access-token` | ConnectRPC | Admin console/internal | Raw token remains show-once. |
+| POST | `/api/users/{id}/one-time-access-email` | ConnectRPC | Admin console/internal | Admin action; still REST until its cutover. |
+| POST | `/api/users/{id}/one-time-access-token` | ConnectRPC | Admin console/internal | Raw token remains show-once; still REST until its cutover. |
 
 ## WebAuthn and device login
 
@@ -279,11 +279,27 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `AuthService.GetSession` | GET `/api/auth/session` | bearer | |
 | `AuthService.ForgotPassword` | POST `/api/auth/forgot-password` | public | `REST + ConnectRPC`; rate-limited. |
 | `AuthService.ResetPassword` | POST `/api/auth/reset-password` | public | `REST + ConnectRPC`; rate-limited. |
-| `AccountService.GetAccount` | GET `/api/account` | bearer | |
-| `AccountService.UpdateAccount` | PATCH `/api/account` | bearer | |
-| `AccountService.ChangePassword` | PUT `/api/account/password` | bearer | Rate-limited. |
-| `AccountService.ListSessions` | GET `/api/account/sessions` | bearer | |
-| `AccountService.RevokeSession` | DELETE `/api/account/sessions/{session_id}` | bearer | |
+| `UserService.List` | GET `/api/users` | bearer | Admin; `query` rides PageRequest. |
+| `UserService.Get` | GET `/api/users/{id}` | bearer | Admin; TypeID-only. |
+| `UserService.Create` | POST `/api/users` | bearer | Admin. |
+| `UserService.Update` | PUT `/api/users/{id}` | bearer | Admin. |
+| `UserService.Delete` | DELETE `/api/users/{id}` | bearer | Admin. |
+| `UserService.UpdateMe` | PUT `/api/users/me` | bearer | Self. |
+| `UserService.UpdateMyProfilePicture` | PUT `/api/users/me/profile-picture` | bearer | Self; raw bytes. |
+| `UserService.DeleteMyProfilePicture` | DELETE `/api/users/me/profile-picture` | bearer | Self. |
+| `UserService.UpdateProfilePicture` | PUT `/api/users/{id}/profile-picture` | bearer | Admin; raw bytes. |
+| `UserService.DeleteProfilePicture` | DELETE `/api/users/{id}/profile-picture` | bearer | Admin. |
+| `UserService.ListUserGroups` | GET `/api/users/{id}/groups` | bearer | Admin. |
+| `UserService.ReplaceUserGroups` | PUT `/api/users/{id}/user-groups` | bearer | Admin; atomic. |
+| `UserService.ListWebAuthnCredentials` | GET `/api/users/{id}/webauthn-credentials` | bearer | Admin. |
+| `UserService.UpdateWebAuthnCredential` | PUT `/api/users/{id}/webauthn-credentials/{id}` | bearer | Admin. |
+| `UserService.DeleteWebAuthnCredential` | DELETE `/api/users/{id}/webauthn-credentials/{id}` | bearer | Admin. |
+| `UserGroupService.*` | `/api/user-groups*` | bearer | Admin-only surface; CRUD, members, allowlist. |
+| `AccountService.GetAccount` | GET `/api/account` | bearer | Self. |
+| `AccountService.UpdateAccount` | PATCH `/api/account` | bearer | Self. |
+| `AccountService.ChangePassword` | PUT `/api/account/password` | bearer | Self; rate-limited; revokes other sessions. |
+| `AccountService.ListSessions` | GET `/api/account/sessions` | bearer | Self. |
+| `AccountService.RevokeSession` | DELETE `/api/account/sessions/{id}` | bearer | Self. |
 | `SignupService.Signup` | POST `/api/signup` | public | `REST + ConnectRPC`; rate-limited. |
 | `SignupService.GetSetupAvailability` | GET `/api/signup/setup` | public | |
 | `SignupService.SetupInitialAdmin` | POST `/api/signup/setup` | public | Rate-limited. |

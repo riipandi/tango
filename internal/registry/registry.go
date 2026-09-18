@@ -172,10 +172,25 @@ func (rt *Runtime) SessionAuthenticator() kernel.AccessAuthenticator {
 // MountRPC registers module-owned Connect services into the shared
 // /rpc handler tree. Registration order mirrors MountAPI.
 func (rt *Runtime) MountRPC(r chi.Router) {
+	auth := rt.SessionAuthenticator()
+
+	// Users: the surface mixes admin CRUD with self-service profile
+	// procedures, so the guard is per procedure inside the handler.
+	userPrefix, userHandler := rt.Identity.UserRPCService(auth)
+	r.Handle(userPrefix+"*", userHandler)
+
+	// Groups: the whole surface is admin-only.
+	groupPrefix, groupHandler := rt.Identity.GroupRPCService()
+	r.Handle(groupPrefix+"*", middleware.RPCAdminGuard(auth)(groupHandler))
+
+	// Account: every procedure is self-service.
+	accountPrefix, accountHandler := rt.Identity.AccountRPCService()
+	r.Handle(accountPrefix+"*", middleware.RPCSessionAuth(auth)(accountHandler))
+
 	// API keys: always session-authenticated, scoped to the caller —
 	// the same contract as the REST surface.
-	prefix, handler := rt.Identity.APIKeyRPCService()
-	r.Handle(prefix+"*", middleware.RPCSessionAuth(rt.SessionAuthenticator())(handler))
+	keyPrefix, keyHandler := rt.Identity.APIKeyRPCService()
+	r.Handle(keyPrefix+"*", middleware.RPCSessionAuth(auth)(keyHandler))
 
 	// Authentication lifecycle: the service mixes a public method
 	// (SignIn) with protected ones and guards its own procedures.
