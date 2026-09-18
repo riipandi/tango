@@ -78,11 +78,28 @@ jobs:
           key: homebrew-${{ runner.os }}-${{ hashFiles('.github/workflows/*.yml') }}
           restore-keys: homebrew-${{ runner.os }}-
 
+      # Homebrew auto-update and unpacking the qemu/colima bottles dominate
+      # the macOS setup time. Cache the installed Cellar so `brew install`
+      # becomes a no-op after the first run; the downloads cache above only
+      # helps a cold Cellar miss.
+      - name: Cache Homebrew packages (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/Cellar
+            /usr/local/opt
+          key: homebrew-cellar-${{ runner.os }}-v1-${{ hashFiles('.github/workflows/*.yml') }}
+
       - name: Setup Docker and PostgreSQL client (macOS)
         if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: |
-          brew install docker colima qemu postgresql@18
-          colima start --cpu 2 --memory 4 --vm-type qemu
+          brew install --quiet docker colima qemu postgresql@18
+          brew link --force --overwrite docker colima qemu postgresql@18 || true
+          colima start --cpu 3 --memory 6 --vm-type qemu
           echo "$(brew --prefix postgresql@18)/bin" >> $GITHUB_PATH
           echo "DOCKER_HOST=unix://$HOME/.colima/default/docker.sock" >> $GITHUB_ENV
 
