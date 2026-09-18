@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_nSP7XyStag
 createdAt: 2026-09-13T08:48:44.907010
-updatedAt: 2026-09-18T10:14:33.936985
+updatedAt: 2026-09-18T10:19:31.935842
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,7 +13,7 @@ description: Retrieve information about the currently authenticated user
 headers: []
 method: GET
 name: Get current user
-sortPriority: 1000.0
+sortPriority: 16868.312757201646
 url: ${[ apiBaseURL ]}/api/users/me
 urlParameters: []
 settingSendCookies:

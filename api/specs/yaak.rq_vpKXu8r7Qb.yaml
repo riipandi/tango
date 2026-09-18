@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_vpKXu8r7Qb
 createdAt: 2026-09-13T16:08:56.960163
-updatedAt: 2026-09-18T10:14:33.941004
+updatedAt: 2026-09-18T10:19:51.851724
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -17,8 +17,8 @@ bodyType: application/json
 description: Rename a specific WebAuthn credential for a user
 headers: []
 method: PUT
-name: Rename user passkey
-sortPriority: 11000.0
+name: '[Tango] Rename user passkey'
+sortPriority: 21000.0
 url: ${[ apiBaseURL ]}/api/users/:id/webauthn-credentials/:credentialId
 urlParameters:
 - enabled: true

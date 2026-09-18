@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_5kV3otZpj5
 createdAt: 2026-09-13T16:09:15.285877
-updatedAt: 2026-09-18T10:14:33.941934
+updatedAt: 2026-09-18T10:19:27.767231
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,7 +13,7 @@ description: Delete a specific WebAuthn credential for a user
 headers: []
 method: DELETE
 name: Delete user passkey
-sortPriority: 12000.0
+sortPriority: 16802.46913580247
 url: ${[ apiBaseURL ]}/api/users/:id/webauthn-credentials/:credentialId
 urlParameters:
 - enabled: true

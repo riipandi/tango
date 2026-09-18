@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_dumogyHx8S
 createdAt: 2026-09-14T09:51:58.968209
-updatedAt: 2026-09-18T10:14:33.944622
+updatedAt: 2026-09-18T10:19:42.669291
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -19,7 +19,7 @@ description: Update the currently authenticated user's profile picture — multi
 headers: []
 method: PUT
 name: Update current user's profile picture
-sortPriority: 23000.0
+sortPriority: 18111.111111111113
 url: ${[ apiBaseURL ]}/api/users/me/profile-picture
 urlParameters: []
 settingSendCookies:

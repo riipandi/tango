@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_czx65gf2FG
 createdAt: 2026-09-13T16:11:15.021099
-updatedAt: 2026-09-18T10:14:33.937950
+updatedAt: 2026-09-18T10:19:01.188716
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -21,7 +21,7 @@ description: Sign up and generate setup access token for initial admin user
 headers: []
 method: POST
 name: Sign up initial admin user
-sortPriority: 3000.0
+sortPriority: 6000.0
 url: ${[ apiBaseURL ]}/api/signup/setup
 urlParameters: []
 settingSendCookies:

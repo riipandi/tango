@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_bA3zUDn9oo
 createdAt: 2026-09-16T11:28:42.097808
-updatedAt: 2026-09-18T10:14:33.947261
+updatedAt: 2026-09-18T10:19:53.417924
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -12,7 +12,7 @@ bodyType: text/plain
 description: Check initial admin setup availability — 204 while no user exists, 404 after
 headers: []
 method: GET
-name: Check setup availability
+name: '[Tango] Check setup availability'
 sortPriority: 28000.0
 url: ${[ apiBaseURL ]}/api/signup/setup
 urlParameters: []

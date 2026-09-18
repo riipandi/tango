@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_whf6jjjWFs
 createdAt: 2026-09-14T09:52:20.712459
-updatedAt: 2026-09-18T10:14:33.947010
+updatedAt: 2026-09-18T10:19:01.195653
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,7 +13,7 @@ description: Reset a specific user's profile picture to the default
 headers: []
 method: DELETE
 name: Reset user profile picture
-sortPriority: 25000.0
+sortPriority: 15000.0
 url: ${[ apiBaseURL ]}/api/users/:userId/profile-picture
 urlParameters:
 - enabled: true

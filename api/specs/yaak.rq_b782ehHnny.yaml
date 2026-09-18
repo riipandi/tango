@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_b782ehHnny
 createdAt: 2026-09-14T09:51:54.756324
-updatedAt: 2026-09-18T10:14:33.942530
+updatedAt: 2026-09-18T10:19:01.193680
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -21,7 +21,7 @@ description: 'Update the currently authenticated user''s information — tango d
 headers: []
 method: PUT
 name: Update current user
-sortPriority: 13000.0
+sortPriority: 17000.0
 url: ${[ apiBaseURL ]}/api/users/me
 urlParameters: []
 settingSendCookies:

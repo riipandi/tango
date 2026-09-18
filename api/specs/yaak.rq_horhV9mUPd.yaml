@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_horhV9mUPd
 createdAt: 2026-09-14T09:51:33.622165
-updatedAt: 2026-09-18T10:14:33.944973
+updatedAt: 2026-09-18T10:19:01.190884
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -27,7 +27,7 @@ headers:
   id: null
 method: POST
 name: Create user
-sortPriority: 18000.0
+sortPriority: 8000.0
 url: ${[ apiBaseURL ]}/api/users
 urlParameters: []
 settingSendCookies:

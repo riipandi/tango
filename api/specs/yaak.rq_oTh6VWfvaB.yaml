@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_oTh6VWfvaB
 createdAt: 2026-09-16T11:28:54.499803
-updatedAt: 2026-09-18T10:14:33.947511
+updatedAt: 2026-09-18T10:19:55.713020
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -18,7 +18,7 @@ bodyType: application/json
 description: Sign up the initial admin — 200 + session cookie while no user exists, 409 after
 headers: []
 method: POST
-name: Initial admin setup
+name: '[Tango] Initial admin setup'
 sortPriority: 29000.0
 url: ${[ apiBaseURL ]}/api/signup/setup
 urlParameters: []

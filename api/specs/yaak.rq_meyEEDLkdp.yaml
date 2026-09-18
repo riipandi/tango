@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_meyEEDLkdp
 createdAt: 2026-09-14T09:51:38.869768
-updatedAt: 2026-09-18T10:14:33.945430
+updatedAt: 2026-09-18T10:19:01.191395
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -17,7 +17,7 @@ headers:
   id: null
 method: GET
 name: Get user by ID
-sortPriority: 19000.0
+sortPriority: 10000.0
 url: ${[ apiBaseURL ]}/api/users/:userId
 urlParameters:
 - enabled: true

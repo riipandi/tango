@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_sLqtQkxSG6
 createdAt: 2026-09-14T09:52:02.876001
-updatedAt: 2026-09-18T10:14:33.946438
+updatedAt: 2026-09-18T10:19:39.568435
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,7 +13,7 @@ description: Reset the currently authenticated user's profile picture to the def
 headers: []
 method: DELETE
 name: Reset current user's profile picture
-sortPriority: 24000.0
+sortPriority: 17666.666666666668
 url: ${[ apiBaseURL ]}/api/users/me/profile-picture
 urlParameters: []
 settingSendCookies:

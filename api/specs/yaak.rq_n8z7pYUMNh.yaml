@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_n8z7pYUMNh
 createdAt: 2026-09-14T09:52:10.386630
-updatedAt: 2026-09-18T10:14:33.936023
+updatedAt: 2026-09-18T10:19:01.192332
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -13,7 +13,7 @@ description: Request a one-time access email for a specific user (admin only; ta
 headers: []
 method: POST
 name: Request one-time access email (admin)
-sortPriority: 0.0
+sortPriority: 13000.0
 url: ${[ apiBaseURL ]}/api/users/:userId/one-time-access-email
 urlParameters:
 - enabled: true

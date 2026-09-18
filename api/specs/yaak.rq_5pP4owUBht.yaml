@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_5pP4owUBht
 createdAt: 2026-09-14T09:52:16.418069
-updatedAt: 2026-09-18T10:14:33.943846
+updatedAt: 2026-09-18T10:19:01.193010
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -19,7 +19,7 @@ description: Update a specific user's profile picture — multipart file; stored
 headers: []
 method: PUT
 name: Update user profile picture
-sortPriority: 22000.0
+sortPriority: 16000.0
 url: ${[ apiBaseURL ]}/api/users/:userId/profile-picture
 urlParameters:
 - enabled: true

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_2CWv5MApih
 createdAt: 2026-09-12T06:54:07.608088
-updatedAt: 2026-09-18T10:14:33.946030
+updatedAt: 2026-09-18T10:19:01.189305
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vxX8pv5Ccb
 authentication: {}
@@ -16,8 +16,8 @@ headers:
   value: dummy
   id: null
 method: GET
-name: List users (anonymous, guarded)
-sortPriority: 17000.0
+name: List users
+sortPriority: 7000.0
 url: ${[ apiBaseURL ]}/api/users
 urlParameters:
 - enabled: true
