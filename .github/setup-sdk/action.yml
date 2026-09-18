@@ -16,6 +16,11 @@ inputs:
     required: false
     default: ">=1.27.0"
 
+outputs:
+  nodeModules:
+    description: "Whether the node_modules cache was restored"
+    value: ${{ steps.node-cache.outputs.cache-hit }}
+
 runs:
   using: composite
   steps:
@@ -27,6 +32,15 @@ runs:
       with:
         run_install: false
         cache: true
+
+    # Restoring node_modules directly skips the pnpm link step entirely;
+    # the pnpm store cache above only accelerates a cold install.
+    - name: Cache node_modules
+      id: node-cache
+      uses: actions/cache@v4
+      with:
+        path: node_modules
+        key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
     - name: Setup Golang toolchain
       uses: actions/setup-go@v7

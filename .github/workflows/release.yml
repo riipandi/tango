@@ -1,7 +1,8 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
-# git tag --delete v0.0.1
-# git push origin --delete tag v0.0.1
+# git tag -d v0.0.1
+# git push origin --delete v0.0.1
+#
 # git tag v0.0.1 -m "version bump"
 # git push origin v0.0.1
 
@@ -39,13 +40,16 @@ jobs:
           fetch-depth: 0
 
       - name: Run actions/setup-sdk@local
+        id: setup-sdk
         uses: ./.github/setup-sdk
         with:
           goVersion: 1.27.1
 
       - name: Install dependencies
         run: |
-          pnpm install --ignore-scripts --frozen-lockfile
+          if [[ "${{ steps.setup-sdk.outputs.nodeModules }}" != "true" ]]; then
+            pnpm install --ignore-scripts --frozen-lockfile
+          fi
           go mod download && go mod tidy
           go install gotest.tools/gotestsum@latest
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
@@ -71,7 +75,18 @@ jobs:
       # macOS runner images ship neither Docker nor the Postgres client; the
       # integration tests need both (testcontainers + pg_dump 18). The Intel
       # image runs colima through QEMU (no nested virtualization required);
-      # colima needs the qemu formula for qemu-img.
+      # colima needs the qemu formula for qemu-img. Homebrew downloads are
+      # cached because installing qemu/colima is slow.
+      - name: Cache Homebrew downloads
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/Homebrew/downloads
+            ~/Library/Caches/Homebrew/api
+          key: homebrew-${{ runner.os }}-${{ hashFiles('.github/workflows/*.yml') }}
+          restore-keys: homebrew-${{ runner.os }}-
+
       - name: Setup Docker and PostgreSQL client (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -79,6 +94,36 @@ jobs:
           colima start --cpu 2 --memory 4 --vm-type qemu
           echo "$(brew --prefix postgresql@18)/bin" >> $GITHUB_PATH
           echo "DOCKER_HOST=unix://$HOME/.colima/default/docker.sock" >> $GITHUB_ENV
+
+      # Pulling images through QEMU networking is slow; persist them between
+      # runs. Linux skips this — direct pulls are faster than save/load.
+      - name: Cache testcontainers images (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: /tmp/tc-images
+          key: tc-images-${{ runner.os }}-${{ hashFiles('pkg/testutils/*.go') }}
+          restore-keys: tc-images-${{ runner.os }}-
+
+      - name: Restore testcontainers images (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -e
+          for f in /tmp/tc-images/*.tar; do
+            [[ -e "$f" ]] || continue
+            docker load --input "$f"
+          done
+          exit 0
+
+      - name: Save testcontainers images (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -e
+          mkdir -p /tmp/tc-images
+          docker image save --output /tmp/tc-images/postgres-18-alpine.tar docker.io/postgres:18-alpine || true
+          docker image save --output /tmp/tc-images/silo.tar docker.io/pgsty/silo:latest || true
+          docker image save --output /tmp/tc-images/mailpit.tar docker.io/axllent/mailpit:latest || true
+          exit 0
 
       - name: Setup golangci-lint toolchain
         uses: golangci/golangci-lint-action@v9
