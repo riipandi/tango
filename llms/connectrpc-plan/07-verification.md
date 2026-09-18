@@ -28,11 +28,14 @@ updated: 2026-09-18
 10. Verify CORS, `Authorization`, and credentials explicitly. The current middleware's wildcard
     origin and disabled credentials must not be assumed compatible with the chosen worker/token
     bridge. Protected RPCs must fail without a bearer header even when an access-token cookie exists.
-11. Run the repository gates: `task test`, `task lint`, `task check`, `task format`, and
+11. Verify the `vite-plugin-comlink` worker with production-built assets, including worker URL
+    resolution, same-origin policy, worker restart, endpoint release, termination, and absence of
+    raw refresh-token transfer across the worker boundary.
+12. Run the repository gates: `task test`, `task lint`, `task check`, `task format`, and
    `task typecheck`.
-12. Run a production build and verify that the embedded SPA calls the same-origin `/rpc` prefix,
+13. Run a production build and verify that the embedded SPA calls the same-origin `/rpc` prefix,
     while retained REST calls continue using `/api`.
-13. Update the main endpoint reference only if the active contract changed; this plan's reference
+14. Update the main endpoint reference only if the active contract changed; this plan's reference
    remains the transport decision record.
 
 ## Completion criteria

@@ -51,6 +51,12 @@ keep only the short-lived access token in worker memory, and never expose the re
 JavaScript. If a different design makes cookies readable to the worker, its XSS and token-exfiltration
 trade-off must be explicitly documented and approved.
 
+The worker boundary uses `comlink` through `vite-plugin-comlink`: the worker module exports a typed
+auth API and the frontend consumes it through the plugin-generated `ComlinkWorker` proxy. Keep the
+worker API narrow, configure the worker origin explicitly, and release/terminate the worker during
+logout and shutdown. The plugin removes the need for application code to call `Comlink.wrap()` or
+`Comlink.expose()` directly; Comlink does not make `HttpOnly` cookies readable from the worker.
+
 Internal access/refresh tokens are not OIDC relying-party tokens. OIDC token, UserInfo, introspection,
 PAR, and device-flow authentication remains governed by the external protocol contract.
 

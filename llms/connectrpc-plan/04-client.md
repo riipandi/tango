@@ -15,36 +15,56 @@ Make the SPA, admin console, and internal tools use typed ConnectRPC clients whi
 1. Decide the internal access/refresh token format, issuer, audience, TTLs, scopes, rotation,
    revocation, logout behavior, and cookie attributes. Keep these tokens distinct from OIDC RP
    access and refresh tokens.
-2. Define the web worker ownership model for token handling. A worker cannot read `HttpOnly`
-   cookies; choose and document a secure token bridge before implementation. Do not make tokens
-   broadly JavaScript-readable merely to avoid this constraint.
-3. Add a Connect client transport generated from `api/connect/*.proto`, configured with the
+2. Add `comlink` and `vite-plugin-comlink` as frontend dependencies and pin both in the package
+   lock. The plugin requires Vite 5 or newer, which is satisfied by the project toolchain.
+3. Configure `vite-plugin-comlink` near the beginning of the Vite plugin list and include it in
+   `worker.plugins`. Add the plugin's client type reference to `vite-env.d.ts`.
+4. Define a typed `AuthWorkerApi` as exports from a dedicated worker module. Instantiate it from
+   the UI with the plugin's typed `ComlinkWorker<typeof import('./auth.worker')>` API; do not call
+   `Comlink.wrap()` or `Comlink.expose()` manually.
+5. The public worker API should
+   expose commands such as bootstrap, get access token, refresh, sign out, and dispose; it must
+   not expose refresh-token values to the UI thread.
+6. Define the web worker ownership model for token handling. A worker cannot read `HttpOnly`
+   cookies; choose and document a secure token bridge before implementation. Prefer worker-owned
+   same-origin `fetch(..., { credentials: 'include' })` for cookie-backed bootstrap/refresh, with
+   only the short-lived access token held in worker memory.
+7. Configure the worker's origin and lifecycle using the plugin-supported worker options. Do not
+   rely on a wildcard origin for an auth worker; if the plugin does not expose an origin control,
+   enforce same-origin worker URLs and document that limitation. Release the worker endpoint and
+   terminate it on logout, auth reset, or application shutdown.
+8. Decide whether production uses the plugin's bundled classic worker or an explicit module worker
+   (`type: 'module'`). Verify the selected mode in Vite dev, Vite preview, and the embedded release
+   build.
+9. Add a Connect client transport generated from `api/connect/*.proto`, configured with the
    same-origin `/rpc` base URL and credentials.
-4. Add `/rpc` to the Vite proxy and use a relative base URL in the browser.
-5. Update `api/client` to retain only REST namespaces and methods for endpoints marked `REST` or
+10. Add `/rpc` to the Vite proxy and use a relative base URL in the browser.
+11. Update `api/client` to retain only REST namespaces and methods for endpoints marked `REST` or
    REST portions of `REST + ConnectRPC`.
-6. Remove `api/client` methods for routes that move exclusively to ConnectRPC, including their
+12. Remove `api/client` methods for routes that move exclusively to ConnectRPC, including their
    schemas, fixtures, exports, and tests.
-7. Keep `raw()` or dedicated REST protocol methods for OAuth/OIDC, WebAuthn, binary, health,
+13. Keep `raw()` or dedicated REST protocol methods for OAuth/OIDC, WebAuthn, binary, health,
    discovery, and other retained HTTP endpoints.
-8. Update TanStack Query/Router call sites: internal application calls use generated Connect
+14. Update TanStack Query/Router call sites: internal application calls use generated Connect
    clients, while protocol and HTTP calls use `api/client`.
-9. Mirror Connect errors in generated/typed RPC client errors without reintroducing the REST
+15. Mirror Connect errors in generated/typed RPC client errors without reintroducing the REST
    envelope; keep REST error handling in `api/client`.
-10. Update vitest fixtures and tests for both transports, asserting RPC method paths/messages and
+16. Update vitest fixtures and tests for both transports, asserting RPC method paths/messages and
    REST method URLs/bodies/headers separately.
-11. Update `api/client/README.md` to state clearly that the SDK is REST-only and document the
+17. Update `api/client/README.md` to state clearly that the SDK is REST-only and document the
    generated Connect client as a separate integration.
-12. Update Yaak requests through Yaak MCP whenever a REST request, gRPC request, auth header,
+18. Update Yaak requests through Yaak MCP whenever a REST request, gRPC request, auth header,
     metadata field, message, expected status, or response shape changes. Do not edit Yaak export
     files manually.
-13. Decide and test the browser transport explicitly: same-origin Connect, Connect-Web, or another
+19. Decide and test the browser transport explicitly: same-origin Connect, Connect-Web, or another
     supported mode. Do not assume a browser can use native gRPC merely because Yaak can send gRPC.
-14. Test session cookies, API-key metadata, `Authorization`, CSRF behavior, and request IDs through
+20. Test session cookies, API-key metadata, `Authorization`, CSRF behavior, and request IDs through
    both Vite's `/rpc` proxy and the Nginx HTTPS proxy.
-15. Test login, access-token injection, refresh rotation, concurrent refresh, expiry, logout,
-    worker restart, multiple tabs, and revocation. Ensure refresh tokens are never sent as bearer
-    tokens to ordinary RPCs.
+21. Test the plugin-generated worker API and lifecycle: login, access-token injection, refresh rotation,
+    concurrent refresh, expiry, logout, worker restart, multiple tabs, and revocation. Test that
+    Comlink exceptions are converted into typed auth errors, no token is accidentally
+    structured-cloned to the UI thread, and refresh tokens are never sent as bearer tokens to
+    ordinary RPCs.
 
 ## Gate
 

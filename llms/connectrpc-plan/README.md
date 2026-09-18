@@ -46,6 +46,9 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
 - The browser token lifecycle is handled by a dedicated web worker. The implementation must resolve
   the browser security boundary before coding: web workers cannot read `HttpOnly` cookies, so the
   plan must not assume that a worker can extract tokens from secure cookies.
+- Browser-to-worker communication uses `comlink` from `GoogleChromeLabs/comlink` through
+  `vite-plugin-comlink`. The plugin owns worker construction and Comlink wrapping; do not add a
+  parallel hand-written `postMessage`, `Comlink.wrap`, or `Comlink.expose` integration.
 - Internal application access/refresh tokens are distinct from OAuth/OIDC tokens issued to external
   relying parties. The OIDC protocol contract and its bearer/form/Basic authentication rules remain
   unchanged.
