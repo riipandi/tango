@@ -189,15 +189,44 @@ func TestRateLimitWrites429WithRetryAfter(t *testing.T) {
 	assert.Equal(t, "42", w.Header().Get("Retry-After"))
 }
 
-func TestRateLimitedResponseUsesEnvelope(t *testing.T) {
+// TestRateLimitedRPCUsesConnectError pins the /rpc half of the
+// limiter contract: a throttled RPC answers a Connect error document
+// with resource_exhausted, not the REST envelope, because the /rpc
+// mount runs the same limiter middleware.
+func TestRateLimitedRPCUsesConnectError(t *testing.T) {
+	handler := RateLimit(failingLimiter{err: &pgconn.PgError{
+		Code:   "42901",
+		Detail: "Retry after: 42 seconds",
+	}})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("throttled request must not reach the handler")
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/rpc/tango.identity.v1.AuthService/SignIn", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Connect-Protocol-Version", "1")
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+	assert.Equal(t, "42", w.Header().Get("Retry-After"))
+	assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
+	assert.Contains(t, w.Body.String(), `"code":"resource_exhausted"`)
+	assert.NotContains(t, w.Body.String(), `"status":"error"`, "must not be the REST envelope")
+}
+
+// TestRateLimitedRESTKeepsEnvelope pins the retained REST half: the
+// envelope stays for non-/rpc paths.
+func TestRateLimitedRESTKeepsEnvelope(t *testing.T) {
 	handler := RateLimit(failingLimiter{err: &pgconn.PgError{Code: "42901"}})(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			t.Fatal("throttled request must not reach the handler")
 		}))
 
 	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/rpc/tango.identity.v1.AuthService/SignIn", strings.NewReader("")))
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader("")))
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 	assert.Contains(t, w.Body.String(), "rate limit exceeded")
+	assert.Contains(t, w.Body.String(), `"status":"error"`)
 }

@@ -11,8 +11,10 @@ import (
 
 	jsonv2 "encoding/json/v2"
 
+	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -212,10 +214,22 @@ func isLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// rpcErrorWriter renders throttled RPC requests as Connect error
+// documents; it is safe for concurrent use.
+var rpcErrorWriter = connect.NewErrorWriter()
+
 // writeRateLimited writes a 429 response with Retry-After when available.
+// The /rpc mount runs this same limiter, so an RPC client must receive a
+// Connect error document instead of the REST envelope; the error writer
+// negotiates the protocol from the request headers.
 func writeRateLimited(w http.ResponseWriter, r *http.Request, detail string) {
 	if seconds := retryAfter(detail); seconds > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	}
+	if strings.HasPrefix(r.URL.Path, "/rpc/") && rpcErrorWriter.IsSupported(r) {
+		if err := rpcErrorWriter.Write(w, r, rpcerr.ResourceExhausted("rate limit exceeded")); err == nil {
+			return
+		}
 	}
 	responder.Fail(w, r, http.StatusTooManyRequests, "rate limit exceeded")
 }
