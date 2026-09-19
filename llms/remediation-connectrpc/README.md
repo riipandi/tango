@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-09-19
+status: done
+updated: 2026-09-20
 owner: tango-connectrpc-remediation
 ---
 
@@ -148,33 +148,44 @@ decisions, and it does not add features. Two known non-goals stay out of scope:
 
 ## Blocking decisions
 
-One task cannot start until the owner decides:
-
-1. **Task 02.2** — whether to close the gRPC and gRPC-Web transports or document them (keep option
-   recommended).
-
-Task 01.1 was decided on 2026-09-19: **Option A (narrow)**, recorded in
-[`01-authorization.md`](./01-authorization.md).
+None. Task 01.1 was decided on 2026-09-19 (**Option A, narrow**), task 02.2 on
+2026-09-19 (**Option B, keep the transports**), and the task 05.1 scope on
+2026-09-20 (**Option 1, align the RPC response metadata with REST in full**).
+Each decision is recorded in its phase file.
 
 ## Progress
 
 | Task | Finding | State |
 | --- | --- | --- |
-| 01.1 | F1 | done — committed `a0e633b` |
-| 01.2 | F2 | done — committed `19112f3` |
-| 02.1 | F3 | done — committed `7393b1e` |
-| 02.2 | F4 | done — committed `f125111` |
-| 02.3 | F5 | done — committed `6635cb0` |
-| 02.4 | F6 | done — committed `689b7cd` |
-| 02.5 | F7 | done |
-| 02.6 | F16 | done — committed `f5eb5ee` |
-| 02.7 | Y4 | done with 02.5 |
-| 03.1 | F8 | done — committed `6c2c049` |
-| 03.2 | F9 | done — committed `9405f80` |
-| 03.3 | F10 | done — committed `14f3e8b` |
-| 04.1 | F11, F15 | done — committed `1371953` |
-| 04.2 | F12 | done — committed `6bcc4af` |
-| 05.1–06.5 | F13, F14, Y1–Y3, Y5–Y7 | not started |
+| 01.1 | F1 | done — `a0e633b` |
+| 01.2 | F2 | done — `19112f3` |
+| 02.1 | F3 | done — `7393b1e` |
+| 02.2 | F4 | done — `f125111` |
+| 02.3 | F5 | done — `6635cb0` |
+| 02.4 | F6 | done — `689b7cd` |
+| 02.5 | F7, Y4 | done — `40e4ae6`, `23b2bcb` |
+| 02.6 | F16 | done — `f5eb5ee` |
+| 03.1 | F8 | done — `6c2c049` |
+| 03.2 | F9 | done — `9405f80` |
+| 03.3 | F10 | done — `14f3e8b` |
+| 04.1 | F11, F15 | done — `1371953` |
+| 04.2 | F12 | done — `6bcc4af` |
+| 05.1 | F13, F17 | done — `6ca011c` |
+| 05.2 | F14 | done — `a0fea7c`, `723c1d3` |
+| 05.3 | closeout | done — the final gate record is in `05-consistency.md` |
+| 06.1 | Y1 | done — the workspace header is gone; the credential rides its two requests |
+| 06.2 | Y2 | done — the environments chain a real token through the cookie bridge |
+| 06.3 | Y3 | done — bearer auth types declined by decision, recorded in phase 06 |
+| 06.4 | Y4 | done with 02.5 |
+| 06.5 | Y5 | done — `refreshToken` deleted from all four environments |
+| 06.5 | Y6, Y7 | **deferred** — reasons recorded in phase 06 |
+
+Also fixed while executing the plan, outside the original findings:
+
+| Fix | Commit |
+| --- | --- |
+| `validate.FieldErrors` reported "malformed JSON" for any non-ozzo error, so a bad username looked like a syntax problem | `a378a95` |
+| The signup sentinels (`ErrNotFound`, `ErrExhausted`, `ErrInvalidIDs`) had no `rpcError` case, so an unknown signup token answered 500 | `a378a95` |
 
 ## Phase index
 

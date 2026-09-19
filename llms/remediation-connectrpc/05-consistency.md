@@ -188,4 +188,63 @@ Commit: `docs(rpc): close the connectrpc remediation`
 
 ## Final gate record
 
-Pending.
+Run 2026-09-20 (UTC+7) on `refactor-connectrpc` at `a378a95`, macOS, OrbStack Docker.
+
+| Command | Result |
+| --- | --- |
+| `task test` (release + debug + frontend) | pass |
+| `go test ./...` (debug tags) | pass, 44 packages |
+| `pnpm exec vitest run` | 43 tests pass, 7 files |
+| `task lint` | 0 issues |
+| `task check` | clean |
+| `task typecheck` | clean |
+| `task rpc:lint` | clean |
+| `task rpc:stale` | clean |
+| `task rpc:breaking` | **fails by design** — see below |
+
+`task rpc:breaking` reports 12 changes against `HEAD~1`, all from the phase 05
+work: 11 responses changed the type of field 2 from `PageMetadata` to
+`ResponseMetadata`, and `PageMetadata` was deleted. The owner approved the wire
+change (Option 1) and the project has no RPC consumer yet (`index.html:97` still
+comments out the SPA entry, and `app/rpc/client.ts` has no importer beyond its
+own test), so nothing needs migrating.
+
+One flaky test appeared once and passed on re-run in isolation:
+`internal/jobs.TestEmailTaskSurvivesQueueRoundTripAndRenders`. It is unrelated to
+this plan (no file under `internal/jobs/` was modified) and is recorded here
+rather than silently dropped.
+
+### Finding verification
+
+Every finding's own verification method now passes:
+
+| Finding | Verification |
+| --- | --- |
+| F1 | `internal/registry.TestRPCMachineCredentialBoundary` |
+| F2 | `modules/admin/appconfig.TestRPCConfigBootstrapIsAnonymous` |
+| F3 | `internal/transport.TestRPCRejectsWrongMethods` |
+| F4 | `internal/transport.TestRPCServesAllProtocols` |
+| F5 | `internal/registry.TestRPCMatrixDocumentsEveryProcedure` |
+| F6 | `internal/transport/middleware.TestRateLimitedRPCUsesConnectError` |
+| F7 | `internal/transport/middleware.TestCORSPreflight` |
+| F8, F9, F10 | deleted symbols and files; `task lint` and `go build ./...` clean |
+| F11, F12, F15 | the documents now match `git ls-files`, `buf.gen.yaml`, and the mounted routes |
+| F13, F17 | `internal/rpcerr.TestListMetadataMatchesTheRestBlock`, `internal/transport/middleware.TestRateKeyMatchesDatabaseConstraint` |
+| F14 | `scripts/check-yaak-secrets.sh`; no credential literal in `api/specs/` |
+| F16 | `internal/transport/middleware.TestRateKeyMatchesDatabaseConstraint` |
+| Y1–Y5 | live `yaak send` runs against the local stack; the workspace header is gone, credentials ride the environments, `refreshToken` is deleted |
+| Y6, Y7 | deferred with reasons recorded in phase 06 |
+
+### Closing statement
+
+The `/rpc` surface, the documents, and the mounted handlers agree. `AGENTS.md`
+describes the shipped architecture. No plaintext credential is tracked under
+`api/specs/`. Two items stay open by decision, both recorded in phase 06:
+
+- **Y6** — the `REPLACE_*` placeholders stay; only the identifiers that a
+  repeated run must vary now generate themselves (`uuid.v4` plus `regex.match`
+  on the create requests that hit a unique constraint).
+- **Y7** — no template function is used beyond that; `prompt.text` and `secure()`
+  were evaluated and rejected with the reasons in phase 06.
+
+Findings F1–F17 are closed except Y6 and Y7, which are deliberate deferrals.
