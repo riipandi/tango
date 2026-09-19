@@ -17,9 +17,12 @@ updated: 2026-09-19
 > testcontainers, covering every ApiKeyService method plus the missing/malformed/expired/revoked
 > bearer branches. Yaak evidence (folder `[ConnectRPC] System (smoke)`): Latest anonymous 200,
 > Current anonymous 401, Current with bearer 200, ApiKey Create 200 (show-once), ApiKey List 200,
-> ApiKey Create with a malformed expiry → invalid_argument 400. Unsupported transports (native
-> gRPC, gRPC-Web) are not mounted and answer not_found; unary Connect over HTTP/1.1 is the only
-> claimed transport. Remaining service groups follow in their cutover phases with the same shape.
+> ApiKey Create with a malformed expiry → invalid_argument 400. All three protocols that connect-go
+> installs are served on every procedure — Connect Protocol (what the browser uses), gRPC, and
+> gRPC-Web — because no handler option restricts them; gRPC reflection is the transport that is
+> genuinely absent. Unary Connect over HTTP/1.1 is the only *claimed* transport, and
+> `internal/transport.TestRPCServesAllProtocols` pins the other two so the capability is stated
+> rather than assumed. Remaining service groups follow in their cutover phases with the same shape.
 
 ## Outcome
 

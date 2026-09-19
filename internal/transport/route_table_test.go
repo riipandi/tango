@@ -6,6 +6,7 @@ package transport
 // security/CORS headers land on API responses.
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -188,6 +189,47 @@ func TestRPCVersionCurrentWithoutInterceptor(t *testing.T) {
 	var cerr *connect.Error
 	require.True(t, errors.As(err, &cerr))
 	assert.Equal(t, connect.CodeUnauthenticated, cerr.Code())
+}
+
+// TestRPCServesAllProtocols pins the transport capability the plan
+// previously denied: connect-go installs the Connect, gRPC, and
+// gRPC-Web protocol handlers for every procedure by default, and no
+// handler option restricts them. Only the Connect protocol is
+// claimed, so this test states the rest rather than leaving it
+// assumed. gRPC-Web carries the status in a trailer frame, so the
+// assertion reads the framed body; native gRPC answers the gRPC
+// content type.
+func TestRPCServesAllProtocols(t *testing.T) {
+	srv := testServer(t, testConfig())
+
+	call := func(contentType string, headers map[string]string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/rpc/tango.system.v1.HealthService/Check",
+			bytes.NewReader([]byte{0, 0, 0, 0, 0}))
+		req.Header.Set("Content-Type", contentType)
+		for name, value := range headers {
+			req.Header.Set(name, value)
+		}
+		w := httptest.NewRecorder()
+		srv.Router.ServeHTTP(w, req)
+		return w
+	}
+
+	grpcWeb := call("application/grpc-web+proto", nil)
+	require.Equal(t, http.StatusOK, grpcWeb.Code, grpcWeb.Body.String())
+	assert.Contains(t, grpcWeb.Header().Get("Content-Type"), "application/grpc-web")
+	assert.Contains(t, grpcWeb.Body.String(), "grpc-status: 0", "gRPC-Web carries the status in a trailer frame")
+
+	grpc := call("application/grpc+proto", map[string]string{"Te": "trailers"})
+	require.Equal(t, http.StatusOK, grpc.Code, grpc.Body.String())
+	assert.Contains(t, grpc.Header().Get("Content-Type"), "application/grpc")
+
+	connectJSON := httptest.NewRequest(http.MethodPost, "/rpc/tango.system.v1.HealthService/Check", strings.NewReader("{}"))
+	connectJSON.Header.Set("Content-Type", "application/json")
+	connectJSON.Header.Set("Connect-Protocol-Version", "1")
+	w := httptest.NewRecorder()
+	srv.Router.ServeHTTP(w, connectJSON)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.JSONEq(t, `{"status":"ok"}`, w.Body.String())
 }
 
 // TestRPCRejectsReflection pins the reflection policy: no reflection
