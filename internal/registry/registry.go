@@ -174,13 +174,17 @@ func (rt *Runtime) SessionAuthenticator() kernel.AccessAuthenticator {
 // /rpc handler tree. Registration order mirrors MountAPI.
 func (rt *Runtime) MountRPC(r chi.Router) {
 	auth := rt.SessionAuthenticator()
-	// Machine clients (X-API-KEY) may reach the application API; the
-	// chain resolves the credential into a principal before the guard
-	// runs and passes keyless requests through to the bearer path.
+	// Machine clients (X-API-KEY) reach the admin application API
+	// only: the chain resolves the credential into a principal before
+	// the guard runs and passes keyless requests through to the bearer
+	// path. Self-service and credential-lifecycle surfaces stay
+	// session-only, so a leaked key cannot rotate its owner's password
+	// or edit its owner's profile.
 	machine := middleware.RPCAPIKeyAuth(rt.apiKeys.Verify)
 
 	// Users: the surface mixes admin CRUD with self-service profile
-	// procedures, so the guard is per procedure inside the handler.
+	// procedures, so the guard is per procedure inside the handler —
+	// and a machine credential is refused on the self procedures.
 	userPrefix, userHandler := rt.Identity.UserRPCService(auth)
 	r.Handle(userPrefix+"*", machine(userHandler))
 
@@ -188,9 +192,9 @@ func (rt *Runtime) MountRPC(r chi.Router) {
 	groupPrefix, groupHandler := rt.Identity.GroupRPCService()
 	r.Handle(groupPrefix+"*", machine(middleware.RPCAdminGuard(auth)(groupHandler)))
 
-	// Account: every procedure is self-service.
+	// Account: every procedure is self-service and session-only.
 	accountPrefix, accountHandler := rt.Identity.AccountRPCService()
-	r.Handle(accountPrefix+"*", machine(middleware.RPCPrincipalAuth(auth)(accountHandler)))
+	r.Handle(accountPrefix+"*", middleware.RPCPrincipalAuth(auth)(accountHandler))
 
 	// API keys: session-authenticated and scoped to the caller. A
 	// machine credential may list and revoke its own keys, but minting
@@ -215,13 +219,15 @@ func (rt *Runtime) MountRPC(r chi.Router) {
 	r.Handle(mfaPrefix+"*", mfaHandler)
 
 	// One-time access: the anonymous email request plus admin minting
-	// and delivery, guarded per procedure.
+	// and delivery, guarded per procedure. Minting and delivery stay
+	// session-only: they act on another account.
 	otaPrefix, otaHandler := rt.Identity.OneTimeAccessRPCService()
-	r.Handle(otaPrefix+"*", machine(otaHandler))
+	r.Handle(otaPrefix+"*", otaHandler)
 
-	// Email verification: every procedure is self-service.
+	// Email verification: every procedure is self-service and
+	// session-only.
 	emailvPrefix, emailvHandler := rt.Identity.EmailVerificationRPCService()
-	r.Handle(emailvPrefix+"*", machine(middleware.RPCPrincipalAuth(auth)(emailvHandler)))
+	r.Handle(emailvPrefix+"*", middleware.RPCPrincipalAuth(auth)(emailvHandler))
 
 	// API registry: admin-only CRUD plus client grants.
 	apiPrefix, apiHandler := rt.Identity.APIAccessRPCService()

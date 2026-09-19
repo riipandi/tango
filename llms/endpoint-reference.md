@@ -19,10 +19,14 @@ the original REST path for traceability; it is no longer mounted. Protocol and i
 surfaces stay HTTP below `/api` (or their root path) and are marked `REST`.
 
 Protected RPCs authenticate with `Authorization: Bearer <internal-access-token>`; the admin
-application API also accepts `X-API-KEY` for machine clients, except where a row says
-session-only. Cookie presence never authorizes an RPC. `llms/connectrpc-plan/endpoint-reference.md`
+application API also accepts `X-API-KEY` for machine clients. Self-service and credential-lifecycle
+procedures — the account surface, `UserService` self procedures, email verification, one-time
+access administration, signup-token administration, MFA, and device approval — never accept a
+machine credential, so a leaked key cannot rotate its owner's password or edit its owner's profile.
+Cookie presence never authorizes an RPC. `llms/connectrpc-plan/endpoint-reference.md`
 is the authoritative transport decision record and service/method matrix; the retained REST set is
-pinned by `internal/registry.TestRetainedRESTInventory`.
+pinned by `internal/registry.TestRetainedRESTInventory` and the machine-credential boundary by
+`internal/registry.TestRPCMachineCredentialBoundary`.
 
 ## Authentication (tango-only)
 
@@ -34,10 +38,10 @@ only. Contracts below define the full password lifecycle.
 | POST | `/rpc/tango.identity.v1.AuthService/SignIn` | Sign in with password | done — indistinguishable failures for unknown identity vs wrong secret; disabled accounts fail closed; sets the token cookies | `modules/identity/session.TestRPCSignInIssuesCookies`, `modules/identity/session.TestRPCSignInPendingFlow` |
 | POST | `/rpc/tango.identity.v1.AuthService/SignOut` | Sign out | done — revokes the token family and clears cookies; the REST twin below is the worker's cookie-channel fallback | `modules/identity/session.TestRPCSignOutAndSession` |
 | GET | `/rpc/tango.identity.v1.AuthService/GetSession` | Inspect current session | done | `modules/identity/session.TestRPCSignOutAndSession` |
-| GET | `/rpc/tango.identity.v1.AccountService/GetAccount` | Get account | done | `modules/identity/account.TestAccountRPCSelfService` |
-| PUT | `/rpc/tango.identity.v1.AccountService/ChangePassword` | Change own password | done — current secret required; other sessions revoked | `modules/identity/account.TestAccountRPCSelfService` |
-| GET | `/rpc/tango.identity.v1.AccountService/ListSessions` | List own sessions | done | `modules/identity/account.TestAccountRPCSelfService` |
-| DELETE | `/rpc/tango.identity.v1.AccountService/RevokeSession` | Revoke one own session | done | `modules/identity/account.TestAccountRPCSelfService` |
+| GET | `/rpc/tango.identity.v1.AccountService/GetAccount` | Get account | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
+| PUT | `/rpc/tango.identity.v1.AccountService/ChangePassword` | Change own password | done — current secret required; other sessions revoked; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
+| GET | `/rpc/tango.identity.v1.AccountService/ListSessions` | List own sessions | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
+| DELETE | `/rpc/tango.identity.v1.AccountService/RevokeSession` | Revoke one own session | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
 | POST | `/api/auth/token` | Cookie bridge for the auth worker | REST — access/refresh cookies in, access token + rotation out; never bearer | `modules/identity/session.TestTokenBridgeBootstrapAndRotation`, `modules/identity/session.TestTokenBridgeRejectsAnonymous` |
 | POST | `/api/auth/sign-out` | Sign out (cookie channel) | REST — worker fallback when the bearer path is unusable | `modules/identity/session.TestRPCSignOutAndSession` |
 | POST | `/api/auth/forgot-password` | Request a password reset | REST — anonymous; always 204; queues recovery email; the RPC twin answers `unimplemented` | `modules/identity/recovery.TestForgotIsAlwaysGeneric` |
@@ -286,9 +290,9 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | POST | `/rpc/tango.identity.v1.UserService/GetUser` | Get user by ID | done — admin; TypeID only | `modules/identity/user.TestUserRPCAdminLifecycle` |
 | POST | `/rpc/tango.identity.v1.UserService/UpdateUser` | Update user | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |
 | POST | `/rpc/tango.identity.v1.UserService/DeleteUser` | Delete user | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateMe` | Update current user | done — self; profile fields only | `modules/identity/user.TestUserRPCSelfBranches` |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateMyProfilePicture` | Update current user's profile picture | done — self; raw bytes | `modules/identity/user.TestUserRPCPictureBranches` |
-| POST | `/rpc/tango.identity.v1.UserService/DeleteMyProfilePicture` | Reset current user's profile picture | done — self | `modules/identity/user.TestUserRPCPictureBranches` |
+| POST | `/rpc/tango.identity.v1.UserService/UpdateMe` | Update current user | done — self; profile fields only; refuses a machine credential | `modules/identity/user.TestUserRPCSelfBranches` |
+| POST | `/rpc/tango.identity.v1.UserService/UpdateMyProfilePicture` | Update current user's profile picture | done — self; raw bytes; refuses a machine credential | `modules/identity/user.TestUserRPCPictureBranches` |
+| POST | `/rpc/tango.identity.v1.UserService/DeleteMyProfilePicture` | Reset current user's profile picture | done — self; refuses a machine credential | `modules/identity/user.TestUserRPCPictureBranches` |
 | POST | `/rpc/tango.identity.v1.UserService/UpdateProfilePicture` | Update user profile picture | done — admin; raw bytes | `modules/identity/user.TestUserRPCPictureBranches` |
 | POST | `/rpc/tango.identity.v1.UserService/DeleteProfilePicture` | Reset user profile picture | done — admin | `modules/identity/user.TestUserRPCPictureBranches` |
 | POST | `/rpc/tango.identity.v1.UserService/ListUserGroups` | Get user groups | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |

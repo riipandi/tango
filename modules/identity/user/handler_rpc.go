@@ -80,7 +80,9 @@ func (s *Service) BindRPCPorts(groups GroupBindingPort, credentials CredentialAd
 // RPCService returns the Connect registration for the user surface:
 // the procedure prefix and the handler. Admin CRUD and the self
 // profile mix in one service, so the guard is per procedure; the
-// access authenticator comes from the composition root.
+// access authenticator comes from the composition root. The self
+// procedures refuse a machine credential — a leaked key must not edit
+// its owner's profile.
 func (s *Service) RPCService(auth kernel.AccessAuthenticator) (string, http.Handler) {
 	admin := map[string]bool{
 		identityv1connect.UserServiceListUsersProcedure:                true,
@@ -102,7 +104,10 @@ func (s *Service) RPCService(auth kernel.AccessAuthenticator) (string, http.Hand
 		identityv1connect.UserServiceDeleteMyProfilePictureProcedure: true,
 	}
 	prefix, handler := identityv1connect.NewUserServiceHandler(&userRPC{service: s},
-		connect.WithInterceptors(middleware.RPCPrincipalGuard(auth, admin, self)),
+		connect.WithInterceptors(
+			middleware.RPCMachineDenied(self),
+			middleware.RPCPrincipalGuard(auth, admin, self),
+		),
 		rpcerr.RecoverOption(),
 	)
 	return prefix, handler

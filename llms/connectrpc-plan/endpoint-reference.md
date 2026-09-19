@@ -50,11 +50,14 @@ Authorization: Bearer <internal-access-token>
 
 Machine clients may instead send `X-API-KEY: <api-key>` against the admin application API. The
 credential resolves into the same principal shape and is attached to the request context as a
-machine principal; a request carrying both uses the API key. API key self-management is the one
-exception: `ApiKeyService.Create` and `ApiKeyService.Renew` demand a session principal so a leaked
-key cannot extend itself, and the browser ceremony surfaces (device approval, WebAuthn, OIDC
-protocol, the auth lifecycle) never accept a machine credential. A cookie-backed principal never
-satisfies an RPC guard: only a bearer token or an API key resolves one.
+machine principal; a request carrying both uses the API key. The machine credential reaches the
+admin application API only. `ApiKeyService.Create` and `ApiKeyService.Renew` demand a session
+principal so a leaked key cannot extend itself, and the self-service and credential-lifecycle
+surfaces — `AccountService`, the `UserService` self procedures, `EmailVerificationService`,
+`OneTimeAccessService` administration, `SignupService` token administration, MFA, device approval,
+WebAuthn, the OIDC protocol, and the auth lifecycle — never accept a machine credential, so a
+leaked key cannot rotate its owner's password or edit its owner's profile. A cookie-backed
+principal never satisfies an RPC guard: only a bearer token or an API key resolves one.
 
 Access and refresh tokens remain stored in secure cookies. Cookie presence alone must not authorize
 an RPC. The frontend worker is responsible for obtaining/refreshing the access token and injecting
@@ -269,11 +272,14 @@ health/version tables above.
 
 Canonical protobuf contract for every ConnectRPC entry. Packages express module ownership; every
 first-party route maps to exactly one service method. Auth column: `bearer` = protected RPC
-(`Authorization: Bearer <internal-access-token>` required, and the admin/self application
+(`Authorization: Bearer <internal-access-token>` required, and the admin application API
 procedures also accept `X-API-KEY` for machine clients), `public` = anonymous, `pending` =
-pending-auth cookie ceremony as today. Browser ceremony surfaces (device approval, MFA, the auth
-lifecycle, OIDC protocol) never accept a machine credential, and API key create/renew stay
-session-only. Yaak request names follow `<METHOD> /rpc/<package>.<Service>/<Method>`;
+pending-auth cookie ceremony as today. Self-service and credential-lifecycle surfaces never accept
+a machine credential: the account surface, the `UserService` self procedures,
+`EmailVerificationService`, `OneTimeAccessService` administration, `SignupService` token
+administration, device approval, MFA, the auth lifecycle, and the OIDC protocol. API key
+create/renew additionally stay session-only. Yaak request names follow
+`<METHOD> /rpc/<package>.<Service>/<Method>`;
 they are created via Yaak MCP in the implementing phase and the row is not complete until sent.
 
 ### Package `tango.system.v1` — `api/connect/system.proto`

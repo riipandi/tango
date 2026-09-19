@@ -13,9 +13,11 @@ lives in `llms/endpoint-reference.md`; the transport decision record and the ser
   surfaces only: OAuth/OIDC, WebAuthn ceremonies, device-login request and exchange, email links,
   the auth worker's cookie bridge, health, and discovery.
 - **Credentials** — `Authorization: Bearer <access-token>` for protected RPCs. Machine clients may
-  also send `X-API-KEY` on the admin application API; API key create and renew stay session-only so
-  a leaked key cannot extend itself. Cookies are token storage and never authorize an RPC. Browser
-  ceremony surfaces (device approval, MFA, the auth lifecycle) never accept a machine credential.
+  also send `X-API-KEY` on the admin application API only; every self-service and
+  credential-lifecycle surface refuses a machine credential, and API key create and renew stay
+  session-only so a leaked key cannot extend itself or rotate its owner's password. Cookies are
+  token storage and never authorize an RPC. Browser ceremony surfaces (device approval, MFA, the
+  auth lifecycle) never accept a machine credential.
 
 ## Authentication
 
