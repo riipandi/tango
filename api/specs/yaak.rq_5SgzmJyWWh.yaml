@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_5SgzmJyWWh
 createdAt: 2026-09-18T19:38:03.314271
-updatedAt: 2026-09-19T14:51:53.107126
+updatedAt: 2026-09-19T15:14:18.213709
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vJemVfyfFL
 authentication: {}
@@ -12,7 +12,7 @@ body:
     {
       "identity": "admin@example.com",
       "secret": "@admin123"
-    }
+      }
 bodyType: application/json
 description: ''
 headers:

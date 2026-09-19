@@ -2,15 +2,11 @@ type: workspace
 model: workspace
 id: wk_kBiMYTkhPP
 createdAt: 2026-09-12T06:21:47.119344
-updatedAt: 2026-09-15T09:23:12.512626
+updatedAt: 2026-09-19T15:18:58.429370
 authentication: {}
 authenticationType: none
 description: ''
-headers:
-- enabled: true
-  name: X-API-KEY
-  value: ${[ apiKey ]}
-  id: jtiWuKQ6Ar
+headers: []
 name: Tango
 encryptionKeyChallenge: null
 settingValidateCertificates: true
