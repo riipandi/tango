@@ -5,7 +5,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 ## Project Overview
 
 - Port of upstream Pocket ID (`~/Developer/github.com/pocket-id/pocket-id`, tag `v2.14.0` — read it locally, never fetch from the web) onto a Go/Postgres stack, deliberately diverging where the porting plan says so.
-- Read `llms/porting-plan/README.md` before porting or changing API features: active scope, excluded-feature cleanup, atomic tasks, endpoint contract checks, and validation gates are defined there. Use `llms/endpoint-reference.md`, `llms/database-reference.sql`, and `llms/tango-deviations.md` as contract references; `llms/archived/` is historical context only.
+- Read `llms/porting-plan/README.md` before porting or changing API features: active scope, excluded-feature cleanup, atomic tasks, endpoint contract checks, and validation gates are defined there. Use `llms/endpoint-reference.md`, `llms/database-reference.sql`, and `llms/tango-deviations.md` as contract references; `llms/archived/` is historical context only. Transport decisions live in `llms/connectrpc-plan/endpoint-reference.md`; open audit findings live in `llms/remediation-connectrpc/`.
 - The upstream port is complete (parity 112/113, one recorded non-goal); new work should check the deviations doc first so upstream shapes do not leak into handlers.
 
 ## Tech Stack & Tooling
@@ -37,6 +37,42 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 - This is a fresh target implementation: do not add legacy code, backward-compatibility branches, fallback readers, compatibility views, dual writes, transitional columns, or adapters for removed behavior. Delete obsolete paths instead.
 - `llms/database-reference.sql` — upstream schema dump for parity checks.
 
+### Transport split (ConnectRPC vs REST)
+
+- **First-party application API is ConnectRPC below `/rpc`.** The contract is `api/connect/*.proto`
+  (flat layout, module-owning packages `tango.<module>.v1`); handlers are generated from it.
+- **Protocol and infrastructure surfaces stay REST** below `/api`, `/authorize`, or a documented
+  root path: OAuth/OIDC, WebAuthn ceremonies, device-login request/exchange, email links, the auth
+  worker's cookie bridge, health, and discovery.
+- Generated Go and TypeScript land in `codegen/proto/go/` and `codegen/proto/ts/`. Both are
+  **gitignored build outputs** — never commit them, never edit them. `task rpc:generate` produces
+  both; `test`, `dev`, `build`, `typecheck`, and `release` already depend on it, so a clean checkout
+  generates before it builds. `task rpc:stale` fails when the contracts change without regenerating.
+- Handlers live in `modules/<area>/<feature>/handler_rpc.go`, beside the REST `handler.go` when the
+  feature still has one. Business logic stays in `service.go`; the RPC file owns transport mapping
+  only (principal resolution, error codes, proto conversion).
+- Adding an endpoint: write the proto, run `task rpc:generate`, implement the handler, register the
+  mount in `internal/registry/registry.go` `MountRPC`, add the row to `llms/endpoint-reference.md`,
+  create and send the Yaak request through Yaak MCP, then update the matching `api/client` schema
+  only if a retained REST route also changed.
+
+### ConnectRPC authorization
+
+- `Authorization: Bearer <access-token>` authenticates protected RPCs. `X-API-KEY` reaches **only**
+  the documented admin application API. Password change, profile update, MFA, device approval, email
+  verification, and one-time-access administration are session-only, so a leaked key cannot rotate
+  its owner's password or edit its profile. The boundary is pinned by
+  `internal/registry.TestRPCMachineCredentialBoundary`; extend it when a mount moves.
+- Cookies are token storage and never authorize an RPC.
+- Pick exactly one mount-level guard, then a per-procedure interceptor only for a service that mixes
+  visibility (the set is documented at the top of `internal/transport/middleware/rpc_guard.go`):
+  `RPCPrincipalGuard` for mixed admin/self/public, `RPCPrincipalAuth` for fully protected non-admin,
+  `RPCAdminGuard` for fully admin, `RPCSessionAuth` to also reject machine credentials,
+  `RPCMachineDenied` for per-procedure session enforcement. `RPCAPIKeyAuth` resolves the machine
+  credential before whichever guard runs.
+- A new RPC request header must be added to `internal/transport/middleware/cors.go`; the nginx layer
+  in `compose.yaml` carries the same list for deployed stacks.
+
 ## Conventions
 
 - Go 1.27 idioms: stdlib `uuid`, `encoding/json/v2` (`omitzero`), `for range n`, `t.Context()` in tests, `errors.Join`, `min`/`max`/`slices`/`maps`.
@@ -52,8 +88,20 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 
 ## Common Tasks
 
-- Add an endpoint: follow the matching `llms/phase-*.md` task list; create the request in Yaak (via MCP) and send it against the running server before ticking a checkbox. Exported request specs land in `api/specs/*.yaml`.
-- API client SDK (`api/client/`) is part of the API contract for every internal surface (SPA, admin console, future internal modules). Adding a new endpoint feature or adjusting an existing one always ships the SDK sync in the same change: add or extend the namespace method, mirror the Go DTO in the zod schema (including show-once secrets and bare documents), update `client.ts`/`index.ts` when a namespace appears, and cover it with vitest. Run `task typecheck` and the vitest api-client suite. Relying-party OAuth surfaces (`token`, `introspect`, `par`, `device/authorize`, `userinfo`, `.well-known/*`) stay out of typed namespaces; `raw()` is the escape hatch — see `llms/api-client-plan/README.md` for the route-diff workflow.
+- Add an endpoint: for a first-party surface, write the proto in `api/connect/*.proto`, run
+  `task rpc:generate`, then the handler and the mount (see "Transport split" above). For upstream
+  parity work, follow the matching task list in `llms/porting-plan/`. Transport decisions live in
+  `llms/connectrpc-plan/endpoint-reference.md`; open findings live in
+  `llms/remediation-connectrpc/`. Create the request in Yaak (via MCP) and send it against the
+  running server before ticking a checkbox. Exported request specs land in `api/specs/*.yaml`.
+- API client SDK (`api/client/`) is the **REST-only** SDK for retained HTTP and protocol endpoints.
+  It does not wrap ConnectRPC services, and adding or changing an RPC never requires an SDK change.
+  A change to a retained REST route does: add or extend the namespace method, mirror the Go DTO in
+  the zod schema (including show-once secrets and bare documents), update `client.ts`/`index.ts` when
+  a namespace appears, and cover it with vitest. Run `task typecheck` and the vitest api-client
+  suite. Relying-party OAuth surfaces (`token`, `introspect`, `par`, `device/authorize`, `userinfo`,
+  `.well-known/*`) stay out of typed namespaces; `raw()` is the escape hatch — see
+  `llms/api-client-plan/README.md` for the route-diff workflow.
 - Add a config key: catalog entry in `modules/appconfig/config.go` + env layer in `modules/appconfig/env.go` (`EnvDefaults`); `.env.example` documents the env name.
 - Frontend asset images live in `public/images/` → copied to `web/output/images` by the Vite build; never embed them in Go.
 - LDAP is an excluded upstream feature: no LDAP configuration, services, clients, or schema
