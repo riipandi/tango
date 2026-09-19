@@ -5,7 +5,8 @@ createdAt: 2026-09-19T12:01:50.287855
 updatedAt: 2026-09-19T15:35:41.783743
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: OIDC client management (admin) + consent records
 headers: []

@@ -5,7 +5,8 @@ createdAt: 2026-09-13T07:28:10.606624
 updatedAt: 2026-09-19T15:35:41.779915
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: OAuth token issuance (POST /api/oidc/token) — not in the upstream swagger tag tables of the endpoint reference
 headers: []

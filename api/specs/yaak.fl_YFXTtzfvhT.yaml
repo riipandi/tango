@@ -5,7 +5,8 @@ createdAt: 2026-09-19T11:59:42.194257
 updatedAt: 2026-09-19T15:39:46.248723
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: 'Tango-only password authentication: session, password, MFA, OAuth extension flows'
 headers: []

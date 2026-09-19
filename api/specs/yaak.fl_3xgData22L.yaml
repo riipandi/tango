@@ -5,7 +5,8 @@ createdAt: 2026-09-19T15:35:02.979148
 updatedAt: 2026-09-19T15:35:53.673547
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: ''
 headers: []

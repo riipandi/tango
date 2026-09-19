@@ -5,7 +5,8 @@ createdAt: 2026-09-14T00:53:28.690067
 updatedAt: 2026-09-19T15:35:41.782569
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: 'Application configuration endpoints: public/all config, test-email'
 headers: []

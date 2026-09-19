@@ -5,7 +5,8 @@ createdAt: 2026-09-19T12:07:19.055192
 updatedAt: 2026-09-19T15:35:41.780789
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: 'Tango-only: /api/webhooks* outbound webhook surface'
 headers: []

@@ -5,7 +5,8 @@ createdAt: 2026-09-19T12:04:08.366105
 updatedAt: 2026-09-19T15:35:41.783178
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: Audit log listing and filter facets
 headers: []

@@ -5,7 +5,8 @@ createdAt: 2026-09-14T09:40:54.965689
 updatedAt: 2026-09-19T15:35:41.781960
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: 'Upstream tag: WebAuthn — passkey registration and discoverable login ceremonies'
 headers: []

@@ -5,7 +5,8 @@ createdAt: 2026-09-19T12:04:24.881367
 updatedAt: 2026-09-19T15:35:41.786853
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: 'SCIM service-provider endpoints: CRUD + sync push'
 headers: []

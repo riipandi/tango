@@ -5,7 +5,8 @@ createdAt: 2026-09-19T12:04:30.408246
 updatedAt: 2026-09-19T15:35:41.787541
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: Version metadata endpoints
 headers: []

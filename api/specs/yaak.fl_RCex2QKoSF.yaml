@@ -5,7 +5,8 @@ createdAt: 2026-09-14T09:40:48.096725
 updatedAt: 2026-09-19T15:35:41.787981
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: 'Healthcheck endpoints: root text healthz (upstream) and JSON variant (tango extension)'
 headers: []

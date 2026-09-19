@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_omxxaSMWV2
 createdAt: 2026-09-18T18:41:27.267187
-updatedAt: 2026-09-19T14:53:23.174275
+updatedAt: 2026-09-19T19:36:54.404640
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5ohk34DQsY
 authentication: {}
@@ -14,17 +14,13 @@ bodyType: application/json
 description: List the caller's API keys over /rpc with a valid bearer — 200 with {apiKeys, metadata}.
 headers:
 - enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
-  id: null
-- enabled: true
   name: Content-Type
   value: application/json
-  id: null
+  id: rRTDbEndus
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
+  id: jIUKHFdtaQ
 method: POST
 name: List API keys
 sortPriority: 0.0

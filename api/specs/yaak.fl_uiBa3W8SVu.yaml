@@ -5,7 +5,8 @@ createdAt: 2026-09-19T12:02:28.216529
 updatedAt: 2026-09-19T15:35:41.784140
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: 'User administration: accounts, groups, sign-up, one-time access, email verification, passkeys'
 headers: []

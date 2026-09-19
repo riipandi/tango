@@ -5,7 +5,8 @@ createdAt: 2026-09-19T12:03:08.560235
 updatedAt: 2026-09-19T15:35:41.786126
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: Resource APIs, permissions, client grants
 headers: []

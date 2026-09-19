@@ -5,7 +5,8 @@ createdAt: 2026-09-13T06:23:01.744642
 updatedAt: 2026-09-19T15:35:41.785761
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: Discovery endpoints for OpenID Connect (RFC 8615)
 headers: []

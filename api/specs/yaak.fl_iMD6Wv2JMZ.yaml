@@ -5,7 +5,8 @@ createdAt: 2026-09-19T12:04:18.781456
 updatedAt: 2026-09-19T15:35:41.785148
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
+authentication:
+  token: ${[ accessToken ]}
 authenticationType: null
 description: User group CRUD, members, per-user group assignment
 headers: []
