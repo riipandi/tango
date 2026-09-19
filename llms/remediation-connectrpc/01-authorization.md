@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-09-19
+status: done
+updated: 2026-09-20
 owner: tango-connectrpc-remediation
 ---
 

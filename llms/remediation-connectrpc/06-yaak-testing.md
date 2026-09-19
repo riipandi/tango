@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-09-19
+status: done
+updated: 2026-09-20
 owner: tango-connectrpc-remediation
 ---
 
@@ -330,34 +330,44 @@ Direct access notes:
 | Task | Finding | State |
 | --- | --- | --- |
 | 06.1 | Y1 | done — the workspace header is gone; the credential rides its two requests only |
-| 06.2 | Y2 | done — the sign-in request reads `identity`/`password` from the environment, and `accessToken` chaining is not needed because the harness authenticates per environment |
-| 06.3 | Y3 | done — bearer auth is not configured as an auth type by decision; see the note below |
+| 06.2 | Y2 | done — the environments chain a real token from the cookie bridge; verified 200 on two environments |
+| 06.3 | Y3 | done — bearer auth types declined by decision; see the note below |
 | 06.4 | Y4 | done with task 02.5 |
-| 06.5 | Y5, Y6, Y7 | Y5 done; Y6 and Y7 deferred, see below |
+| 06.5 | Y5, Y6, Y7 | done — `refreshToken` deleted, Faker adopted |
 
 ### Task 06.2 result
 
 The sign-in request now sends `${[ identity ]}` and `${[ password ]}`, and every environment defines
 both. Verified with `yaak send rq_5SgzmJyWWh -e ev_WCMcNHoAdN` → 200.
 
-Response chaining (`accessToken = response.body.path(...)`) was **not** adopted. The chain would need
-a request to mint a token from the environment's credentials, and the harness already gets a fresh
-token per environment by signing in; adding a chain would make every protected request depend on
-another request having run first, which is a larger change than the finding warrants. Recorded as a
-deliberate decision, not an omission.
+**Response chaining is adopted.** Every environment sets
 
-`settingStoreCookies` stays disabled on the sign-in request for the same reason: the harness does not
-rely on cookie chaining.
+```
+accessToken = ${[ response.body.path(request='rq_7bY6RFnbv9', path='$.data.access_token') ]}
+```
+
+so a protected request obtains a real token instead of the literal `dummy` that finding Y2 recorded.
+Verified with `yaak send rq_YmqEc7B7tX -e ev_WCMcNHoAdN` and `-e ev_UvqVACKyGv`: both sent a real
+`Authorization: Bearer eyJ...` and answered 200.
+
+Ordering matters: the bridge (`rq_7bY6RFnbv9`) authenticates from the session cookie, so in a fresh
+workspace the sign-in request (`rq_5SgzmJyWWh`) must run before any protected request. Yaak sends a
+referenced request automatically only when it has no stored response yet, and an expired token is not
+refreshed — re-send the sign-in request to mint a new one.
 
 ### Task 06.3 result
 
 Bearer authentication was **not** configured as a Yaak auth type. Two reasons:
 
 - the requests already send `Authorization: Bearer ${[ accessToken ]}` from a shared environment
-  variable, so an auth type would duplicate the same wiring at a different level;
+  variable that now resolves through the chain, so an auth type would duplicate the same wiring at a
+  different level;
 - switching 110 requests to an inherited auth type is a bulk mutation with no verification path in
   this environment (the MCP surface cannot set folder auth for a request that also declares its own
   header without shadowing it).
+
+This is a recorded decision, not an omission. `authenticationType` stays `null` on 133 requests and
+`none` on 23.
 
 The OAuth 2.0 auth type on the OIDC folders remains a genuine improvement and is left as a follow-up:
 it needs a registered redirect URI on a Tango OIDC client first, which is a product decision.

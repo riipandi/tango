@@ -66,8 +66,8 @@ documentation contradicts behavior, **P2** = residue or hygiene.
 | F15 | P2 | `llms/connectrpc-plan/` is marked `status: done` while its own completion criteria are unmet (no SPA, so the caller-migration criterion cannot pass) | 04.1 — **resolved**: criteria rewritten, the two out-of-scope ones named |
 | F16 | P1 | The rate limiter was silently disabled on **every** policy: `rateKey` embedded the policy name verbatim (`forgot-password`), and the `rate_limits` key check only accepts `[a-z0-9_:]`, so each insert raised `23514` and the middleware failed open | 02.6 — **resolved** (`f5eb5ee`) |
 | Y1 | P0 | The Yaak workspace header `X-API-KEY: ${[ apiKey ]}` was inherited by every request, so "anonymous" evidence carried a machine credential | 06.1 — **resolved**: the owner removed the workspace header during the audit; the credential is now scoped to its two requests |
-| Y2 | P1 | No Yaak request obtains a real token; `accessToken` is `dummy`, so all 110 protected requests answer 401 | 06.2 |
-| Y3 | P1 | No Yaak auth type is configured: 130 requests `null`, 23 `none`, zero folders or workspaces set one | 06.3 |
+| Y2 | P1 | No Yaak request obtains a real token; `accessToken` was `dummy`, so all 110 protected requests answered 401 | 06.2 — **resolved**: every environment chains a real token from the cookie bridge |
+| Y3 | P1 | No Yaak auth type is configured: 133 requests `null`, 23 `none`, zero folders or workspaces set one | 06.3 — **resolved as a decision**: the shared environment variable already supplies the header; an auth type would duplicate it |
 | Y4 | P1 | Neither CORS layer (nginx `compose.yaml:209`, Go `middleware/cors.go`) allows `X-API-KEY` or `Connect-Timeout-Ms` | 06.4 — **resolved** by 02.5 (`40e4ae6`, `23b2bcb`) |
 | Y5 | P2 | `refreshToken` is defined in every Yaak environment and referenced by no request | 06.5 — **resolved** (`a0fea7c`) |
 | Y6 | P2 | ~40 `REPLACE_*` placeholders are typed by hand where `faker.*` and `response.body.path()` apply | 06.5 — **resolved**: the create requests generate their own values |
