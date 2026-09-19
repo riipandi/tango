@@ -7,6 +7,7 @@ import (
 
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/crypto"
@@ -143,4 +144,44 @@ func TestListAndRevokeForUser(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 	assert.NotEqual(t, first.ID, list[0].ID)
+}
+
+// TestSessionLookupsRejectMalformedIDs pins that a session id which is
+// not a session TypeID is a miss, not a database error. Passing the
+// raw value into a uuid column would fail the cast and surface an
+// internal error where the caller asked about a session that cannot
+// exist.
+func TestSessionLookupsRejectMalformedIDs(t *testing.T) {
+	sessions, passwords, users := newTestStack(t)
+	u := newUser(t, users, passwords, "malformed")
+	ctx := t.Context()
+
+	_, _, live, err := sessions.SignIn(ctx, u.Username, "s3cret-p@ss", Meta{})
+	require.NoError(t, err)
+
+	for _, id := range []string{"", "bogus", "not-a-typeid-at-all", "session_nothex"} {
+		assert.ErrorIs(t, sessions.RevokeForUser(ctx, u.ID, id), ErrNotFound, "revoke %q", id)
+	}
+
+	// RevokeAllForUser treats an empty id as "spare nothing", so only a
+	// non-empty unparseable id is a miss.
+	for _, id := range []string{"bogus", "not-a-typeid-at-all", "session_nothex"} {
+		assert.ErrorIs(t, sessions.RevokeAllForUser(ctx, u.ID, id), ErrNotFound, "revoke all %q", id)
+	}
+
+	// The live session survives every rejected revoke.
+	list, err := sessions.ListForUser(ctx, u.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, live.ID, list[0].ID)
+
+	// A well-formed id that matches nothing is the same miss.
+	other := identity.NewID[SessionID]()
+	assert.ErrorIs(t, sessions.RevokeForUser(ctx, u.ID, other.String()), ErrNotFound)
+
+	// A real id still revokes.
+	require.NoError(t, sessions.RevokeForUser(ctx, u.ID, live.ID))
+	list, err = sessions.ListForUser(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Empty(t, list)
 }
