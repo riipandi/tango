@@ -97,7 +97,7 @@ func New(deps Deps) (*Runtime, error) {
 	rt.Queue = queue.New(queueClient)
 
 	// Register email and maintenance consumers; the version feed
-	// supplies /api/version/latest.
+	// supplies VersionService.Latest over /rpc.
 	feed := newVersionFeed(deps)
 	rt.Jobs = jobs.NewRegistry(queueClient, deps.Mailer, deps.Logger, feed)
 

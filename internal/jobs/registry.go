@@ -40,7 +40,7 @@ type Registry struct {
 	jobs map[string]Job
 	mu   sync.RWMutex
 
-	// feed supplies /api/version/latest.
+	// feed supplies VersionService.Latest over /rpc.
 	feed *VersionFeed
 
 	// started prevents duplicate initial schedules.
@@ -48,7 +48,7 @@ type Registry struct {
 }
 
 // NewRegistry registers the email and recurring maintenance queues.
-// The version feed supplies /api/version/latest.
+// The version feed supplies VersionService.Latest over /rpc.
 func NewRegistry(client *queue.Client, mail Mailer, log logger.Logger, feed *VersionFeed) *Registry {
 	r := &Registry{
 		queue: client,

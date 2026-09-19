@@ -57,7 +57,8 @@ func rateLimiter(db *datastore.Postgres) func(http.Handler) http.Handler {
 }
 
 // latestVersion exposes the cached release feed from the jobs module
-// for /api/version/latest; a nil source keeps the deployed version.
+// for VersionService.Latest over /rpc; a nil source keeps the deployed
+// version.
 func latestVersion(feed *jobs.Registry) transport.LatestVersionSource {
 	if feed == nil {
 		return nil

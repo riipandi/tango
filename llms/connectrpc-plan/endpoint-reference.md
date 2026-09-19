@@ -264,9 +264,10 @@ appear in the service matrix below:
 - `GET /api/apis/{id}` and `GET/PUT/DELETE` register with a trailing-slash chi pattern (`/apis/{id}/`);
   the ambiguity list below resolves how these are recorded.
 
-Transport-owned routes (`/api/`, `/api/healthz`, `/api/version/current`, `/api/version/latest`,
-`/healthz`, `/.well-known/version`, `/static/*`) mount outside `MountAPI` and are covered by the
-health/version tables above.
+Transport-owned routes (`/api/`, `/api/healthz`, `/healthz`, `/.well-known/version`, `/static/*`)
+mount outside `MountAPI` and are covered by the health/version tables above. The
+`/api/version/current` and `/api/version/latest` routes are gone; version metadata serves
+`VersionService` below `/rpc`.
 
 ## Connect service and method matrix
 
