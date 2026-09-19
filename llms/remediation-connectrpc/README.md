@@ -49,8 +49,8 @@ documentation contradicts behavior, **P2** = residue or hygiene.
 
 | ID | Severity | Finding | Task |
 | --- | --- | --- | --- |
-| F1 | P0 | `X-API-KEY` reaches self-service and credential-lifecycle procedures far beyond the documented "admin application API" — including `AccountService.ChangePassword`, which rotates the key owner's password | 01.1 |
-| F2 | P1 | `ApplicationConfigurationService.Get` is documented anonymous in three files but guarded as a `self` procedure; anonymous callers get 401 | 01.2 |
+| F1 | P0 | `X-API-KEY` reaches self-service and credential-lifecycle procedures far beyond the documented "admin application API" — including `AccountService.ChangePassword`, which rotates the key owner's password | 01.1 — **resolved** (Option A, 2026-09-19) |
+| F2 | P1 | `ApplicationConfigurationService.Get` is documented anonymous in three files but guarded as a `self` procedure; anonymous callers get 401 | 01.2 — **resolved** (2026-09-19) |
 | F3 | P1 | `docs/api-endpoint.md` and `llms/endpoint-reference.md` list `GET`/`PUT`/`DELETE` for 10 `/rpc` procedures; the transport is POST-only and answers 405 | 02.1 |
 | F4 | P1 | `llms/connectrpc-plan/03-server.md` claims gRPC and gRPC-Web "are not mounted and answer not_found"; the generated handlers serve both | 02.2 |
 | F5 | P1 | 3 procedures exist in the proto with no document row and no Yaak request: `AccountService.UpdateAccount`, `AuthService.ForgotPassword`, `AuthService.ResetPassword` | 02.3 |
@@ -129,13 +129,21 @@ decisions, and it does not add features. Two known non-goals stay out of scope:
 
 ## Blocking decisions
 
-Two tasks cannot start until the owner decides:
+One task cannot start until the owner decides:
 
-1. **Task 01.1** — the intended `X-API-KEY` boundary (narrow option recommended).
-2. **Task 02.2** — whether to close the gRPC and gRPC-Web transports or document them (keep option
+1. **Task 02.2** — whether to close the gRPC and gRPC-Web transports or document them (keep option
    recommended).
 
-Both decisions are recorded in their phase files.
+Task 01.1 was decided on 2026-09-19: **Option A (narrow)**, recorded in
+[`01-authorization.md`](./01-authorization.md).
+
+## Progress
+
+| Task | Finding | State |
+| --- | --- | --- |
+| 01.1 | F1 | implemented, awaiting the owner's commit |
+| 01.2 | F2 | implemented, awaiting the owner's commit |
+| 02.1–06.5 | F3–F15, Y1–Y7 | not started |
 
 ## Phase index
 

@@ -121,4 +121,58 @@ Commit: `fix(rpc): serve the public bootstrap configuration anonymously`
 
 ## Decision (Task 01.1)
 
-Not yet taken. Owner input required before the task starts.
+**Option A — narrow.** Taken by the owner on 2026-09-19.
+
+`X-API-KEY` reaches the admin application API only. The `machine()` wrapper was removed from the
+account, email verification, one-time access, and auth-lifecycle mounts; the one-time access
+service no longer resolves a machine principal at all. Because the user mount keeps `machine()` for
+its admin procedures, the self procedures gained `middleware.RPCMachineDenied`, so a machine
+principal cannot reach `UpdateMe`, `UpdateMyProfilePicture`, or `DeleteMyProfilePicture`.
+
+Shipped in the same change:
+
+- `internal/registry/registry.go` — the mount list above.
+- `modules/identity/user/handler_rpc.go` — `RPCMachineDenied(self)` on the user service.
+- `internal/registry/rpc_machine_boundary_test.go` — pins both halves: the allowed procedures
+  accept a machine credential, the denied procedures answer unauthenticated or permission_denied,
+  and the same self-service procedure still resolves a bearer principal.
+- `docs/api-endpoint.md`, `llms/endpoint-reference.md`,
+  `llms/connectrpc-plan/endpoint-reference.md` — the credential paragraph and the affected rows.
+
+`SignupService` token administration stays machine-reachable because Option A lists it as part of
+the admin application API. It is admin-only and mints signup tokens, not account changes; revisit
+if the owner wants it narrowed too.
+
+## Status (Task 01.2)
+
+**Done.** `ApplicationConfigurationService.Get` is anonymous again. The `self` map was removed from
+`modules/admin/appconfig/handler_rpc.go`, which is the pass-through case of `RPCPrincipalGuard`;
+`GetAll`, `Update`, and `TestEmail` keep the `admin` map.
+
+Shipped in the same change:
+
+- `modules/admin/appconfig/handler_rpc_test.go` — `TestRPCConfigBootstrapIsAnonymous` sends an
+  unauthenticated request through the mounted handler: `Get` answers 200 with the public payload,
+  `GetAll` answers 401. The endpoint row now cites this test.
+- Verified live against the running server and through Yaak: `Public bootstrap configuration`
+  (`rq_F5VSGPSv6T`, environment `Development`) answers `200` with `requestHeaders` carrying no
+  credential; the same request against the stale container on `:3443` answered `401`.
+
+Note: `internal/registry/rpc_machine_boundary_test.go` (task 01.1) was committed on its own in
+`d6ea484` without the implementation it pins, so `HEAD` fails that test until task 01.1's source
+changes land.
+
+## Phase 01 gate
+
+Run at `HEAD` + the working-tree changes above:
+
+| Command | Result |
+| --- | --- |
+| `go test ./...` (debug tags) | pass |
+| `go test -tags release ./...` | pass |
+| `go test -tags debug ./cmd/... ./database/...` | pass |
+| `pnpm exec vitest run` | 43 tests pass, 7 files |
+| `task lint` | 0 issues |
+| `task check` | clean |
+| `task typecheck` | clean |
+| `task rpc:lint`, `task rpc:breaking`, `task rpc:stale` | clean |
