@@ -24,7 +24,10 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 ## Architecture
 
 - `cmd/launcher` remains the CLI and server entrypoint. `internal/registry` is the explicit composition root. Keep `internal/` flat and avoid adding `internal/app`, `internal/platform`, or a generic plugin registry. Application boundaries are `modules/identity`, `modules/federation`, `modules/admin`, and `modules/webhook`.
-- `modules/<area>/<feature>/{schema,service,store,handler}.go` — exactly one store file named `store.go`, Postgres-backed via `internal/datastore`. No memory-store implementations.
+- `modules/<area>/<feature>/{schema,service,handler}.go`, plus `store.go` when the feature owns
+  persistence — the store file is named exactly `store.go`, Postgres-backed via `internal/datastore`.
+  No memory-store implementations. A feature that reads and writes only through another feature's
+  stores has no `store.go`.
 - `modules/identity` — accounts core + auth features (session, password, webauthn, signup, apikey, apiaccess, ...). `modules/federation` — provider surface (oidc, jwks, discovery, scimsync). Authn/authz features never leave `modules/identity`.
 - Admin-editable settings live in `app_config` via `modules/appconfig`; defaults fold catalog < env < DB. Cross-module consumers read through the appconfig surface (`MergedValues`), not raw env. Sensitive values redact in the admin view but resolve for their owning consumers.
 - Schema is owned by `database/migrations/` (goose). Never embed or auto-create schema. Migration DDL is verbatim: editing an applied migration does not re-run it; reset via `tango db migrate:down --force --count N` then `migrate:up`.
