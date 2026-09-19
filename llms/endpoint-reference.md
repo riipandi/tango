@@ -148,6 +148,7 @@ ciphertext.
 | Method | Endpoint | Summary / Yaak Title | Status | Evidence |
 | ------ | -------- | -------------------- | ------ | -------- |
 | DELETE, GET, PUT | `/api/application-images/*` | Bundled application images | excluded — served from `public/images` through `/static/*` | `internal/transport.TestStaticAssetsHandler` |
+| GET | `/api/storage/sqlite-warning` | SQLite storage warning | excluded — Postgres is the only supported database | — |
 
 ## Audit Logs
 

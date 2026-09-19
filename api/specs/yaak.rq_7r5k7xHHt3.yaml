@@ -28,7 +28,7 @@ headers:
 method: POST
 name: Rotate the signing secret
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.webhook.v1.WebhookService/RotateSecret
+url: ${[ apiBaseURL ]}/rpc/tango.webhook.v1.WebhookService/RotateSecret
 urlParameters: []
 settingSendCookies:
   enabled: false

@@ -28,7 +28,7 @@ headers:
 method: POST
 name: Get current deployed version
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.system.v1.VersionService/Current
+url: ${[ apiBaseURL ]}/rpc/tango.system.v1.VersionService/Current
 urlParameters: []
 settingSendCookies:
   enabled: false

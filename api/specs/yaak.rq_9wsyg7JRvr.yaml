@@ -27,7 +27,7 @@ headers:
 method: POST
 name: Create API key (X-API-KEY denied)
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.admin.v1.ApiKeyService/Create
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiKeyService/Create
 urlParameters: []
 settingSendCookies:
   enabled: false

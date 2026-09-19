@@ -1,0 +1,49 @@
+type: http_request
+model: http_request
+id: rq_VhesmGBNas
+createdAt: 2026-09-19T12:32:22.306194
+updatedAt: 2026-09-19T12:32:22.306194
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_WkFGw2eWkx
+authentication: {}
+authenticationType: null
+body:
+  text: '{"id":"REPLACE_CLIENT_ID"}'
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+- enabled: true
+  name: Authorization
+  value: Bearer ${[ accessToken ]}
+  id: null
+method: POST
+name: Get SCIM service provider for a client
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/GetScimProvider
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

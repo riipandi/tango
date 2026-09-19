@@ -27,7 +27,7 @@ headers:
 method: POST
 name: List API keys (X-API-KEY)
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.admin.v1.ApiKeyService/List
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiKeyService/List
 urlParameters: []
 settingSendCookies:
   enabled: false

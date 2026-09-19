@@ -28,7 +28,7 @@ headers:
 method: POST
 name: List authorized clients for current user
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.federation.v1.OidcConsentService/ListMyAuthorizedClients
+url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcConsentService/ListMyAuthorizedClients
 urlParameters: []
 settingSendCookies:
   enabled: false

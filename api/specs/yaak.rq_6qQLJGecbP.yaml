@@ -28,7 +28,7 @@ headers:
 method: POST
 name: Get custom claim suggestions
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.identity.v1.CustomClaimService/Suggest
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.CustomClaimService/Suggest
 urlParameters: []
 settingSendCookies:
   enabled: false

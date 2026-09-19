@@ -1,0 +1,49 @@
+type: http_request
+model: http_request
+id: rq_igpzZXJaLQ
+createdAt: 2026-09-19T12:34:22.907177
+updatedAt: 2026-09-19T12:38:29.105202
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_Uf3pbN2b4K
+authentication: {}
+authenticationType: null
+body:
+  text: '{"id":"REPLACE_PROVIDER_ID","endpoint":"https://scim.example/v2","token":"REPLACE_SCIM_TOKEN"}'
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+- enabled: true
+  name: Authorization
+  value: Bearer ${[ accessToken ]}
+  id: null
+method: POST
+name: Update SCIM service provider
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.ScimProviderService/Update
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -24,7 +24,7 @@ headers:
 method: POST
 name: Connect transport smoke (nginx HTTPS)
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.system.v1.HealthService/Check
+url: ${[ apiBaseURL ]}/rpc/tango.system.v1.HealthService/Check
 urlParameters: []
 settingSendCookies:
   enabled: false

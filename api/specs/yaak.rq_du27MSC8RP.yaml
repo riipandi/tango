@@ -1,0 +1,49 @@
+type: http_request
+model: http_request
+id: rq_du27MSC8RP
+createdAt: 2026-09-19T12:34:49.075710
+updatedAt: 2026-09-19T12:34:49.075710
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_E6GycS3VZ9
+authentication: {}
+authenticationType: null
+body:
+  text: '{"page":{"page":1,"limit":20}}'
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+- enabled: true
+  name: Authorization
+  value: Bearer ${[ accessToken ]}
+  id: null
+method: POST
+name: List all deliveries
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.webhook.v1.WebhookService/ListAllDeliveries
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -28,7 +28,7 @@ headers:
 method: POST
 name: Inspect device login request
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.identity.v1.DeviceApprovalService/GetPendingRequest
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.DeviceApprovalService/GetPendingRequest
 urlParameters: []
 settingSendCookies:
   enabled: false

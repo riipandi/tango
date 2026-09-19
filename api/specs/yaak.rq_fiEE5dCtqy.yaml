@@ -2,13 +2,13 @@ type: http_request
 model: http_request
 id: rq_fiEE5dCtqy
 createdAt: 2026-09-19T00:36:25.423311
-updatedAt: 2026-09-19T12:12:12.737239
+updatedAt: 2026-09-19T12:38:18.466136
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_Uf3pbN2b4K
 authentication: {}
 authenticationType: none
 body:
-  text: '{"endpoint":"https://scim-bench.example/v2","token":"${[ scimToken ]}","oidc_client_id":"${[ oidcClientId ]}"}'
+  text: '{"endpoint":"https://scim-bench.example/v2","token":"REPLACE_SCIM_TOKEN","oidc_client_id":"REPLACE_CLIENT_ID"}'
 bodyType: application/json
 description: ''
 headers:
@@ -27,7 +27,7 @@ headers:
 method: POST
 name: Create SCIM service provider
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.federation.v1.ScimProviderService/Upsert
+url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.ScimProviderService/Upsert
 urlParameters: []
 settingSendCookies:
   enabled: false

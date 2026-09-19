@@ -28,7 +28,7 @@ headers:
 method: POST
 name: List OIDC clients
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.federation.v1.OidcClientService/ListClients
+url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/ListClients
 urlParameters: []
 settingSendCookies:
   enabled: false

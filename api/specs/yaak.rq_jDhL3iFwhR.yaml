@@ -28,7 +28,7 @@ headers:
 method: POST
 name: List all application configurations
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.admin.v1.ApplicationConfigurationService/GetAll
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApplicationConfigurationService/GetAll
 urlParameters: []
 settingSendCookies:
   enabled: false

@@ -28,7 +28,7 @@ headers:
 method: POST
 name: List all audit logs
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.admin.v1.AuditLogService/ListAll
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.AuditLogService/ListAll
 urlParameters: []
 settingSendCookies:
   enabled: false

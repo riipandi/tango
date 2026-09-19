@@ -28,7 +28,7 @@ headers:
 method: POST
 name: Decide device login request
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.identity.v1.DeviceApprovalService/DecideRequest
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.DeviceApprovalService/DecideRequest
 urlParameters: []
 settingSendCookies:
   enabled: false

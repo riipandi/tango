@@ -28,7 +28,7 @@ headers:
 method: POST
 name: Create API
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.admin.v1.ApiService/CreateApi
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/CreateApi
 urlParameters: []
 settingSendCookies:
   enabled: false

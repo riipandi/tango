@@ -28,7 +28,7 @@ headers:
 method: POST
 name: Create a webhook endpoint
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.webhook.v1.WebhookService/Create
+url: ${[ apiBaseURL ]}/rpc/tango.webhook.v1.WebhookService/Create
 urlParameters: []
 settingSendCookies:
   enabled: false

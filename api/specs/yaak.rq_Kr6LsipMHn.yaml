@@ -28,7 +28,7 @@ headers:
 method: POST
 name: Send a test delivery
 sortPriority: 0.0
-url: https://localhost:8443/rpc/tango.webhook.v1.WebhookService/Test
+url: ${[ apiBaseURL ]}/rpc/tango.webhook.v1.WebhookService/Test
 urlParameters: []
 settingSendCookies:
   enabled: false
