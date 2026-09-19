@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_LdVEQTxE6V
 createdAt: 2026-09-19T12:31:46.271298
-updatedAt: 2026-09-19T14:58:05.104884
+updatedAt: 2026-09-19T18:12:13.565479
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_WNyJqCXLvz
 authentication: {}
@@ -10,10 +10,11 @@ authenticationType: null
 body:
   text: |-
     {
-      "name": "REPLACE_CLIENT_NAME"
+      "name": "${[ faker.company.name() ]}",
+      "callback_urls": ["${[ faker.internet.url() ]}/callback"]
     }
 bodyType: application/json
-description: ''
+description: Name and callback URL are generated per run with Faker, so repeated sends do not collide on the client name.
 headers:
 - enabled: true
   name: Content-Type

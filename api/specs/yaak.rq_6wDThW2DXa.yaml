@@ -2,20 +2,19 @@ type: http_request
 model: http_request
 id: rq_6wDThW2DXa
 createdAt: 2026-09-18T20:58:00.984820
-updatedAt: 2026-09-19T14:56:07.776203
+updatedAt: 2026-09-19T18:11:37.543020
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
 authentication: {}
 authenticationType: none
 body:
-  bodyType: application/json
   text: |-
     {
-      "name": "yaak_group_1",
-      "display_name": "Yaak Group"
+      "name": "${[ faker.string.alphanumeric(options='{"length": 10}') ]}",
+      "display_name": "${[ faker.company.name() ]}"
     }
 bodyType: application/json
-description: ''
+description: The name is generated per run with Faker; a user group name must match the username pattern, so only letters and digits are used.
 headers:
 - enabled: true
   name: Content-Type

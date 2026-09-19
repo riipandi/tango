@@ -233,18 +233,14 @@ Every finding's own verification method now passes:
 | F14 | `scripts/check-yaak-secrets.sh`; no credential literal in `api/specs/` |
 | F16 | `internal/transport/middleware.TestRateKeyMatchesDatabaseConstraint` |
 | Y1–Y5 | live `yaak send` runs against the local stack; the workspace header is gone, credentials ride the environments, `refreshToken` is deleted |
-| Y6, Y7 | deferred with reasons recorded in phase 06 |
+| Y6, Y7 | done — the create requests generate their own values with Faker; see the Faker notes in phase 06 |
 
 ### Closing statement
 
 The `/rpc` surface, the documents, and the mounted handlers agree. `AGENTS.md`
 describes the shipped architecture. No plaintext credential is tracked under
-`api/specs/`. Two items stay open by decision, both recorded in phase 06:
+`api/specs/`. Every finding is closed.
 
-- **Y6** — the `REPLACE_*` placeholders stay; only the identifiers that a
-  repeated run must vary now generate themselves (`uuid.v4` plus `regex.match`
-  on the create requests that hit a unique constraint).
-- **Y7** — no template function is used beyond that; `prompt.text` and `secure()`
-  were evaluated and rejected with the reasons in phase 06.
-
-Findings F1–F17 are closed except Y6 and Y7, which are deliberate deferrals.
+The `REPLACE_*` placeholders that remain mark a value a human must supply (a
+token from a previous response, a redirect URI, a claim key). The values that a
+repeated run must vary are generated with Faker instead.

@@ -2,20 +2,22 @@ type: http_request
 model: http_request
 id: rq_BMkDsk2Tir
 createdAt: 2026-09-19T00:54:36.897973
-updatedAt: 2026-09-19T14:52:48.142552
+updatedAt: 2026-09-19T18:13:29.638618
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_E6GycS3VZ9
 authentication: {}
 authenticationType: none
 body:
-  bodyType: application/json
   text: |-
     {
-      "name": "bench-hook-yaak",
-      "endpoint": "https://hooks.example/yaak"
+      "name": "${[ faker.word.adjective() ]}_${[ faker.word.noun() ]}",
+      "description": "${[ faker.lorem.sentence() ]}",
+      "endpoint": "${[ faker.internet.url() ]}",
+      "method": "POST",
+      "event_types": ["user.created"]
     }
 bodyType: application/json
-description: ''
+description: Name, description, and endpoint are generated per run with Faker. The webhook name pattern is ^[a-zA-Z0-9_-]{3,100}$, so the name joins two single words with an underscore instead of using a spaced phrase.
 headers:
 - enabled: true
   name: Content-Type

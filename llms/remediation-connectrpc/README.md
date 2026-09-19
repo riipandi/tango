@@ -70,8 +70,8 @@ documentation contradicts behavior, **P2** = residue or hygiene.
 | Y3 | P1 | No Yaak auth type is configured: 130 requests `null`, 23 `none`, zero folders or workspaces set one | 06.3 |
 | Y4 | P1 | Neither CORS layer (nginx `compose.yaml:209`, Go `middleware/cors.go`) allows `X-API-KEY` or `Connect-Timeout-Ms` | 06.4 — **resolved** by 02.5 (`40e4ae6`, `23b2bcb`) |
 | Y5 | P2 | `refreshToken` is defined in every Yaak environment and referenced by no request | 06.5 — **resolved** (`a0fea7c`) |
-| Y6 | P2 | ~40 `REPLACE_*` placeholders are typed by hand where `uuid.v7()`, `faker.*`, and `response.body.path()` apply | 06.5 |
-| Y7 | P2 | Zero Yaak template functions are used anywhere in the collection | 06.5 |
+| Y6 | P2 | ~40 `REPLACE_*` placeholders are typed by hand where `faker.*` and `response.body.path()` apply | 06.5 — **resolved**: the create requests generate their own values |
+| Y7 | P2 | Zero Yaak template functions are used anywhere in the collection | 06.5 — **resolved**: `faker.*` is in use |
 
 ## Finding F17 — the RPC response shape did not mirror the REST envelope
 
@@ -178,7 +178,8 @@ Each decision is recorded in its phase file.
 | 06.3 | Y3 | done — bearer auth types declined by decision, recorded in phase 06 |
 | 06.4 | Y4 | done with 02.5 |
 | 06.5 | Y5 | done — `refreshToken` deleted from all four environments |
-| 06.5 | Y6, Y7 | **deferred** — reasons recorded in phase 06 |
+| 06.5 | Y6 | done — the create requests generate their own values with Faker |
+| 06.5 | Y7 | done — the collection uses `faker.*` template functions |
 
 Also fixed while executing the plan, outside the original findings:
 

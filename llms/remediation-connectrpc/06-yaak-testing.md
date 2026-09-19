@@ -365,12 +365,43 @@ it needs a registered redirect URI on a Tango OIDC client first, which is a prod
 ### Task 06.5 result
 
 - **Y5 done**: `refreshToken` is deleted from all four environments.
-- **Y6 deferred**: the `REPLACE_*` placeholders stay. Adopting `faker.*` and `uuid.v7()` for ~40
-  placeholders is a bulk edit across the collection, and several of the placeholders are consumed by
-  requests whose expected response is recorded as evidence; changing them would invalidate that
-  evidence without adding coverage.
-- **Y7 deferred**: no template function is used yet. `secure()` and `prompt.text()` were evaluated;
-  see the note below.
+- **Y6 done**: the create requests that hit a unique or format constraint now
+  generate their own values with Faker (`@yaak/faker` v1.1.1), verified by
+  repeated sends that all succeed. See the Faker notes below.
+- **Y7 done**: the collection now uses template functions (`faker.*`).
+
+### Faker notes (Y6)
+
+The plugin exposes every FakerJS module as `faker.<module>.<method>(options='...')`.
+The `options` argument is a JSON string: an object for most methods
+(`faker.string.alphanumeric(options='{"length": 12}')`), an array for positional
+arguments, or a scalar.
+
+Each domain has its own name rule, and the generated value has to satisfy it:
+
+| Request | Rule | Generator used |
+| --- | --- | --- |
+| `Create user` | `^[a-zA-Z0-9_]{3,32}$` | `faker.string.alphanumeric` |
+| `Create user group` | same as the username pattern | `faker.string.alphanumeric` |
+| `Create API` | name 1-50 characters | `faker.word.words` |
+| `Create a webhook endpoint` | `^[a-zA-Z0-9_-]{3,100}$` | `faker.word.adjective` + `faker.word.noun` joined by `_` |
+| `Create OIDC client` | name required, callback URL must parse | `faker.company.name`, `faker.internet.url` |
+
+Two rules the generators must respect:
+
+- `faker.word.words` returns a **spaced phrase**, so it fails a name pattern that
+  forbids spaces (the webhook endpoint). Join single words instead.
+- Two references to a generator produce **two different values**. Yaak re-renders
+  the template for every reference, including through `request.body.path()` and
+  `request.header()`, so one generated value cannot be shared between two fields
+  (for example a username and its derived email). Verified empirically: four of
+  four sends had `username != email-local`, and a header-carried uuid also
+  differed from the body value. The `Create user` request therefore generates the
+  username and the email independently.
+
+`faker.string.uuid` and `faker.internet.email` are available but were not used for
+the username: the former carries dashes and the latter produces mixed case and
+characters the pattern rejects.
 
 ### Template function evaluation (Y7)
 

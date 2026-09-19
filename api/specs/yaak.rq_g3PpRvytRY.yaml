@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_g3PpRvytRY
 createdAt: 2026-09-19T12:29:06.568494
-updatedAt: 2026-09-19T14:56:56.941304
+updatedAt: 2026-09-19T18:12:29.224648
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_rhFgcRFFEJ
 authentication: {}
@@ -10,12 +10,12 @@ authenticationType: null
 body:
   text: |-
     {
-      "username": "REPLACE_USERNAME",
-      "email": "user@example.com",
+      "username": "yaak_${[ faker.string.alphanumeric(options='{"length": 12}') ]}",
+      "email": "yaak_${[ faker.string.alphanumeric(options='{"length": 12}') ]}@example.com",
       "token": "REPLACE_SIGNUP_TOKEN"
     }
 bodyType: application/json
-description: ''
+description: Username and email are generated per run with Faker; the signup token still needs a value from the Create signup token request.
 headers:
 - enabled: true
   name: Content-Type

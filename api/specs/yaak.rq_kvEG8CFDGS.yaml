@@ -2,20 +2,19 @@ type: http_request
 model: http_request
 id: rq_kvEG8CFDGS
 createdAt: 2026-09-18T23:54:33.194723
-updatedAt: 2026-09-19T14:55:40.477188
+updatedAt: 2026-09-19T18:11:50.642485
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sUMABSVJCr
 authentication: {}
 authenticationType: none
 body:
-  bodyType: application/json
   text: |-
     {
-      "name": "Bench API",
-      "resource": "https://bench-yaak.example/api"
+      "name": "${[ faker.word.words(options='{"count": 2}') ]}",
+      "resource": "${[ faker.internet.url() ]}"
     }
 bodyType: application/json
-description: ''
+description: The name and resource URL are generated per run with Faker; the API name allows up to 50 characters, so a short word phrase fits.
 headers:
 - enabled: true
   name: Content-Type
