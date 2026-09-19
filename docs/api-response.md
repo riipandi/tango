@@ -6,16 +6,36 @@ The rules are defined once in `pkg/responder` and both transports use
 them, so a client reads the same page, limit, totals, and item range
 from either surface.
 
-| REST envelope | ConnectRPC |
-| --- | --- |
-| `status` | the Connect error code (`ok` is the absence of an error) |
-| `message` | the Connect error message |
-| `data` | the response message's own payload field (`users`, `api_keys`, ...) |
-| `metadata.status_code` | `metadata.status_code` |
-| `metadata.request_id` | `metadata.request_id` |
-| `metadata.rate_limit` | `metadata.rate_limit` |
-| `metadata.page` … `metadata.last_item_index` | the same fields on `metadata` |
-| `links` | not modelled yet; RPCs that need it add the field explicitly |
+## Field naming
+
+Every JSON field on both transports is **snake_case**.
+
+REST gets this from the Go struct tags. ConnectRPC needs an explicit
+step: protobuf's JSON mapping defaults to lowerCamelCase, so each
+service registers a codec that serializes under the declared proto
+field names instead. Without it the two transports of one contract
+would disagree on field naming.
+
+Requests are tolerant: protojson accepts both spellings, so a body may
+send `display_name` or `displayName` and unmarshal the same way.
+
+Two protocol surfaces keep camelCase because their specifications
+require it, and neither is part of this envelope contract:
+
+- SCIM 2.0 (`/scim/v2/*`) — `userName`, `displayName`, `givenName`, `Resources`, `totalResults`.
+- WebAuthn (`/api/webauthn/*`) — `publicKey`, `rp`, `user`, `challenge`.
+
+| REST envelope              | ConnectRPC                                                          |
+| -------------------------- | ------------------------------------------------------------------- |
+| `status`                   | the Connect error code (`ok` is the absence of an error)            |
+| `message`                  | the Connect error message                                           |
+| `data`                     | the response message's own payload field (`users`, `api_keys`, ...) |
+| `metadata.status_code`     | `metadata.status_code`                                              |
+| `metadata.request_id`      | `metadata.request_id`                                               |
+| `metadata.rate_limit`      | `metadata.rate_limit`                                               |
+| `metadata.page`            | `metadata.page`                                                     |
+| `metadata.last_item_index` | `metadata.last_item_index`                                          |
+| `links`                    | not modelled yet; RPCs that need it add the field explicitly        |
 
 Minimal sucess response:
 

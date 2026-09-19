@@ -52,6 +52,17 @@ match the upstream endpoint contract.
 - **`/.well-known/version`** — a bare version document under `.well-known` for instance
   fingerprinting; the upstream-parity version endpoints stay under `/api/version/*`.
 
+## Response contract
+
+- **JSON field names are snake_case on both transports.** Upstream serves camelCase from its Go
+  struct tags; tango normalizes REST and ConnectRPC onto snake_case so one client reads one
+  spelling. REST gets it from struct tags, and each RPC service registers a codec that serializes
+  protobuf under its declared field names (protobuf's JSON default is lowerCamelCase). Requests
+  stay tolerant — protojson accepts either spelling on input.
+- **SCIM and WebAuthn keep camelCase.** Both specifications mandate it (`userName`,
+  `displayName`, `Resources`; `publicKey`, `challenge`), and neither is part of the envelope
+  contract.
+
 ## Signup and setup contract
 
 - The setup contract counts **every** existing user, matching upstream: `GET /api/signup/setup`
