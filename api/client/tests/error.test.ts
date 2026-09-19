@@ -76,7 +76,7 @@ describe('error normalization', () => {
     const { fetchMock } = mockFetch([{ status: 500, body: 'oops' }])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.system.versionLatest())
+    const error = await catchError(client.system.health())
 
     expect(error.code).toBe('api_error')
     expect(error.status).toBe(500)

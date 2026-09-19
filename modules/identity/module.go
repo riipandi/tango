@@ -205,6 +205,15 @@ func (m *Module) CustomClaimRPCService() (string, http.Handler) {
 	return "", http.NotFoundHandler()
 }
 
+// DeviceApprovalRPCService returns the device approval Connect
+// registration, or the not-found stub when the feature is unwired.
+func (m *Module) DeviceApprovalRPCService() (string, http.Handler) {
+	if provider, ok := m.devices.(rpcServiceProvider); ok && m.devices != nil {
+		return provider.RPCService()
+	}
+	return "", http.NotFoundHandler()
+}
+
 // APIRoutes mounts the user core, then every wired feature's
 // endpoints, in construction order. Unwired features stay unmounted.
 // Claims and API access serve ConnectRPC exclusively; the REST

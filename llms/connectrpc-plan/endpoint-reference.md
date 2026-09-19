@@ -148,8 +148,8 @@ running server. Request names should use `<METHOD> <path>` for REST and
 | POST | `/api/webauthn/login/finish` | REST | Browser WebAuthn client | Sets the session cookie. |
 | POST | `/api/device-login/requests` | REST | External device / CLI | Device login is an integration flow. |
 | POST | `/api/device-login/requests/{id}/exchange` | REST | External device / CLI | Keep exchange HTTP-compatible. |
-| POST | `/api/device-login/verification` | ConnectRPC | Tango approval UI | Internal UI lookup. |
-| POST | `/api/device-login/verification/decision` | ConnectRPC | Tango approval UI | Internal UI action. |
+| POST | `/api/device-login/verification` | ConnectRPC | Tango approval UI | Internal UI lookup; REST route removed in phase 05. |
+| POST | `/api/device-login/verification/decision` | ConnectRPC | Tango approval UI | Internal UI action; REST route removed in phase 05. |
 
 ## Admin APIs and configuration
 
@@ -216,8 +216,8 @@ running server. Request names should use `<METHOD> <path>` for REST and
 | --- | --- | --- | --- | --- |
 | GET | `/healthz` | REST | Load balancer/orchestrator | Liveness probe. |
 | GET | `/api/healthz` | REST | Deploy tooling | Readiness document. |
-| GET | `/api/version/current` | ConnectRPC | Admin/internal | |
-| GET | `/api/version/latest` | ConnectRPC | Admin/internal | |
+| GET | `/api/version/current` | ConnectRPC | Admin/internal | REST route removed in phase 05. |
+| GET | `/api/version/latest` | ConnectRPC | Admin/internal | REST route removed in phase 05. |
 | All | `/api/application-images/*` | None | None | Excluded and not mounted. |
 | POST | `/api/application-configuration/sync-ldap` | None | None | Excluded; LDAP must not be reintroduced. |
 
@@ -266,8 +266,8 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 
 | Service.Method | Replaces (method + path) | Auth | Notes |
 | --- | --- | --- | --- |
-| `VersionService.Current` | GET `/api/version/current` | bearer | |
-| `VersionService.Latest` | GET `/api/version/latest` | public | |
+| `VersionService.Current` | GET `/api/version/current` | bearer | REST route removed in phase 05. |
+| `VersionService.Latest` | GET `/api/version/latest` | public | REST route removed in phase 05. |
 | `HealthService.Check` | — (smoke RPC, no REST replacement) | public | Transport smoke target only; `/healthz` and `/api/healthz` stay REST. |
 
 ### Package `tango.identity.v1` — `api/connect/identity.proto`
@@ -341,8 +341,8 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `UserGroupService.ListGroupUsers` | GET `/api/user-groups/{group_id}/users` | bearer | |
 | `UserGroupService.ReplaceGroupUsers` | PUT `/api/user-groups/{group_id}/users` | bearer | Atomic replacement. |
 | `UserGroupService.ReplaceAllowedOidcClients` | PUT `/api/user-groups/{group_id}/allowed-oidc-clients` | bearer | |
-| `DeviceApprovalService.GetPendingRequest` | POST `/api/device-login/verification` | bearer | |
-| `DeviceApprovalService.DecideRequest` | POST `/api/device-login/verification/decision` | bearer | |
+| `DeviceApprovalService.GetPendingRequest` | POST `/api/device-login/verification` | bearer | Contract fixed in phase 05: the request carries the user_code. |
+| `DeviceApprovalService.DecideRequest` | POST `/api/device-login/verification/decision` | bearer | Request carries user_code + approve; cutover phase 05. |
 | `CustomClaimService.Suggest` | GET `/api/custom-claims/suggestions` | bearer | Cutover phase 05. |
 | `CustomClaimService.ListUserClaims` | GET `/api/custom-claims/user/{user_id}` | bearer | |
 | `CustomClaimService.CreateUserClaim` | POST `/api/custom-claims/user/{user_id}` | bearer | |

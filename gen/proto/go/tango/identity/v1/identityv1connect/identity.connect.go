@@ -1859,7 +1859,7 @@ func (UnimplementedUserGroupServiceHandler) ReplaceAllowedOidcClients(context.Co
 
 // DeviceApprovalServiceClient is a client for the tango.identity.v1.DeviceApprovalService service.
 type DeviceApprovalServiceClient interface {
-	GetPendingRequest(context.Context, *connect.Request[emptypb.Empty]) (*connect.Response[v1.VerificationInfo], error)
+	GetPendingRequest(context.Context, *connect.Request[v1.GetPendingRequestRequest]) (*connect.Response[v1.VerificationInfo], error)
 	DecideRequest(context.Context, *connect.Request[v1.DecideRequestRequest]) (*connect.Response[emptypb.Empty], error)
 }
 
@@ -1874,7 +1874,7 @@ func NewDeviceApprovalServiceClient(httpClient connect.HTTPClient, baseURL strin
 	baseURL = strings.TrimRight(baseURL, "/")
 	deviceApprovalServiceMethods := v1.File_identity_proto.Services().ByName("DeviceApprovalService").Methods()
 	return &deviceApprovalServiceClient{
-		getPendingRequest: connect.NewClient[emptypb.Empty, v1.VerificationInfo](
+		getPendingRequest: connect.NewClient[v1.GetPendingRequestRequest, v1.VerificationInfo](
 			httpClient,
 			baseURL+DeviceApprovalServiceGetPendingRequestProcedure,
 			connect.WithSchema(deviceApprovalServiceMethods.ByName("GetPendingRequest")),
@@ -1891,12 +1891,12 @@ func NewDeviceApprovalServiceClient(httpClient connect.HTTPClient, baseURL strin
 
 // deviceApprovalServiceClient implements DeviceApprovalServiceClient.
 type deviceApprovalServiceClient struct {
-	getPendingRequest *connect.Client[emptypb.Empty, v1.VerificationInfo]
+	getPendingRequest *connect.Client[v1.GetPendingRequestRequest, v1.VerificationInfo]
 	decideRequest     *connect.Client[v1.DecideRequestRequest, emptypb.Empty]
 }
 
 // GetPendingRequest calls tango.identity.v1.DeviceApprovalService.GetPendingRequest.
-func (c *deviceApprovalServiceClient) GetPendingRequest(ctx context.Context, req *connect.Request[emptypb.Empty]) (*connect.Response[v1.VerificationInfo], error) {
+func (c *deviceApprovalServiceClient) GetPendingRequest(ctx context.Context, req *connect.Request[v1.GetPendingRequestRequest]) (*connect.Response[v1.VerificationInfo], error) {
 	return c.getPendingRequest.CallUnary(ctx, req)
 }
 
@@ -1908,7 +1908,7 @@ func (c *deviceApprovalServiceClient) DecideRequest(ctx context.Context, req *co
 // DeviceApprovalServiceHandler is an implementation of the tango.identity.v1.DeviceApprovalService
 // service.
 type DeviceApprovalServiceHandler interface {
-	GetPendingRequest(context.Context, *connect.Request[emptypb.Empty]) (*connect.Response[v1.VerificationInfo], error)
+	GetPendingRequest(context.Context, *connect.Request[v1.GetPendingRequestRequest]) (*connect.Response[v1.VerificationInfo], error)
 	DecideRequest(context.Context, *connect.Request[v1.DecideRequestRequest]) (*connect.Response[emptypb.Empty], error)
 }
 
@@ -1946,7 +1946,7 @@ func NewDeviceApprovalServiceHandler(svc DeviceApprovalServiceHandler, opts ...c
 // UnimplementedDeviceApprovalServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedDeviceApprovalServiceHandler struct{}
 
-func (UnimplementedDeviceApprovalServiceHandler) GetPendingRequest(context.Context, *connect.Request[emptypb.Empty]) (*connect.Response[v1.VerificationInfo], error) {
+func (UnimplementedDeviceApprovalServiceHandler) GetPendingRequest(context.Context, *connect.Request[v1.GetPendingRequestRequest]) (*connect.Response[v1.VerificationInfo], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("tango.identity.v1.DeviceApprovalService.GetPendingRequest is not implemented"))
 }
 

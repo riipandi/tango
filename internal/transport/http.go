@@ -30,8 +30,9 @@ type RouteSet struct {
 	// MountRPC registers module-owned Connect services into the
 	// shared /rpc handler tree; nil leaves only the smoke service.
 	MountRPC func(r chi.Router)
-	// RequireSession protects metadata endpoints that upstream serves
-	// to any signed-in user; nil leaves those routes unmounted.
+	// RequireSession is unused since the version cutover — the RPC
+	// surface authenticates via bearer. Kept for route-set parity
+	// with callers that still pass it.
 	RequireSession kernel.Guard
 }
 
@@ -63,10 +64,8 @@ func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limit
 		}
 		r.Get("/", APIRootHandler)
 		r.Get("/healthz", newHealthHandler(checks).ServeHTTP)
-		if routes.RequireSession != nil {
-			r.Get("/version/current", routes.RequireSession(http.HandlerFunc(VersionCurrentHandler)).ServeHTTP)
-		}
-		r.Get("/version/latest", VersionLatestHandler(latest))
+		// Version metadata serves ConnectRPC exclusively (the
+		// VersionService below /rpc); /api/version* is gone.
 		if routes.MountAPI != nil {
 			routes.MountAPI(r)
 		}

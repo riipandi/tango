@@ -88,11 +88,11 @@ func TestNewHTTPServerRoutes(t *testing.T) {
 		wantStatus int
 		checkJSON  bool
 	}{
-		{"/api/healthz", http.StatusOK, true},                   // moved under the /api group
-		{"/api", http.StatusOK, true},                           // identity apiRoot
-		{"/api/users", http.StatusNotFound, true},               // users cutover: ConnectRPC only
-		{"/api/version/current", http.StatusUnauthorized, true}, // session-guarded
-		{"/api/version/latest", http.StatusOK, true},            // public release feed
+		{"/api/healthz", http.StatusOK, true},               // moved under the /api group
+		{"/api", http.StatusOK, true},                       // identity apiRoot
+		{"/api/users", http.StatusNotFound, true},           // users cutover: ConnectRPC only
+		{"/api/version/current", http.StatusNotFound, true}, // version cutover: ConnectRPC only
+		{"/api/version/latest", http.StatusNotFound, true},  // version cutover: ConnectRPC only
 		{"/api/nope", http.StatusNotFound, true},
 		{"/.well-known/version", http.StatusOK, true},
 		{"/static/missing.js", http.StatusNotFound, true}, // static 404 is JSON
@@ -107,30 +107,6 @@ func TestNewHTTPServerRoutes(t *testing.T) {
 			assert.Contains(t, w.Header().Get("Content-Type"), "application/json", tc.path)
 		}
 	}
-}
-
-func TestVersionContracts(t *testing.T) {
-	cfg := testConfig()
-
-	// The release feed is public and cacheable.
-	srv := testServer(t, cfg)
-	w := httptest.NewRecorder()
-	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/version/latest", nil))
-	require.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "public, max-age=300, stale-while-revalidate=900", w.Header().Get("Cache-Control"))
-	assert.NotEmpty(t, versionData(t, w).LatestVersion)
-
-	// The deployed version requires a session; a signed-in request
-	// passes the guard and reads the build version.
-	srv = newTestServer(t, cfg, allowAllGuard)
-	w = httptest.NewRecorder()
-	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/version/current", nil))
-	require.Equal(t, http.StatusOK, w.Code)
-	assert.NotEmpty(t, versionData(t, w).CurrentVersion)
-}
-
-func allowAllGuard(next http.Handler) http.Handler {
-	return next
 }
 
 func TestNewHTTPServerMountsModules(t *testing.T) {

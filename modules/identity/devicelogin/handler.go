@@ -9,12 +9,9 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-ozzo/ozzo-validation/v4"
 
-	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/validate"
 )
 
 // Feature is the wireable device login unit.
@@ -28,19 +25,13 @@ func New(service *Service) Feature { return Feature{service: service} }
 // Name names the feature for logs.
 func (Feature) Name() string { return "devicelogin" }
 
-// APIRoutes mounts the device login endpoints relative to the /api
-// group. Without a self group the approving surfaces are skipped
-// (fail closed).
-func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
+// APIRoutes mounts the retained device-side endpoints relative to
+// the /api group (RFC 8628 integration surface). The approval UI's
+// inspect/decision pair serves ConnectRPC exclusively — see
+// handler_rpc.go.
+func (f Feature) APIRoutes(r chi.Router, _ identity.RouteGroups) {
 	r.Post("/device-login/requests", f.service.handleCreate)
 	r.Post("/device-login/requests/{id}/exchange", f.service.handleExchange)
-
-	if g.Self == nil {
-		return
-	}
-	self := r.With(g.Self)
-	self.Post("/device-login/verification", f.service.handleInspect)
-	self.Post("/device-login/verification/decision", f.service.handleDecision)
 }
 
 // handleCreate serves POST /device-login/requests (anonymous): the
@@ -108,74 +99,6 @@ func (s *Service) handleExchange(w http.ResponseWriter, r *http.Request) {
 
 	setSessionCookie(w, s.cookieName, token, s.cookieSecure)
 	responder.Success(w, r, http.StatusOK, u)
-}
-
-// handleInspect serves POST /device-login/verification: what the
-// approving device will see for the code.
-func (s *Service) handleInspect(w http.ResponseWriter, r *http.Request) {
-	var req inspectRequest
-	if verr := validate.Request(r.Body, &req); verr != nil {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(verr)))
-		return
-	}
-
-	info, err := s.Inspect(r.Context(), req.Code)
-	if err != nil {
-		responder.Fail(w, r, http.StatusNotFound, "device login request is invalid or expired")
-		return
-	}
-	responder.Success(w, r, http.StatusOK, info)
-}
-
-// inspectRequest is the POST verification payload.
-type inspectRequest struct {
-	Code string `json:"code"`
-}
-
-func (r inspectRequest) Validate() error {
-	if normalizeCode(r.Code) == "" {
-		return validation.Errors{"code": validation.NewError("validation", "cannot be blank")}
-	}
-	return nil
-}
-
-// decisionRequest is the POST decision payload.
-type decisionRequest struct {
-	Code     string `json:"code"`
-	Decision string `json:"decision"`
-}
-
-func (r decisionRequest) Validate() error {
-	if normalizeCode(r.Code) == "" {
-		return validation.Errors{"code": validation.NewError("validation", "cannot be blank")}
-	}
-	if r.Decision != "approve" && r.Decision != "deny" {
-		return validation.Errors{"decision": validation.NewError("validation", "must be approve or deny")}
-	}
-	return nil
-}
-
-// handleDecision serves POST /device-login/verification/decision.
-func (s *Service) handleDecision(w http.ResponseWriter, r *http.Request) {
-	principal, ok := middleware.PrincipalFromContext(r.Context())
-	if !ok {
-		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
-		return
-	}
-
-	var req decisionRequest
-	if verr := validate.Request(r.Body, &req); verr != nil {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(verr)))
-		return
-	}
-
-	if err := s.Decide(r.Context(), req.Code, req.Decision, principal); err != nil {
-		responder.Fail(w, r, http.StatusNotFound, "device login request is invalid or expired")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // deviceTokenFrom reads the pairing token: cookie first, then the

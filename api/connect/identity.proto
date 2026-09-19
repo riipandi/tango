@@ -435,8 +435,13 @@ message ReplaceAllowedOidcClientsRequest {
 // DeviceApprovalService backs the internal approval UI for device
 // login (RFC 8628 device side stays REST).
 service DeviceApprovalService {
-  rpc GetPendingRequest(google.protobuf.Empty) returns (VerificationInfo);
+  rpc GetPendingRequest(GetPendingRequestRequest) returns (VerificationInfo);
   rpc DecideRequest(DecideRequestRequest) returns (google.protobuf.Empty);
+}
+
+message GetPendingRequestRequest {
+  // The user code shown on the device awaiting approval.
+  string user_code = 1;
 }
 
 message VerificationInfo {
@@ -449,7 +454,8 @@ message VerificationInfo {
 }
 
 message DecideRequestRequest {
-  bool approve = 1;
+  string user_code = 1;
+  bool approve = 2;
 }
 
 // CustomClaimService administers claim entries on users and groups.

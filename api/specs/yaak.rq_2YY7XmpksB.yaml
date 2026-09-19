@@ -1,0 +1,50 @@
+type: http_request
+model: http_request
+id: rq_2YY7XmpksB
+createdAt: 2026-09-19T01:09:32.336397
+updatedAt: 2026-09-19T01:09:32.336398
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_Zg3xFLU2hm
+authentication: {}
+authenticationType: none
+body:
+  bodyType: application/json
+  text: '{"user_code":"P7JMQ95R","approve":true}'
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+- enabled: true
+  name: Authorization
+  value: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6Imp3a18wMW0ydHp3czFwZXE4c2U1MjUzY2N0emZ2biIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1ZSwiYXVkIjpbInRhbmdvOnJwYyJdLCJleHAiOjE3ODk3ODA2NTEsImlhdCI6MTc4OTc4MDA1MSwiaXNzIjoidGFuZ286aW50ZXJuYWwiLCJzaWQiOiJzZXNzaW9uXzAxbTJ2azhocjdlcmg4Z3NheHZwNTZqMTloIiwic3ViIjoidXNlcl8wMW0ydHp3aGgwZmc1OTJteGM1OHljM3BnZCJ9.Le1yoC98nQ1CTa3iElvauCOzs7Gxw-YcFYutyxhkKLpS0ZgVo4AC3VMQ0bTs2Y6VULojojc4N0Cg1vJCdoE_JDC3TYbExh9Jyhq_L1RbL_OHydCz_EL05KHOHxuwrxy9NV5v12PqRHouoCgIf6VNs9masW8W1lysjvPeHUKnPvNuM0LU11I_ijDEZNQHoYixBRfsQDpJ7-6HbpIhhzGuZmoNb73J3MR-kiO8uvTaOX4sv_0TbZIHC_LWBci_DctPttRofi0ILPgkvDpfEzQvotU4mLRn7lxDffJedApsdrR65UsOXsZ0qaeJNhIxvLz-HvGTD8_e4FpD_vul5im47A
+  id: null
+method: POST
+name: POST /rpc/tango.identity.v1.DeviceApprovalService/DecideRequest
+sortPriority: 0.0
+url: https://localhost:8443/rpc/tango.identity.v1.DeviceApprovalService/DecideRequest
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

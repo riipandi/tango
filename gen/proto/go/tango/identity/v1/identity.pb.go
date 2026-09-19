@@ -3184,6 +3184,51 @@ func (x *ReplaceAllowedOidcClientsRequest) GetClientIds() []string {
 	return nil
 }
 
+type GetPendingRequestRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The user code shown on the device awaiting approval.
+	UserCode      string `protobuf:"bytes,1,opt,name=user_code,json=userCode,proto3" json:"user_code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPendingRequestRequest) Reset() {
+	*x = GetPendingRequestRequest{}
+	mi := &file_identity_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPendingRequestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPendingRequestRequest) ProtoMessage() {}
+
+func (x *GetPendingRequestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_identity_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPendingRequestRequest.ProtoReflect.Descriptor instead.
+func (*GetPendingRequestRequest) Descriptor() ([]byte, []int) {
+	return file_identity_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *GetPendingRequestRequest) GetUserCode() string {
+	if x != nil {
+		return x.UserCode
+	}
+	return ""
+}
+
 type VerificationInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserCode      string                 `protobuf:"bytes,1,opt,name=user_code,json=userCode,proto3" json:"user_code,omitempty"`
@@ -3198,7 +3243,7 @@ type VerificationInfo struct {
 
 func (x *VerificationInfo) Reset() {
 	*x = VerificationInfo{}
-	mi := &file_identity_proto_msgTypes[55]
+	mi := &file_identity_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3210,7 +3255,7 @@ func (x *VerificationInfo) String() string {
 func (*VerificationInfo) ProtoMessage() {}
 
 func (x *VerificationInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[55]
+	mi := &file_identity_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3223,7 +3268,7 @@ func (x *VerificationInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerificationInfo.ProtoReflect.Descriptor instead.
 func (*VerificationInfo) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{55}
+	return file_identity_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *VerificationInfo) GetUserCode() string {
@@ -3270,14 +3315,15 @@ func (x *VerificationInfo) GetExpiresAt() string {
 
 type DecideRequestRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Approve       bool                   `protobuf:"varint,1,opt,name=approve,proto3" json:"approve,omitempty"`
+	UserCode      string                 `protobuf:"bytes,1,opt,name=user_code,json=userCode,proto3" json:"user_code,omitempty"`
+	Approve       bool                   `protobuf:"varint,2,opt,name=approve,proto3" json:"approve,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DecideRequestRequest) Reset() {
 	*x = DecideRequestRequest{}
-	mi := &file_identity_proto_msgTypes[56]
+	mi := &file_identity_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3289,7 +3335,7 @@ func (x *DecideRequestRequest) String() string {
 func (*DecideRequestRequest) ProtoMessage() {}
 
 func (x *DecideRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[56]
+	mi := &file_identity_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3302,7 +3348,14 @@ func (x *DecideRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecideRequestRequest.ProtoReflect.Descriptor instead.
 func (*DecideRequestRequest) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{56}
+	return file_identity_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *DecideRequestRequest) GetUserCode() string {
+	if x != nil {
+		return x.UserCode
+	}
+	return ""
 }
 
 func (x *DecideRequestRequest) GetApprove() bool {
@@ -3321,7 +3374,7 @@ type SuggestRequest struct {
 
 func (x *SuggestRequest) Reset() {
 	*x = SuggestRequest{}
-	mi := &file_identity_proto_msgTypes[57]
+	mi := &file_identity_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3333,7 +3386,7 @@ func (x *SuggestRequest) String() string {
 func (*SuggestRequest) ProtoMessage() {}
 
 func (x *SuggestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[57]
+	mi := &file_identity_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3346,7 +3399,7 @@ func (x *SuggestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuggestRequest.ProtoReflect.Descriptor instead.
 func (*SuggestRequest) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{57}
+	return file_identity_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *SuggestRequest) GetQuery() string {
@@ -3365,7 +3418,7 @@ type SuggestResponse struct {
 
 func (x *SuggestResponse) Reset() {
 	*x = SuggestResponse{}
-	mi := &file_identity_proto_msgTypes[58]
+	mi := &file_identity_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3377,7 +3430,7 @@ func (x *SuggestResponse) String() string {
 func (*SuggestResponse) ProtoMessage() {}
 
 func (x *SuggestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[58]
+	mi := &file_identity_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3390,7 +3443,7 @@ func (x *SuggestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuggestResponse.ProtoReflect.Descriptor instead.
 func (*SuggestResponse) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{58}
+	return file_identity_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *SuggestResponse) GetKeys() []string {
@@ -3409,7 +3462,7 @@ type ListUserClaimsRequest struct {
 
 func (x *ListUserClaimsRequest) Reset() {
 	*x = ListUserClaimsRequest{}
-	mi := &file_identity_proto_msgTypes[59]
+	mi := &file_identity_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3421,7 +3474,7 @@ func (x *ListUserClaimsRequest) String() string {
 func (*ListUserClaimsRequest) ProtoMessage() {}
 
 func (x *ListUserClaimsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[59]
+	mi := &file_identity_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3434,7 +3487,7 @@ func (x *ListUserClaimsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUserClaimsRequest.ProtoReflect.Descriptor instead.
 func (*ListUserClaimsRequest) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{59}
+	return file_identity_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ListUserClaimsRequest) GetUserId() string {
@@ -3453,7 +3506,7 @@ type ListGroupClaimsRequest struct {
 
 func (x *ListGroupClaimsRequest) Reset() {
 	*x = ListGroupClaimsRequest{}
-	mi := &file_identity_proto_msgTypes[60]
+	mi := &file_identity_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3465,7 +3518,7 @@ func (x *ListGroupClaimsRequest) String() string {
 func (*ListGroupClaimsRequest) ProtoMessage() {}
 
 func (x *ListGroupClaimsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[60]
+	mi := &file_identity_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3478,7 +3531,7 @@ func (x *ListGroupClaimsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGroupClaimsRequest.ProtoReflect.Descriptor instead.
 func (*ListGroupClaimsRequest) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{60}
+	return file_identity_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ListGroupClaimsRequest) GetUserGroupId() string {
@@ -3497,7 +3550,7 @@ type ListClaimsResponse struct {
 
 func (x *ListClaimsResponse) Reset() {
 	*x = ListClaimsResponse{}
-	mi := &file_identity_proto_msgTypes[61]
+	mi := &file_identity_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3509,7 +3562,7 @@ func (x *ListClaimsResponse) String() string {
 func (*ListClaimsResponse) ProtoMessage() {}
 
 func (x *ListClaimsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[61]
+	mi := &file_identity_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3522,7 +3575,7 @@ func (x *ListClaimsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListClaimsResponse.ProtoReflect.Descriptor instead.
 func (*ListClaimsResponse) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{61}
+	return file_identity_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ListClaimsResponse) GetClaims() []*CustomClaim {
@@ -3543,7 +3596,7 @@ type CreateUserClaimRequest struct {
 
 func (x *CreateUserClaimRequest) Reset() {
 	*x = CreateUserClaimRequest{}
-	mi := &file_identity_proto_msgTypes[62]
+	mi := &file_identity_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3555,7 +3608,7 @@ func (x *CreateUserClaimRequest) String() string {
 func (*CreateUserClaimRequest) ProtoMessage() {}
 
 func (x *CreateUserClaimRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[62]
+	mi := &file_identity_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3568,7 +3621,7 @@ func (x *CreateUserClaimRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateUserClaimRequest.ProtoReflect.Descriptor instead.
 func (*CreateUserClaimRequest) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{62}
+	return file_identity_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *CreateUserClaimRequest) GetUserId() string {
@@ -3603,7 +3656,7 @@ type CreateGroupClaimRequest struct {
 
 func (x *CreateGroupClaimRequest) Reset() {
 	*x = CreateGroupClaimRequest{}
-	mi := &file_identity_proto_msgTypes[63]
+	mi := &file_identity_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3615,7 +3668,7 @@ func (x *CreateGroupClaimRequest) String() string {
 func (*CreateGroupClaimRequest) ProtoMessage() {}
 
 func (x *CreateGroupClaimRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[63]
+	mi := &file_identity_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3628,7 +3681,7 @@ func (x *CreateGroupClaimRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateGroupClaimRequest.ProtoReflect.Descriptor instead.
 func (*CreateGroupClaimRequest) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{63}
+	return file_identity_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *CreateGroupClaimRequest) GetUserGroupId() string {
@@ -3663,7 +3716,7 @@ type UpdateClaimRequest struct {
 
 func (x *UpdateClaimRequest) Reset() {
 	*x = UpdateClaimRequest{}
-	mi := &file_identity_proto_msgTypes[64]
+	mi := &file_identity_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3675,7 +3728,7 @@ func (x *UpdateClaimRequest) String() string {
 func (*UpdateClaimRequest) ProtoMessage() {}
 
 func (x *UpdateClaimRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[64]
+	mi := &file_identity_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3688,7 +3741,7 @@ func (x *UpdateClaimRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateClaimRequest.ProtoReflect.Descriptor instead.
 func (*UpdateClaimRequest) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{64}
+	return file_identity_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *UpdateClaimRequest) GetUserId() string {
@@ -3723,7 +3776,7 @@ type UpdateGroupClaimRequest struct {
 
 func (x *UpdateGroupClaimRequest) Reset() {
 	*x = UpdateGroupClaimRequest{}
-	mi := &file_identity_proto_msgTypes[65]
+	mi := &file_identity_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3735,7 +3788,7 @@ func (x *UpdateGroupClaimRequest) String() string {
 func (*UpdateGroupClaimRequest) ProtoMessage() {}
 
 func (x *UpdateGroupClaimRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[65]
+	mi := &file_identity_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3748,7 +3801,7 @@ func (x *UpdateGroupClaimRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateGroupClaimRequest.ProtoReflect.Descriptor instead.
 func (*UpdateGroupClaimRequest) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{65}
+	return file_identity_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *UpdateGroupClaimRequest) GetUserGroupId() string {
@@ -3782,7 +3835,7 @@ type DeleteClaimRequest struct {
 
 func (x *DeleteClaimRequest) Reset() {
 	*x = DeleteClaimRequest{}
-	mi := &file_identity_proto_msgTypes[66]
+	mi := &file_identity_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3794,7 +3847,7 @@ func (x *DeleteClaimRequest) String() string {
 func (*DeleteClaimRequest) ProtoMessage() {}
 
 func (x *DeleteClaimRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[66]
+	mi := &file_identity_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3807,7 +3860,7 @@ func (x *DeleteClaimRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteClaimRequest.ProtoReflect.Descriptor instead.
 func (*DeleteClaimRequest) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{66}
+	return file_identity_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *DeleteClaimRequest) GetUserId() string {
@@ -3834,7 +3887,7 @@ type DeleteGroupClaimRequest struct {
 
 func (x *DeleteGroupClaimRequest) Reset() {
 	*x = DeleteGroupClaimRequest{}
-	mi := &file_identity_proto_msgTypes[67]
+	mi := &file_identity_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3846,7 +3899,7 @@ func (x *DeleteGroupClaimRequest) String() string {
 func (*DeleteGroupClaimRequest) ProtoMessage() {}
 
 func (x *DeleteGroupClaimRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_identity_proto_msgTypes[67]
+	mi := &file_identity_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3859,7 +3912,7 @@ func (x *DeleteGroupClaimRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGroupClaimRequest.ProtoReflect.Descriptor instead.
 func (*DeleteGroupClaimRequest) Descriptor() ([]byte, []int) {
-	return file_identity_proto_rawDescGZIP(), []int{67}
+	return file_identity_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *DeleteGroupClaimRequest) GetUserGroupId() string {
@@ -4157,7 +4210,9 @@ const file_identity_proto_rawDesc = "" +
 	" ReplaceAllowedOidcClientsRequest\x12\x19\n" +
 	"\bgroup_id\x18\x01 \x01(\tR\agroupId\x12\x1d\n" +
 	"\n" +
-	"client_ids\x18\x02 \x03(\tR\tclientIds\"\xb3\x01\n" +
+	"client_ids\x18\x02 \x03(\tR\tclientIds\"7\n" +
+	"\x18GetPendingRequestRequest\x12\x1b\n" +
+	"\tuser_code\x18\x01 \x01(\tR\buserCode\"\xb3\x01\n" +
 	"\x10VerificationInfo\x12\x1b\n" +
 	"\tuser_code\x18\x01 \x01(\tR\buserCode\x12\x16\n" +
 	"\x06device\x18\x02 \x01(\tR\x06device\x12\x1d\n" +
@@ -4166,9 +4221,10 @@ const file_identity_proto_rawDesc = "" +
 	"\x04city\x18\x04 \x01(\tR\x04city\x12\x18\n" +
 	"\acountry\x18\x05 \x01(\tR\acountry\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\x06 \x01(\tR\texpiresAt\"0\n" +
-	"\x14DecideRequestRequest\x12\x18\n" +
-	"\aapprove\x18\x01 \x01(\bR\aapprove\"&\n" +
+	"expires_at\x18\x06 \x01(\tR\texpiresAt\"M\n" +
+	"\x14DecideRequestRequest\x12\x1b\n" +
+	"\tuser_code\x18\x01 \x01(\tR\buserCode\x12\x18\n" +
+	"\aapprove\x18\x02 \x01(\bR\aapprove\"&\n" +
 	"\x0eSuggestRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\"%\n" +
 	"\x0fSuggestResponse\x12\x12\n" +
@@ -4266,9 +4322,9 @@ const file_identity_proto_rawDesc = "" +
 	"\vDeleteGroup\x12).tango.identity.v1.DeleteUserGroupRequest\x1a\x16.google.protobuf.Empty\x12e\n" +
 	"\x0eListGroupUsers\x12(.tango.identity.v1.ListGroupUsersRequest\x1a).tango.identity.v1.ListGroupUsersResponse\x12X\n" +
 	"\x11ReplaceGroupUsers\x12+.tango.identity.v1.ReplaceGroupUsersRequest\x1a\x16.google.protobuf.Empty\x12h\n" +
-	"\x19ReplaceAllowedOidcClients\x123.tango.identity.v1.ReplaceAllowedOidcClientsRequest\x1a\x16.google.protobuf.Empty2\xbb\x01\n" +
-	"\x15DeviceApprovalService\x12P\n" +
-	"\x11GetPendingRequest\x12\x16.google.protobuf.Empty\x1a#.tango.identity.v1.VerificationInfo\x12P\n" +
+	"\x19ReplaceAllowedOidcClients\x123.tango.identity.v1.ReplaceAllowedOidcClientsRequest\x1a\x16.google.protobuf.Empty2\xd0\x01\n" +
+	"\x15DeviceApprovalService\x12e\n" +
+	"\x11GetPendingRequest\x12+.tango.identity.v1.GetPendingRequestRequest\x1a#.tango.identity.v1.VerificationInfo\x12P\n" +
 	"\rDecideRequest\x12'.tango.identity.v1.DecideRequestRequest\x1a\x16.google.protobuf.Empty2\xd0\x06\n" +
 	"\x12CustomClaimService\x12P\n" +
 	"\aSuggest\x12!.tango.identity.v1.SuggestRequest\x1a\".tango.identity.v1.SuggestResponse\x12a\n" +
@@ -4293,7 +4349,7 @@ func file_identity_proto_rawDescGZIP() []byte {
 	return file_identity_proto_rawDescData
 }
 
-var file_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 68)
+var file_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 69)
 var file_identity_proto_goTypes = []any{
 	(*User)(nil),                             // 0: tango.identity.v1.User
 	(*SessionView)(nil),                      // 1: tango.identity.v1.SessionView
@@ -4350,73 +4406,74 @@ var file_identity_proto_goTypes = []any{
 	(*ListGroupUsersResponse)(nil),           // 52: tango.identity.v1.ListGroupUsersResponse
 	(*ReplaceGroupUsersRequest)(nil),         // 53: tango.identity.v1.ReplaceGroupUsersRequest
 	(*ReplaceAllowedOidcClientsRequest)(nil), // 54: tango.identity.v1.ReplaceAllowedOidcClientsRequest
-	(*VerificationInfo)(nil),                 // 55: tango.identity.v1.VerificationInfo
-	(*DecideRequestRequest)(nil),             // 56: tango.identity.v1.DecideRequestRequest
-	(*SuggestRequest)(nil),                   // 57: tango.identity.v1.SuggestRequest
-	(*SuggestResponse)(nil),                  // 58: tango.identity.v1.SuggestResponse
-	(*ListUserClaimsRequest)(nil),            // 59: tango.identity.v1.ListUserClaimsRequest
-	(*ListGroupClaimsRequest)(nil),           // 60: tango.identity.v1.ListGroupClaimsRequest
-	(*ListClaimsResponse)(nil),               // 61: tango.identity.v1.ListClaimsResponse
-	(*CreateUserClaimRequest)(nil),           // 62: tango.identity.v1.CreateUserClaimRequest
-	(*CreateGroupClaimRequest)(nil),          // 63: tango.identity.v1.CreateGroupClaimRequest
-	(*UpdateClaimRequest)(nil),               // 64: tango.identity.v1.UpdateClaimRequest
-	(*UpdateGroupClaimRequest)(nil),          // 65: tango.identity.v1.UpdateGroupClaimRequest
-	(*DeleteClaimRequest)(nil),               // 66: tango.identity.v1.DeleteClaimRequest
-	(*DeleteGroupClaimRequest)(nil),          // 67: tango.identity.v1.DeleteGroupClaimRequest
-	(*v1.PageMetadata)(nil),                  // 68: tango.common.v1.PageMetadata
-	(*v1.PageRequest)(nil),                   // 69: tango.common.v1.PageRequest
-	(*emptypb.Empty)(nil),                    // 70: google.protobuf.Empty
+	(*GetPendingRequestRequest)(nil),         // 55: tango.identity.v1.GetPendingRequestRequest
+	(*VerificationInfo)(nil),                 // 56: tango.identity.v1.VerificationInfo
+	(*DecideRequestRequest)(nil),             // 57: tango.identity.v1.DecideRequestRequest
+	(*SuggestRequest)(nil),                   // 58: tango.identity.v1.SuggestRequest
+	(*SuggestResponse)(nil),                  // 59: tango.identity.v1.SuggestResponse
+	(*ListUserClaimsRequest)(nil),            // 60: tango.identity.v1.ListUserClaimsRequest
+	(*ListGroupClaimsRequest)(nil),           // 61: tango.identity.v1.ListGroupClaimsRequest
+	(*ListClaimsResponse)(nil),               // 62: tango.identity.v1.ListClaimsResponse
+	(*CreateUserClaimRequest)(nil),           // 63: tango.identity.v1.CreateUserClaimRequest
+	(*CreateGroupClaimRequest)(nil),          // 64: tango.identity.v1.CreateGroupClaimRequest
+	(*UpdateClaimRequest)(nil),               // 65: tango.identity.v1.UpdateClaimRequest
+	(*UpdateGroupClaimRequest)(nil),          // 66: tango.identity.v1.UpdateGroupClaimRequest
+	(*DeleteClaimRequest)(nil),               // 67: tango.identity.v1.DeleteClaimRequest
+	(*DeleteGroupClaimRequest)(nil),          // 68: tango.identity.v1.DeleteGroupClaimRequest
+	(*v1.PageMetadata)(nil),                  // 69: tango.common.v1.PageMetadata
+	(*v1.PageRequest)(nil),                   // 70: tango.common.v1.PageRequest
+	(*emptypb.Empty)(nil),                    // 71: google.protobuf.Empty
 }
 var file_identity_proto_depIdxs = []int32{
 	0,  // 0: tango.identity.v1.SignedIn.user:type_name -> tango.identity.v1.User
 	1,  // 1: tango.identity.v1.ListSessionsResponse.sessions:type_name -> tango.identity.v1.SessionView
 	16, // 2: tango.identity.v1.SignupTokenSecret.token_info:type_name -> tango.identity.v1.SignupToken
 	16, // 3: tango.identity.v1.ListSignupTokensResponse.tokens:type_name -> tango.identity.v1.SignupToken
-	68, // 4: tango.identity.v1.ListSignupTokensResponse.metadata:type_name -> tango.common.v1.PageMetadata
+	69, // 4: tango.identity.v1.ListSignupTokensResponse.metadata:type_name -> tango.common.v1.PageMetadata
 	0,  // 5: tango.identity.v1.ListUsersResponse.users:type_name -> tango.identity.v1.User
-	68, // 6: tango.identity.v1.ListUsersResponse.metadata:type_name -> tango.common.v1.PageMetadata
+	69, // 6: tango.identity.v1.ListUsersResponse.metadata:type_name -> tango.common.v1.PageMetadata
 	2,  // 7: tango.identity.v1.ListUserGroupsResponse.groups:type_name -> tango.identity.v1.UserGroup
 	3,  // 8: tango.identity.v1.ListWebAuthnCredentialsResponse.credentials:type_name -> tango.identity.v1.WebAuthnCredential
 	2,  // 9: tango.identity.v1.ListGroupsResponse.groups:type_name -> tango.identity.v1.UserGroup
-	68, // 10: tango.identity.v1.ListGroupsResponse.metadata:type_name -> tango.common.v1.PageMetadata
-	69, // 11: tango.identity.v1.ListGroupUsersRequest.page:type_name -> tango.common.v1.PageRequest
+	69, // 10: tango.identity.v1.ListGroupsResponse.metadata:type_name -> tango.common.v1.PageMetadata
+	70, // 11: tango.identity.v1.ListGroupUsersRequest.page:type_name -> tango.common.v1.PageRequest
 	0,  // 12: tango.identity.v1.ListGroupUsersResponse.users:type_name -> tango.identity.v1.User
-	68, // 13: tango.identity.v1.ListGroupUsersResponse.metadata:type_name -> tango.common.v1.PageMetadata
+	69, // 13: tango.identity.v1.ListGroupUsersResponse.metadata:type_name -> tango.common.v1.PageMetadata
 	4,  // 14: tango.identity.v1.ListClaimsResponse.claims:type_name -> tango.identity.v1.CustomClaim
 	6,  // 15: tango.identity.v1.AuthService.SignIn:input_type -> tango.identity.v1.SignInRequest
-	70, // 16: tango.identity.v1.AuthService.SignOut:input_type -> google.protobuf.Empty
-	70, // 17: tango.identity.v1.AuthService.GetSession:input_type -> google.protobuf.Empty
+	71, // 16: tango.identity.v1.AuthService.SignOut:input_type -> google.protobuf.Empty
+	71, // 17: tango.identity.v1.AuthService.GetSession:input_type -> google.protobuf.Empty
 	7,  // 18: tango.identity.v1.AuthService.ForgotPassword:input_type -> tango.identity.v1.ForgotPasswordRequest
 	8,  // 19: tango.identity.v1.AuthService.ResetPassword:input_type -> tango.identity.v1.ResetPasswordRequest
-	70, // 20: tango.identity.v1.AccountService.GetAccount:input_type -> google.protobuf.Empty
+	71, // 20: tango.identity.v1.AccountService.GetAccount:input_type -> google.protobuf.Empty
 	9,  // 21: tango.identity.v1.AccountService.UpdateAccount:input_type -> tango.identity.v1.UpdateProfileRequest
 	10, // 22: tango.identity.v1.AccountService.ChangePassword:input_type -> tango.identity.v1.ChangePasswordRequest
-	70, // 23: tango.identity.v1.AccountService.ListSessions:input_type -> google.protobuf.Empty
+	71, // 23: tango.identity.v1.AccountService.ListSessions:input_type -> google.protobuf.Empty
 	12, // 24: tango.identity.v1.AccountService.RevokeSession:input_type -> tango.identity.v1.RevokeSessionRequest
 	13, // 25: tango.identity.v1.SignupService.Signup:input_type -> tango.identity.v1.SignupRequest
-	70, // 26: tango.identity.v1.SignupService.GetSetupAvailability:input_type -> google.protobuf.Empty
+	71, // 26: tango.identity.v1.SignupService.GetSetupAvailability:input_type -> google.protobuf.Empty
 	15, // 27: tango.identity.v1.SignupService.SetupInitialAdmin:input_type -> tango.identity.v1.SetupInitialAdminRequest
-	69, // 28: tango.identity.v1.SignupService.ListSignupTokens:input_type -> tango.common.v1.PageRequest
+	70, // 28: tango.identity.v1.SignupService.ListSignupTokens:input_type -> tango.common.v1.PageRequest
 	19, // 29: tango.identity.v1.SignupService.CreateSignupToken:input_type -> tango.identity.v1.CreateSignupTokenRequest
 	20, // 30: tango.identity.v1.SignupService.DeleteSignupToken:input_type -> tango.identity.v1.DeleteSignupTokenRequest
-	70, // 31: tango.identity.v1.MfaService.EnrollTotp:input_type -> google.protobuf.Empty
+	71, // 31: tango.identity.v1.MfaService.EnrollTotp:input_type -> google.protobuf.Empty
 	22, // 32: tango.identity.v1.MfaService.ConfirmTotp:input_type -> tango.identity.v1.ConfirmTotpRequest
-	70, // 33: tango.identity.v1.MfaService.GetTotpStatus:input_type -> google.protobuf.Empty
+	71, // 33: tango.identity.v1.MfaService.GetTotpStatus:input_type -> google.protobuf.Empty
 	25, // 34: tango.identity.v1.MfaService.VerifyPending:input_type -> tango.identity.v1.VerifyPendingRequest
 	22, // 35: tango.identity.v1.MfaService.RotateRecoveryCodes:input_type -> tango.identity.v1.ConfirmTotpRequest
 	26, // 36: tango.identity.v1.MfaService.DisableTotp:input_type -> tango.identity.v1.DisableTotpRequest
 	27, // 37: tango.identity.v1.OneTimeAccessService.RequestEmail:input_type -> tango.identity.v1.RequestEmailRequest
 	28, // 38: tango.identity.v1.OneTimeAccessService.AdminSendEmail:input_type -> tango.identity.v1.AdminSendEmailRequest
 	29, // 39: tango.identity.v1.OneTimeAccessService.AdminIssueToken:input_type -> tango.identity.v1.AdminIssueTokenRequest
-	70, // 40: tango.identity.v1.EmailVerificationService.SendEmail:input_type -> google.protobuf.Empty
-	69, // 41: tango.identity.v1.UserService.ListUsers:input_type -> tango.common.v1.PageRequest
+	71, // 40: tango.identity.v1.EmailVerificationService.SendEmail:input_type -> google.protobuf.Empty
+	70, // 41: tango.identity.v1.UserService.ListUsers:input_type -> tango.common.v1.PageRequest
 	32, // 42: tango.identity.v1.UserService.GetUser:input_type -> tango.identity.v1.GetUserRequest
 	33, // 43: tango.identity.v1.UserService.CreateUser:input_type -> tango.identity.v1.CreateUserRequest
 	34, // 44: tango.identity.v1.UserService.UpdateUser:input_type -> tango.identity.v1.UpdateUserRequest
 	35, // 45: tango.identity.v1.UserService.DeleteUser:input_type -> tango.identity.v1.DeleteUserRequest
 	9,  // 46: tango.identity.v1.UserService.UpdateMe:input_type -> tango.identity.v1.UpdateProfileRequest
 	36, // 47: tango.identity.v1.UserService.UpdateMyProfilePicture:input_type -> tango.identity.v1.UpdateMyProfilePictureRequest
-	70, // 48: tango.identity.v1.UserService.DeleteMyProfilePicture:input_type -> google.protobuf.Empty
+	71, // 48: tango.identity.v1.UserService.DeleteMyProfilePicture:input_type -> google.protobuf.Empty
 	37, // 49: tango.identity.v1.UserService.UpdateProfilePicture:input_type -> tango.identity.v1.UpdateProfilePictureRequest
 	38, // 50: tango.identity.v1.UserService.DeleteProfilePicture:input_type -> tango.identity.v1.DeleteProfilePictureRequest
 	39, // 51: tango.identity.v1.UserService.ListUserGroups:input_type -> tango.identity.v1.ListUserGroupsRequest
@@ -4424,7 +4481,7 @@ var file_identity_proto_depIdxs = []int32{
 	42, // 53: tango.identity.v1.UserService.ListWebAuthnCredentials:input_type -> tango.identity.v1.ListWebAuthnCredentialsRequest
 	44, // 54: tango.identity.v1.UserService.UpdateWebAuthnCredential:input_type -> tango.identity.v1.UpdateWebAuthnCredentialRequest
 	45, // 55: tango.identity.v1.UserService.DeleteWebAuthnCredential:input_type -> tango.identity.v1.DeleteWebAuthnCredentialRequest
-	69, // 56: tango.identity.v1.UserGroupService.ListGroups:input_type -> tango.common.v1.PageRequest
+	70, // 56: tango.identity.v1.UserGroupService.ListGroups:input_type -> tango.common.v1.PageRequest
 	47, // 57: tango.identity.v1.UserGroupService.GetGroup:input_type -> tango.identity.v1.GetUserGroupRequest
 	48, // 58: tango.identity.v1.UserGroupService.CreateGroup:input_type -> tango.identity.v1.CreateUserGroupRequest
 	49, // 59: tango.identity.v1.UserGroupService.UpdateGroup:input_type -> tango.identity.v1.UpdateUserGroupRequest
@@ -4432,77 +4489,77 @@ var file_identity_proto_depIdxs = []int32{
 	51, // 61: tango.identity.v1.UserGroupService.ListGroupUsers:input_type -> tango.identity.v1.ListGroupUsersRequest
 	53, // 62: tango.identity.v1.UserGroupService.ReplaceGroupUsers:input_type -> tango.identity.v1.ReplaceGroupUsersRequest
 	54, // 63: tango.identity.v1.UserGroupService.ReplaceAllowedOidcClients:input_type -> tango.identity.v1.ReplaceAllowedOidcClientsRequest
-	70, // 64: tango.identity.v1.DeviceApprovalService.GetPendingRequest:input_type -> google.protobuf.Empty
-	56, // 65: tango.identity.v1.DeviceApprovalService.DecideRequest:input_type -> tango.identity.v1.DecideRequestRequest
-	57, // 66: tango.identity.v1.CustomClaimService.Suggest:input_type -> tango.identity.v1.SuggestRequest
-	59, // 67: tango.identity.v1.CustomClaimService.ListUserClaims:input_type -> tango.identity.v1.ListUserClaimsRequest
-	62, // 68: tango.identity.v1.CustomClaimService.CreateUserClaim:input_type -> tango.identity.v1.CreateUserClaimRequest
-	64, // 69: tango.identity.v1.CustomClaimService.UpdateUserClaim:input_type -> tango.identity.v1.UpdateClaimRequest
-	66, // 70: tango.identity.v1.CustomClaimService.DeleteUserClaim:input_type -> tango.identity.v1.DeleteClaimRequest
-	60, // 71: tango.identity.v1.CustomClaimService.ListGroupClaims:input_type -> tango.identity.v1.ListGroupClaimsRequest
-	63, // 72: tango.identity.v1.CustomClaimService.CreateGroupClaim:input_type -> tango.identity.v1.CreateGroupClaimRequest
-	65, // 73: tango.identity.v1.CustomClaimService.UpdateGroupClaim:input_type -> tango.identity.v1.UpdateGroupClaimRequest
-	67, // 74: tango.identity.v1.CustomClaimService.DeleteGroupClaim:input_type -> tango.identity.v1.DeleteGroupClaimRequest
+	55, // 64: tango.identity.v1.DeviceApprovalService.GetPendingRequest:input_type -> tango.identity.v1.GetPendingRequestRequest
+	57, // 65: tango.identity.v1.DeviceApprovalService.DecideRequest:input_type -> tango.identity.v1.DecideRequestRequest
+	58, // 66: tango.identity.v1.CustomClaimService.Suggest:input_type -> tango.identity.v1.SuggestRequest
+	60, // 67: tango.identity.v1.CustomClaimService.ListUserClaims:input_type -> tango.identity.v1.ListUserClaimsRequest
+	63, // 68: tango.identity.v1.CustomClaimService.CreateUserClaim:input_type -> tango.identity.v1.CreateUserClaimRequest
+	65, // 69: tango.identity.v1.CustomClaimService.UpdateUserClaim:input_type -> tango.identity.v1.UpdateClaimRequest
+	67, // 70: tango.identity.v1.CustomClaimService.DeleteUserClaim:input_type -> tango.identity.v1.DeleteClaimRequest
+	61, // 71: tango.identity.v1.CustomClaimService.ListGroupClaims:input_type -> tango.identity.v1.ListGroupClaimsRequest
+	64, // 72: tango.identity.v1.CustomClaimService.CreateGroupClaim:input_type -> tango.identity.v1.CreateGroupClaimRequest
+	66, // 73: tango.identity.v1.CustomClaimService.UpdateGroupClaim:input_type -> tango.identity.v1.UpdateGroupClaimRequest
+	68, // 74: tango.identity.v1.CustomClaimService.DeleteGroupClaim:input_type -> tango.identity.v1.DeleteGroupClaimRequest
 	5,  // 75: tango.identity.v1.AuthService.SignIn:output_type -> tango.identity.v1.SignedIn
-	70, // 76: tango.identity.v1.AuthService.SignOut:output_type -> google.protobuf.Empty
+	71, // 76: tango.identity.v1.AuthService.SignOut:output_type -> google.protobuf.Empty
 	5,  // 77: tango.identity.v1.AuthService.GetSession:output_type -> tango.identity.v1.SignedIn
-	70, // 78: tango.identity.v1.AuthService.ForgotPassword:output_type -> google.protobuf.Empty
-	70, // 79: tango.identity.v1.AuthService.ResetPassword:output_type -> google.protobuf.Empty
+	71, // 78: tango.identity.v1.AuthService.ForgotPassword:output_type -> google.protobuf.Empty
+	71, // 79: tango.identity.v1.AuthService.ResetPassword:output_type -> google.protobuf.Empty
 	0,  // 80: tango.identity.v1.AccountService.GetAccount:output_type -> tango.identity.v1.User
 	0,  // 81: tango.identity.v1.AccountService.UpdateAccount:output_type -> tango.identity.v1.User
-	70, // 82: tango.identity.v1.AccountService.ChangePassword:output_type -> google.protobuf.Empty
+	71, // 82: tango.identity.v1.AccountService.ChangePassword:output_type -> google.protobuf.Empty
 	11, // 83: tango.identity.v1.AccountService.ListSessions:output_type -> tango.identity.v1.ListSessionsResponse
-	70, // 84: tango.identity.v1.AccountService.RevokeSession:output_type -> google.protobuf.Empty
+	71, // 84: tango.identity.v1.AccountService.RevokeSession:output_type -> google.protobuf.Empty
 	5,  // 85: tango.identity.v1.SignupService.Signup:output_type -> tango.identity.v1.SignedIn
 	14, // 86: tango.identity.v1.SignupService.GetSetupAvailability:output_type -> tango.identity.v1.GetSetupAvailabilityResponse
 	5,  // 87: tango.identity.v1.SignupService.SetupInitialAdmin:output_type -> tango.identity.v1.SignedIn
 	18, // 88: tango.identity.v1.SignupService.ListSignupTokens:output_type -> tango.identity.v1.ListSignupTokensResponse
 	17, // 89: tango.identity.v1.SignupService.CreateSignupToken:output_type -> tango.identity.v1.SignupTokenSecret
-	70, // 90: tango.identity.v1.SignupService.DeleteSignupToken:output_type -> google.protobuf.Empty
+	71, // 90: tango.identity.v1.SignupService.DeleteSignupToken:output_type -> google.protobuf.Empty
 	21, // 91: tango.identity.v1.MfaService.EnrollTotp:output_type -> tango.identity.v1.EnrollTotpResponse
 	23, // 92: tango.identity.v1.MfaService.ConfirmTotp:output_type -> tango.identity.v1.ConfirmTotpResponse
 	24, // 93: tango.identity.v1.MfaService.GetTotpStatus:output_type -> tango.identity.v1.GetTotpStatusResponse
 	5,  // 94: tango.identity.v1.MfaService.VerifyPending:output_type -> tango.identity.v1.SignedIn
 	23, // 95: tango.identity.v1.MfaService.RotateRecoveryCodes:output_type -> tango.identity.v1.ConfirmTotpResponse
-	70, // 96: tango.identity.v1.MfaService.DisableTotp:output_type -> google.protobuf.Empty
-	70, // 97: tango.identity.v1.OneTimeAccessService.RequestEmail:output_type -> google.protobuf.Empty
-	70, // 98: tango.identity.v1.OneTimeAccessService.AdminSendEmail:output_type -> google.protobuf.Empty
+	71, // 96: tango.identity.v1.MfaService.DisableTotp:output_type -> google.protobuf.Empty
+	71, // 97: tango.identity.v1.OneTimeAccessService.RequestEmail:output_type -> google.protobuf.Empty
+	71, // 98: tango.identity.v1.OneTimeAccessService.AdminSendEmail:output_type -> google.protobuf.Empty
 	30, // 99: tango.identity.v1.OneTimeAccessService.AdminIssueToken:output_type -> tango.identity.v1.AdminIssueTokenResponse
-	70, // 100: tango.identity.v1.EmailVerificationService.SendEmail:output_type -> google.protobuf.Empty
+	71, // 100: tango.identity.v1.EmailVerificationService.SendEmail:output_type -> google.protobuf.Empty
 	31, // 101: tango.identity.v1.UserService.ListUsers:output_type -> tango.identity.v1.ListUsersResponse
 	0,  // 102: tango.identity.v1.UserService.GetUser:output_type -> tango.identity.v1.User
 	0,  // 103: tango.identity.v1.UserService.CreateUser:output_type -> tango.identity.v1.User
 	0,  // 104: tango.identity.v1.UserService.UpdateUser:output_type -> tango.identity.v1.User
-	70, // 105: tango.identity.v1.UserService.DeleteUser:output_type -> google.protobuf.Empty
+	71, // 105: tango.identity.v1.UserService.DeleteUser:output_type -> google.protobuf.Empty
 	0,  // 106: tango.identity.v1.UserService.UpdateMe:output_type -> tango.identity.v1.User
 	0,  // 107: tango.identity.v1.UserService.UpdateMyProfilePicture:output_type -> tango.identity.v1.User
 	0,  // 108: tango.identity.v1.UserService.DeleteMyProfilePicture:output_type -> tango.identity.v1.User
 	0,  // 109: tango.identity.v1.UserService.UpdateProfilePicture:output_type -> tango.identity.v1.User
 	0,  // 110: tango.identity.v1.UserService.DeleteProfilePicture:output_type -> tango.identity.v1.User
 	40, // 111: tango.identity.v1.UserService.ListUserGroups:output_type -> tango.identity.v1.ListUserGroupsResponse
-	70, // 112: tango.identity.v1.UserService.ReplaceUserGroups:output_type -> google.protobuf.Empty
+	71, // 112: tango.identity.v1.UserService.ReplaceUserGroups:output_type -> google.protobuf.Empty
 	43, // 113: tango.identity.v1.UserService.ListWebAuthnCredentials:output_type -> tango.identity.v1.ListWebAuthnCredentialsResponse
 	3,  // 114: tango.identity.v1.UserService.UpdateWebAuthnCredential:output_type -> tango.identity.v1.WebAuthnCredential
-	70, // 115: tango.identity.v1.UserService.DeleteWebAuthnCredential:output_type -> google.protobuf.Empty
+	71, // 115: tango.identity.v1.UserService.DeleteWebAuthnCredential:output_type -> google.protobuf.Empty
 	46, // 116: tango.identity.v1.UserGroupService.ListGroups:output_type -> tango.identity.v1.ListGroupsResponse
 	2,  // 117: tango.identity.v1.UserGroupService.GetGroup:output_type -> tango.identity.v1.UserGroup
 	2,  // 118: tango.identity.v1.UserGroupService.CreateGroup:output_type -> tango.identity.v1.UserGroup
 	2,  // 119: tango.identity.v1.UserGroupService.UpdateGroup:output_type -> tango.identity.v1.UserGroup
-	70, // 120: tango.identity.v1.UserGroupService.DeleteGroup:output_type -> google.protobuf.Empty
+	71, // 120: tango.identity.v1.UserGroupService.DeleteGroup:output_type -> google.protobuf.Empty
 	52, // 121: tango.identity.v1.UserGroupService.ListGroupUsers:output_type -> tango.identity.v1.ListGroupUsersResponse
-	70, // 122: tango.identity.v1.UserGroupService.ReplaceGroupUsers:output_type -> google.protobuf.Empty
-	70, // 123: tango.identity.v1.UserGroupService.ReplaceAllowedOidcClients:output_type -> google.protobuf.Empty
-	55, // 124: tango.identity.v1.DeviceApprovalService.GetPendingRequest:output_type -> tango.identity.v1.VerificationInfo
-	70, // 125: tango.identity.v1.DeviceApprovalService.DecideRequest:output_type -> google.protobuf.Empty
-	58, // 126: tango.identity.v1.CustomClaimService.Suggest:output_type -> tango.identity.v1.SuggestResponse
-	61, // 127: tango.identity.v1.CustomClaimService.ListUserClaims:output_type -> tango.identity.v1.ListClaimsResponse
+	71, // 122: tango.identity.v1.UserGroupService.ReplaceGroupUsers:output_type -> google.protobuf.Empty
+	71, // 123: tango.identity.v1.UserGroupService.ReplaceAllowedOidcClients:output_type -> google.protobuf.Empty
+	56, // 124: tango.identity.v1.DeviceApprovalService.GetPendingRequest:output_type -> tango.identity.v1.VerificationInfo
+	71, // 125: tango.identity.v1.DeviceApprovalService.DecideRequest:output_type -> google.protobuf.Empty
+	59, // 126: tango.identity.v1.CustomClaimService.Suggest:output_type -> tango.identity.v1.SuggestResponse
+	62, // 127: tango.identity.v1.CustomClaimService.ListUserClaims:output_type -> tango.identity.v1.ListClaimsResponse
 	4,  // 128: tango.identity.v1.CustomClaimService.CreateUserClaim:output_type -> tango.identity.v1.CustomClaim
 	4,  // 129: tango.identity.v1.CustomClaimService.UpdateUserClaim:output_type -> tango.identity.v1.CustomClaim
-	70, // 130: tango.identity.v1.CustomClaimService.DeleteUserClaim:output_type -> google.protobuf.Empty
-	61, // 131: tango.identity.v1.CustomClaimService.ListGroupClaims:output_type -> tango.identity.v1.ListClaimsResponse
+	71, // 130: tango.identity.v1.CustomClaimService.DeleteUserClaim:output_type -> google.protobuf.Empty
+	62, // 131: tango.identity.v1.CustomClaimService.ListGroupClaims:output_type -> tango.identity.v1.ListClaimsResponse
 	4,  // 132: tango.identity.v1.CustomClaimService.CreateGroupClaim:output_type -> tango.identity.v1.CustomClaim
 	4,  // 133: tango.identity.v1.CustomClaimService.UpdateGroupClaim:output_type -> tango.identity.v1.CustomClaim
-	70, // 134: tango.identity.v1.CustomClaimService.DeleteGroupClaim:output_type -> google.protobuf.Empty
+	71, // 134: tango.identity.v1.CustomClaimService.DeleteGroupClaim:output_type -> google.protobuf.Empty
 	75, // [75:135] is the sub-list for method output_type
 	15, // [15:75] is the sub-list for method input_type
 	15, // [15:15] is the sub-list for extension type_name
@@ -4533,7 +4590,7 @@ func file_identity_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_identity_proto_rawDesc), len(file_identity_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   68,
+			NumMessages:   69,
 			NumExtensions: 0,
 			NumServices:   10,
 		},

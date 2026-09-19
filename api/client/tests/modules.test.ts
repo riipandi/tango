@@ -141,19 +141,13 @@ describe('deviceLogin module', () => {
 })
 
 describe('system module', () => {
-  it('reads versions and health', async () => {
-    const { fetchMock, calls } = mockFetch([
-      envelope({ current_version: '1.0.0' }),
-      envelope({ latest_version: '1.1.0' }),
-      { status: 200, body: { status: 'ok' } }
-    ])
+  it('probes health', async () => {
+    const { fetchMock, calls } = mockFetch([{ status: 200, body: { status: 'ok' } }])
     const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    await expect(c.system.versionCurrent()).resolves.toMatchObject({ current_version: '1.0.0' })
-    await expect(c.system.versionLatest()).resolves.toMatchObject({ latest_version: '1.1.0' })
     await expect(c.system.health()).resolves.toMatchObject({ status: 'ok' })
 
-    expect(expectCall(calls, 2).path).toBe('/api/healthz')
+    expect(expectCall(calls, 0).path).toBe('/api/healthz')
   })
 })
 

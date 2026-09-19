@@ -251,6 +251,10 @@ func (rt *Runtime) MountRPC(r chi.Router) {
 	// Webhooks: admin-only registration and delivery inspection.
 	hookPrefix, hookHandler := rt.Webhook.RPCService()
 	r.Handle(hookPrefix+"*", middleware.RPCAdminGuard(auth)(hookHandler))
+
+	// Device approval: both procedures demand a signed-in principal.
+	approvalPrefix, approvalHandler := rt.Identity.DeviceApprovalRPCService()
+	r.Handle(approvalPrefix+"*", middleware.RPCSessionAuth(auth)(approvalHandler))
 }
 
 // MountAPI mounts API routes in registration order. The webhook and
