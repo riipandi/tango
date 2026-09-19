@@ -4,10 +4,7 @@
 // DeviceApprovalService.
 
 import { isDeviceLoginPending } from '../schemas/devicelogin.schema'
-import type {
-  DeviceLoginExchangeResult,
-  DeviceLoginRequest
-} from '../schemas/devicelogin.schema'
+import type { DeviceLoginExchangeResult, DeviceLoginRequest } from '../schemas/devicelogin.schema'
 import type { Executor } from '../types'
 
 export { isDeviceLoginPending }
