@@ -15,6 +15,7 @@ import (
 	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/pkg/responder"
+	"go.jetify.com/typeid"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -397,6 +398,18 @@ func (h *consentRPC) ListMyClients(ctx context.Context, req *connect.Request[com
 }
 
 func (h *consentRPC) ListUserAuthorizedClients(ctx context.Context, req *connect.Request[federationv1.ListUserAuthorizedClientsRequest]) (*connect.Response[federationv1.ListAuthorizedClientsResponse], error) {
+	// The user id is validated and resolved before the listing: an id
+	// that is not a TypeID, or that names no user, is a not-found. Letting
+	// either reach the query surfaces as a uuid cast failure and a 500.
+	if _, err := typeid.FromString(req.Msg.GetUserId()); err != nil {
+		return nil, rpcerr.NotFound("user not found")
+	}
+	if _, err := h.service.store.UserByID(ctx, req.Msg.GetUserId()); err != nil {
+		if errors.Is(err, ErrInvalidGrant) {
+			return nil, rpcerr.NotFound("user not found")
+		}
+		return nil, rpcerr.Internal("internal error")
+	}
 	userID := req.Msg.GetUserId()
 	return h.listAuthorized(ctx, &userID, req.Msg.GetPage())
 }

@@ -11,6 +11,7 @@ import (
 	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	federationv1 "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/usergroup"
 )
@@ -147,6 +148,45 @@ func TestRPCConsentScopes(t *testing.T) {
 	mine, err = h.ListMyAuthorizedClients(selfCtx, connect.NewRequest(&commonv1.PageRequest{Page: 1, Limit: 20}))
 	require.NoError(t, err)
 	assert.Empty(t, mine.Msg.GetAuthorizedClients())
+}
+
+// TestRPCConsentUserListingRejectsUnknownUser pins the not-found
+// contract of the admin consent listing: an id that is not a TypeID,
+// or that names no user, must not reach the store query, where it
+// would surface as a uuid cast failure and answer 500.
+func TestRPCConsentUserListingRejectsUnknownUser(t *testing.T) {
+	service, store, ds := testStack(t)
+	h := &consentRPC{service: service}
+	ctx := t.Context()
+
+	users := user.NewPostgresStore(ds)
+	u, err := users.Create(ctx, user.CreateParams{
+		Username: "cu_" + stamp(), Email: "consent-unknown-" + stamp() + "@example.com"})
+	require.NoError(t, err)
+
+	client := clientFixture(ctx, t, store, "consent-unknown-"+stamp())
+	require.NoError(t, store.UpsertAuthorizedClient(ctx, u.ID.UUID(), client.ID.String(), []string{"openid"}))
+
+	// A well-formed TypeID that names no row.
+	unknown := identity.NewID[user.UserID]()
+
+	for name, id := range map[string]string{
+		"unknown but well formed": unknown.String(),
+		"not a typeid":            "not-an-id",
+		"empty":                   "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, callErr := h.ListUserAuthorizedClients(ctx, connect.NewRequest(
+				&federationv1.ListUserAuthorizedClientsRequest{UserId: id, Page: &commonv1.PageRequest{Page: 1, Limit: 20}}))
+			assert.Equal(t, connect.CodeNotFound, connectCode(t, callErr).Code())
+		})
+	}
+
+	// The known user still lists, so the guard did not narrow the happy path.
+	got, err := h.ListUserAuthorizedClients(ctx, connect.NewRequest(
+		&federationv1.ListUserAuthorizedClientsRequest{UserId: u.ID.String(), Page: &commonv1.PageRequest{Page: 1, Limit: 20}}))
+	require.NoError(t, err)
+	require.Len(t, got.Msg.GetAuthorizedClients(), 1)
 }
 
 // TestRPCRegistrationPrefixes pin the registration contracts the
