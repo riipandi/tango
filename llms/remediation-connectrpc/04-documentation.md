@@ -119,3 +119,69 @@ walking the steps against a real procedure (for example `WebhookService.Get`) an
 step in the instructions matches a file that exists.
 
 Commit: `docs: describe the connectrpc architecture in AGENTS.md`
+
+## Status
+
+Both tasks are done and committed.
+
+| Task | Finding | Commit |
+| --- | --- | --- |
+| 04.1 | F11, F15 | `1371953` |
+| 04.2 | F12 | `6bcc4af` |
+
+### Task 04.1 result
+
+Corrections shipped in `llms/connectrpc-plan/`:
+
+| Location | Correction |
+| --- | --- |
+| `01-transport.md` | generated Go is a gitignored build output, not committed; the Yaak evidence folder is `Health Check` |
+| `02-protobuf.md` | the endpoint reference is recorded before generation, not before a commit |
+| `03-server.md`, `04-client.md` | the `[ConnectRPC] System (smoke)` folder no longer exists; the workspace was reorganised |
+| `07-verification.md` | generated code is reproducible by `task rpc:generate`, never committed |
+| `endpoint-reference.md` | `protoc-gen-connect-es` removed; the ambiguity block became "Ambiguity resolutions" |
+| `README.md` | completion criteria describe what was delivered |
+
+The ambiguity block is resolved in full: A1 and A2 became `OidcConsentService` and
+`OidcClientService` procedures, A3 is closed as historical because `/api/apis*` was retired
+(`internal/registry/rpc_inventory_test.go` lists it under `retiredREST`), A4 is answered by task
+02.3, and A5 is answered by `modules/federation/oidc/handler.go:24-25` (both `GET` and `POST`).
+
+**Status decision (F15).** The plan keeps `status: done`, and the completion criteria were rewritten
+to describe the transport refactor that shipped. Two criteria are named as out of scope instead of
+sitting unmet:
+
+- *first-party callers use the Connect client* — the SPA does not exist (`index.html:97` still
+  comments out the app entry), so there is no caller to migrate; the SPA work owns it;
+- *`api/client` wraps the RPC surface* — `api/client` is REST-only by decision.
+
+`llms/connectrpc-plan/README.md` now links to this remediation plan as the open work. Rationale for
+keeping `done`: the refactor is complete, and the unmet criterion belongs to a different piece of
+work. `status: partial` would imply the refactor itself is unfinished.
+
+### Task 04.2 result
+
+`AGENTS.md` gained a "Transport split (ConnectRPC vs REST)" section and a "ConnectRPC
+authorization" section covering the proto-first workflow, the gitignored generated outputs, the
+`handler_rpc.go` placement, the `X-API-KEY` boundary with its test, guard selection, and the CORS
+rule. The plan paths were corrected (`llms/porting-plan/` for parity, `llms/connectrpc-plan/` for
+transport decisions, `llms/remediation-connectrpc/` for open findings) and the `api/client` bullet
+now states the REST-only decision.
+
+Verified by walking the instructions against `WebhookService.Get`: the proto declares it
+(`api/connect/webhook.proto:48`), the handler is `modules/webhook/handler_rpc.go`, the mount is
+`internal/registry/registry.go:264`, the matrix row is `llms/endpoint-reference.md:98`, and
+`rpc:generate` exists with `test`, `dev`, `build`, `typecheck`, and `release` depending on it.
+
+### Phase 04 gate
+
+| Command | Result |
+| --- | --- |
+| `go test ./...` (debug tags) | pass |
+| `go test -tags release ./...` | pass |
+| `go test -tags debug ./cmd/... ./database/...` | pass |
+| `pnpm exec vitest run` | 43 tests pass, 7 files |
+| `task lint` | 0 issues |
+| `task check` | clean |
+| `task typecheck` | clean |
+| `task rpc:lint`, `task rpc:breaking`, `task rpc:stale` | clean |

@@ -59,11 +59,11 @@ documentation contradicts behavior, **P2** = residue or hygiene.
 | F8 | P2 | `middleware.ResolveRPCPrincipal` and `middleware.RPCAdminProcedureGuard` have no caller | 03.1 — **resolved** (`6c2c049`) |
 | F9 | P2 | `modules/identity/account/store.go` and `modules/identity/password/handler.go` contain only a package clause | 03.2 — **resolved** (`9405f80`) |
 | F10 | P2 | Comments cite the deleted `/api/version/latest` route | 03.3 — **resolved** (`14f3e8b`) |
-| F11 | P2 | Plan documents carry stale claims: generated Go "committed", `protoc-gen-connect-es`, the removed Yaak folder `[ConnectRPC] System (smoke)`, and the unresolved A1–A5 block | 04.1 |
-| F12 | P2 | `AGENTS.md` has zero ConnectRPC coverage and still points at `llms/phase-*.md`, which does not exist | 04.2 |
+| F11 | P2 | Plan documents carry stale claims: generated Go "committed", `protoc-gen-connect-es`, the removed Yaak folder `[ConnectRPC] System (smoke)`, and the unresolved A1–A5 block | 04.1 — **resolved** (`1371953`) |
+| F12 | P2 | `AGENTS.md` has zero ConnectRPC coverage and still points at `llms/phase-*.md`, which does not exist | 04.2 — **resolved** (`6bcc4af`) |
 | F13 | P2 | Pagination shape is inconsistent: some list RPCs take `common.v1.PageRequest` directly, others embed it | 05.1 |
 | F14 | P1 | Tracked Yaak requests carry a plaintext password at `HEAD`: `api/specs/yaak.rq_5SgzmJyWWh.yaml` holds `"secret": "@admin123"` | 05.2 |
-| F15 | P2 | `llms/connectrpc-plan/` is marked `status: done` while its own completion criteria are unmet (no SPA, so the caller-migration criterion cannot pass) | 04.1, 05.3 |
+| F15 | P2 | `llms/connectrpc-plan/` is marked `status: done` while its own completion criteria are unmet (no SPA, so the caller-migration criterion cannot pass) | 04.1 — **resolved**: criteria rewritten, the two out-of-scope ones named | 05.3 |
 | F16 | P1 | The rate limiter was silently disabled on **every** policy: `rateKey` embedded the policy name verbatim (`forgot-password`), and the `rate_limits` key check only accepts `[a-z0-9_:]`, so each insert raised `23514` and the middleware failed open | 02.6 |
 | Y1 | P0 | The Yaak workspace header `X-API-KEY: ${[ apiKey ]}` was inherited by every request, so "anonymous" evidence carried a machine credential — **removed during the audit**, task 06.1 keeps it scoped | 06.1 |
 | Y2 | P1 | No Yaak request obtains a real token; `accessToken` is `dummy`, so all 110 protected requests answer 401 | 06.2 |
@@ -154,7 +154,9 @@ Task 01.1 was decided on 2026-09-19: **Option A (narrow)**, recorded in
 | 03.1 | F8 | done — committed `6c2c049` |
 | 03.2 | F9 | done — committed `9405f80` |
 | 03.3 | F10 | done — committed `14f3e8b` |
-| 04.1–06.5 | F11–F15, Y1–Y3, Y5–Y7 | not started |
+| 04.1 | F11, F15 | done — committed `1371953` |
+| 04.2 | F12 | done — committed `6bcc4af` |
+| 05.1–06.5 | F13, F14, Y1–Y3, Y5–Y7 | not started |
 
 ## Phase index
 
