@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_UwXpNWCV47
 createdAt: 2026-09-19T12:06:04.360658
-updatedAt: 2026-09-19T12:06:04.360659
+updatedAt: 2026-09-19T15:35:41.778531
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: 'Tango-only: /api/account* self-service surface (profile, password, sessions)'
 headers: []
 name: '[Tango] Account'
-sortPriority: 1000.0
+sortPriority: 4000.0
 settingSendCookies:
   enabled: false
   value: true

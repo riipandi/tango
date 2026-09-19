@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_Uf3pbN2b4K
 createdAt: 2026-09-19T12:04:24.881367
-updatedAt: 2026-09-19T12:04:24.881368
+updatedAt: 2026-09-19T15:35:41.786853
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: 'SCIM service-provider endpoints: CRUD + sync push'
 headers: []
 name: SCIM
-sortPriority: 15000.0
+sortPriority: 18000.0
 settingSendCookies:
   enabled: false
   value: true

@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_FirJqL3vmS
 createdAt: 2026-09-19T12:04:30.408246
-updatedAt: 2026-09-19T12:04:30.408247
+updatedAt: 2026-09-19T15:35:41.787541
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: Version metadata endpoints
 headers: []
 name: Version
-sortPriority: 16000.0
+sortPriority: 19000.0
 settingSendCookies:
   enabled: false
   value: true

@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_5ohk34DQsY
 createdAt: 2026-09-19T12:04:03.188567
-updatedAt: 2026-09-19T12:04:03.188568
+updatedAt: 2026-09-19T15:35:41.781382
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: API keys CRUD + renew (X-API-KEY machine auth)
 headers: []
 name: API Keys
-sortPriority: 13000.46
+sortPriority: 8000.0
 settingSendCookies:
   enabled: false
   value: true

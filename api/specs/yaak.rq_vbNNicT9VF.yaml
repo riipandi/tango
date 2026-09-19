@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_vbNNicT9VF
 createdAt: 2026-09-19T12:32:10.505776
-updatedAt: 2026-09-19T12:32:10.505777
+updatedAt: 2026-09-19T15:38:43.799818
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_SRs9gwLx8j
 authentication: {}
@@ -14,8 +14,16 @@ headers: []
 method: GET
 name: Get client logo
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/oidc/clients/REPLACE_CLIENT_ID/logo
-urlParameters: []
+url: ${[ apiBaseURL ]}/api/oidc/clients/:clientId/logo
+urlParameters:
+- enabled: true
+  name: :clientId
+  value: dummy
+  id: path-placeholder:1
+- enabled: true
+  name: ''
+  value: ''
+  id: jykJTSMzTM
 settingSendCookies:
   enabled: false
   value: true

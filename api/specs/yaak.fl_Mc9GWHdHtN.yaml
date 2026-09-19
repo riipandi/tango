@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_Mc9GWHdHtN
 createdAt: 2026-09-19T12:03:08.560235
-updatedAt: 2026-09-19T12:03:08.560235
+updatedAt: 2026-09-19T15:35:41.786126
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: Resource APIs, permissions, client grants
 headers: []
 name: APIs
-sortPriority: 14111.0
+sortPriority: 16000.0
 settingSendCookies:
   enabled: false
   value: true

@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_auMsw4bdee
 createdAt: 2026-09-19T12:04:13.563724
-updatedAt: 2026-09-19T12:04:13.563725
+updatedAt: 2026-09-19T15:35:41.788583
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: Custom claim listing and CRUD for users and user groups
 headers: []
 name: Custom Claims
-sortPriority: 13010.21
+sortPriority: 11000.0
 settingSendCookies:
   enabled: false
   value: true
