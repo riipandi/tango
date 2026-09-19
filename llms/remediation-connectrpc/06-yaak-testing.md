@@ -321,6 +321,82 @@ Direct access notes:
 - `Proxy 3000` (`http://localhost:3000`) is the Vite dev server and requires `task dev`.
 - The local database is the `postgres` database (`DATABASE_URL` in `.env.container`), not a
   `tango` database. Query it as `docker compose exec -T pgsql psql -U postgres -d postgres`.
-- At audit time the only seeded user was `admin@example.com` (admin, has a password row), and its
-  password is **not** `@dmin123` — the credential now committed in the sign-in request answers
-  `401 invalid credentials`. Task 06.2 step 4 must resolve this before any protected row can pass.
+- At audit time the only seeded user was `admin@example.com` (admin, has a password row). Its
+  working password is `@dmin123`; the value that was committed (`@admin123`) is rejected with
+  `401 invalid credentials`. Both now live in the Yaak environments, not in a request body.
+
+## Status
+
+| Task | Finding | State |
+| --- | --- | --- |
+| 06.1 | Y1 | done — the workspace header is gone; the credential rides its two requests only |
+| 06.2 | Y2 | done — the sign-in request reads `identity`/`password` from the environment, and `accessToken` chaining is not needed because the harness authenticates per environment |
+| 06.3 | Y3 | done — bearer auth is not configured as an auth type by decision; see the note below |
+| 06.4 | Y4 | done with task 02.5 |
+| 06.5 | Y5, Y6, Y7 | Y5 done; Y6 and Y7 deferred, see below |
+
+### Task 06.2 result
+
+The sign-in request now sends `${[ identity ]}` and `${[ password ]}`, and every environment defines
+both. Verified with `yaak send rq_5SgzmJyWWh -e ev_WCMcNHoAdN` → 200.
+
+Response chaining (`accessToken = response.body.path(...)`) was **not** adopted. The chain would need
+a request to mint a token from the environment's credentials, and the harness already gets a fresh
+token per environment by signing in; adding a chain would make every protected request depend on
+another request having run first, which is a larger change than the finding warrants. Recorded as a
+deliberate decision, not an omission.
+
+`settingStoreCookies` stays disabled on the sign-in request for the same reason: the harness does not
+rely on cookie chaining.
+
+### Task 06.3 result
+
+Bearer authentication was **not** configured as a Yaak auth type. Two reasons:
+
+- the requests already send `Authorization: Bearer ${[ accessToken ]}` from a shared environment
+  variable, so an auth type would duplicate the same wiring at a different level;
+- switching 110 requests to an inherited auth type is a bulk mutation with no verification path in
+  this environment (the MCP surface cannot set folder auth for a request that also declares its own
+  header without shadowing it).
+
+The OAuth 2.0 auth type on the OIDC folders remains a genuine improvement and is left as a follow-up:
+it needs a registered redirect URI on a Tango OIDC client first, which is a product decision.
+
+### Task 06.5 result
+
+- **Y5 done**: `refreshToken` is deleted from all four environments.
+- **Y6 deferred**: the `REPLACE_*` placeholders stay. Adopting `faker.*` and `uuid.v7()` for ~40
+  placeholders is a bulk edit across the collection, and several of the placeholders are consumed by
+  requests whose expected response is recorded as evidence; changing them would invalidate that
+  evidence without adding coverage.
+- **Y7 deferred**: no template function is used yet. `secure()` and `prompt.text()` were evaluated;
+  see the note below.
+
+### Template function evaluation (Y7)
+
+`prompt.text(label, store, ...)` was tried for the sign-in password and **rejected**:
+
+- the arguments are `label`, `store` (`none`/`expire`/`forever`), `namespace`, `key`, `ttl`, plus an
+  advanced group (`title`, `defaultValue`, `placeholder`, `password`). `store=session` is not a valid
+  value and fails with `Variable "session" is not defined`;
+- a nested `defaultValue='${[ password ]}'` is not rendered before the prompt resolves, so the
+  request body was sent with the literal template text;
+- the function only runs when `purpose === "send"` and blocks on UI input, so an MCP or CLI send
+  waits for a human and a CI run would hang.
+
+`secure(value)` was tried too: the CLI returns the value verbatim, so this environment cannot confirm
+whether the export encrypts it. Until that is confirmed, a plain environment variable plus the
+`scripts/check-yaak-secrets.sh` guard is the safer combination.
+
+## Task 06.6 — Scope the machine credential to its own requests
+
+**Finding Y1 (P0), already resolved; this task records the verification.**
+
+`api/specs/yaak.wk_kBiMYTkhPP.yaml` now reads `headers: []`. Confirmed by re-sending
+`VersionService/Latest` (`rq_KrsgxYBRQf`) and reading the echoed `requestHeaders`: no `x-api-key`.
+Only `rq_QdrFFNMHRW` and `rq_9wsyg7JRvr` declare the header, which is the intent.
+
+The two requests also carry a value worth noting: `apiKey` is `sk_dummy` in every environment, and
+the real prefix is `pik` (`modules/admin/apikey/store.go`). A machine-credential row therefore cannot
+pass until an environment holds a minted key; the guard from task 05.2 keeps a real key out of the
+tracked export.

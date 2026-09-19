@@ -61,17 +61,35 @@ documentation contradicts behavior, **P2** = residue or hygiene.
 | F10 | P2 | Comments cite the deleted `/api/version/latest` route | 03.3 — **resolved** (`14f3e8b`) |
 | F11 | P2 | Plan documents carry stale claims: generated Go "committed", `protoc-gen-connect-es`, the removed Yaak folder `[ConnectRPC] System (smoke)`, and the unresolved A1–A5 block | 04.1 — **resolved** (`1371953`) |
 | F12 | P2 | `AGENTS.md` has zero ConnectRPC coverage and still points at `llms/phase-*.md`, which does not exist | 04.2 — **resolved** (`6bcc4af`) |
-| F13 | P2 | Pagination shape is inconsistent: some list RPCs take `common.v1.PageRequest` directly, others embed it | 05.1 |
-| F14 | P1 | Tracked Yaak requests carry a plaintext password at `HEAD`: `api/specs/yaak.rq_5SgzmJyWWh.yaml` holds `"secret": "@dmin123"` | 05.2 |
-| F15 | P2 | `llms/connectrpc-plan/` is marked `status: done` while its own completion criteria are unmet (no SPA, so the caller-migration criterion cannot pass) | 04.1 — **resolved**: criteria rewritten, the two out-of-scope ones named | 05.3 |
-| F16 | P1 | The rate limiter was silently disabled on **every** policy: `rateKey` embedded the policy name verbatim (`forgot-password`), and the `rate_limits` key check only accepts `[a-z0-9_:]`, so each insert raised `23514` and the middleware failed open | 02.6 |
-| Y1 | P0 | The Yaak workspace header `X-API-KEY: ${[ apiKey ]}` was inherited by every request, so "anonymous" evidence carried a machine credential — **removed during the audit**, task 06.1 keeps it scoped | 06.1 |
+| F13 | P2 | Pagination shape is inconsistent: some list RPCs take `common.v1.PageRequest` directly, others embed it | 05.1 — **resolved** (`6ca011c`); scope widened to the REST/RPC metadata parity below |
+| F14 | P1 | Tracked Yaak requests carry a plaintext password at `HEAD` | 05.2 — **resolved** (`a0fea7c` env references, `723c1d3` guard) |
+| F15 | P2 | `llms/connectrpc-plan/` is marked `status: done` while its own completion criteria are unmet (no SPA, so the caller-migration criterion cannot pass) | 04.1 — **resolved**: criteria rewritten, the two out-of-scope ones named |
+| F16 | P1 | The rate limiter was silently disabled on **every** policy: `rateKey` embedded the policy name verbatim (`forgot-password`), and the `rate_limits` key check only accepts `[a-z0-9_:]`, so each insert raised `23514` and the middleware failed open | 02.6 — **resolved** (`f5eb5ee`) |
+| Y1 | P0 | The Yaak workspace header `X-API-KEY: ${[ apiKey ]}` was inherited by every request, so "anonymous" evidence carried a machine credential | 06.1 — **resolved**: the owner removed the workspace header during the audit; the credential is now scoped to its two requests |
 | Y2 | P1 | No Yaak request obtains a real token; `accessToken` is `dummy`, so all 110 protected requests answer 401 | 06.2 |
 | Y3 | P1 | No Yaak auth type is configured: 130 requests `null`, 23 `none`, zero folders or workspaces set one | 06.3 |
-| Y4 | P1 | Neither CORS layer (nginx `compose.yaml:209`, Go `middleware/cors.go`) allows `X-API-KEY` or `Connect-Timeout-Ms` | 06.4 — **resolved** by 02.5 (2026-09-19) |
-| Y5 | P2 | `refreshToken` is defined in every Yaak environment and referenced by no request | 06.5 |
+| Y4 | P1 | Neither CORS layer (nginx `compose.yaml:209`, Go `middleware/cors.go`) allows `X-API-KEY` or `Connect-Timeout-Ms` | 06.4 — **resolved** by 02.5 (`40e4ae6`, `23b2bcb`) |
+| Y5 | P2 | `refreshToken` is defined in every Yaak environment and referenced by no request | 06.5 — **resolved** (`a0fea7c`) |
 | Y6 | P2 | ~40 `REPLACE_*` placeholders are typed by hand where `uuid.v7()`, `faker.*`, and `response.body.path()` apply | 06.5 |
 | Y7 | P2 | Zero Yaak template functions are used anywhere in the collection | 06.5 |
+
+## Finding F17 — the RPC response shape did not mirror the REST envelope
+
+Added during phase 05, at the owner's request. The RPC surface answered a `common.v1.PageMetadata`
+block that shared nothing with the REST envelope, and the pagination rules lived in two places with
+different behaviour. Three defects came out of that review:
+
+- **`limit: 0` returned every row.** Stores guard with `if params.Limit > 0 { Limit(...) }`, so a
+  proto3 default of 0 meant "no LIMIT". REST treats a zero limit as invalid and falls back to 25.
+- **`rpcerr.PageMetadata` was one-based** while `responder.NewPagination` is zero-based, and both
+  sides had a test pinning its own convention.
+- **`sort_by`/`sort_order` do not work on either transport.** `PaginationParams.SortBy`/`SortOrder`
+  have no production caller and no store builds an `ORDER BY` from input, so the fields were not
+  copied into the proto.
+
+Resolved in `6ca011c` by defining the rules once in `pkg/responder`, giving
+`common.v1.ResponseMetadata` the same fields as the REST metadata block, and applying the list-shape
+rule from task 05.1.
 
 ## Baseline state
 
