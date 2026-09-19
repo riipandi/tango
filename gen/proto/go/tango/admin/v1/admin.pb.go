@@ -803,6 +803,191 @@ func (x *DeleteApiKeyRequest) GetId() string {
 	return ""
 }
 
+// ClientApisRequest addresses the grant surface of one relying-party
+// client.
+type ClientApisRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ClientId      string                 `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientApisRequest) Reset() {
+	*x = ClientApisRequest{}
+	mi := &file_admin_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientApisRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientApisRequest) ProtoMessage() {}
+
+func (x *ClientApisRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientApisRequest.ProtoReflect.Descriptor instead.
+func (*ClientApisRequest) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ClientApisRequest) GetClientId() string {
+	if x != nil {
+		return x.ClientId
+	}
+	return ""
+}
+
+// ClientApiGrant is one client's access to an API with the per-subject
+// permission split; the CIMD columns are computed from the API flag
+// plus its permission allowlist.
+type ClientApiGrant struct {
+	state                      protoimpl.MessageState `protogen:"open.v1"`
+	Api                        *API                   `protobuf:"bytes,1,opt,name=api,proto3" json:"api,omitempty"`
+	ClientAccess               bool                   `protobuf:"varint,2,opt,name=client_access,json=clientAccess,proto3" json:"client_access,omitempty"`
+	ClientPermissionIds        []string               `protobuf:"bytes,3,rep,name=client_permission_ids,json=clientPermissionIds,proto3" json:"client_permission_ids,omitempty"`
+	UserDelegatedAccess        bool                   `protobuf:"varint,4,opt,name=user_delegated_access,json=userDelegatedAccess,proto3" json:"user_delegated_access,omitempty"`
+	UserDelegatedPermissionIds []string               `protobuf:"bytes,5,rep,name=user_delegated_permission_ids,json=userDelegatedPermissionIds,proto3" json:"user_delegated_permission_ids,omitempty"`
+	CimdGrantedAccess          bool                   `protobuf:"varint,6,opt,name=cimd_granted_access,json=cimdGrantedAccess,proto3" json:"cimd_granted_access,omitempty"`
+	CimdGrantedPermissionIds   []string               `protobuf:"bytes,7,rep,name=cimd_granted_permission_ids,json=cimdGrantedPermissionIds,proto3" json:"cimd_granted_permission_ids,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *ClientApiGrant) Reset() {
+	*x = ClientApiGrant{}
+	mi := &file_admin_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientApiGrant) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientApiGrant) ProtoMessage() {}
+
+func (x *ClientApiGrant) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientApiGrant.ProtoReflect.Descriptor instead.
+func (*ClientApiGrant) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ClientApiGrant) GetApi() *API {
+	if x != nil {
+		return x.Api
+	}
+	return nil
+}
+
+func (x *ClientApiGrant) GetClientAccess() bool {
+	if x != nil {
+		return x.ClientAccess
+	}
+	return false
+}
+
+func (x *ClientApiGrant) GetClientPermissionIds() []string {
+	if x != nil {
+		return x.ClientPermissionIds
+	}
+	return nil
+}
+
+func (x *ClientApiGrant) GetUserDelegatedAccess() bool {
+	if x != nil {
+		return x.UserDelegatedAccess
+	}
+	return false
+}
+
+func (x *ClientApiGrant) GetUserDelegatedPermissionIds() []string {
+	if x != nil {
+		return x.UserDelegatedPermissionIds
+	}
+	return nil
+}
+
+func (x *ClientApiGrant) GetCimdGrantedAccess() bool {
+	if x != nil {
+		return x.CimdGrantedAccess
+	}
+	return false
+}
+
+func (x *ClientApiGrant) GetCimdGrantedPermissionIds() []string {
+	if x != nil {
+		return x.CimdGrantedPermissionIds
+	}
+	return nil
+}
+
+type ListClientApiGrantsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Grants        []*ClientApiGrant      `protobuf:"bytes,1,rep,name=grants,proto3" json:"grants,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListClientApiGrantsResponse) Reset() {
+	*x = ListClientApiGrantsResponse{}
+	mi := &file_admin_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListClientApiGrantsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListClientApiGrantsResponse) ProtoMessage() {}
+
+func (x *ListClientApiGrantsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListClientApiGrantsResponse.ProtoReflect.Descriptor instead.
+func (*ListClientApiGrantsResponse) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ListClientApiGrantsResponse) GetGrants() []*ClientApiGrant {
+	if x != nil {
+		return x.Grants
+	}
+	return nil
+}
+
 type ListApisResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Apis          []*API                 `protobuf:"bytes,1,rep,name=apis,proto3" json:"apis,omitempty"`
@@ -813,7 +998,7 @@ type ListApisResponse struct {
 
 func (x *ListApisResponse) Reset() {
 	*x = ListApisResponse{}
-	mi := &file_admin_proto_msgTypes[10]
+	mi := &file_admin_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -825,7 +1010,7 @@ func (x *ListApisResponse) String() string {
 func (*ListApisResponse) ProtoMessage() {}
 
 func (x *ListApisResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[10]
+	mi := &file_admin_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -838,7 +1023,7 @@ func (x *ListApisResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApisResponse.ProtoReflect.Descriptor instead.
 func (*ListApisResponse) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{10}
+	return file_admin_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListApisResponse) GetApis() []*API {
@@ -866,7 +1051,7 @@ type CreateApiRequest struct {
 
 func (x *CreateApiRequest) Reset() {
 	*x = CreateApiRequest{}
-	mi := &file_admin_proto_msgTypes[11]
+	mi := &file_admin_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -878,7 +1063,7 @@ func (x *CreateApiRequest) String() string {
 func (*CreateApiRequest) ProtoMessage() {}
 
 func (x *CreateApiRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[11]
+	mi := &file_admin_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -891,7 +1076,7 @@ func (x *CreateApiRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateApiRequest.ProtoReflect.Descriptor instead.
 func (*CreateApiRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{11}
+	return file_admin_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CreateApiRequest) GetName() string {
@@ -924,7 +1109,7 @@ type GetApiRequest struct {
 
 func (x *GetApiRequest) Reset() {
 	*x = GetApiRequest{}
-	mi := &file_admin_proto_msgTypes[12]
+	mi := &file_admin_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -936,7 +1121,7 @@ func (x *GetApiRequest) String() string {
 func (*GetApiRequest) ProtoMessage() {}
 
 func (x *GetApiRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[12]
+	mi := &file_admin_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -949,7 +1134,7 @@ func (x *GetApiRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetApiRequest.ProtoReflect.Descriptor instead.
 func (*GetApiRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{12}
+	return file_admin_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetApiRequest) GetId() string {
@@ -970,7 +1155,7 @@ type UpdateApiRequest struct {
 
 func (x *UpdateApiRequest) Reset() {
 	*x = UpdateApiRequest{}
-	mi := &file_admin_proto_msgTypes[13]
+	mi := &file_admin_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -982,7 +1167,7 @@ func (x *UpdateApiRequest) String() string {
 func (*UpdateApiRequest) ProtoMessage() {}
 
 func (x *UpdateApiRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[13]
+	mi := &file_admin_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -995,7 +1180,7 @@ func (x *UpdateApiRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateApiRequest.ProtoReflect.Descriptor instead.
 func (*UpdateApiRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{13}
+	return file_admin_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UpdateApiRequest) GetId() string {
@@ -1028,7 +1213,7 @@ type DeleteApiRequest struct {
 
 func (x *DeleteApiRequest) Reset() {
 	*x = DeleteApiRequest{}
-	mi := &file_admin_proto_msgTypes[14]
+	mi := &file_admin_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1040,7 +1225,7 @@ func (x *DeleteApiRequest) String() string {
 func (*DeleteApiRequest) ProtoMessage() {}
 
 func (x *DeleteApiRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[14]
+	mi := &file_admin_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1053,7 +1238,7 @@ func (x *DeleteApiRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteApiRequest.ProtoReflect.Descriptor instead.
 func (*DeleteApiRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{14}
+	return file_admin_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *DeleteApiRequest) GetId() string {
@@ -1074,7 +1259,7 @@ type SetPermissionsRequest struct {
 
 func (x *SetPermissionsRequest) Reset() {
 	*x = SetPermissionsRequest{}
-	mi := &file_admin_proto_msgTypes[15]
+	mi := &file_admin_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1086,7 +1271,7 @@ func (x *SetPermissionsRequest) String() string {
 func (*SetPermissionsRequest) ProtoMessage() {}
 
 func (x *SetPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[15]
+	mi := &file_admin_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1099,7 +1284,7 @@ func (x *SetPermissionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*SetPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{15}
+	return file_admin_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SetPermissionsRequest) GetId() string {
@@ -1127,7 +1312,7 @@ type SetCimdAccessRequest struct {
 
 func (x *SetCimdAccessRequest) Reset() {
 	*x = SetCimdAccessRequest{}
-	mi := &file_admin_proto_msgTypes[16]
+	mi := &file_admin_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1139,7 +1324,7 @@ func (x *SetCimdAccessRequest) String() string {
 func (*SetCimdAccessRequest) ProtoMessage() {}
 
 func (x *SetCimdAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[16]
+	mi := &file_admin_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1152,7 +1337,7 @@ func (x *SetCimdAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetCimdAccessRequest.ProtoReflect.Descriptor instead.
 func (*SetCimdAccessRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{16}
+	return file_admin_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *SetCimdAccessRequest) GetId() string {
@@ -1185,7 +1370,7 @@ type ListClientRefsResponse struct {
 
 func (x *ListClientRefsResponse) Reset() {
 	*x = ListClientRefsResponse{}
-	mi := &file_admin_proto_msgTypes[17]
+	mi := &file_admin_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1197,7 +1382,7 @@ func (x *ListClientRefsResponse) String() string {
 func (*ListClientRefsResponse) ProtoMessage() {}
 
 func (x *ListClientRefsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[17]
+	mi := &file_admin_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1210,7 +1395,7 @@ func (x *ListClientRefsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListClientRefsResponse.ProtoReflect.Descriptor instead.
 func (*ListClientRefsResponse) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{17}
+	return file_admin_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListClientRefsResponse) GetClients() []*v11.ClientRef {
@@ -1234,7 +1419,7 @@ type GrantClientRequest struct {
 
 func (x *GrantClientRequest) Reset() {
 	*x = GrantClientRequest{}
-	mi := &file_admin_proto_msgTypes[18]
+	mi := &file_admin_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1246,7 +1431,7 @@ func (x *GrantClientRequest) String() string {
 func (*GrantClientRequest) ProtoMessage() {}
 
 func (x *GrantClientRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[18]
+	mi := &file_admin_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1259,7 +1444,7 @@ func (x *GrantClientRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrantClientRequest.ProtoReflect.Descriptor instead.
 func (*GrantClientRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{18}
+	return file_admin_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GrantClientRequest) GetApiId() string {
@@ -1314,7 +1499,7 @@ type RevokeClientRequest struct {
 
 func (x *RevokeClientRequest) Reset() {
 	*x = RevokeClientRequest{}
-	mi := &file_admin_proto_msgTypes[19]
+	mi := &file_admin_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1326,7 +1511,7 @@ func (x *RevokeClientRequest) String() string {
 func (*RevokeClientRequest) ProtoMessage() {}
 
 func (x *RevokeClientRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[19]
+	mi := &file_admin_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1339,7 +1524,7 @@ func (x *RevokeClientRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeClientRequest.ProtoReflect.Descriptor instead.
 func (*RevokeClientRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{19}
+	return file_admin_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RevokeClientRequest) GetApiId() string {
@@ -1365,7 +1550,7 @@ type ListConfigVariablesResponse struct {
 
 func (x *ListConfigVariablesResponse) Reset() {
 	*x = ListConfigVariablesResponse{}
-	mi := &file_admin_proto_msgTypes[20]
+	mi := &file_admin_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1377,7 +1562,7 @@ func (x *ListConfigVariablesResponse) String() string {
 func (*ListConfigVariablesResponse) ProtoMessage() {}
 
 func (x *ListConfigVariablesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[20]
+	mi := &file_admin_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1390,7 +1575,7 @@ func (x *ListConfigVariablesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListConfigVariablesResponse.ProtoReflect.Descriptor instead.
 func (*ListConfigVariablesResponse) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{20}
+	return file_admin_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ListConfigVariablesResponse) GetVariables() []*ConfigVariable {
@@ -1409,7 +1594,7 @@ type UpdateConfigVariablesRequest struct {
 
 func (x *UpdateConfigVariablesRequest) Reset() {
 	*x = UpdateConfigVariablesRequest{}
-	mi := &file_admin_proto_msgTypes[21]
+	mi := &file_admin_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1421,7 +1606,7 @@ func (x *UpdateConfigVariablesRequest) String() string {
 func (*UpdateConfigVariablesRequest) ProtoMessage() {}
 
 func (x *UpdateConfigVariablesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[21]
+	mi := &file_admin_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1434,7 +1619,7 @@ func (x *UpdateConfigVariablesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateConfigVariablesRequest.ProtoReflect.Descriptor instead.
 func (*UpdateConfigVariablesRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{21}
+	return file_admin_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *UpdateConfigVariablesRequest) GetVariables() []*ConfigVariable {
@@ -1457,7 +1642,7 @@ type ListAuditLogsRequest struct {
 
 func (x *ListAuditLogsRequest) Reset() {
 	*x = ListAuditLogsRequest{}
-	mi := &file_admin_proto_msgTypes[22]
+	mi := &file_admin_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1469,7 +1654,7 @@ func (x *ListAuditLogsRequest) String() string {
 func (*ListAuditLogsRequest) ProtoMessage() {}
 
 func (x *ListAuditLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[22]
+	mi := &file_admin_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1482,7 +1667,7 @@ func (x *ListAuditLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuditLogsRequest.ProtoReflect.Descriptor instead.
 func (*ListAuditLogsRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{22}
+	return file_admin_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListAuditLogsRequest) GetPage() *v1.PageRequest {
@@ -1530,7 +1715,7 @@ type ListAuditLogsResponse struct {
 
 func (x *ListAuditLogsResponse) Reset() {
 	*x = ListAuditLogsResponse{}
-	mi := &file_admin_proto_msgTypes[23]
+	mi := &file_admin_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1542,7 +1727,7 @@ func (x *ListAuditLogsResponse) String() string {
 func (*ListAuditLogsResponse) ProtoMessage() {}
 
 func (x *ListAuditLogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[23]
+	mi := &file_admin_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1555,7 +1740,7 @@ func (x *ListAuditLogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuditLogsResponse.ProtoReflect.Descriptor instead.
 func (*ListAuditLogsResponse) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{23}
+	return file_admin_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListAuditLogsResponse) GetLogs() []*AuditLog {
@@ -1582,7 +1767,7 @@ type FilterOptionsRequest struct {
 
 func (x *FilterOptionsRequest) Reset() {
 	*x = FilterOptionsRequest{}
-	mi := &file_admin_proto_msgTypes[24]
+	mi := &file_admin_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1594,7 +1779,7 @@ func (x *FilterOptionsRequest) String() string {
 func (*FilterOptionsRequest) ProtoMessage() {}
 
 func (x *FilterOptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[24]
+	mi := &file_admin_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1607,7 +1792,7 @@ func (x *FilterOptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FilterOptionsRequest.ProtoReflect.Descriptor instead.
 func (*FilterOptionsRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{24}
+	return file_admin_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *FilterOptionsRequest) GetKind() string {
@@ -1626,7 +1811,7 @@ type FilterOptionsResponse struct {
 
 func (x *FilterOptionsResponse) Reset() {
 	*x = FilterOptionsResponse{}
-	mi := &file_admin_proto_msgTypes[25]
+	mi := &file_admin_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1638,7 +1823,7 @@ func (x *FilterOptionsResponse) String() string {
 func (*FilterOptionsResponse) ProtoMessage() {}
 
 func (x *FilterOptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[25]
+	mi := &file_admin_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1651,7 +1836,7 @@ func (x *FilterOptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FilterOptionsResponse.ProtoReflect.Descriptor instead.
 func (*FilterOptionsResponse) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{25}
+	return file_admin_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *FilterOptionsResponse) GetValues() []string {
@@ -1754,7 +1939,19 @@ const file_admin_proto_rawDesc = "" +
 	"\n" +
 	"expires_at\x18\x02 \x01(\tR\texpiresAt\"%\n" +
 	"\x13DeleteApiKeyRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"v\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"0\n" +
+	"\x11ClientApisRequest\x12\x1b\n" +
+	"\tclient_id\x18\x01 \x01(\tR\bclientId\"\xf6\x02\n" +
+	"\x0eClientApiGrant\x12%\n" +
+	"\x03api\x18\x01 \x01(\v2\x13.tango.admin.v1.APIR\x03api\x12#\n" +
+	"\rclient_access\x18\x02 \x01(\bR\fclientAccess\x122\n" +
+	"\x15client_permission_ids\x18\x03 \x03(\tR\x13clientPermissionIds\x122\n" +
+	"\x15user_delegated_access\x18\x04 \x01(\bR\x13userDelegatedAccess\x12A\n" +
+	"\x1duser_delegated_permission_ids\x18\x05 \x03(\tR\x1auserDelegatedPermissionIds\x12.\n" +
+	"\x13cimd_granted_access\x18\x06 \x01(\bR\x11cimdGrantedAccess\x12=\n" +
+	"\x1bcimd_granted_permission_ids\x18\a \x03(\tR\x18cimdGrantedPermissionIds\"U\n" +
+	"\x1bListClientApiGrantsResponse\x126\n" +
+	"\x06grants\x18\x01 \x03(\v2\x1e.tango.admin.v1.ClientApiGrantR\x06grants\"v\n" +
 	"\x10ListApisResponse\x12'\n" +
 	"\x04apis\x18\x01 \x03(\v2\x13.tango.admin.v1.APIR\x04apis\x129\n" +
 	"\bmetadata\x18\x02 \x01(\v2\x1d.tango.common.v1.PageMetadataR\bmetadata\"\x8c\x01\n" +
@@ -1818,7 +2015,7 @@ const file_admin_proto_rawDesc = "" +
 	"\x04List\x12\x1c.tango.common.v1.PageRequest\x1a#.tango.admin.v1.ListApiKeysResponse\x12K\n" +
 	"\x06Create\x12#.tango.admin.v1.CreateApiKeyRequest\x1a\x1c.tango.admin.v1.APIKeySecret\x12I\n" +
 	"\x05Renew\x12\".tango.admin.v1.RenewApiKeyRequest\x1a\x1c.tango.admin.v1.APIKeySecret\x12E\n" +
-	"\x06Delete\x12#.tango.admin.v1.DeleteApiKeyRequest\x1a\x16.google.protobuf.Empty2\xd3\x06\n" +
+	"\x06Delete\x12#.tango.admin.v1.DeleteApiKeyRequest\x1a\x16.google.protobuf.Empty2\x9c\b\n" +
 	"\n" +
 	"ApiService\x12J\n" +
 	"\bListApis\x12\x1c.tango.common.v1.PageRequest\x1a .tango.admin.v1.ListApisResponse\x12B\n" +
@@ -1831,7 +2028,9 @@ const file_admin_proto_rawDesc = "" +
 	"\x15ListAssignableClients\x12\x1d.tango.admin.v1.GetApiRequest\x1a&.tango.admin.v1.ListClientRefsResponse\x12T\n" +
 	"\vListClients\x12\x1d.tango.admin.v1.GetApiRequest\x1a&.tango.admin.v1.ListClientRefsResponse\x12I\n" +
 	"\vGrantClient\x12\".tango.admin.v1.GrantClientRequest\x1a\x16.google.protobuf.Empty\x12K\n" +
-	"\fRevokeClient\x12#.tango.admin.v1.RevokeClientRequest\x1a\x16.google.protobuf.Empty2\xde\x02\n" +
+	"\fRevokeClient\x12#.tango.admin.v1.RevokeClientRequest\x1a\x16.google.protobuf.Empty\x12c\n" +
+	"\x11ListApisForClient\x12!.tango.admin.v1.ClientApisRequest\x1a+.tango.admin.v1.ListClientApiGrantsResponse\x12b\n" +
+	"\x1bListAssignableApisForClient\x12!.tango.admin.v1.ClientApisRequest\x1a .tango.admin.v1.ListApisResponse2\xde\x02\n" +
 	"\x1fApplicationConfigurationService\x12J\n" +
 	"\x03Get\x12\x16.google.protobuf.Empty\x1a+.tango.admin.v1.ListConfigVariablesResponse\x12M\n" +
 	"\x06GetAll\x12\x16.google.protobuf.Empty\x1a+.tango.admin.v1.ListConfigVariablesResponse\x12c\n" +
@@ -1855,7 +2054,7 @@ func file_admin_proto_rawDescGZIP() []byte {
 }
 
 var file_admin_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_admin_proto_goTypes = []any{
 	(ConfigVariable_Type)(0),             // 0: tango.admin.v1.ConfigVariable.Type
 	(*Permission)(nil),                   // 1: tango.admin.v1.Permission
@@ -1868,92 +2067,101 @@ var file_admin_proto_goTypes = []any{
 	(*CreateApiKeyRequest)(nil),          // 8: tango.admin.v1.CreateApiKeyRequest
 	(*RenewApiKeyRequest)(nil),           // 9: tango.admin.v1.RenewApiKeyRequest
 	(*DeleteApiKeyRequest)(nil),          // 10: tango.admin.v1.DeleteApiKeyRequest
-	(*ListApisResponse)(nil),             // 11: tango.admin.v1.ListApisResponse
-	(*CreateApiRequest)(nil),             // 12: tango.admin.v1.CreateApiRequest
-	(*GetApiRequest)(nil),                // 13: tango.admin.v1.GetApiRequest
-	(*UpdateApiRequest)(nil),             // 14: tango.admin.v1.UpdateApiRequest
-	(*DeleteApiRequest)(nil),             // 15: tango.admin.v1.DeleteApiRequest
-	(*SetPermissionsRequest)(nil),        // 16: tango.admin.v1.SetPermissionsRequest
-	(*SetCimdAccessRequest)(nil),         // 17: tango.admin.v1.SetCimdAccessRequest
-	(*ListClientRefsResponse)(nil),       // 18: tango.admin.v1.ListClientRefsResponse
-	(*GrantClientRequest)(nil),           // 19: tango.admin.v1.GrantClientRequest
-	(*RevokeClientRequest)(nil),          // 20: tango.admin.v1.RevokeClientRequest
-	(*ListConfigVariablesResponse)(nil),  // 21: tango.admin.v1.ListConfigVariablesResponse
-	(*UpdateConfigVariablesRequest)(nil), // 22: tango.admin.v1.UpdateConfigVariablesRequest
-	(*ListAuditLogsRequest)(nil),         // 23: tango.admin.v1.ListAuditLogsRequest
-	(*ListAuditLogsResponse)(nil),        // 24: tango.admin.v1.ListAuditLogsResponse
-	(*FilterOptionsRequest)(nil),         // 25: tango.admin.v1.FilterOptionsRequest
-	(*FilterOptionsResponse)(nil),        // 26: tango.admin.v1.FilterOptionsResponse
-	(*structpb.Struct)(nil),              // 27: google.protobuf.Struct
-	(*v1.PageMetadata)(nil),              // 28: tango.common.v1.PageMetadata
-	(*v11.ClientRef)(nil),                // 29: tango.federation.v1.ClientRef
-	(*v1.PageRequest)(nil),               // 30: tango.common.v1.PageRequest
-	(*emptypb.Empty)(nil),                // 31: google.protobuf.Empty
+	(*ClientApisRequest)(nil),            // 11: tango.admin.v1.ClientApisRequest
+	(*ClientApiGrant)(nil),               // 12: tango.admin.v1.ClientApiGrant
+	(*ListClientApiGrantsResponse)(nil),  // 13: tango.admin.v1.ListClientApiGrantsResponse
+	(*ListApisResponse)(nil),             // 14: tango.admin.v1.ListApisResponse
+	(*CreateApiRequest)(nil),             // 15: tango.admin.v1.CreateApiRequest
+	(*GetApiRequest)(nil),                // 16: tango.admin.v1.GetApiRequest
+	(*UpdateApiRequest)(nil),             // 17: tango.admin.v1.UpdateApiRequest
+	(*DeleteApiRequest)(nil),             // 18: tango.admin.v1.DeleteApiRequest
+	(*SetPermissionsRequest)(nil),        // 19: tango.admin.v1.SetPermissionsRequest
+	(*SetCimdAccessRequest)(nil),         // 20: tango.admin.v1.SetCimdAccessRequest
+	(*ListClientRefsResponse)(nil),       // 21: tango.admin.v1.ListClientRefsResponse
+	(*GrantClientRequest)(nil),           // 22: tango.admin.v1.GrantClientRequest
+	(*RevokeClientRequest)(nil),          // 23: tango.admin.v1.RevokeClientRequest
+	(*ListConfigVariablesResponse)(nil),  // 24: tango.admin.v1.ListConfigVariablesResponse
+	(*UpdateConfigVariablesRequest)(nil), // 25: tango.admin.v1.UpdateConfigVariablesRequest
+	(*ListAuditLogsRequest)(nil),         // 26: tango.admin.v1.ListAuditLogsRequest
+	(*ListAuditLogsResponse)(nil),        // 27: tango.admin.v1.ListAuditLogsResponse
+	(*FilterOptionsRequest)(nil),         // 28: tango.admin.v1.FilterOptionsRequest
+	(*FilterOptionsResponse)(nil),        // 29: tango.admin.v1.FilterOptionsResponse
+	(*structpb.Struct)(nil),              // 30: google.protobuf.Struct
+	(*v1.PageMetadata)(nil),              // 31: tango.common.v1.PageMetadata
+	(*v11.ClientRef)(nil),                // 32: tango.federation.v1.ClientRef
+	(*v1.PageRequest)(nil),               // 33: tango.common.v1.PageRequest
+	(*emptypb.Empty)(nil),                // 34: google.protobuf.Empty
 }
 var file_admin_proto_depIdxs = []int32{
 	1,  // 0: tango.admin.v1.API.permissions:type_name -> tango.admin.v1.Permission
 	3,  // 1: tango.admin.v1.APIKeySecret.api_key:type_name -> tango.admin.v1.APIKey
 	0,  // 2: tango.admin.v1.ConfigVariable.type:type_name -> tango.admin.v1.ConfigVariable.Type
-	27, // 3: tango.admin.v1.AuditLog.payload:type_name -> google.protobuf.Struct
+	30, // 3: tango.admin.v1.AuditLog.payload:type_name -> google.protobuf.Struct
 	3,  // 4: tango.admin.v1.ListApiKeysResponse.api_keys:type_name -> tango.admin.v1.APIKey
-	28, // 5: tango.admin.v1.ListApiKeysResponse.metadata:type_name -> tango.common.v1.PageMetadata
-	2,  // 6: tango.admin.v1.ListApisResponse.apis:type_name -> tango.admin.v1.API
-	28, // 7: tango.admin.v1.ListApisResponse.metadata:type_name -> tango.common.v1.PageMetadata
-	29, // 8: tango.admin.v1.ListClientRefsResponse.clients:type_name -> tango.federation.v1.ClientRef
-	5,  // 9: tango.admin.v1.ListConfigVariablesResponse.variables:type_name -> tango.admin.v1.ConfigVariable
-	5,  // 10: tango.admin.v1.UpdateConfigVariablesRequest.variables:type_name -> tango.admin.v1.ConfigVariable
-	30, // 11: tango.admin.v1.ListAuditLogsRequest.page:type_name -> tango.common.v1.PageRequest
-	6,  // 12: tango.admin.v1.ListAuditLogsResponse.logs:type_name -> tango.admin.v1.AuditLog
-	28, // 13: tango.admin.v1.ListAuditLogsResponse.metadata:type_name -> tango.common.v1.PageMetadata
-	30, // 14: tango.admin.v1.ApiKeyService.List:input_type -> tango.common.v1.PageRequest
-	8,  // 15: tango.admin.v1.ApiKeyService.Create:input_type -> tango.admin.v1.CreateApiKeyRequest
-	9,  // 16: tango.admin.v1.ApiKeyService.Renew:input_type -> tango.admin.v1.RenewApiKeyRequest
-	10, // 17: tango.admin.v1.ApiKeyService.Delete:input_type -> tango.admin.v1.DeleteApiKeyRequest
-	30, // 18: tango.admin.v1.ApiService.ListApis:input_type -> tango.common.v1.PageRequest
-	12, // 19: tango.admin.v1.ApiService.CreateApi:input_type -> tango.admin.v1.CreateApiRequest
-	13, // 20: tango.admin.v1.ApiService.GetApi:input_type -> tango.admin.v1.GetApiRequest
-	14, // 21: tango.admin.v1.ApiService.UpdateApi:input_type -> tango.admin.v1.UpdateApiRequest
-	15, // 22: tango.admin.v1.ApiService.DeleteApi:input_type -> tango.admin.v1.DeleteApiRequest
-	16, // 23: tango.admin.v1.ApiService.SetPermissions:input_type -> tango.admin.v1.SetPermissionsRequest
-	17, // 24: tango.admin.v1.ApiService.SetCimdAccess:input_type -> tango.admin.v1.SetCimdAccessRequest
-	13, // 25: tango.admin.v1.ApiService.ListAssignableClients:input_type -> tango.admin.v1.GetApiRequest
-	13, // 26: tango.admin.v1.ApiService.ListClients:input_type -> tango.admin.v1.GetApiRequest
-	19, // 27: tango.admin.v1.ApiService.GrantClient:input_type -> tango.admin.v1.GrantClientRequest
-	20, // 28: tango.admin.v1.ApiService.RevokeClient:input_type -> tango.admin.v1.RevokeClientRequest
-	31, // 29: tango.admin.v1.ApplicationConfigurationService.Get:input_type -> google.protobuf.Empty
-	31, // 30: tango.admin.v1.ApplicationConfigurationService.GetAll:input_type -> google.protobuf.Empty
-	22, // 31: tango.admin.v1.ApplicationConfigurationService.Update:input_type -> tango.admin.v1.UpdateConfigVariablesRequest
-	31, // 32: tango.admin.v1.ApplicationConfigurationService.TestEmail:input_type -> google.protobuf.Empty
-	23, // 33: tango.admin.v1.AuditLogService.List:input_type -> tango.admin.v1.ListAuditLogsRequest
-	23, // 34: tango.admin.v1.AuditLogService.ListAll:input_type -> tango.admin.v1.ListAuditLogsRequest
-	25, // 35: tango.admin.v1.AuditLogService.FilterOptions:input_type -> tango.admin.v1.FilterOptionsRequest
-	7,  // 36: tango.admin.v1.ApiKeyService.List:output_type -> tango.admin.v1.ListApiKeysResponse
-	4,  // 37: tango.admin.v1.ApiKeyService.Create:output_type -> tango.admin.v1.APIKeySecret
-	4,  // 38: tango.admin.v1.ApiKeyService.Renew:output_type -> tango.admin.v1.APIKeySecret
-	31, // 39: tango.admin.v1.ApiKeyService.Delete:output_type -> google.protobuf.Empty
-	11, // 40: tango.admin.v1.ApiService.ListApis:output_type -> tango.admin.v1.ListApisResponse
-	2,  // 41: tango.admin.v1.ApiService.CreateApi:output_type -> tango.admin.v1.API
-	2,  // 42: tango.admin.v1.ApiService.GetApi:output_type -> tango.admin.v1.API
-	2,  // 43: tango.admin.v1.ApiService.UpdateApi:output_type -> tango.admin.v1.API
-	31, // 44: tango.admin.v1.ApiService.DeleteApi:output_type -> google.protobuf.Empty
-	31, // 45: tango.admin.v1.ApiService.SetPermissions:output_type -> google.protobuf.Empty
-	31, // 46: tango.admin.v1.ApiService.SetCimdAccess:output_type -> google.protobuf.Empty
-	18, // 47: tango.admin.v1.ApiService.ListAssignableClients:output_type -> tango.admin.v1.ListClientRefsResponse
-	18, // 48: tango.admin.v1.ApiService.ListClients:output_type -> tango.admin.v1.ListClientRefsResponse
-	31, // 49: tango.admin.v1.ApiService.GrantClient:output_type -> google.protobuf.Empty
-	31, // 50: tango.admin.v1.ApiService.RevokeClient:output_type -> google.protobuf.Empty
-	21, // 51: tango.admin.v1.ApplicationConfigurationService.Get:output_type -> tango.admin.v1.ListConfigVariablesResponse
-	21, // 52: tango.admin.v1.ApplicationConfigurationService.GetAll:output_type -> tango.admin.v1.ListConfigVariablesResponse
-	21, // 53: tango.admin.v1.ApplicationConfigurationService.Update:output_type -> tango.admin.v1.ListConfigVariablesResponse
-	31, // 54: tango.admin.v1.ApplicationConfigurationService.TestEmail:output_type -> google.protobuf.Empty
-	24, // 55: tango.admin.v1.AuditLogService.List:output_type -> tango.admin.v1.ListAuditLogsResponse
-	24, // 56: tango.admin.v1.AuditLogService.ListAll:output_type -> tango.admin.v1.ListAuditLogsResponse
-	26, // 57: tango.admin.v1.AuditLogService.FilterOptions:output_type -> tango.admin.v1.FilterOptionsResponse
-	36, // [36:58] is the sub-list for method output_type
-	14, // [14:36] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	31, // 5: tango.admin.v1.ListApiKeysResponse.metadata:type_name -> tango.common.v1.PageMetadata
+	2,  // 6: tango.admin.v1.ClientApiGrant.api:type_name -> tango.admin.v1.API
+	12, // 7: tango.admin.v1.ListClientApiGrantsResponse.grants:type_name -> tango.admin.v1.ClientApiGrant
+	2,  // 8: tango.admin.v1.ListApisResponse.apis:type_name -> tango.admin.v1.API
+	31, // 9: tango.admin.v1.ListApisResponse.metadata:type_name -> tango.common.v1.PageMetadata
+	32, // 10: tango.admin.v1.ListClientRefsResponse.clients:type_name -> tango.federation.v1.ClientRef
+	5,  // 11: tango.admin.v1.ListConfigVariablesResponse.variables:type_name -> tango.admin.v1.ConfigVariable
+	5,  // 12: tango.admin.v1.UpdateConfigVariablesRequest.variables:type_name -> tango.admin.v1.ConfigVariable
+	33, // 13: tango.admin.v1.ListAuditLogsRequest.page:type_name -> tango.common.v1.PageRequest
+	6,  // 14: tango.admin.v1.ListAuditLogsResponse.logs:type_name -> tango.admin.v1.AuditLog
+	31, // 15: tango.admin.v1.ListAuditLogsResponse.metadata:type_name -> tango.common.v1.PageMetadata
+	33, // 16: tango.admin.v1.ApiKeyService.List:input_type -> tango.common.v1.PageRequest
+	8,  // 17: tango.admin.v1.ApiKeyService.Create:input_type -> tango.admin.v1.CreateApiKeyRequest
+	9,  // 18: tango.admin.v1.ApiKeyService.Renew:input_type -> tango.admin.v1.RenewApiKeyRequest
+	10, // 19: tango.admin.v1.ApiKeyService.Delete:input_type -> tango.admin.v1.DeleteApiKeyRequest
+	33, // 20: tango.admin.v1.ApiService.ListApis:input_type -> tango.common.v1.PageRequest
+	15, // 21: tango.admin.v1.ApiService.CreateApi:input_type -> tango.admin.v1.CreateApiRequest
+	16, // 22: tango.admin.v1.ApiService.GetApi:input_type -> tango.admin.v1.GetApiRequest
+	17, // 23: tango.admin.v1.ApiService.UpdateApi:input_type -> tango.admin.v1.UpdateApiRequest
+	18, // 24: tango.admin.v1.ApiService.DeleteApi:input_type -> tango.admin.v1.DeleteApiRequest
+	19, // 25: tango.admin.v1.ApiService.SetPermissions:input_type -> tango.admin.v1.SetPermissionsRequest
+	20, // 26: tango.admin.v1.ApiService.SetCimdAccess:input_type -> tango.admin.v1.SetCimdAccessRequest
+	16, // 27: tango.admin.v1.ApiService.ListAssignableClients:input_type -> tango.admin.v1.GetApiRequest
+	16, // 28: tango.admin.v1.ApiService.ListClients:input_type -> tango.admin.v1.GetApiRequest
+	22, // 29: tango.admin.v1.ApiService.GrantClient:input_type -> tango.admin.v1.GrantClientRequest
+	23, // 30: tango.admin.v1.ApiService.RevokeClient:input_type -> tango.admin.v1.RevokeClientRequest
+	11, // 31: tango.admin.v1.ApiService.ListApisForClient:input_type -> tango.admin.v1.ClientApisRequest
+	11, // 32: tango.admin.v1.ApiService.ListAssignableApisForClient:input_type -> tango.admin.v1.ClientApisRequest
+	34, // 33: tango.admin.v1.ApplicationConfigurationService.Get:input_type -> google.protobuf.Empty
+	34, // 34: tango.admin.v1.ApplicationConfigurationService.GetAll:input_type -> google.protobuf.Empty
+	25, // 35: tango.admin.v1.ApplicationConfigurationService.Update:input_type -> tango.admin.v1.UpdateConfigVariablesRequest
+	34, // 36: tango.admin.v1.ApplicationConfigurationService.TestEmail:input_type -> google.protobuf.Empty
+	26, // 37: tango.admin.v1.AuditLogService.List:input_type -> tango.admin.v1.ListAuditLogsRequest
+	26, // 38: tango.admin.v1.AuditLogService.ListAll:input_type -> tango.admin.v1.ListAuditLogsRequest
+	28, // 39: tango.admin.v1.AuditLogService.FilterOptions:input_type -> tango.admin.v1.FilterOptionsRequest
+	7,  // 40: tango.admin.v1.ApiKeyService.List:output_type -> tango.admin.v1.ListApiKeysResponse
+	4,  // 41: tango.admin.v1.ApiKeyService.Create:output_type -> tango.admin.v1.APIKeySecret
+	4,  // 42: tango.admin.v1.ApiKeyService.Renew:output_type -> tango.admin.v1.APIKeySecret
+	34, // 43: tango.admin.v1.ApiKeyService.Delete:output_type -> google.protobuf.Empty
+	14, // 44: tango.admin.v1.ApiService.ListApis:output_type -> tango.admin.v1.ListApisResponse
+	2,  // 45: tango.admin.v1.ApiService.CreateApi:output_type -> tango.admin.v1.API
+	2,  // 46: tango.admin.v1.ApiService.GetApi:output_type -> tango.admin.v1.API
+	2,  // 47: tango.admin.v1.ApiService.UpdateApi:output_type -> tango.admin.v1.API
+	34, // 48: tango.admin.v1.ApiService.DeleteApi:output_type -> google.protobuf.Empty
+	34, // 49: tango.admin.v1.ApiService.SetPermissions:output_type -> google.protobuf.Empty
+	34, // 50: tango.admin.v1.ApiService.SetCimdAccess:output_type -> google.protobuf.Empty
+	21, // 51: tango.admin.v1.ApiService.ListAssignableClients:output_type -> tango.admin.v1.ListClientRefsResponse
+	21, // 52: tango.admin.v1.ApiService.ListClients:output_type -> tango.admin.v1.ListClientRefsResponse
+	34, // 53: tango.admin.v1.ApiService.GrantClient:output_type -> google.protobuf.Empty
+	34, // 54: tango.admin.v1.ApiService.RevokeClient:output_type -> google.protobuf.Empty
+	13, // 55: tango.admin.v1.ApiService.ListApisForClient:output_type -> tango.admin.v1.ListClientApiGrantsResponse
+	14, // 56: tango.admin.v1.ApiService.ListAssignableApisForClient:output_type -> tango.admin.v1.ListApisResponse
+	24, // 57: tango.admin.v1.ApplicationConfigurationService.Get:output_type -> tango.admin.v1.ListConfigVariablesResponse
+	24, // 58: tango.admin.v1.ApplicationConfigurationService.GetAll:output_type -> tango.admin.v1.ListConfigVariablesResponse
+	24, // 59: tango.admin.v1.ApplicationConfigurationService.Update:output_type -> tango.admin.v1.ListConfigVariablesResponse
+	34, // 60: tango.admin.v1.ApplicationConfigurationService.TestEmail:output_type -> google.protobuf.Empty
+	27, // 61: tango.admin.v1.AuditLogService.List:output_type -> tango.admin.v1.ListAuditLogsResponse
+	27, // 62: tango.admin.v1.AuditLogService.ListAll:output_type -> tango.admin.v1.ListAuditLogsResponse
+	29, // 63: tango.admin.v1.AuditLogService.FilterOptions:output_type -> tango.admin.v1.FilterOptionsResponse
+	40, // [40:64] is the sub-list for method output_type
+	16, // [16:40] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_admin_proto_init() }
@@ -1967,16 +2175,16 @@ func file_admin_proto_init() {
 	file_admin_proto_msgTypes[4].OneofWrappers = []any{}
 	file_admin_proto_msgTypes[5].OneofWrappers = []any{}
 	file_admin_proto_msgTypes[7].OneofWrappers = []any{}
-	file_admin_proto_msgTypes[11].OneofWrappers = []any{}
-	file_admin_proto_msgTypes[13].OneofWrappers = []any{}
-	file_admin_proto_msgTypes[22].OneofWrappers = []any{}
+	file_admin_proto_msgTypes[14].OneofWrappers = []any{}
+	file_admin_proto_msgTypes[16].OneofWrappers = []any{}
+	file_admin_proto_msgTypes[25].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_admin_proto_rawDesc), len(file_admin_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   26,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   4,
 		},

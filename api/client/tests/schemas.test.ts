@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { ConfigVariableSchema } from '../schemas/appconfig.schema'
 import {
   ForgotPasswordSchema,
   ResetPasswordSchema,
@@ -75,11 +74,7 @@ describe('schema contracts', () => {
     expect(AdminUpdateUserSchema.safeParse({ disabled: true }).success).toBe(true)
   })
 
-  it('validates config variables and webauthn begin payloads', () => {
-    expect(ConfigVariableSchema.safeParse({ key: 'k', type: 'int', value: '1' }).success).toBe(true)
-    expect(ConfigVariableSchema.safeParse({ key: 'k', type: 'float', value: '1' }).success).toBe(
-      false
-    )
+  it('validates webauthn begin payloads', () => {
     expect(
       WebAuthnBeginSchema.safeParse({ publicKey: { challenge: 'c' }, session_id: 'ws_1' }).success
     ).toBe(true)

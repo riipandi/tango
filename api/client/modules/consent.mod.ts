@@ -1,7 +1,7 @@
 // Consent surfaces: the user's own authorized clients plus the admin
 // view of any user's consents.
 
-import type { ClientRef } from '../schemas/apiaccess.schema'
+import type { ClientRef } from '../schemas/oidcclient.schema'
 import type { AuthorizedClient } from '../schemas/oidcclient.schema'
 import type { Executor } from '../types'
 

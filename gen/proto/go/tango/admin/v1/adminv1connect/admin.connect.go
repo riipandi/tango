@@ -80,6 +80,12 @@ const (
 	ApiServiceGrantClientProcedure = "/tango.admin.v1.ApiService/GrantClient"
 	// ApiServiceRevokeClientProcedure is the fully-qualified name of the ApiService's RevokeClient RPC.
 	ApiServiceRevokeClientProcedure = "/tango.admin.v1.ApiService/RevokeClient"
+	// ApiServiceListApisForClientProcedure is the fully-qualified name of the ApiService's
+	// ListApisForClient RPC.
+	ApiServiceListApisForClientProcedure = "/tango.admin.v1.ApiService/ListApisForClient"
+	// ApiServiceListAssignableApisForClientProcedure is the fully-qualified name of the ApiService's
+	// ListAssignableApisForClient RPC.
+	ApiServiceListAssignableApisForClientProcedure = "/tango.admin.v1.ApiService/ListAssignableApisForClient"
 	// ApplicationConfigurationServiceGetProcedure is the fully-qualified name of the
 	// ApplicationConfigurationService's Get RPC.
 	ApplicationConfigurationServiceGetProcedure = "/tango.admin.v1.ApplicationConfigurationService/Get"
@@ -262,6 +268,8 @@ type ApiServiceClient interface {
 	ListClients(context.Context, *connect.Request[v11.GetApiRequest]) (*connect.Response[v11.ListClientRefsResponse], error)
 	GrantClient(context.Context, *connect.Request[v11.GrantClientRequest]) (*connect.Response[emptypb.Empty], error)
 	RevokeClient(context.Context, *connect.Request[v11.RevokeClientRequest]) (*connect.Response[emptypb.Empty], error)
+	ListApisForClient(context.Context, *connect.Request[v11.ClientApisRequest]) (*connect.Response[v11.ListClientApiGrantsResponse], error)
+	ListAssignableApisForClient(context.Context, *connect.Request[v11.ClientApisRequest]) (*connect.Response[v11.ListApisResponse], error)
 }
 
 // NewApiServiceClient constructs a client for the tango.admin.v1.ApiService service. By default, it
@@ -341,22 +349,36 @@ func NewApiServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(apiServiceMethods.ByName("RevokeClient")),
 			connect.WithClientOptions(opts...),
 		),
+		listApisForClient: connect.NewClient[v11.ClientApisRequest, v11.ListClientApiGrantsResponse](
+			httpClient,
+			baseURL+ApiServiceListApisForClientProcedure,
+			connect.WithSchema(apiServiceMethods.ByName("ListApisForClient")),
+			connect.WithClientOptions(opts...),
+		),
+		listAssignableApisForClient: connect.NewClient[v11.ClientApisRequest, v11.ListApisResponse](
+			httpClient,
+			baseURL+ApiServiceListAssignableApisForClientProcedure,
+			connect.WithSchema(apiServiceMethods.ByName("ListAssignableApisForClient")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // apiServiceClient implements ApiServiceClient.
 type apiServiceClient struct {
-	listApis              *connect.Client[v1.PageRequest, v11.ListApisResponse]
-	createApi             *connect.Client[v11.CreateApiRequest, v11.API]
-	getApi                *connect.Client[v11.GetApiRequest, v11.API]
-	updateApi             *connect.Client[v11.UpdateApiRequest, v11.API]
-	deleteApi             *connect.Client[v11.DeleteApiRequest, emptypb.Empty]
-	setPermissions        *connect.Client[v11.SetPermissionsRequest, emptypb.Empty]
-	setCimdAccess         *connect.Client[v11.SetCimdAccessRequest, emptypb.Empty]
-	listAssignableClients *connect.Client[v11.GetApiRequest, v11.ListClientRefsResponse]
-	listClients           *connect.Client[v11.GetApiRequest, v11.ListClientRefsResponse]
-	grantClient           *connect.Client[v11.GrantClientRequest, emptypb.Empty]
-	revokeClient          *connect.Client[v11.RevokeClientRequest, emptypb.Empty]
+	listApis                    *connect.Client[v1.PageRequest, v11.ListApisResponse]
+	createApi                   *connect.Client[v11.CreateApiRequest, v11.API]
+	getApi                      *connect.Client[v11.GetApiRequest, v11.API]
+	updateApi                   *connect.Client[v11.UpdateApiRequest, v11.API]
+	deleteApi                   *connect.Client[v11.DeleteApiRequest, emptypb.Empty]
+	setPermissions              *connect.Client[v11.SetPermissionsRequest, emptypb.Empty]
+	setCimdAccess               *connect.Client[v11.SetCimdAccessRequest, emptypb.Empty]
+	listAssignableClients       *connect.Client[v11.GetApiRequest, v11.ListClientRefsResponse]
+	listClients                 *connect.Client[v11.GetApiRequest, v11.ListClientRefsResponse]
+	grantClient                 *connect.Client[v11.GrantClientRequest, emptypb.Empty]
+	revokeClient                *connect.Client[v11.RevokeClientRequest, emptypb.Empty]
+	listApisForClient           *connect.Client[v11.ClientApisRequest, v11.ListClientApiGrantsResponse]
+	listAssignableApisForClient *connect.Client[v11.ClientApisRequest, v11.ListApisResponse]
 }
 
 // ListApis calls tango.admin.v1.ApiService.ListApis.
@@ -414,6 +436,16 @@ func (c *apiServiceClient) RevokeClient(ctx context.Context, req *connect.Reques
 	return c.revokeClient.CallUnary(ctx, req)
 }
 
+// ListApisForClient calls tango.admin.v1.ApiService.ListApisForClient.
+func (c *apiServiceClient) ListApisForClient(ctx context.Context, req *connect.Request[v11.ClientApisRequest]) (*connect.Response[v11.ListClientApiGrantsResponse], error) {
+	return c.listApisForClient.CallUnary(ctx, req)
+}
+
+// ListAssignableApisForClient calls tango.admin.v1.ApiService.ListAssignableApisForClient.
+func (c *apiServiceClient) ListAssignableApisForClient(ctx context.Context, req *connect.Request[v11.ClientApisRequest]) (*connect.Response[v11.ListApisResponse], error) {
+	return c.listAssignableApisForClient.CallUnary(ctx, req)
+}
+
 // ApiServiceHandler is an implementation of the tango.admin.v1.ApiService service.
 type ApiServiceHandler interface {
 	ListApis(context.Context, *connect.Request[v1.PageRequest]) (*connect.Response[v11.ListApisResponse], error)
@@ -427,6 +459,8 @@ type ApiServiceHandler interface {
 	ListClients(context.Context, *connect.Request[v11.GetApiRequest]) (*connect.Response[v11.ListClientRefsResponse], error)
 	GrantClient(context.Context, *connect.Request[v11.GrantClientRequest]) (*connect.Response[emptypb.Empty], error)
 	RevokeClient(context.Context, *connect.Request[v11.RevokeClientRequest]) (*connect.Response[emptypb.Empty], error)
+	ListApisForClient(context.Context, *connect.Request[v11.ClientApisRequest]) (*connect.Response[v11.ListClientApiGrantsResponse], error)
+	ListAssignableApisForClient(context.Context, *connect.Request[v11.ClientApisRequest]) (*connect.Response[v11.ListApisResponse], error)
 }
 
 // NewApiServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -502,6 +536,18 @@ func NewApiServiceHandler(svc ApiServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(apiServiceMethods.ByName("RevokeClient")),
 		connect.WithHandlerOptions(opts...),
 	)
+	apiServiceListApisForClientHandler := connect.NewUnaryHandler(
+		ApiServiceListApisForClientProcedure,
+		svc.ListApisForClient,
+		connect.WithSchema(apiServiceMethods.ByName("ListApisForClient")),
+		connect.WithHandlerOptions(opts...),
+	)
+	apiServiceListAssignableApisForClientHandler := connect.NewUnaryHandler(
+		ApiServiceListAssignableApisForClientProcedure,
+		svc.ListAssignableApisForClient,
+		connect.WithSchema(apiServiceMethods.ByName("ListAssignableApisForClient")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/tango.admin.v1.ApiService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ApiServiceListApisProcedure:
@@ -526,6 +572,10 @@ func NewApiServiceHandler(svc ApiServiceHandler, opts ...connect.HandlerOption) 
 			apiServiceGrantClientHandler.ServeHTTP(w, r)
 		case ApiServiceRevokeClientProcedure:
 			apiServiceRevokeClientHandler.ServeHTTP(w, r)
+		case ApiServiceListApisForClientProcedure:
+			apiServiceListApisForClientHandler.ServeHTTP(w, r)
+		case ApiServiceListAssignableApisForClientProcedure:
+			apiServiceListAssignableApisForClientHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -577,6 +627,14 @@ func (UnimplementedApiServiceHandler) GrantClient(context.Context, *connect.Requ
 
 func (UnimplementedApiServiceHandler) RevokeClient(context.Context, *connect.Request[v11.RevokeClientRequest]) (*connect.Response[emptypb.Empty], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("tango.admin.v1.ApiService.RevokeClient is not implemented"))
+}
+
+func (UnimplementedApiServiceHandler) ListApisForClient(context.Context, *connect.Request[v11.ClientApisRequest]) (*connect.Response[v11.ListClientApiGrantsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("tango.admin.v1.ApiService.ListApisForClient is not implemented"))
+}
+
+func (UnimplementedApiServiceHandler) ListAssignableApisForClient(context.Context, *connect.Request[v11.ClientApisRequest]) (*connect.Response[v11.ListApisResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("tango.admin.v1.ApiService.ListAssignableApisForClient is not implemented"))
 }
 
 // ApplicationConfigurationServiceClient is a client for the

@@ -40,13 +40,13 @@ type Module struct {
 	account   Feature
 	sessions  APIFeature
 	groups    Feature
-	claims    APIFeature
+	claims    Feature
 	passkeys  APIFeature
 	devices   APIFeature
-	onetime   APIFeature
-	emailv    APIFeature
+	onetime   Feature
+	emailv    Feature
 	signup    Feature
-	apiaccess APIFeature
+	apiaccess Feature
 	apikeys   APIFeature
 	recovery  APIFeature
 	totp      Feature
@@ -60,13 +60,13 @@ func New(
 	account Feature,
 	sessions APIFeature,
 	groups Feature,
-	claims APIFeature,
+	claims Feature,
 	passkeys APIFeature,
 	devices APIFeature,
-	onetime APIFeature,
-	emailv APIFeature,
+	onetime Feature,
+	emailv Feature,
 	signup Feature,
-	apiaccess APIFeature,
+	apiaccess Feature,
 	apikeys APIFeature,
 	recovery APIFeature,
 	totp Feature,
@@ -182,32 +182,39 @@ func (m *Module) APIKeyRPCService() (string, http.Handler) {
 	return "", http.NotFoundHandler()
 }
 
+// APIAccessRPCService returns the API registry Connect registration,
+// or the not-found stub when the feature is unwired.
+func (m *Module) APIAccessRPCService() (string, http.Handler) {
+	if provider, ok := m.apiaccess.(rpcServiceProvider); ok && m.apiaccess != nil {
+		return provider.RPCService()
+	}
+	return "", http.NotFoundHandler()
+}
+
+// CustomClaimRPCService returns the custom claim Connect registration,
+// or the not-found stub when the feature is unwired.
+func (m *Module) CustomClaimRPCService() (string, http.Handler) {
+	if provider, ok := m.claims.(rpcServiceProvider); ok && m.claims != nil {
+		return provider.RPCService()
+	}
+	return "", http.NotFoundHandler()
+}
+
 // APIRoutes mounts the user core, then every wired feature's
 // endpoints, in construction order. Unwired features stay unmounted.
-// Account and groups carry no REST routes anymore — they serve
-// ConnectRPC exclusively.
+// Claims and API access serve ConnectRPC exclusively; the REST
+// surfaces left are the user core, sessions, passkeys, device login,
+// and the retained email-link/protocol routes.
 func (m *Module) APIRoutes(r chi.Router, g RouteGroups) {
 	m.core.APIRoutes(r, g)
 	if m.sessions != nil {
 		m.sessions.APIRoutes(r, g)
-	}
-	if m.claims != nil {
-		m.claims.APIRoutes(r, g)
 	}
 	if m.passkeys != nil {
 		m.passkeys.APIRoutes(r, g)
 	}
 	if m.devices != nil {
 		m.devices.APIRoutes(r, g)
-	}
-	if m.onetime != nil {
-		m.onetime.APIRoutes(r, g)
-	}
-	if m.emailv != nil {
-		m.emailv.APIRoutes(r, g)
-	}
-	if m.apiaccess != nil {
-		m.apiaccess.APIRoutes(r, g)
 	}
 	if m.apikeys != nil {
 		m.apikeys.APIRoutes(r, g)

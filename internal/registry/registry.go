@@ -173,7 +173,6 @@ func (rt *Runtime) SessionAuthenticator() kernel.AccessAuthenticator {
 // /rpc handler tree. Registration order mirrors MountAPI.
 func (rt *Runtime) MountRPC(r chi.Router) {
 	auth := rt.SessionAuthenticator()
-
 	// Users: the surface mixes admin CRUD with self-service profile
 	// procedures, so the guard is per procedure inside the handler.
 	userPrefix, userHandler := rt.Identity.UserRPCService(auth)
@@ -216,6 +215,24 @@ func (rt *Runtime) MountRPC(r chi.Router) {
 	// Email verification: every procedure is self-service.
 	emailvPrefix, emailvHandler := rt.Identity.EmailVerificationRPCService()
 	r.Handle(emailvPrefix+"*", middleware.RPCSessionAuth(auth)(emailvHandler))
+
+	// API registry: admin-only CRUD plus client grants.
+	apiPrefix, apiHandler := rt.Identity.APIAccessRPCService()
+	r.Handle(apiPrefix+"*", middleware.RPCAdminGuard(auth)(apiHandler))
+
+	// Custom claims: admin-only surface.
+	claimsPrefix, claimsHandler := rt.Identity.CustomClaimRPCService()
+	r.Handle(claimsPrefix+"*", middleware.RPCAdminGuard(auth)(claimsHandler))
+
+	// Audit logs: the self listing is any principal; the admin
+	// listing and filter facets guard per procedure.
+	auditPrefix, auditHandler := rt.AuditLog.RPCService(auth)
+	r.Handle(auditPrefix+"*", auditHandler)
+
+	// Application configuration: reads, updates, and the test email
+	// are admin-only; the public bootstrap view is anonymous.
+	cfgPrefix, cfgHandler := rt.AppConfig.RPCService(auth)
+	r.Handle(cfgPrefix+"*", cfgHandler)
 }
 
 // MountAPI mounts API routes in registration order.
@@ -223,7 +240,6 @@ func (rt *Runtime) MountAPI(api chi.Router) {
 	api.NotFound(responder.NotFoundJSON)
 	api.MethodNotAllowed(responder.MethodNotAllowedJSON)
 
-	rt.AuditLog.APIRoutes(api)
 	rt.Identity.APIRoutes(api, rt.identityGroups)
 	rt.Webhook.APIRoutes(api)
 	rt.AppConfig.APIRoutes(api)

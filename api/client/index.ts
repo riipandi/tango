@@ -53,7 +53,6 @@ export type {
 } from './schemas/devicelogin.schema'
 
 // Admin surface types.
-export type { ConfigVariable } from './schemas/appconfig.schema'
 export type {
   AuthorizedClient,
   OidcClient,
@@ -63,25 +62,11 @@ export type {
   OidcTokenPreview
 } from './schemas/oidcclient.schema'
 export type {
-  API,
-  ClientAPIGrant,
-  ClientRef,
-  Grant,
-  GrantParams,
-  Permission
-} from './schemas/apiaccess.schema'
-export type {
   APIKey,
   APIKeySecret,
   CreateAPIKeyParams,
   RenewAPIKeyParams
 } from './schemas/apikey.schema'
-export type { AuditLog, AuditLogListParams } from './schemas/auditlog.schema'
-export type {
-  CreateCustomClaimParams,
-  CustomClaim,
-  UpdateCustomClaimParams
-} from './schemas/customclaim.schema'
 export type { CreateScimProviderParams, ScimProvider } from './schemas/scim.schema'
 export type {
   CreateWebhookParams,

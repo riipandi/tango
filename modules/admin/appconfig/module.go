@@ -7,15 +7,11 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-ozzo/ozzo-validation/v4"
-	"github.com/go-ozzo/ozzo-validation/v4/is"
 
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
-	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/validate"
 )
 
 // ModuleName identifies the appconfig module in the registry.
@@ -80,30 +76,13 @@ func (m *Module) WithCipher(cipher *crypto.Cipher) *Module {
 // Name identifies the module.
 func (*Module) Name() string { return ModuleName }
 
-// APIRoutes mounts the configuration endpoints relative to /api.
+// APIRoutes mounts the retained public bootstrap endpoint relative
+// to /api. The admin CRUD and test-email surfaces serve ConnectRPC
+// exclusively (see handler_rpc.go).
 func (m *Module) APIRoutes(r chi.Router) {
-	// The public bootstrap payload has no guard.
 	if m.store != nil {
 		r.Get("/application-configuration", m.listPublic)
 	}
-
-	if m.store == nil || m.guard == nil {
-		if m.guard != nil && m.mailer != nil {
-			r.Group(func(admin chi.Router) {
-				admin.Use(m.guard)
-				admin.Post("/application-configuration/test-email", m.testEmail)
-			})
-		}
-		return
-	}
-	r.Group(func(admin chi.Router) {
-		admin.Use(m.guard)
-		admin.Get("/application-configuration/all", m.listAll)
-		admin.Put("/application-configuration", m.update)
-		if m.mailer != nil {
-			admin.Post("/application-configuration/test-email", m.testEmail)
-		}
-	})
 }
 
 // listPublic serves GET /application-configuration: the settings the
@@ -170,92 +149,6 @@ func (m *Module) decryptOverrides(overrides map[string]string) (map[string]strin
 	return out, nil
 }
 
-// listAll serves GET /application-configuration/all (admin): every
-// key with its visibility flag.
-func (m *Module) listAll(w http.ResponseWriter, r *http.Request) {
-	overrides, err := m.store.List(r.Context())
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-	merged, err := m.merged(r.Context(), overrides)
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-	responder.Success(w, r, http.StatusOK, allView(merged))
-}
-
-// updateRequest is the PUT /application-configuration body:
-// snake_case settings object. Omitted keys keep their stored value.
-type updateRequest map[string]string
-
-func (r updateRequest) Validate() error {
-	for key, value := range r {
-		entry, known := lookup(key)
-		if !known {
-			continue // unknown keys are ignored, not rejected
-		}
-		if err := validateValue(entry, value); err != nil {
-			return validation.Errors{key: validation.NewError("validation", err.Error())}
-		}
-	}
-	return nil
-}
-
-// update serves PUT /application-configuration (admin): upsert the
-// provided keys, then answer with the full view.
-func (m *Module) update(w http.ResponseWriter, r *http.Request) {
-	var req updateRequest
-	if verr := validate.Request(r.Body, &req); verr != nil {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(verr)))
-		return
-	}
-
-	// Only catalog keys persist; the rest never reach the store.
-	// Sensitive values are sealed before they hit the disk; an empty
-	// sensitive value clears the stored secret (the enc: check
-	// rejects empty rows, so clearing means deleting).
-	known := map[string]string{}
-	var clear []string
-	for key, value := range req {
-		entry, ok := lookup(key)
-		if !ok {
-			continue
-		}
-		if entry.Sensitive && value == "" {
-			clear = append(clear, key)
-			continue
-		}
-		known[key] = value
-	}
-	if err := m.sealSensitive(known); err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if err := m.store.Upsert(r.Context(), known); err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if err := m.store.Delete(r.Context(), clear); err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	overrides, err := m.store.List(r.Context())
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-	merged, err := m.merged(r.Context(), overrides)
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-	responder.Success(w, r, http.StatusOK, allView(merged))
-}
-
 // sealSensitive encrypts every sensitive value in place. Empty
 // values never reach this path: the update handler routes them to
 // the store's Delete (clearing).
@@ -280,61 +173,4 @@ func (m *Module) sealSensitive(values map[string]string) error {
 		values[key] = sealed
 	}
 	return nil
-}
-
-// testEmailRequest is the POST /application-configuration/test-email
-// body. An explicit address lets operators test a shared inbox.
-type testEmailRequest struct {
-	Email string `json:"email,omitzero"`
-}
-
-func (r testEmailRequest) Validate() error {
-	return validation.ValidateStruct(&r,
-		validation.Field(&r.Email, is.EmailFormat),
-	)
-}
-
-// testEmail queues the test message: 202, because the SMTP
-// transaction runs on a worker and the answer cannot report it.
-func (m *Module) testEmail(w http.ResponseWriter, r *http.Request) {
-	var req testEmailRequest
-	if verr := decodeOptional(r, &req); verr != nil {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(verr)))
-		return
-	}
-
-	principal, ok := middleware.PrincipalFromContext(r.Context())
-	if !ok {
-		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
-		return
-	}
-
-	// Default to the signed-in administrator.
-	to := req.Email
-	if to == "" {
-		to = principal.Email
-	}
-
-	if err := m.mailer.EnqueueEmail(r.Context(), mailer.Message{
-		To:       to,
-		Subject:  "SMTP test email",
-		Template: "test-email",
-	}); err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to queue email")
-		return
-	}
-	responder.Success(w, r, http.StatusAccepted, map[string]any{
-		"queued": true,
-		"to":     to,
-	})
-}
-
-// decodeOptional tolerates a body the caller omitted: every field of
-// the test-email request is optional.
-func decodeOptional(r *http.Request, dst any) error {
-	if r.Body == nil || r.ContentLength == 0 {
-		return nil
-	}
-	return validate.Request(r.Body, dst)
 }

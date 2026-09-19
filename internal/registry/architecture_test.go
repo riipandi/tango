@@ -216,7 +216,7 @@ func TestAPIRoutesMountEachPathOnce(t *testing.T) {
 	for _, route := range collectRoutes(t, api) {
 		seen[route]++
 	}
-	assert.Greater(t, len(seen), 100, "the API surface must be mounted")
+	assert.Greater(t, len(seen), 50, "the API surface must be mounted")
 
 	duplicates := []string{}
 	for route, count := range seen {

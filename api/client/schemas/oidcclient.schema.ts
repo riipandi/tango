@@ -1,5 +1,17 @@
 import { z } from 'zod'
 
+// ClientRef mirrors federation.v1.ClientRef: a compact client summary
+// for grant and consent listings.
+export const ClientRefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  client_type: z.string(),
+  is_public: z.boolean(),
+  has_logo: z.boolean()
+})
+
+export type ClientRef = z.infer<typeof ClientRefSchema>
+
 // Mirrors the federation/oidc client view (handler.go client.view()).
 export const OidcClientSchema = z.object({
   id: z.string(),

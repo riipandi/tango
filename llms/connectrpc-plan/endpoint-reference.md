@@ -156,23 +156,23 @@ running server. Request names should use `<METHOD> <path>` for REST and
 | Methods | Endpoint | Protocol | Consumer | Notes |
 | --- | --- | --- | --- | --- |
 | GET, DELETE, POST | `/api/api-keys/*` | ConnectRPC | Admin console/internal | API keys remain a machine-auth credential, but management is internal. |
-| GET, POST, PUT, DELETE | `/api/apis/*` | ConnectRPC | Admin console/internal | |
-| GET | `/api/api-access/{clientId}/apis` | ConnectRPC | Admin console/internal | |
-| GET | `/api/api-access/{clientId}/assignable-apis` | ConnectRPC | Admin console/internal | |
-| GET | `/api/apis/{id}/assignable-clients` | ConnectRPC | Admin console/internal | |
-| GET | `/api/apis/{id}/clients` | ConnectRPC | Admin console/internal | |
-| PUT, DELETE | `/api/apis/{id}/clients/{clientId}` | ConnectRPC | Admin console/internal | |
-| PUT | `/api/apis/{id}/permissions` | ConnectRPC | Admin console/internal | |
-| PUT | `/api/apis/{id}/cimd-access` | ConnectRPC | Admin console/internal | |
-| GET, PUT | `/api/application-configuration` | ConnectRPC | Admin console/internal | Sensitive values remain redacted in read responses. |
-| GET | `/api/application-configuration/all` | ConnectRPC | Admin console/internal | |
-| POST | `/api/application-configuration/test-email` | ConnectRPC | Admin console/internal | Queues the test email. |
-| GET | `/api/audit-logs` | ConnectRPC | SPA/internal | |
-| GET | `/api/audit-logs/all` | ConnectRPC | Admin console/internal | |
-| GET | `/api/audit-logs/filters/*` | ConnectRPC | Admin console/internal | |
-| GET | `/api/custom-claims/suggestions` | ConnectRPC | Admin console/internal | |
-| PUT | `/api/custom-claims/user/{userId}` | ConnectRPC | Admin console/internal | |
-| PUT | `/api/custom-claims/user-group/{userGroupId}` | ConnectRPC | Admin console/internal | |
+| GET, POST, PUT, DELETE | `/api/apis/*` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| GET | `/api/api-access/{clientId}/apis` | ConnectRPC | Admin console/internal | `ApiService.ListApisForClient`; REST route removed in phase 05. |
+| GET | `/api/api-access/{clientId}/assignable-apis` | ConnectRPC | Admin console/internal | `ApiService.ListAssignableApisForClient`; REST route removed in phase 05. |
+| GET | `/api/apis/{id}/assignable-clients` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| GET | `/api/apis/{id}/clients` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| PUT, DELETE | `/api/apis/{id}/clients/{clientId}` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| PUT | `/api/apis/{id}/permissions` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| PUT | `/api/apis/{id}/cimd-access` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| GET, PUT | `/api/application-configuration` | ConnectRPC | Admin console/internal | Public bootstrap stays REST; admin surface cut over in phase 05. |
+| GET | `/api/application-configuration/all` | ConnectRPC | Admin console/internal | REST route removed in phase 05. |
+| POST | `/api/application-configuration/test-email` | ConnectRPC | Admin console/internal | REST route removed in phase 05. |
+| GET | `/api/audit-logs` | ConnectRPC | SPA/internal | REST route removed in phase 05. |
+| GET | `/api/audit-logs/all` | ConnectRPC | Admin console/internal | REST route removed in phase 05. |
+| GET | `/api/audit-logs/filters/*` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| GET | `/api/custom-claims/suggestions` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| GET, POST, PUT, DELETE | `/api/custom-claims/user/{userId}*` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
+| GET, POST, PUT, DELETE | `/api/custom-claims/user-group/{userGroupId}*` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
 
 ## OIDC administration and protocol
 
@@ -343,7 +343,7 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `UserGroupService.ReplaceAllowedOidcClients` | PUT `/api/user-groups/{group_id}/allowed-oidc-clients` | bearer | |
 | `DeviceApprovalService.GetPendingRequest` | POST `/api/device-login/verification` | bearer | |
 | `DeviceApprovalService.DecideRequest` | POST `/api/device-login/verification/decision` | bearer | |
-| `CustomClaimService.Suggest` | GET `/api/custom-claims/suggestions` | bearer | |
+| `CustomClaimService.Suggest` | GET `/api/custom-claims/suggestions` | bearer | Cutover phase 05. |
 | `CustomClaimService.ListUserClaims` | GET `/api/custom-claims/user/{user_id}` | bearer | |
 | `CustomClaimService.CreateUserClaim` | POST `/api/custom-claims/user/{user_id}` | bearer | |
 | `CustomClaimService.UpdateUserClaim` | PUT `/api/custom-claims/user/{user_id}/{claim_id}` | bearer | |
@@ -363,8 +363,8 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `ApiKeyService.Create` | POST `/api/api-keys` | bearer | Self-scoped; show-once secret. |
 | `ApiKeyService.Renew` | POST `/api/api-keys/{id}/renew` | bearer | Self-scoped; show-once secret. |
 | `ApiKeyService.Delete` | DELETE `/api/api-keys/{id}` | bearer | Self-scoped. |
-| `ApiService.ListApis` | GET `/api/apis` | bearer | |
-| `ApiService.CreateApi` | POST `/api/apis` | bearer | |
+| `ApiService.ListApis` | GET `/api/apis` | bearer | Cutover phase 05. |
+| `ApiService.CreateApi` | POST `/api/apis` | bearer | Cutover phase 05. |
 | `ApiService.GetApi` | GET `/api/apis/{id}` | bearer | See ambiguity A3 (trailing slash). |
 | `ApiService.UpdateApi` | PUT `/api/apis/{id}` | bearer | See ambiguity A3. |
 | `ApiService.DeleteApi` | DELETE `/api/apis/{id}` | bearer | See ambiguity A3. |
@@ -374,13 +374,13 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `ApiService.ListClients` | GET `/api/apis/{id}/clients` | bearer | |
 | `ApiService.GrantClient` | PUT `/api/apis/{id}/clients/{client_id}` | bearer | |
 | `ApiService.RevokeClient` | DELETE `/api/apis/{id}/clients/{client_id}` | bearer | |
-| `ApplicationConfigurationService.Get` | GET `/api/application-configuration` | bearer | Sensitive values redacted. |
-| `ApplicationConfigurationService.GetAll` | GET `/api/application-configuration/all` | bearer | |
-| `ApplicationConfigurationService.Update` | PUT `/api/application-configuration` | bearer | |
-| `ApplicationConfigurationService.TestEmail` | POST `/api/application-configuration/test-email` | bearer | |
-| `AuditLogService.List` | GET `/api/audit-logs` | bearer | |
-| `AuditLogService.ListAll` | GET `/api/audit-logs/all` | bearer | |
-| `AuditLogService.FilterOptions` | GET `/api/audit-logs/filters/{kind}` | bearer | `kind` ∈ `client-names`, `users`. |
+| `ApplicationConfigurationService.Get` | GET `/api/application-configuration` | bearer | Public bootstrap view; anonymous. |
+| `ApplicationConfigurationService.GetAll` | GET `/api/application-configuration/all` | bearer | Cutover phase 05. |
+| `ApplicationConfigurationService.Update` | PUT `/api/application-configuration` | bearer | Cutover phase 05. |
+| `ApplicationConfigurationService.TestEmail` | POST `/api/application-configuration/test-email` | bearer | Cutover phase 05. |
+| `AuditLogService.List` | GET `/api/audit-logs` | bearer | Self-scoped; cutover phase 05. |
+| `AuditLogService.ListAll` | GET `/api/audit-logs/all` | bearer | Cutover phase 05. |
+| `AuditLogService.FilterOptions` | GET `/api/audit-logs/filters/{kind}` | bearer | `kind` ∈ `client-names`, `users`; cutover phase 05. |
 
 ### Package `tango.federation.v1` — `api/connect/federation.proto`
 

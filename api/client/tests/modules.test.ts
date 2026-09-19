@@ -179,157 +179,6 @@ describe('apiKeys module', () => {
   })
 })
 
-describe('apis + apiAccess modules', () => {
-  const api = {
-    id: 'api_1',
-    name: 'core',
-    resource: 'https://api.tango.local',
-    allow_cimd_clients: false,
-    permissions: [],
-    created_at: 'x'
-  }
-
-  it('performs API CRUD and permission replacement', async () => {
-    const { fetchMock, calls } = mockFetch([
-      envelope([api], { page: 1, limit: 20, total_pages: 1, total_items: 1 }),
-      envelope(api),
-      envelope(api, {}, 201),
-      envelope(api),
-      envelope(null, {}, 204),
-      envelope({ permissions: [] })
-    ])
-    const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    await expect(c.apis.list()).resolves.toMatchObject({ data: [api] })
-    await expect(c.apis.get('api_1')).resolves.toMatchObject({ name: 'core' })
-    await expect(c.apis.create({ name: 'core', resource: api.resource })).resolves.toMatchObject({
-      id: 'api_1'
-    })
-    await expect(c.apis.update('api_1', { name: 'core2' })).resolves.toMatchObject({ id: 'api_1' })
-    await expect(c.apis.remove('api_1')).resolves.toBeUndefined()
-    await expect(c.apis.setPermissions('api_1', [])).resolves.toMatchObject({ permissions: [] })
-
-    expect(expectCall(calls, 4).path).toBe('/api/apis/api_1')
-    expect(expectCall(calls, 5).path).toBe('/api/apis/api_1/permissions')
-  })
-
-  it('manages grants, client lists, cimd, and client views', async () => {
-    const grant = {
-      client_access: true,
-      client_permission_ids: [],
-      user_delegated_access: false,
-      user_delegated_permission_ids: []
-    }
-    const ref = {
-      id: 'oidc_client_01j',
-      name: 'app',
-      client_type: 'confidential',
-      is_public: false,
-      has_logo: false
-    }
-    const { fetchMock, calls } = mockFetch([
-      envelope([ref], { page: 1, limit: 20, total_pages: 1, total_items: 1 }),
-      envelope([]),
-      envelope(grant),
-      envelope({ deleted: true }),
-      envelope(api),
-      envelope([{ api, ...grant, cimd_granted_access: false, cimd_granted_permission_ids: [] }]),
-      envelope([api])
-    ])
-    const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    await expect(c.apis.listClients('api_1')).resolves.toMatchObject({ data: [ref] })
-    await expect(c.apis.listAssignableClients('api_1')).resolves.toMatchObject({ data: [] })
-    await expect(
-      c.apis.setGrant('api_1', 'oidc_client_01j', {
-        user_delegated_access: false,
-        user_delegated_permission_ids: [],
-        client_access: true,
-        client_permission_ids: []
-      })
-    ).resolves.toMatchObject({ client_access: true })
-    await expect(c.apis.removeGrant('api_1', 'oidc_client_01j')).resolves.toMatchObject({
-      deleted: true
-    })
-    await expect(c.apis.setCimdAccess('api_1', { enabled: true })).resolves.toMatchObject({
-      id: 'api_1'
-    })
-    await expect(c.apiAccess.listForClient('oidc_client_01j')).resolves.toHaveLength(1)
-    await expect(c.apiAccess.listAssignableForClient('oidc_client_01j')).resolves.toMatchObject({
-      data: [api]
-    })
-
-    expect(expectCall(calls, 2).path).toBe('/api/apis/api_1/clients/oidc_client_01j')
-    expect(expectCall(calls, 5).path).toBe('/api/api-access/oidc_client_01j/apis')
-  })
-})
-
-describe('auditLogs module', () => {
-  it('lists scoped and all entries with filters', async () => {
-    const entry = {
-      id: 'al_1',
-      event: 'user.created',
-      trigger: 'user',
-      status: 'success',
-      created_at: 'x'
-    }
-    const { fetchMock, calls } = mockFetch([
-      envelope([entry], { page: 1, limit: 20, total_pages: 1, total_items: 1 }),
-      envelope([]),
-      envelope(['core', 'admin']),
-      envelope([])
-    ])
-    const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    const list = await c.auditLogs.list({ event: 'user.created', page: 1, limit: 20 })
-    expect(list.pagination?.totalItems).toBe(1)
-    await c.auditLogs.listAll({ user_id: 'user_01j' })
-    await expect(c.auditLogs.suggestedClientNames()).resolves.toEqual(['core', 'admin'])
-    await c.auditLogs.suggestedUsers()
-
-    expect(expectCall(calls, 0).url).toContain('/api/audit-logs?event=user.created&page=1&limit=20')
-    expect(expectCall(calls, 1).path).toBe('/api/audit-logs/all')
-    expect(expectCall(calls, 1).query.get('user_id')).toBe('user_01j')
-  })
-})
-
-describe('customClaims module', () => {
-  it('manages user and group claims', async () => {
-    const claim = { id: 'cc_1', key: 'tenant', value: 'a', created_at: 'x' }
-    const { fetchMock, calls } = mockFetch([
-      envelope(['tenant', 'role']),
-      envelope([claim]),
-      envelope(claim, {}, 201),
-      envelope([claim]),
-      envelope(claim),
-      envelope(null, {}, 204),
-      envelope([]),
-      envelope(claim, {}, 201)
-    ])
-    const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    await expect(c.customClaims.suggestions()).resolves.toEqual(['tenant', 'role'])
-    await expect(c.customClaims.listForUser('user_01j')).resolves.toHaveLength(1)
-    await expect(
-      c.customClaims.createForUser('user_01j', { key: 'tenant', value: 'a' })
-    ).resolves.toMatchObject({ id: 'cc_1' })
-    await expect(
-      c.customClaims.replaceForUser('user_01j', [{ key: 'tenant', value: 'a' }])
-    ).resolves.toHaveLength(1)
-    await expect(
-      c.customClaims.updateForUser('user_01j', 'cc_1', { value: 'b' })
-    ).resolves.toMatchObject({ id: 'cc_1' })
-    await c.customClaims.deleteForUser('user_01j', 'cc_1')
-    await expect(c.customClaims.listForGroup('ug_1')).resolves.toHaveLength(0)
-    await expect(
-      c.customClaims.createForGroup('ug_1', { key: 'tenant', value: 'a' })
-    ).resolves.toMatchObject({ id: 'cc_1' })
-
-    expect(expectCall(calls, 4).path).toBe('/api/custom-claims/user/user_01j/cc_1')
-    expect(expectCall(calls, 7).path).toBe('/api/custom-claims/user-group/ug_1')
-  })
-})
-
 describe('webhooks module', () => {
   it('manages endpoints, test deliveries, and secrets', async () => {
     const hook = {
@@ -489,7 +338,7 @@ describe('apiKey auth handling', () => {
     const { fetchMock, calls } = mockFetch([envelope([])])
     const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock, apiKey: 'k-123' })
 
-    await c.apis.list()
+    await c.apiKeys.list()
 
     expect(expectCall(calls).headers.get('x-api-key')).toBe('k-123')
   })
@@ -499,9 +348,9 @@ describe('apiKey auth handling', () => {
     const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock, apiKey: 'old' })
 
     c.setApiKey('new')
-    await c.apis.list()
+    await c.apiKeys.list()
     c.setApiKey(undefined)
-    await c.apis.list()
+    await c.apiKeys.list()
 
     expect(expectCall(calls, 0).headers.get('x-api-key')).toBe('new')
     expect(expectCall(calls, 1).headers.get('x-api-key')).toBeNull()
@@ -511,7 +360,7 @@ describe('apiKey auth handling', () => {
     const { fetchMock, calls } = mockFetch([envelope([])])
     const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock, apiKey: 'default' })
 
-    await c.apis.list()
+    await c.apiKeys.list()
 
     expect(expectCall(calls).headers.get('x-api-key')).toBe('default')
   })

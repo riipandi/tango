@@ -171,23 +171,3 @@ func publicView(values map[string]string) []variable {
 	}
 	return out
 }
-
-// allView lists every key with its visibility flag (admin). The
-// stored value of a sensitive key never leaves the server: the
-// response carries an empty string instead.
-func allView(values map[string]string) []variable {
-	out := make([]variable, 0, len(configKeys))
-	for _, entry := range configKeys {
-		value := values[entry.Key]
-		if entry.Sensitive {
-			value = ""
-		}
-		out = append(out, variable{
-			Key:      entry.Key,
-			Type:     string(entry.Type),
-			Value:    value,
-			IsPublic: entry.Public,
-		})
-	}
-	return out
-}

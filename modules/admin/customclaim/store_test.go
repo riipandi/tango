@@ -1,34 +1,22 @@
 package customclaim
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
-	jsonv2 "encoding/json/v2"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/internal/transport/middleware"
-	"github.com/riipandi/tango/modules/identity"
-	"github.com/riipandi/tango/modules/identity/password"
-	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/usergroup"
-	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/testutils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// newTestStack builds the full claim stack: real stores, real
-// session guard (RequireAuth + RequireAdmin), shared router.
-func newTestStack(t *testing.T) (chi.Router, *PostgresStore, *user.PostgresStore, *usergroup.PostgresStore, *password.Service) {
+// newTestStack builds the claim stack over the shared test container
+// with real stores.
+func newTestStack(t *testing.T) (*PostgresStore, *user.PostgresStore, *usergroup.PostgresStore) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -41,73 +29,11 @@ func newTestStack(t *testing.T) (chi.Router, *PostgresStore, *user.PostgresStore
 	require.NoError(t, err)
 	t.Cleanup(func() { ds.Close() })
 
-	users := user.NewPostgresStore(ds)
-	groups := usergroup.NewPostgresStore(ds)
-	store := NewPostgresStore(ds)
-	passwords := password.NewService(password.NewPostgresStore(ds),
-		crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmArgon2id), nil)
-	sessions := session.NewService(session.NewPostgresStore(ds), passwords, users, nil)
-
-	adminGuard := func(next http.Handler) http.Handler {
-		return middleware.RequireAuth(sessions, session.CookieName)(middleware.RequireAdmin(next))
-	}
-
-	svc := NewService(store, nil)
-
-	r := chi.NewRouter()
-	r.Route("/api", func(r chi.Router) {
-		sessions.APIRoutes(r, identity.RouteGroups{})
-		svc.APIRoutes(r, identity.RouteGroups{Admin: adminGuard})
-	})
-	return r, store, users, groups, passwords
-}
-
-// newUser provisions an admin (guard requires IsAdmin) with credentials.
-func newAdminUser(t *testing.T, users *user.PostgresStore, passwords *password.Service, name string) user.User {
-	t.Helper()
-	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
-	u, err := users.Create(t.Context(), user.CreateParams{
-		Username: name + "_" + stamp,
-		Email:    name + "-" + stamp + "@example.com",
-		IsAdmin:  true,
-	})
-	require.NoError(t, err)
-	require.NoError(t, passwords.SetPassword(t.Context(), u.ID, "s3cret-p@ss"))
-	return u
-}
-
-// signIn returns a fresh admin cookie token (default credential).
-func signIn(t *testing.T, r chi.Router, u user.User) string {
-	return signInWith(t, r, u.Username, "s3cret-p@ss")
-}
-
-// signInWith signs in with an explicit secret.
-func signInWith(t *testing.T, r chi.Router, identityText, secret string) string {
-	t.Helper()
-	body := `{"identity":"` + identityText + `","secret":"` + secret + `"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/sign-in", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	cookies := w.Result().Cookies()
-	require.NotEmpty(t, cookies)
-	return cookies[0].Value
-}
-
-func authed(method, path, token, body string) *http.Request {
-	req := httptest.NewRequest(method, path, nil)
-	if body != "" {
-		req = httptest.NewRequest(method, path, strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-	}
-	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: token})
-	return req
+	return NewPostgresStore(ds), user.NewPostgresStore(ds), usergroup.NewPostgresStore(ds)
 }
 
 func TestClaimsForUserAndGroup(t *testing.T) {
-	_, store, users, groups, _ := newTestStack(t)
+	store, users, groups := newTestStack(t)
 	ctx := t.Context()
 	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
 
@@ -149,77 +75,6 @@ func TestClaimsForUserAndGroup(t *testing.T) {
 	keys, err := store.SuggestedKeys(ctx)
 	require.NoError(t, err)
 	assert.Contains(t, keys, "role")
-}
-
-func TestClaimEndpointsAdminGated(t *testing.T) {
-	r, _, users, groups, passwords := newTestStack(t)
-	ctx := t.Context()
-	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
-
-	admin := newAdminUser(t, users, passwords, "adm")
-	member, err := users.Create(ctx, user.CreateParams{
-		Username: "member_" + stamp, Email: "member-" + stamp + "@example.com"})
-	require.NoError(t, err)
-	group, err := groups.Create(ctx, usergroup.CreateParams{
-		Name: "ep_g_" + stamp, DisplayName: "Endpoint Group"})
-	require.NoError(t, err)
-	token := signIn(t, r, admin)
-
-	// Anonymous → 401.
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/custom-claims/user/"+member.ID.String(), nil))
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-
-	// Non-admin member session → 403.
-	require.NoError(t, passwords.SetPassword(ctx, member.ID, "member-pass-1"))
-	memberToken := signInWith(t, r, member.Username, "member-pass-1")
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authed(http.MethodGet, "/api/custom-claims/user/"+member.ID.String(), memberToken, ""))
-	assert.Equal(t, http.StatusForbidden, w.Code)
-
-	// Admin: create → list → update → delete.
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authed(http.MethodPost, "/api/custom-claims/user/"+member.ID.String(), token,
-		`{"key":"role","value":"vip"}`))
-	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-
-	var created struct {
-		Data struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &created))
-
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authed(http.MethodGet, "/api/custom-claims/user/"+member.ID.String(), token, ""))
-	require.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), `"value":"vip"`)
-
-	claimID := created.Data.ID
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authed(http.MethodPut, "/api/custom-claims/user/"+member.ID.String()+"/"+claimID, token,
-		`{"value":"admin"}`))
-	require.Equal(t, http.StatusOK, w.Code)
-
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authed(http.MethodDelete, "/api/custom-claims/user/"+member.ID.String()+"/"+claimID, token, ""))
-	require.Equal(t, http.StatusOK, w.Code)
-
-	// Duplicate (same owner + key) → 409.
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authed(http.MethodPost, "/api/custom-claims/user-group/"+group.ID.String(), token,
-		`{"key":"tier","value":"gold"}`))
-	require.Equal(t, http.StatusCreated, w.Code)
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authed(http.MethodPost, "/api/custom-claims/user-group/"+group.ID.String(), token,
-		`{"key":"tier","value":"gold"}`))
-	assert.Equal(t, http.StatusConflict, w.Code)
-
-	// Suggestions list the keys in use.
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authed(http.MethodGet, "/api/custom-claims/suggestions", token, ""))
-	require.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "tier")
 }
 
 func strPtr(s string) *string { return &s }

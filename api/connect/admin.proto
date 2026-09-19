@@ -123,6 +123,31 @@ service ApiService {
   rpc ListClients(GetApiRequest) returns (ListClientRefsResponse);
   rpc GrantClient(GrantClientRequest) returns (google.protobuf.Empty);
   rpc RevokeClient(RevokeClientRequest) returns (google.protobuf.Empty);
+  rpc ListApisForClient(ClientApisRequest) returns (ListClientApiGrantsResponse);
+  rpc ListAssignableApisForClient(ClientApisRequest) returns (ListApisResponse);
+}
+
+// ClientApisRequest addresses the grant surface of one relying-party
+// client.
+message ClientApisRequest {
+  string client_id = 1;
+}
+
+// ClientApiGrant is one client's access to an API with the per-subject
+// permission split; the CIMD columns are computed from the API flag
+// plus its permission allowlist.
+message ClientApiGrant {
+  API api = 1;
+  bool client_access = 2;
+  repeated string client_permission_ids = 3;
+  bool user_delegated_access = 4;
+  repeated string user_delegated_permission_ids = 5;
+  bool cimd_granted_access = 6;
+  repeated string cimd_granted_permission_ids = 7;
+}
+
+message ListClientApiGrantsResponse {
+  repeated ClientApiGrant grants = 1;
 }
 
 message ListApisResponse {
