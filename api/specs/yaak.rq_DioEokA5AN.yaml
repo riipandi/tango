@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_DioEokA5AN
 createdAt: 2026-09-19T12:29:53.078784
-updatedAt: 2026-09-19T18:01:37.935490
+updatedAt: 2026-09-19T18:07:39.939567
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_JuHm4xpFbc
 authentication: {}
@@ -11,10 +11,10 @@ body:
   text: |-
     {
       "username": "yaak_${[ regex.match(input=uuid.v4(), regex='[a-f0-9]{8}$') ]}",
-      "email": "${[ request.body.path() ]}@example.com"
+      "email": "yaak_${[ regex.match(input=uuid.v4(), regex='[a-f0-9]{8}$') ]}@example.com"
     }
 bodyType: application/json
-description: The username and email are generated per run, so repeated sends do not collide on the unique constraint.
+description: 'Username and email are generated per run so repeated sends do not collide on the unique constraint. They are independent values: Yaak re-renders the template for every reference, so a single generated value cannot be shared between two fields without a plugin.'
 headers:
 - enabled: true
   name: Content-Type
