@@ -31,8 +31,9 @@
         "useDefineForClassFields": true,
         "verbatimModuleSyntax": true,
         "paths": {
-            "#/*": ["./app/*"],
-            "~/apiclient/*": ["./api/client/*"]
+            "~/apiclient/*": ["./api/client/*"],
+            "~/codegen/*": ["./codegen/proto/ts/*"],
+            "#/*": ["./app/*"]
         }
     },
     "include": ["**/*.ts", "**/*.tsx"],

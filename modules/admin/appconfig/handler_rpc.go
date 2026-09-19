@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
-	adminv1 "github.com/riipandi/tango/gen/proto/go/tango/admin/v1"
-	adminv1connect "github.com/riipandi/tango/gen/proto/go/tango/admin/v1/adminv1connect"
+	adminv1 "github.com/riipandi/tango/codegen/proto/go/tango/admin/v1"
+	adminv1connect "github.com/riipandi/tango/codegen/proto/go/tango/admin/v1/adminv1connect"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/rpcerr"

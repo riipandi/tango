@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	federationv1 "github.com/riipandi/tango/gen/proto/go/tango/federation/v1"
+	federationv1 "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1"
 )
 
 // testTLSInsecure accepts the stub server's self-signed cert.

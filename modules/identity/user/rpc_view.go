@@ -3,7 +3,7 @@ package user
 import (
 	"time"
 
-	identityv1 "github.com/riipandi/tango/gen/proto/go/tango/identity/v1"
+	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 )
 
 // ProtoView maps the account projection onto the shared RPC message.

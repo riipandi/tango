@@ -8,8 +8,8 @@ updated: 2026-09-19
 > Completed 2026-09-19. Contracts frozen flat in `api/connect/*.proto` (common, system, identity,
 > admin, federation, webhook) with module-owning packages `tango.<module>.v1`; TypeIDs and
 > timestamps are strings; show-once secrets are dedicated response fields documented never to
-> return from reads. buf generation produces untracked build outputs — Go in `gen/proto/go/` and
-> TypeScript in `app/generated/rpc/` — through pinned, locally resolved plugins; buf itself comes
+> return from reads. buf generation produces untracked build outputs — Go in `codegen/proto/go/` and
+> TypeScript in `codegen/proto/ts/` — through pinned, locally resolved plugins; buf itself comes
 > from the `go.mod` tool directive (`go tool buf`), so no global binary is required.
 > `test`/`dev`/`build`/`typecheck` depend on generation, and every build path (Dockerfile,
 > GoReleaser, CI) generates before it compiles; `.rpc-gen.stamp` detects stale

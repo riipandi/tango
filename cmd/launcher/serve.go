@@ -167,9 +167,9 @@ func (s *ServeCmd) Run(cli *CLI) error {
 	}
 
 	srv := transport.NewHTTPServer(transport.RouteSet{
-		MountRoot:      rt.MountRoot,
-		MountAPI:       rt.MountAPI,
-		MountRPC:       mountRPC(rt),
+		MountRoot: rt.MountRoot,
+		MountAPI:  rt.MountAPI,
+		MountRPC:  mountRPC(rt),
 	}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs), healthChecks)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	serveErr := make(chan error, 1)

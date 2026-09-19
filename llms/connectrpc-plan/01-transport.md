@@ -9,7 +9,7 @@ updated: 2026-09-19
 > `Mount("/rpc", http.StripPrefix("/rpc", rpcHandler()))` — chi's `Mount` shifts only its route
 > context, never `r.URL.Path`, so the Connect mux needs an explicit `StripPrefix`), smoke RPC
 > `tango.system.v1.HealthService/Check` (`api/connect/system.proto`, buf-generated Go in
-> `gen/proto/go/`, committed), `middleware.RequestTimeout` (30s RPC deadline), and
+> `codegen/proto/go/`, committed), `middleware.RequestTimeout` (30s RPC deadline), and
 > `middleware.BearerAuth` (Connect-shaped 401; wired to protected services in phase 03). Route-table
 > tests pin the smoke call, Connect 404 fallthrough, and 405 on GET. Vite proxy: `/rpc` already in
 > `viteProxy` — verified through dev (:3000) and preview (:4173); Storybook stays explicit

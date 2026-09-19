@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	identityv1 "github.com/riipandi/tango/gen/proto/go/tango/identity/v1"
+	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"

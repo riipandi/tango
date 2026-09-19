@@ -5,7 +5,7 @@ syntax = "proto3";
 
 package tango.system.v1;
 
-option go_package = "github.com/riipandi/tango/gen/proto/go/tango/system/v1;systemv1";
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/system/v1;systemv1";
 
 // HealthService is the transport smoke target for the /rpc mount.
 service HealthService {

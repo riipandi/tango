@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	commonv1 "github.com/riipandi/tango/gen/proto/go/tango/common/v1"
-	federationv1 "github.com/riipandi/tango/gen/proto/go/tango/federation/v1"
-	federationv1connect "github.com/riipandi/tango/gen/proto/go/tango/federation/v1/federationv1connect"
+	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
+	federationv1 "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1"
+	federationv1connect "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1/federationv1connect"
 	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"google.golang.org/protobuf/types/known/emptypb"

@@ -443,9 +443,9 @@ from `/api` once its replacement and callers are verified.
   (`PACKAGE_DIRECTORY_MATCH`, `PACKAGE_SAME_DIRECTORY`, `DIRECTORY_SAME_PACKAGE`) and the RPC
   request/response naming rules (shared `PageRequest`/`Get*Request` reuse) are excluded in
   `buf.yaml` for that reason.
-- Generated Go lands in `gen/proto/go/` (package option
-  `github.com/riipandi/tango/gen/proto/go/tango/<module>/v1`, Go package suffix `<module>v1`) and
-  generated TypeScript in `app/generated/rpc/`; both are build outputs and stay untracked, so a
+- Generated Go lands in `codegen/proto/go/` (package option
+  `github.com/riipandi/tango/codegen/proto/go/tango/<module>/v1`, Go package suffix `<module>v1`) and
+  generated TypeScript in `codegen/proto/ts/`; both are build outputs and stay untracked, so a
   clean checkout does not compile until generation runs. Every build path generates first — the
   Dockerfile builder stage, the GoReleaser `before` hooks, and both CI workflows — and buf itself
   resolves from the `go.mod` tool directive via `go tool buf`, so no global binary is installed.

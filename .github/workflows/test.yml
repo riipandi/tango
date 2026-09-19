@@ -87,7 +87,7 @@ jobs:
       - name: Generate ConnectRPC code
         run: |
           go tool buf generate
-          gofmt -w gen/proto/go
+          gofmt -w codegen/proto/go
 
       - name: Generate email template
         run: pnpm exec vite build

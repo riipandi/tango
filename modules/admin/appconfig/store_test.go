@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	adminv1 "github.com/riipandi/tango/codegen/proto/go/tango/admin/v1"
 	"github.com/riipandi/tango/database"
-	adminv1 "github.com/riipandi/tango/gen/proto/go/tango/admin/v1"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/testutils"

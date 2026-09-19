@@ -9,8 +9,8 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/go-ozzo/ozzo-validation/v4"
-	identityv1 "github.com/riipandi/tango/gen/proto/go/tango/identity/v1"
-	identityv1connect "github.com/riipandi/tango/gen/proto/go/tango/identity/v1/identityv1connect"
+	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
+	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
 	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"

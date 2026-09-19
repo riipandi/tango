@@ -5,7 +5,7 @@
 import { createClient, type Interceptor } from '@connectrpc/connect'
 import { createConnectTransport } from '@connectrpc/connect-web'
 import type { Remote } from 'comlink'
-import { AuthService } from '../generated/rpc/identity_pb'
+import { AuthService } from '~/codegen/identity_pb'
 
 // AuthWorker is the plugin-typed worker API: every export of the
 // worker module, Promisified by Comlink. The ComlinkWorker

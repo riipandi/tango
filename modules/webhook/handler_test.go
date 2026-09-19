@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	commonv1 "github.com/riipandi/tango/gen/proto/go/tango/common/v1"
-	webhookv1 "github.com/riipandi/tango/gen/proto/go/tango/webhook/v1"
+	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
+	webhookv1 "github.com/riipandi/tango/codegen/proto/go/tango/webhook/v1"
 )
 
 // rpcStack builds the Connect adapter over the service test stack.

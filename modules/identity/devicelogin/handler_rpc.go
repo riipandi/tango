@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	identityv1 "github.com/riipandi/tango/gen/proto/go/tango/identity/v1"
-	identityv1connect "github.com/riipandi/tango/gen/proto/go/tango/identity/v1/identityv1connect"
+	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
+	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
 	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"google.golang.org/protobuf/types/known/emptypb"

@@ -43,7 +43,7 @@ WebAuthn ceremonies, device-login request/exchange, email-link exchanges
 (one-time access token, verify-email), the auth-worker cookie bridge and sign-out
 fallback, and health/discovery documents. It does not wrap ConnectRPC services:
 first-party application calls use the generated Connect clients
-(`app/generated/rpc/`, produced from `api/connect/*.proto` by `task rpc:generate`) through
+(`codegen/proto/ts/`, produced from `api/connect/*.proto` by `task rpc:generate`) through
 the same-origin `/rpc` transport with bearer access tokens supplied by the auth worker
 (`app/auth.worker.ts`). See `llms/connectrpc-plan/04-client.md` for the split.
 

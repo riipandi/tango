@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	commonv1 "github.com/riipandi/tango/gen/proto/go/tango/common/v1"
-	federationv1 "github.com/riipandi/tango/gen/proto/go/tango/federation/v1"
+	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
+	federationv1 "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/usergroup"

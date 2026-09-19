@@ -8,13 +8,13 @@ version: v2
 modules:
   - path: api/connect
 
+# The plan pins contracts flat in api/connect/*.proto — one folder,
+# module-owning package names — and shared request messages
+# (PageRequest, Get*Request) are reused across RPCs. The directory
+# rules below contradict that flat layout by design.
 lint:
   use:
     - STANDARD
-  # The plan pins contracts flat in api/connect/*.proto — one folder,
-  # module-owning package names — and shared request messages
-  # (PageRequest, Get*Request) are reused across RPCs. The directory
-  # rules below contradict that flat layout by design.
   except:
     - PACKAGE_DIRECTORY_MATCH
     - PACKAGE_SAME_DIRECTORY

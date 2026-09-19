@@ -1,14 +1,8 @@
 # yaml-language-server: $schema=https://json.schemastore.org/buf.gen.json
 
-# ConnectRPC code generation. buf itself resolves through the go.mod tool
-# directive (`go tool buf`); the Go plugins are pinned via @version and
-# module-resolved, the TS plugin resolves through pnpm exec against the
-# devDependencies. No globally installed binaries required. Contracts live
-# in api/connect/*.proto; generated Go lands in gen/proto/go/ and generated
-# TypeScript in app/generated/rpc/. Both are build outputs and stay
-# untracked, so every build compiles them first: the Dockerfile, GoReleaser,
-# and both CI workflows run the generation before they compile, type-check,
-# or bundle.
+# This file defines the generation configuration for buf.
+# For detailed information, see https://buf.build/docs/configuration/v2/buf-gen-yaml
+
 version: v2
 
 clean: true
@@ -18,17 +12,17 @@ plugins:
       - go
       - run
       - google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
-    out: gen/proto/go
-    opt: module=github.com/riipandi/tango/gen/proto/go
+    out: codegen/proto/go
+    opt: module=github.com/riipandi/tango/codegen/proto/go
   - local:
       - go
       - run
       - connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.21.0
-    out: gen/proto/go
-    opt: module=github.com/riipandi/tango/gen/proto/go
+    out: codegen/proto/go
+    opt: module=github.com/riipandi/tango/codegen/proto/go
   - local:
       - pnpm
       - exec
       - protoc-gen-es
-    out: app/generated/rpc
+    out: codegen/proto/ts
     opt: target=ts

@@ -8,9 +8,9 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/go-ozzo/ozzo-validation/v4"
-	commonv1 "github.com/riipandi/tango/gen/proto/go/tango/common/v1"
-	webhookv1 "github.com/riipandi/tango/gen/proto/go/tango/webhook/v1"
-	webhookv1connect "github.com/riipandi/tango/gen/proto/go/tango/webhook/v1/webhookv1connect"
+	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
+	webhookv1 "github.com/riipandi/tango/codegen/proto/go/tango/webhook/v1"
+	webhookv1connect "github.com/riipandi/tango/codegen/proto/go/tango/webhook/v1/webhookv1connect"
 	"github.com/riipandi/tango/internal/rpcerr"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/structpb"

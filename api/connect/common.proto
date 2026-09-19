@@ -3,7 +3,7 @@ syntax = "proto3";
 
 package tango.common.v1;
 
-option go_package = "github.com/riipandi/tango/gen/proto/go/tango/common/v1;commonv1";
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/common/v1;commonv1";
 
 // PageRequest bounds one list call. `page` starts at 1; `limit` caps
 // the result size; `query` is the free-text filter (ILIKE over the

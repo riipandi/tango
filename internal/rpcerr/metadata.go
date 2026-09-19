@@ -3,7 +3,7 @@ package rpcerr
 import (
 	"math"
 
-	commonv1 "github.com/riipandi/tango/gen/proto/go/tango/common/v1"
+	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 )
 
 // PageMetadata builds the shared pagination block for list RPCs.

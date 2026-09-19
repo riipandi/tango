@@ -79,11 +79,10 @@ RUN --mount=type=cache,id=go-mod,target=/go/pkg/mod go mod download
 # email templates, SPA bundle, and the Go binary are all driven by Vite).
 COPY --link . .
 
-# Generate the ConnectRPC code before anything compiles: `gen/proto/go` and
-# `app/generated/rpc` are build outputs. buf resolves from the module cache
-# prepared above through `go tool`, so no extra download is needed.
+# Generate the ConnectRPC code before anything compiles.
+# Buf resolves from the module cache prepared above through `go tool`.
 RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build \
-    go tool buf generate && gofmt -w gen/proto/go
+    go tool buf generate && gofmt -w codegen/proto/go
 
 RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build \
     NODE_ENV=production pnpm exec tsc -b --noEmit \

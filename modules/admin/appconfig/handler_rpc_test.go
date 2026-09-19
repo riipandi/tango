@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	adminv1 "github.com/riipandi/tango/gen/proto/go/tango/admin/v1"
+	adminv1 "github.com/riipandi/tango/codegen/proto/go/tango/admin/v1"
 )
 
 // TestRPCConfigLifecycle covers the settings surface through the

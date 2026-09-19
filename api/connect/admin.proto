@@ -11,7 +11,7 @@ import "federation.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "github.com/riipandi/tango/gen/proto/go/tango/admin/v1;adminv1";
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/admin/v1;adminv1";
 
 // Permission is one grantable API permission.
 message Permission {

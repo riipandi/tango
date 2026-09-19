@@ -96,8 +96,7 @@ sbom-*
 /api/docs.go
 /api/swagger.json
 /api/swagger.yaml
-/app/generated/
-/gen/
+/codegen/
 .rpc-gen.stamp
 *.gen.ts
 *.gen.go

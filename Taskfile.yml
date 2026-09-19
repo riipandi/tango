@@ -137,7 +137,7 @@ tasks:
     desc: Generate Go + TypeScript from api/connect/*.proto
     cmds:
       - go tool buf generate
-      - gofmt -w gen/proto/go
+      - gofmt -w codegen/proto/go
       - task: rpc:stamp
 
   rpc:lint:
@@ -185,7 +185,7 @@ tasks:
 
   cleanup:dist:
     desc: Remove build artifacts
-    cmd: pnpm dlx del-cli .{tanstack,wrangler} build web/output storybook-static
+    cmd: pnpm dlx del-cli .{output,tanstack} build web/output codegen
 
   cleanup:deps:
     desc: Remove dependencies
@@ -193,6 +193,7 @@ tasks:
 
   update-deps:
     desc: Update dependencies
+    deps: [rpc:generate]
     cmds:
       - pnpm exec npm-check-updates --configFileName .ncurc.json
       - go mod download && go mod tidy

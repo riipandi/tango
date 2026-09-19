@@ -10,7 +10,7 @@ package tango.identity.v1;
 import "common.proto";
 import "google/protobuf/empty.proto";
 
-option go_package = "github.com/riipandi/tango/gen/proto/go/tango/identity/v1;identityv1";
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1;identityv1";
 
 // User mirrors the account projection shared by the SPA and admin
 // console.

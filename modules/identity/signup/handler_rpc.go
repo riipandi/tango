@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	commonv1 "github.com/riipandi/tango/gen/proto/go/tango/common/v1"
-	identityv1 "github.com/riipandi/tango/gen/proto/go/tango/identity/v1"
-	identityv1connect "github.com/riipandi/tango/gen/proto/go/tango/identity/v1/identityv1connect"
+	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
+	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
+	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/internal/transport/middleware"

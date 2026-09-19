@@ -12,7 +12,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/lestrrat-go/jwx/v3/jwk"
-	identityv1 "github.com/riipandi/tango/gen/proto/go/tango/identity/v1"
+	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

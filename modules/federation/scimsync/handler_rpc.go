@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	federationv1 "github.com/riipandi/tango/gen/proto/go/tango/federation/v1"
-	federationv1connect "github.com/riipandi/tango/gen/proto/go/tango/federation/v1/federationv1connect"
+	federationv1 "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1"
+	federationv1connect "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1/federationv1connect"
 	"github.com/riipandi/tango/internal/rpcerr"
 	"go.jetify.com/typeid"
 	"google.golang.org/protobuf/types/known/emptypb"

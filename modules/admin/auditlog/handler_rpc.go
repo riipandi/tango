@@ -7,9 +7,9 @@ import (
 	"uuid"
 
 	"connectrpc.com/connect"
-	adminv1 "github.com/riipandi/tango/gen/proto/go/tango/admin/v1"
-	adminv1connect "github.com/riipandi/tango/gen/proto/go/tango/admin/v1/adminv1connect"
-	commonv1 "github.com/riipandi/tango/gen/proto/go/tango/common/v1"
+	adminv1 "github.com/riipandi/tango/codegen/proto/go/tango/admin/v1"
+	adminv1connect "github.com/riipandi/tango/codegen/proto/go/tango/admin/v1/adminv1connect"
+	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/internal/transport/middleware"

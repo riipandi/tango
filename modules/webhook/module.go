@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"context"
-
 )
 
 // ModuleName identifies the webhook module in the registry.

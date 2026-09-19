@@ -11,7 +11,7 @@ import "common.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "github.com/riipandi/tango/gen/proto/go/tango/federation/v1;federationv1";
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1;federationv1";
 
 // ClientRef is a compact client summary for grant listings.
 message ClientRef {

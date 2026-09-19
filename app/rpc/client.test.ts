@@ -3,7 +3,7 @@ import { Code, ConnectError, createClient } from '@connectrpc/connect'
 // worker and the same-origin base URL are pinned without a live
 // server by mocking fetch.
 import { afterEach, beforeEach, describe, expect, vi, it } from 'vitest'
-import { AuthService } from '../generated/rpc/identity_pb'
+import { AuthService } from '~/codegen/identity_pb'
 import { createRPCTransport } from './client'
 import type { AuthWorker } from './client'
 
