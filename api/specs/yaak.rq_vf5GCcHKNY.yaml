@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_vf5GCcHKNY
 createdAt: 2026-09-18T23:54:46.763293
-updatedAt: 2026-09-18T23:54:46.763295
+updatedAt: 2026-09-19T11:12:37.664552
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_Zg3xFLU2hm
 authentication: {}
@@ -23,7 +23,7 @@ headers:
   id: null
 - enabled: true
   name: Authorization
-  value: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6Imp3a18wMW0ydHp3czFwZXE4c2U1MjUzY2N0emZ2biIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1ZSwiYXVkIjpbInRhbmdvOnJwYyJdLCJleHAiOjE3ODk3NzYwNjgsImlhdCI6MTc4OTc3NTQ2OCwiaXNzIjoidGFuZ286aW50ZXJuYWwiLCJzaWQiOiJzZXNzaW9uXzAxbTJ2ZXdwODZldmF0MzMwa3A1MHdjcWdmIiwic3ViIjoidXNlcl8wMW0ydHp3aGgwZmc1OTJteGM1OHljM3BnZCJ9.ah1cHy19BwcImKnBztQ4KI_-Bs_7VsDpjzjdEof5G07I4P32ckYjuxNPjQslUCvXIcsxgOk4cyqpeCJlCLuaIyx7Fw82wwMiKSq_cPdFxOV15Cwbq9E61_gqGnFff7ddsWDRxRK7CoN2w02ImAjOX5DreuRr1vuqft-JPcj1AAKMJYXsZ9inTbdPNHebmImTSNznjvEw7K1fR-kJenVSWBwsQ_jFQwbOL1lPpNiYze76oOMGIiGHMVBjkkjDhp2gXfAeSAtpnT2N1R8Zu9r52KMaV9RbORdx7_xLi-d1Yyr9V6o_SDR5S7h_xMqxq6kbsJCXkqX45tXV7cq52EtUJg
+  value: Bearer ${[ accessToken ]}
   id: null
 method: POST
 name: POST /rpc/tango.admin.v1.AuditLogService/ListAll

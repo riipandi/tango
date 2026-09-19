@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_BMkDsk2Tir
 createdAt: 2026-09-19T00:54:36.897973
-updatedAt: 2026-09-19T00:54:36.897974
+updatedAt: 2026-09-19T11:07:40.188628
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_Zg3xFLU2hm
 authentication: {}
@@ -23,7 +23,7 @@ headers:
   id: null
 - enabled: true
   name: Authorization
-  value: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6Imp3a18wMW0ydHp3czFwZXE4c2U1MjUzY2N0emZ2biIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1ZSwiYXVkIjpbInRhbmdvOnJwYyJdLCJleHAiOjE3ODk3Nzk4MjcsImlhdCI6MTc4OTc3OTIyNywiaXNzIjoidGFuZ286aW50ZXJuYWwiLCJzaWQiOiJzZXNzaW9uXzAxbTJ2amZjYnRlcTV0ZGVzbjQyNDVyaHJyIiwic3ViIjoidXNlcl8wMW0ydHp3aGgwZmc1OTJteGM1OHljM3BnZCJ9.QK0nQ3IrOmEq06h0zOdxUKS5xokPz7LeaY5VGbfWd1HW4c8fZvgIE-p2Eel4kpejGyp-r9TTclpLeLhuMSDahMbqBtQDM0v6a9fV_1_5eK2B987Yd8UiWvX6WfTIi_KyAFutsd5tFOVV2AhFVdaVvS6J6RN9XDSbNmbDu5Wh-8RsJBCjdqxPgsInpSQ7VJIeDJwb7eJqeCTsZ7cw0rBCYlIAadoPWnDe5QDpotL8FhG3AmMoPmADy1A_0c9NYMMdwnp-Qln6J_IGF1ewxqjp0PH29H3GL2frfarSTECinAWKrUKczsYMHSpRcszjHyQLZEM_WrBGcfNIozAQSCRVpg
+  value: Bearer ${[ accessToken ]}
   id: null
 method: POST
 name: POST /rpc/tango.webhook.v1.WebhookService/Create

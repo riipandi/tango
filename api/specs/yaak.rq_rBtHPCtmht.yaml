@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_rBtHPCtmht
 createdAt: 2026-09-18T19:41:10.176163
-updatedAt: 2026-09-18T19:41:10.176164
+updatedAt: 2026-09-19T11:12:01.658959
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_Zg3xFLU2hm
 authentication: {}
@@ -23,7 +23,7 @@ headers:
   id: null
 - enabled: true
   name: Authorization
-  value: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6Imp3a18wMW0ydHp3czFwZXE4c2U1MjUzY2N0emZ2biIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6ZmFsc2UsImF1ZCI6WyJ0YW5nbzpycGMiXSwiZXhwIjoxNzg5NzYxMDQ1LCJpYXQiOjE3ODk3NjA0NDUsImlzcyI6InRhbmdvOmludGVybmFsIiwic2lkIjoic2Vzc2lvbl8wMW0ydjBqNzV5ZTI0cnpiMmFiYThlcWFyMCIsInN1YiI6InVzZXJfMDFtMnR6d2hoMGZnNTkybXhjNTh5YzNwZ2QifQ.StmLf0IPUrNDUvAH7G95k1KB9M3Cx_b_IpOjzaGLY0pT72HF-J6eTZieaJF1kkIehPE8Dofp9mtp_HYCnt6xZSuxgo5oF94Po6TIYF7z3BspSlnXEc3JY94yFXxpwljnvSwm0f8KuP0LQw0MsAX9PxAW4NcQbwoXvHwxY2jsrJlRORGf_N9slNk6RrUBpsqcdH56NK42r7m-nCXxXerku4LGFeq0FK8w17z74Trg2OFWrL7t3Mjc4Il1k_CqTlMdbuFsB_pjCJXP6kQUgA5PY3Dwb9MEtOiRQAFsFeGle6AshHHoF8jk9ct54yswcuQHymzFAilb-lsIqQBSPdWk5Q
+  value: Bearer ${[ accessToken ]}
   id: null
 method: POST
 name: Auth SignOut (bearer)

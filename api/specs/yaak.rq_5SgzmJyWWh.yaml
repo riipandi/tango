@@ -2,14 +2,13 @@ type: http_request
 model: http_request
 id: rq_5SgzmJyWWh
 createdAt: 2026-09-18T19:38:03.314271
-updatedAt: 2026-09-18T19:38:03.314272
+updatedAt: 2026-09-19T11:18:25.618071
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_Zg3xFLU2hm
 authentication: {}
 authenticationType: none
 body:
-  bodyType: application/json
-  text: '{"identity":"first_admin","secret":"bench-password-1"}'
+  text: '{"identity":"${[ identity ]}","secret":"${[ password ]}"}'
 bodyType: application/json
 description: ''
 headers:
