@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_NvrcekKhMJ
 createdAt: 2026-09-19T12:33:57.271190
-updatedAt: 2026-09-19T17:36:22.938196
+updatedAt: 2026-09-19T18:35:11.965529
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tHTGrChyrG
 authentication: {}
@@ -17,7 +17,7 @@ body:
       }
     }
 bodyType: application/json
-description: ''
+description: ListClientApisRequest carries a nested PageRequest, so the window stays an object here.
 headers:
 - enabled: true
   name: Content-Type

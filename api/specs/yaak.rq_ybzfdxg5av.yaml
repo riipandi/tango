@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_ybzfdxg5av
 createdAt: 2026-09-19T12:34:35.688370
-updatedAt: 2026-09-19T14:52:58.410179
+updatedAt: 2026-09-19T18:33:27.022212
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_E6GycS3VZ9
 authentication: {}
@@ -10,13 +10,11 @@ authenticationType: null
 body:
   text: |-
     {
-      "page": {
-        "page": 1,
-        "limit": 20
-      }
+      "page": 1,
+      "limit": 20
     }
 bodyType: application/json
-description: ''
+description: Webhook List takes a flat PageRequest; the nested object form predates the pagination alignment with the REST envelope.
 headers:
 - enabled: true
   name: Content-Type

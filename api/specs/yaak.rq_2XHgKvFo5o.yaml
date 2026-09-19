@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_2XHgKvFo5o
 createdAt: 2026-09-19T12:34:49.068918
-updatedAt: 2026-09-19T14:53:04.659486
+updatedAt: 2026-09-19T18:34:54.250675
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_E6GycS3VZ9
 authentication: {}
@@ -17,7 +17,7 @@ body:
       }
     }
 bodyType: application/json
-description: ''
+description: ListDeliveriesRequest carries a nested PageRequest, so the window stays an object here.
 headers:
 - enabled: true
   name: Content-Type

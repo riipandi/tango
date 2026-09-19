@@ -2,13 +2,12 @@ type: http_request
 model: http_request
 id: rq_vf5GCcHKNY
 createdAt: 2026-09-18T23:54:46.763293
-updatedAt: 2026-09-19T14:54:04.479742
+updatedAt: 2026-09-19T18:35:21.970702
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LLg3fisc5c
 authentication: {}
 authenticationType: none
 body:
-  bodyType: application/json
   text: |-
     {
       "page": {
@@ -17,7 +16,7 @@ body:
       }
     }
 bodyType: application/json
-description: ''
+description: ListAuditLogsRequest carries a nested PageRequest, so the window stays an object here.
 headers:
 - enabled: true
   name: Content-Type

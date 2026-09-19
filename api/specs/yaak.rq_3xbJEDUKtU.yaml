@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_3xbJEDUKtU
 createdAt: 2026-09-19T12:33:32.176077
-updatedAt: 2026-09-19T14:55:42.443606
+updatedAt: 2026-09-19T18:33:17.779029
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sUMABSVJCr
 authentication: {}
@@ -10,13 +10,11 @@ authenticationType: null
 body:
   text: |-
     {
-      "page": {
-        "page": 1,
-        "limit": 20
-      }
+      "page": 1,
+      "limit": 20
     }
 bodyType: application/json
-description: ''
+description: PageRequest carries the window as flat int32 fields; the nested object form predates the pagination alignment with the REST envelope.
 headers:
 - enabled: true
   name: Content-Type
