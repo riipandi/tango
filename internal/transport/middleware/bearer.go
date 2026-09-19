@@ -11,21 +11,6 @@ import (
 	"github.com/riipandi/tango/internal/rpcerr"
 )
 
-// BearerAuth enforces the first-party RPC authentication contract:
-// protected Connect methods authenticate with
-// `Authorization: Bearer <internal-access-token>`. Cookie presence
-// alone never authorizes an RPC. Public RPC services are mounted
-// without this guard.
-func BearerAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := BearerFromHeader(r.Header); !ok {
-			writeConnectError(w, "unauthenticated", "bearer token required")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 // RPCSessionAuth authenticates a protected Connect service from the
 // bearer header only: the token is the internal short-lived access
 // JWT and resolves through the access authenticator, which

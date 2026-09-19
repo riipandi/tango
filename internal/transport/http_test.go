@@ -12,12 +12,10 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/account"
 	"github.com/riipandi/tango/modules/identity/user"
-	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,13 +33,8 @@ func testLogger() logger.Logger {
 	return loglayer.NewMock()
 }
 
-// testServer builds the HTTP server over Postgres-backed modules;
-// session-guarded routes see the denying guard unless overridden.
+// testServer builds the HTTP server over Postgres-backed modules.
 func testServer(t *testing.T, cfg *config.Config) *HTTPServer {
-	return newTestServer(t, cfg, denyAllGuard)
-}
-
-func newTestServer(t *testing.T, cfg *config.Config, guard kernel.Guard) *HTTPServer {
 	pg := testutils.StartPostgres(t.Context(), t)
 	if _, err := database.MigrateUp(t.Context(), pg.DSN); err != nil {
 		t.Fatalf("apply migrations: %v", err)
@@ -67,16 +60,7 @@ func newTestServer(t *testing.T, cfg *config.Config, guard kernel.Guard) *HTTPSe
 		MountAPI: func(r chi.Router) {
 			idModule.APIRoutes(r, identity.RouteGroups{})
 		},
-		RequireSession: guard,
 	}, cfg, testLogger(), nil, nil, nil)
-}
-
-// denyAllGuard rejects every request with the standard 401 envelope,
-// standing in for an absent session.
-func denyAllGuard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
-	})
 }
 
 func TestNewHTTPServerRoutes(t *testing.T) {

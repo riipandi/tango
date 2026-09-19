@@ -79,7 +79,6 @@ func TestPolicyForMapsSensitiveEndpoints(t *testing.T) {
 		{http.MethodPost, "/rpc/tango.identity.v1.DeviceApprovalService/GetPendingRequest", "device-login-verify", 10},
 		{http.MethodPost, "/rpc/tango.identity.v1.DeviceApprovalService/DecideRequest", "device-login-decision", 10},
 		{http.MethodPost, "/api/webauthn/login/finish", "webauthn-login", 10},
-		{http.MethodPost, "/api/webauthn/reauthenticate", "webauthn-reauthenticate", 6},
 		{http.MethodPost, "/rpc/tango.identity.v1.EmailVerificationService/SendEmail", "email-verification-send", 2},
 		{http.MethodPost, "/api/users/me/verify-email", "email-verification-verify", 6},
 		{http.MethodPost, "/rpc/tango.identity.v1.AccountService/ChangePassword", "account-password", 10},

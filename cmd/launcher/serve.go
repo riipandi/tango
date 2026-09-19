@@ -170,7 +170,6 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		MountRoot:      rt.MountRoot,
 		MountAPI:       rt.MountAPI,
 		MountRPC:       mountRPC(rt),
-		RequireSession: rt.SessionGuard(),
 	}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs), healthChecks)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	serveErr := make(chan error, 1)

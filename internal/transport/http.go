@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/web"
@@ -30,10 +29,6 @@ type RouteSet struct {
 	// MountRPC registers module-owned Connect services into the
 	// shared /rpc handler tree; nil leaves only the smoke service.
 	MountRPC func(r chi.Router)
-	// RequireSession is unused since the version cutover — the RPC
-	// surface authenticates via bearer. Kept for route-set parity
-	// with callers that still pass it.
-	RequireSession kernel.Guard
 }
 
 // NewHTTPServer wires middleware, core routes, and runtime routes.

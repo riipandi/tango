@@ -123,7 +123,7 @@ func New(deps Deps) (*Runtime, error) {
 	events.audit = rt.AuditLog
 
 	// Register outbound webhooks.
-	rt.Webhook = newWebhookModule(deps, queueClient, groups.Admin)
+	rt.Webhook = newWebhookModule(deps, queueClient)
 	events.webhook = rt.Webhook
 
 	// Register application configuration. The settings cipher shares
@@ -133,7 +133,7 @@ func New(deps Deps) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	rt.AppConfig = appconfig.New(rt.Jobs, appconfig.WithGuard(groups.Admin)).
+	rt.AppConfig = appconfig.New(rt.Jobs).
 		WithStore(appconfig.NewPostgresStore(deps.DB)).
 		WithEnvDefaults(appconfig.EnvDefaults(deps.Config)).
 		WithCipher(settingsCipher)
@@ -161,12 +161,6 @@ func New(deps Deps) (*Runtime, error) {
 // discovery) in registration order.
 func (rt *Runtime) MountRoot(r chi.Router) {
 	rt.Federation.Routes(r)
-}
-
-// SessionGuard returns the identity session guard for transport
-// routes upstream serves to any signed-in user.
-func (rt *Runtime) SessionGuard() kernel.Guard {
-	return rt.identityGroups.Self
 }
 
 // SessionAuthenticator exposes the session resolver for the RPC

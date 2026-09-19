@@ -83,7 +83,7 @@ func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service) 
 }
 
 // newWebhookModule builds the webhook service and queue processor.
-func newWebhookModule(deps Deps, queueClient *queue.Client, guard func(http.Handler) http.Handler) *webhook.Module {
+func newWebhookModule(deps Deps, queueClient *queue.Client) *webhook.Module {
 	service := webhook.NewService(
 		webhook.NewPostgresStore(deps.DB),
 		deps.DB,
@@ -93,7 +93,7 @@ func newWebhookModule(deps Deps, queueClient *queue.Client, guard func(http.Hand
 		webhook.WithSender(webhook.NewFetcherSender(deps.Fetcher)),
 	)
 	service.RegisterQueue(queueClient)
-	return webhook.New(service, webhook.WithGuard(guard))
+	return webhook.New(service)
 }
 
 // secretCipher derives the AES-256 key used to seal module secrets.

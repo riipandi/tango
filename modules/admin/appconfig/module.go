@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/responder"
@@ -21,7 +20,6 @@ const ModuleName = "appconfig"
 type Module struct {
 	store       Store
 	mailer      MailSender
-	guard       func(http.Handler) http.Handler
 	envDefaults map[string]string
 	cipher      *crypto.Cipher
 }
@@ -50,12 +48,6 @@ func (m *Module) WithStore(store Store) *Module {
 
 // Option configures the appconfig module at construction.
 type Option func(*Module)
-
-// WithGuard protects the admin routes; without one nothing
-// admin-facing mounts.
-func WithGuard(guard kernel.Guard) Option {
-	return func(m *Module) { m.guard = guard }
-}
 
 // WithEnvDefaults seeds the env-backed defaults (MAILER_*
 // values from the koanf config). Catalog defaults stay the bottom

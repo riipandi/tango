@@ -18,29 +18,25 @@ func next(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// TestBearerAuthRejectsAnonymous pins the RPC auth contract: protected
-// RPCs require an explicit bearer token; a missing, malformed, or
-// empty token yields the Connect unauthenticated error body.
-func TestBearerAuthRejectsAnonymous(t *testing.T) {
-	handler := BearerAuth(http.HandlerFunc(next))
+// TestRPCSessionAuthHeaderShapes pins that a malformed bearer header
+// answers the Connect unauthenticated error instead of falling back to
+// anything else: cookies stay token storage, never RPC authorization.
+func TestRPCSessionAuthHeaderShapes(t *testing.T) {
+	handler := RPCSessionAuth(stubAuth{})(http.HandlerFunc(next))
 
 	cases := []struct {
 		name   string
 		header string
 	}{
-		{"no header", ""},
 		{"bare scheme", "Bearer"},
 		{"empty token", "Bearer "},
 		{"wrong scheme", "Basic dXNlcjpwYXNz"},
-		{"cookie fallback rejected", ""},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/rpc/tango.identity.v1.UserService/ListUsers", nil)
-			if tc.header != "" {
-				req.Header.Set("Authorization", tc.header)
-			}
+			req.Header.Set("Authorization", tc.header)
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
 
@@ -49,19 +45,6 @@ func TestBearerAuthRejectsAnonymous(t *testing.T) {
 			assert.JSONEq(t, `{"code":"unauthenticated","message":"bearer token required"}`, w.Body.String())
 		})
 	}
-}
-
-// TestBearerAuthAcceptsToken pins that a well-formed bearer header
-// reaches the wrapped handler untouched.
-func TestBearerAuthAcceptsToken(t *testing.T) {
-	handler := BearerAuth(http.HandlerFunc(next))
-
-	req := httptest.NewRequest(http.MethodPost, "/rpc/tango.identity.v1.UserService/ListUsers", nil)
-	req.Header.Set("Authorization", "Bearer internal-access-token")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 // stubAuth resolves any non-empty token to a fixed principal.

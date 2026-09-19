@@ -3,7 +3,6 @@ package webhook
 import (
 	"context"
 
-	"github.com/riipandi/tango/internal/kernel"
 )
 
 // ModuleName identifies the webhook module in the registry.
@@ -25,14 +24,8 @@ func New(service *Service, _opts ...Option) *Module {
 	return &Module{service: service}
 }
 
-// Option configures the webhook module at construction. The guard
-// option is gone with the REST surface; it stays for wiring parity.
+// Option configures the webhook module at construction.
 type Option func(*Module)
-
-// WithGuard kept no behavior after the ConnectRPC cutover — REST
-// routes were removed; the mount guard comes from the composition
-// root.
-func WithGuard(kernel.Guard) Option { return func(*Module) {} }
 
 // Store exposes the persistence layer for the recurring log-pruning
 // job; the module itself never needs a wider surface.
