@@ -15,7 +15,9 @@ updated: 2026-09-19
 > invalid-argument errors via `internal/rpcerr`; TypeID-only path IDs; show-once secrets ride the
 > create/renew responses only. Integration tests run through the real transport with
 > testcontainers, covering every ApiKeyService method plus the missing/malformed/expired/revoked
-> bearer branches. Yaak evidence (folder `[ConnectRPC] System (smoke)`): Latest anonymous 200,
+> bearer branches. Yaak evidence (folder `Health Check` and `API Keys`; the workspace was
+> reorganised after this phase and `[ConnectRPC] System (smoke)` no longer exists): Latest anonymous
+> 200,
 > Current anonymous 401, Current with bearer 200, ApiKey Create 200 (show-once), ApiKey List 200,
 > ApiKey Create with a malformed expiry → invalid_argument 400. All three protocols that connect-go
 > installs are served on every procedure — Connect Protocol (what the browser uses), gRPC, and

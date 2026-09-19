@@ -30,9 +30,10 @@ updated: 2026-09-19
 >   descriptors; `buf.gen.yaml` drops the connect-es plugin and `*_connect.ts` outputs are gone.
 > - **Tests**: Go bridge/rotation/revocation integration tests (testcontainers) plus 9 vitest
 >   cases (new `app` vitest project) covering bootstrap, silent refresh, typed `AuthError`,
->   sign-out fallback, header injection, and anonymous calls. Yaak evidence in
->   `[ConnectRPC] System (smoke)`: SignIn 200 + cookies, bridge 200 + access token, GetSession
->   (bearer) 200, SignOut 200 + cookie clears, and the revoked bearer answers 401 afterwards.
+>   sign-out fallback, header injection, and anonymous calls. Yaak evidence (the workspace was
+>   reorganised after this phase; the smoke folder is gone): SignIn 200 + cookies, bridge 200 +
+>   access token, GetSession (bearer) 200, SignOut 200 + cookie clears, and the revoked bearer
+>   answers 401 afterwards.
 > - **Deferred by design**: tasks 11–12 (REST SDK method removal) and 14–16 (TanStack call-site
 >   migration) belong to the domain cutover phases — no SPA exists yet; `api/client` is documented
 >   as REST-only (README) and stays untouched until cutover deletes each route.

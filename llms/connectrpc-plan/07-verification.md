@@ -45,7 +45,8 @@ updated: 2026-09-19
 - All first-party application calls use ConnectRPC.
 - All external protocol integrations use their required HTTP contracts.
 - No internal REST compatibility layer remains.
-- Generated code is reproducible and checked in according to repository convention.
+- Generated code is reproducible from a clean checkout by `task rpc:generate`; it is a gitignored
+  build output and is never committed.
 - Yaak requests are created, updated, and sent through Yaak MCP; no manual Yaak export edits are
   used as contract evidence.
 - Full test, lint, format, vet, and typecheck gates pass.

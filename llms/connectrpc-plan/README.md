@@ -102,8 +102,26 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
 
 ## Completion criteria
 
-The refactor is complete when every endpoint in the reference has an explicit protocol decision,
-all ConnectRPC services have an explicit service/method matrix, generated Go and TypeScript clients, all first-party callers use the
-Connect client, internal REST routes are removed, protocol REST tests remain green, Yaak request
-evidence is current, every phase has its atomic commit, and the full Go, frontend, typecheck, lint,
-format, and verification gates pass.
+The transport refactor is complete. Every criterion below holds at `HEAD`:
+
+- every endpoint in the reference has an explicit protocol decision;
+- every ConnectRPC service has an explicit service/method matrix, pinned by
+  `internal/registry.TestConnectServiceInventory` and `TestRPCMatrixDocumentsEveryProcedure`;
+- generated Go and TypeScript are reproducible from a clean checkout by `task rpc:generate`
+  (gitignored build outputs, never committed);
+- internal REST routes are removed, pinned by `internal/registry.TestRetainedRESTInventory`;
+- protocol REST tests remain green;
+- Yaak request evidence is current;
+- every phase has its atomic commit;
+- the full Go, frontend, typecheck, lint, format, and verification gates pass.
+
+Two criteria are deliberately **not** in scope for this plan:
+
+- **first-party callers use the Connect client** — the SPA does not exist yet (`index.html:97` still
+  comments out the app entry), so there is no caller to migrate. This is carried by the caller
+  migration in the SPA work, not by the transport refactor.
+- **`api/client` wraps the RPC surface** — `api/client` is the REST-only SDK for retained HTTP and
+  protocol endpoints, by decision.
+
+The post-implementation audit of this plan lives in
+[`../remediation-connectrpc/`](../remediation-connectrpc/README.md); its findings are the open work.

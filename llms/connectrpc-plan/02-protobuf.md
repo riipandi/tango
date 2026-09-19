@@ -63,7 +63,8 @@ more focused files. Do not create nested contract directories under `api/connect
 - `api/connect/*.proto` contains contracts only: no generated code, server implementation, client
   wrappers, or transport-specific helper logic.
 - Every Connect service has an explicit package and method name. The mapping is recorded in the
-  endpoint reference before generated code is committed.
+  endpoint reference before the generated code is produced (generated output is a gitignored build
+  artifact, never committed).
 - Pagination has one shared message shape across internal list RPCs.
 - Empty success responses use `google.protobuf.Empty` or an explicit result only when metadata is
   needed; do not encode HTTP 204 semantics into every RPC.

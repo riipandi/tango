@@ -460,8 +460,9 @@ from `/api` once its replacement and callers are verified.
   configs, local tooling — gitignored); `test`, `dev`, `build`, `build:release`, `release`, and
   `typecheck` depend on the generation task, and `task rpc:stale` fails when the contracts change
   without regeneration.
-- TypeScript runtime: `@bufbuild/protobuf` + `@connectrpc/connect` (pinned devDeps; plugins
-  `protoc-gen-es` / `protoc-gen-connect-es` resolve through `pnpm exec`).
+- TypeScript runtime: `@bufbuild/protobuf` + `@connectrpc/connect` (pinned devDeps; the
+  `protoc-gen-es` plugin resolves through `pnpm exec` and emits the service descriptors —
+  connect-es v2 removed the separate `protoc-gen-connect-es` plugin).
 - Task targets: `rpc:generate`, `rpc:lint`, `rpc:breaking`, `rpc:stale`.
 
 ## Connect error mapping (contract)
@@ -492,24 +493,27 @@ Webhooks [Tango], Sign-up & Setup, User Management, Account (me), One-Time Acces
 Verification, Passkeys (admin), User Groups, OIDC (Clients/Secrets/Logo/Authorizations/Protocol/
 SCIM Providers/CIMD Access), APIs (API Management/Client Grants/CIMD), API Keys, Application
 Configuration, Device Login, WebAuthn, SCIM, Version, Health Check, Well Known, OAuth.
-Connect Protocol requests do not exist yet; each implementing phase creates
-`POST /rpc/<package>.<Service>/<Method>` requests under a new `[ConnectRPC] <Module>` folder tree
-via Yaak MCP. A matrix row without a sent Yaak request is not complete.
+Connect Protocol requests did not exist when this plan was written; each implementing phase created
+`POST /rpc/<package>.<Service>/<Method>` requests via Yaak MCP. The workspace was later reorganised
+by topic (`[Tango] Account`, `[Tango] Authentication`, `[Tango] Webhooks`, and per-domain folders),
+so the `[ConnectRPC] <Module>` tree described here no longer exists. A matrix row without a sent
+Yaak request is not complete.
 
-## Ambiguities
+## Ambiguity resolutions
 
-A1, A2, A3, and A5 remain open; A4 is resolved below. Resolved entries stay in place so the
-decision is traceable rather than silently dropped.
+A4 and A5 are resolved below. A1, A2, and A3 are closed as historical: the routes they question were
+deleted when the ConnectRPC cutover retired them, so no decision is outstanding.
 
-- **A1 — `GET /api/oidc/authorized-clients`**: live admin-wide listing, absent from the route
-  tables. Owner module (federation) is clear; confirm intended consumer and pagination before the
-  `OidcConsentService` proto is frozen.
-- **A2 — `GET /api/oidc/clients/{id}/scim-service-provider`**: per-client binding lookup distinct
-  from `/api/scim/service-provider` CRUD. Confirm response shape ownership (federation vs webhook
-  scimsync) before the proto split.
-- **A3 — `/api/apis/{id}` trailing-slash chi pattern**: `chi.Walk` reports `GET/PUT/DELETE
-  /api/apis/{id}/` (trailing slash) while sibling subpaths register without it. Confirm the handler
-  registration is intentional before recording the canonical path shape.
+- **A1 — `GET /api/oidc/authorized-clients`** — **closed**: the admin-wide listing became
+  `OidcConsentService.ListAllAuthorizedClients` (`/rpc`, admin-guarded) and the REST route was
+  removed; the matrix carries the row.
+- **A2 — `GET /api/oidc/clients/{id}/scim-service-provider`** — **closed**: the per-client binding
+  became `OidcClientService.GetScimProvider`, whose scimsync store adapts onto the lookup port; the
+  REST route was removed.
+- **A3 — `/api/apis/{id}` trailing-slash chi pattern** — **closed as historical**: `/api/apis*` was
+  deleted with the API-registry cutover (`internal/registry/rpc_inventory_test.go` lists it under
+  `retiredREST`), so the canonical path shape question no longer applies. The ConnectRPC
+  replacement is `ApiService`.
 - **A4 — `PATCH /api/account` vs `PUT /api/users/me`** — **resolved**: both are intentional, and they
   own the same field set. `AccountService.UpdateAccount` and `UserService.UpdateMe` both take
   `UpdateProfileRequest` and both call `user.PostgresStore.UpdateProfile` with `first_name`,
@@ -517,5 +521,6 @@ decision is traceable rather than silently dropped.
   or admin flags. The pair exists because each replaces a distinct legacy route that the SPA and
   the upstream client already call, and collapsing them would break one of those callers for no
   contract gain. New self-service profile writes should extend both or neither.
-- **A5 — `POST /authorize`**: live but undocumented in the tables above (upstream parity for
-  form-post authorize?). Protocol surface stays REST either way; document the method set.
+- **A5 — `POST /authorize`** — **resolved**: the route serves both `GET` and `POST`
+  (`modules/federation/oidc/handler.go:24-25`); `POST` is the form-post entry the provider needs for
+  upstream parity. It stays a root-path REST protocol surface.
