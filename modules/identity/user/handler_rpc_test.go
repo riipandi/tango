@@ -78,7 +78,7 @@ func TestUserRPCAdminLifecycle(t *testing.T) {
 	// Create → the generated User view.
 	w := rpcPost(t, h, "CreateUser", "admin-1", `{"username":"`+"rpc_lf_"+uniqueStamp()+`","email":"`+"lf-"+uniqueStamp()+`@example.com"}`)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), `"displayName"`)
+	assert.Contains(t, w.Body.String(), `"display_name"`)
 
 	// ListUsers echoes pagination metadata.
 	w = rpcPost(t, h, "ListUsers", "admin-1", `{"page":1,"limit":10}`)

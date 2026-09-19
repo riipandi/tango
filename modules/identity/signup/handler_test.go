@@ -117,7 +117,7 @@ func TestSetupAvailabilityAndInitialAdmin(t *testing.T) {
 
 	w = rpcPost(t, h, "SetupInitialAdmin", "", `{"username":"root_admin_`+stamp()+`","email":"root-`+stamp()+`@example.com"}`)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), `"isAdmin":true`)
+	assert.Contains(t, w.Body.String(), `"is_admin":true`)
 
 	// The response rides the refresh and access cookies.
 	cookies := w.Result().Cookies()

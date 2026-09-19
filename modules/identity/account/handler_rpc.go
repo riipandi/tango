@@ -29,7 +29,7 @@ const rfc3339 = time.RFC3339
 // access token, so the composition root wraps it with the session
 // middleware.
 func (s *Service) RPCService() (string, http.Handler) {
-	prefix, handler := identityv1connect.NewAccountServiceHandler(&accountRPC{service: s}, rpcerr.RecoverOption())
+	prefix, handler := identityv1connect.NewAccountServiceHandler(&accountRPC{service: s}, rpcerr.Options()...)
 	return prefix, handler
 }
 

@@ -23,7 +23,7 @@ const versionCurrentProcedure = "/tango.system.v1.VersionService/Current"
 // protected methods. The handler-level principal check stays as a
 // defense in depth for callers that bypass the interceptor.
 func VersionRPCService(latest LatestVersionSource, auth kernel.AccessAuthenticator) (string, http.Handler) {
-	opts := []connect.HandlerOption{}
+	opts := rpcerr.Options()
 	if auth != nil {
 		opts = append(opts, connect.WithInterceptors(bearerInterceptor{auth: auth}))
 	}

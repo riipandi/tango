@@ -47,7 +47,7 @@ type consentRPC struct {
 // RPCService returns the client administration registration; the
 // composition root wraps it with the admin guard.
 func (f Feature) RPCService() (string, http.Handler) {
-	prefix, handler := federationv1connect.NewOidcClientServiceHandler(&clientRPC{service: f.service}, rpcerr.RecoverOption())
+	prefix, handler := federationv1connect.NewOidcClientServiceHandler(&clientRPC{service: f.service}, rpcerr.Options()...)
 	return prefix, handler
 }
 
@@ -65,7 +65,7 @@ func (f Feature) ConsentRPCService() (string, http.Handler) {
 		federationv1connect.OidcConsentServiceRevokeMyAuthorizedClientProcedure: true,
 		federationv1connect.OidcConsentServiceListMyClientsProcedure:            true,
 	}
-	opts := []connect.HandlerOption{rpcerr.RecoverOption()}
+	opts := rpcerr.Options()
 	if f.service.access != nil {
 		opts = append(opts, connect.WithInterceptors(middleware.RPCPrincipalGuard(f.service.access, admin, self)))
 	}

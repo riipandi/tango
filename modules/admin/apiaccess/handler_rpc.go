@@ -33,7 +33,7 @@ type apiRPC struct { //nolint:staticcheck // generated interface names
 // RPCService returns the Connect registration for the API registry
 // surface.
 func (s *Service) RPCService() (string, http.Handler) {
-	prefix, handler := adminv1connect.NewApiServiceHandler(&apiRPC{service: s}, rpcerr.RecoverOption())
+	prefix, handler := adminv1connect.NewApiServiceHandler(&apiRPC{service: s}, rpcerr.Options()...)
 	return prefix, handler
 }
 

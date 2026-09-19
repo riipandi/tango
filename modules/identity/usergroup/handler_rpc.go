@@ -24,7 +24,7 @@ import (
 // the whole service is admin-only, so the composition root's admin
 // guard wraps it.
 func (s *Service) RPCService() (string, http.Handler) {
-	prefix, handler := identityv1connect.NewUserGroupServiceHandler(&groupRPC{service: s}, rpcerr.RecoverOption())
+	prefix, handler := identityv1connect.NewUserGroupServiceHandler(&groupRPC{service: s}, rpcerr.Options()...)
 	return prefix, handler
 }
 

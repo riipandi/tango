@@ -37,10 +37,8 @@ func (s *Service) RPCService() (string, http.Handler) {
 		adminv1connect.ApiKeyServiceCreateProcedure: true,
 		adminv1connect.ApiKeyServiceRenewProcedure:  true,
 	}
-	prefix, handler := adminv1connect.NewApiKeyServiceHandler(&apiKeyRPC{service: s},
-		connect.WithInterceptors(middleware.RPCMachineDenied(sessionOnly)),
-		rpcerr.RecoverOption(),
-	)
+	opts := append(rpcerr.Options(), connect.WithInterceptors(middleware.RPCMachineDenied(sessionOnly)))
+	prefix, handler := adminv1connect.NewApiKeyServiceHandler(&apiKeyRPC{service: s}, opts...)
 	return prefix, handler
 }
 

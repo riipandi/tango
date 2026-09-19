@@ -27,7 +27,7 @@ type claimRPC struct {
 // RPCService returns the Connect registration for the custom claim
 // surface.
 func (s *Service) RPCService() (string, http.Handler) {
-	prefix, handler := identityv1connect.NewCustomClaimServiceHandler(&claimRPC{service: s}, rpcerr.RecoverOption())
+	prefix, handler := identityv1connect.NewCustomClaimServiceHandler(&claimRPC{service: s}, rpcerr.Options()...)
 	return prefix, handler
 }
 

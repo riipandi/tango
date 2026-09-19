@@ -103,13 +103,11 @@ func (s *Service) RPCService(auth kernel.AccessAuthenticator) (string, http.Hand
 		identityv1connect.UserServiceUpdateMyProfilePictureProcedure: true,
 		identityv1connect.UserServiceDeleteMyProfilePictureProcedure: true,
 	}
-	prefix, handler := identityv1connect.NewUserServiceHandler(&userRPC{service: s},
-		connect.WithInterceptors(
-			middleware.RPCMachineDenied(self),
-			middleware.RPCPrincipalGuard(auth, admin, self),
-		),
-		rpcerr.RecoverOption(),
-	)
+	opts := append(rpcerr.Options(), connect.WithInterceptors(
+		middleware.RPCMachineDenied(self),
+		middleware.RPCPrincipalGuard(auth, admin, self),
+	))
+	prefix, handler := identityv1connect.NewUserServiceHandler(&userRPC{service: s}, opts...)
 	return prefix, handler
 }
 

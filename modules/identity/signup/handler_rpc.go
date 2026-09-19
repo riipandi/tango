@@ -32,10 +32,8 @@ func (s *Service) RPCService(secure bool, access kernel.AccessAuthenticator) (st
 		identityv1connect.SignupServiceCreateSignupTokenProcedure: true,
 		identityv1connect.SignupServiceDeleteSignupTokenProcedure: true,
 	}
-	prefix, handler := identityv1connect.NewSignupServiceHandler(&signupRPC{service: s, secure: secure},
-		connect.WithInterceptors(middleware.RPCPrincipalGuard(access, admin, nil)),
-		rpcerr.RecoverOption(),
-	)
+	opts := append(rpcerr.Options(), connect.WithInterceptors(middleware.RPCPrincipalGuard(access, admin, nil)))
+	prefix, handler := identityv1connect.NewSignupServiceHandler(&signupRPC{service: s, secure: secure}, opts...)
 	return prefix, handler
 }
 

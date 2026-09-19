@@ -27,10 +27,8 @@ func (s *Service) RPCService(access kernel.AccessAuthenticator) (string, http.Ha
 		identityv1connect.OneTimeAccessServiceAdminSendEmailProcedure:  true,
 		identityv1connect.OneTimeAccessServiceAdminIssueTokenProcedure: true,
 	}
-	prefix, handler := identityv1connect.NewOneTimeAccessServiceHandler(&otaRPC{service: s},
-		connect.WithInterceptors(middleware.RPCPrincipalGuard(access, admin, nil)),
-		rpcerr.RecoverOption(),
-	)
+	opts := append(rpcerr.Options(), connect.WithInterceptors(middleware.RPCPrincipalGuard(access, admin, nil)))
+	prefix, handler := identityv1connect.NewOneTimeAccessServiceHandler(&otaRPC{service: s}, opts...)
 	return prefix, handler
 }
 

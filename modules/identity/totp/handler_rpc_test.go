@@ -119,7 +119,7 @@ func TestMfaRPCLifecycle(t *testing.T) {
 
 	w = rpcPost(t, h, "ConfirmTotp", `{"code":"`+codeAt(t, secret, time.Now().UTC())+`"}`, "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), `"recoveryCodes"`)
+	assert.Contains(t, w.Body.String(), `"recovery_codes"`)
 
 	// Re-confirm → already_exists.
 	w = rpcPost(t, h, "ConfirmTotp", `{"code":"000000"}`, "")

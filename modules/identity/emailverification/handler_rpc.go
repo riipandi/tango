@@ -21,10 +21,8 @@ func (s *Service) RPCService(access kernel.AccessAuthenticator) (string, http.Ha
 	self := map[string]bool{
 		identityv1connect.EmailVerificationServiceSendEmailProcedure: true,
 	}
-	prefix, handler := identityv1connect.NewEmailVerificationServiceHandler(&emailvRPC{service: s},
-		connect.WithInterceptors(middleware.RPCPrincipalGuard(access, nil, self)),
-		rpcerr.RecoverOption(),
-	)
+	opts := append(rpcerr.Options(), connect.WithInterceptors(middleware.RPCPrincipalGuard(access, nil, self)))
+	prefix, handler := identityv1connect.NewEmailVerificationServiceHandler(&emailvRPC{service: s}, opts...)
 	return prefix, handler
 }
 

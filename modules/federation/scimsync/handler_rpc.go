@@ -29,7 +29,7 @@ type providerRPC struct {
 // RPCService returns the Connect registration for the SCIM provider
 // surface.
 func (f *APIFeature) RPCService() (string, http.Handler) {
-	prefix, handler := federationv1connect.NewScimProviderServiceHandler(&providerRPC{service: f.service}, rpcerr.RecoverOption())
+	prefix, handler := federationv1connect.NewScimProviderServiceHandler(&providerRPC{service: f.service}, rpcerr.Options()...)
 	return prefix, handler
 }
 

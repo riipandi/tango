@@ -30,10 +30,8 @@ func (m *Module) RPCService(access kernel.AccessAuthenticator) (string, http.Han
 		adminv1connect.ApplicationConfigurationServiceUpdateProcedure:    true,
 		adminv1connect.ApplicationConfigurationServiceTestEmailProcedure: true,
 	}
-	prefix, handler := adminv1connect.NewApplicationConfigurationServiceHandler(&configRPC{module: m},
-		connect.WithInterceptors(middleware.RPCPrincipalGuard(access, admin, nil)),
-		rpcerr.RecoverOption(),
-	)
+	opts := append(rpcerr.Options(), connect.WithInterceptors(middleware.RPCPrincipalGuard(access, admin, nil)))
+	prefix, handler := adminv1connect.NewApplicationConfigurationServiceHandler(&configRPC{module: m}, opts...)
 	return prefix, handler
 }
 

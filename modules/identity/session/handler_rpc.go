@@ -27,10 +27,8 @@ func (s *Service) RPCService() (string, http.Handler) {
 		identityv1connect.AuthServiceSignOutProcedure:    true,
 		identityv1connect.AuthServiceGetSessionProcedure: true,
 	}
-	prefix, handler := identityv1connect.NewAuthServiceHandler(&authRPC{service: s},
-		connect.WithInterceptors(middleware.RPCPrincipalGuard(s, protected, nil)),
-		rpcerr.RecoverOption(),
-	)
+	opts := append(rpcerr.Options(), connect.WithInterceptors(middleware.RPCPrincipalGuard(s, protected, nil)))
+	prefix, handler := identityv1connect.NewAuthServiceHandler(&authRPC{service: s}, opts...)
 	return prefix, handler
 }
 

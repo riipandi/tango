@@ -35,10 +35,8 @@ func (m *Module) RPCService(access kernel.AccessAuthenticator) (string, http.Han
 	self := map[string]bool{
 		adminv1connect.AuditLogServiceListProcedure: true,
 	}
-	prefix, handler := adminv1connect.NewAuditLogServiceHandler(&logRPC{module: m},
-		connect.WithInterceptors(middleware.RPCPrincipalGuard(access, admin, self)),
-		rpcerr.RecoverOption(),
-	)
+	opts := append(rpcerr.Options(), connect.WithInterceptors(middleware.RPCPrincipalGuard(access, admin, self)))
+	prefix, handler := adminv1connect.NewAuditLogServiceHandler(&logRPC{module: m}, opts...)
 	return prefix, handler
 }
 

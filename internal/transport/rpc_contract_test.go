@@ -37,14 +37,15 @@ func TestUserMessageMatchesRESTDTOShape(t *testing.T) {
 	assert.True(t, msg.GetIsAdmin())
 
 	// Round-trip: the generated message re-emits the same field set in
-	// snake_case. Proto JSON omits default-valued scalars (disabled
-	// false never appears) — RPC consumers apply proto default
-	// semantics instead of the REST "always present" convention.
-	out, err := protojson.MarshalOptions{}.Marshal(&msg)
+	// snake_case, matching the codec the RPC handlers register. Proto
+	// JSON omits default-valued scalars (disabled false never appears)
+	// — RPC consumers apply proto default semantics instead of the
+	// REST "always present" convention.
+	out, err := (protojson.MarshalOptions{UseProtoNames: true}).Marshal(&msg)
 	require.NoError(t, err)
 	var back map[string]any
 	require.NoError(t, json.Unmarshal(out, &back))
-	for _, field := range []string{"id", "username", "email", "displayName", "isAdmin", "createdAt"} {
+	for _, field := range []string{"id", "username", "email", "display_name", "is_admin", "created_at"} {
 		assert.Contains(t, back, field)
 	}
 	assert.NotContains(t, back, "disabled", "proto JSON omits default-valued scalars")

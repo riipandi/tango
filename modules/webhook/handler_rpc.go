@@ -30,7 +30,7 @@ const defaultTestEvent = "webhook.test"
 // RPCService returns the Connect registration for the webhook
 // surface.
 func (m *Module) RPCService() (string, http.Handler) {
-	prefix, handler := webhookv1connect.NewWebhookServiceHandler(&hookRPC{service: m.service}, rpcerr.RecoverOption())
+	prefix, handler := webhookv1connect.NewWebhookServiceHandler(&hookRPC{service: m.service}, rpcerr.Options()...)
 	return prefix, handler
 }
 

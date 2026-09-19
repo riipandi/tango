@@ -23,7 +23,7 @@ type approvalRPC struct {
 // RPCService returns the Connect registration for the device approval
 // surface.
 func (f Feature) RPCService() (string, http.Handler) {
-	prefix, handler := identityv1connect.NewDeviceApprovalServiceHandler(&approvalRPC{service: f.service}, rpcerr.RecoverOption())
+	prefix, handler := identityv1connect.NewDeviceApprovalServiceHandler(&approvalRPC{service: f.service}, rpcerr.Options()...)
 	return prefix, handler
 }
 

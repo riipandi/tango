@@ -167,7 +167,7 @@ func TestRPCVersionAuthBranches(t *testing.T) {
 
 	w = post("/rpc/tango.system.v1.VersionService/Latest", "")
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "latestVersion")
+	assert.Contains(t, w.Body.String(), "latest_version")
 
 	// Expired/revoked tokens are indistinguishable from unknown ones.
 	w = post("/rpc/tango.system.v1.VersionService/Current", "revoked-token")

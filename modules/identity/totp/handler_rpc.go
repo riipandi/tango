@@ -32,10 +32,8 @@ func (s *Service) RPCService(secure bool, access kernel.AccessAuthenticator) (st
 		identityv1connect.MfaServiceRotateRecoveryCodesProcedure: true,
 		identityv1connect.MfaServiceDisableTotpProcedure:         true,
 	}
-	prefix, handler := identityv1connect.NewMfaServiceHandler(&mfaRPC{service: s, secure: secure},
-		connect.WithInterceptors(middleware.RPCPrincipalGuard(access, nil, self)),
-		rpcerr.RecoverOption(),
-	)
+	opts := append(rpcerr.Options(), connect.WithInterceptors(middleware.RPCPrincipalGuard(access, nil, self)))
+	prefix, handler := identityv1connect.NewMfaServiceHandler(&mfaRPC{service: s, secure: secure}, opts...)
 	return prefix, handler
 }
 

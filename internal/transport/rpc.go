@@ -25,7 +25,7 @@ func newRPCRouter(mount func(chi.Router)) chi.Router {
 
 	prefix, smoke := systemv1connect.NewHealthServiceHandler(
 		&healthSmokeService{},
-		rpcerr.RecoverOption(),
+		rpcerr.Options()...,
 	)
 	r.Handle(prefix+"*", smoke)
 
