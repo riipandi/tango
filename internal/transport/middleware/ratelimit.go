@@ -180,15 +180,33 @@ func RateLimit(store RateLimitStore) func(http.Handler) http.Handler {
 	}
 }
 
-// rateKey builds the database key for a client IP and policy.
+// rateKey builds the database key for a client IP and policy. Policy
+// names and IPv6 addresses both contain characters the rate_limits
+// key check rejects, so every byte outside its alphabet is normalized:
+// a key that fails the check makes the insert fail, and the limiter
+// treats that as a store error and silently allows the request.
 func rateKey(r *http.Request, policy string) string {
 	ip := clientIP(r)
 	if ip == "" {
 		return ""
 	}
-	ip = strings.ReplaceAll(ip, ".", "_")
-	ip = strings.ReplaceAll(ip, ":", "_")
-	return fmt.Sprintf("rl_%s_%s", policy, ip)
+	return fmt.Sprintf("rl_%s_%s", sanitizeKeyPart(policy), sanitizeKeyPart(ip))
+}
+
+// sanitizeKeyPart maps a key fragment onto the [a-z0-9_:] alphabet the
+// rate_limits key constraint allows.
+func sanitizeKeyPart(part string) string {
+	var b strings.Builder
+	b.Grow(len(part))
+	for _, c := range strings.ToLower(part) {
+		switch {
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9', c == '_', c == ':':
+			b.WriteRune(c)
+		default:
+			b.WriteRune('_')
+		}
+	}
+	return b.String()
 }
 
 // clientIP resolves the peer and trusts forwarded IPs from loopback only.

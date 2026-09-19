@@ -153,7 +153,9 @@ func TestRateLimitEnforcesPolicyBudgets(t *testing.T) {
 	assert.Equal(t, 1, limiter.calls)
 	assert.Equal(t, 20, limiter.max)
 	assert.Equal(t, 60, limiter.window)
-	assert.True(t, strings.HasPrefix(limiter.key, "rl_sign-in_"))
+	// The key must survive the rate_limits key check, which rejects a
+	// hyphen: the policy name is normalized, not copied verbatim.
+	assert.Equal(t, "rl_sign_in_192_0_2_1", limiter.key)
 
 	// Unthrottled routes never touch the store.
 	limiter = &fakeLimiter{}
