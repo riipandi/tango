@@ -362,7 +362,7 @@ the local admin password `@dmin123`, then the `/api/auth/token` bridge):
 | `AccountService/UpdateAccount` with `X-API-KEY: pik_bogus` alone | 401 `invalid or expired token` (task 01.1 boundary holds) |
 | `AuthService/ForgotPassword`, `AuthService/ResetPassword` | 501 `unimplemented` |
 
-Note: the credential committed in `api/specs/yaak.rq_5SgzmJyWWh.yaml` is `@admin123`, which the local
+Note: the credential committed in `api/specs/yaak.rq_5SgzmJyWWh.yaml` is `@dmin123`, which the local
 server rejects. The working local password is `@dmin123`. Task 05.2/06.2 must correct the request
 rather than the password.
 

@@ -98,7 +98,7 @@ body:
   text: |-
     {
       "identity": "admin@example.com",
-      "secret": "@admin123"
+      "secret": "@dmin123"
     }
 ```
 
@@ -147,7 +147,7 @@ change from export churn.
      `REPLACE_*` placeholder nor a `${[...]}` environment reference;
    - a `Bearer eyJ` literal;
    - an API-key literal (`pik_`, `sk_`) outside a placeholder.
-5. Verify the guard by reintroducing `@admin123` locally and confirming the check fails.
+5. Verify the guard by reintroducing `@dmin123` locally and confirming the check fails.
 
 Validation: the guard fails on the literal and passes on the reverted tree.
 

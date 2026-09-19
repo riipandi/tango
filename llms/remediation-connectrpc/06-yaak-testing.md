@@ -142,7 +142,7 @@ manual copy. Re-running the collection after a server restart needs no editing.
 3. Define the environment variable `accessToken` as a response tag rather than the literal `dummy`:
    `response.body.path(request='rq_7bY6RFnbv9', path='$.access_token')`. Apply it to the
    `Development` environment first, then to `Proxy 3000`, `Proxy 3443`, and `Proxy 8443`.
-4. Set the real sign-in password. The request currently hardcodes `admin@example.com` / `@admin123`,
+4. Set the real sign-in password. The request currently hardcodes `admin@example.com` / `@dmin123`,
    which **fails against the local stack** (`401 invalid credentials`, verified). Move both to
    environment variables (`${[ adminIdentity ]}`, `${[ adminPassword ]}`) and store the password with
    `secure()` so it stays encrypted. This also resolves finding F14.
@@ -322,5 +322,5 @@ Direct access notes:
 - The local database is the `postgres` database (`DATABASE_URL` in `.env.container`), not a
   `tango` database. Query it as `docker compose exec -T pgsql psql -U postgres -d postgres`.
 - At audit time the only seeded user was `admin@example.com` (admin, has a password row), and its
-  password is **not** `@admin123` — the credential now committed in the sign-in request answers
+  password is **not** `@dmin123` — the credential now committed in the sign-in request answers
   `401 invalid credentials`. Task 06.2 step 4 must resolve this before any protected row can pass.

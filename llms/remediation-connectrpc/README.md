@@ -62,7 +62,7 @@ documentation contradicts behavior, **P2** = residue or hygiene.
 | F11 | P2 | Plan documents carry stale claims: generated Go "committed", `protoc-gen-connect-es`, the removed Yaak folder `[ConnectRPC] System (smoke)`, and the unresolved A1–A5 block | 04.1 — **resolved** (`1371953`) |
 | F12 | P2 | `AGENTS.md` has zero ConnectRPC coverage and still points at `llms/phase-*.md`, which does not exist | 04.2 — **resolved** (`6bcc4af`) |
 | F13 | P2 | Pagination shape is inconsistent: some list RPCs take `common.v1.PageRequest` directly, others embed it | 05.1 |
-| F14 | P1 | Tracked Yaak requests carry a plaintext password at `HEAD`: `api/specs/yaak.rq_5SgzmJyWWh.yaml` holds `"secret": "@admin123"` | 05.2 |
+| F14 | P1 | Tracked Yaak requests carry a plaintext password at `HEAD`: `api/specs/yaak.rq_5SgzmJyWWh.yaml` holds `"secret": "@dmin123"` | 05.2 |
 | F15 | P2 | `llms/connectrpc-plan/` is marked `status: done` while its own completion criteria are unmet (no SPA, so the caller-migration criterion cannot pass) | 04.1 — **resolved**: criteria rewritten, the two out-of-scope ones named | 05.3 |
 | F16 | P1 | The rate limiter was silently disabled on **every** policy: `rateKey` embedded the policy name verbatim (`forgot-password`), and the `rate_limits` key check only accepts `[a-z0-9_:]`, so each insert raised `23514` and the middleware failed open | 02.6 |
 | Y1 | P0 | The Yaak workspace header `X-API-KEY: ${[ apiKey ]}` was inherited by every request, so "anonymous" evidence carried a machine credential — **removed during the audit**, task 06.1 keeps it scoped | 06.1 |
