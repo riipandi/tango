@@ -5,9 +5,12 @@ updated: 2026-09-19
 
 # ConnectRPC Refactor Endpoint Reference
 
-> Scope addendum (2026-09-19): sections below `Connect service and method matrix` are the phase-00
-> decision record. The route tables above predate that record; where they disagree with the live
-> route inventory, the matrix tables and the inventory diff are authoritative.
+> Scope addendum (2026-09-19): this file is the phase-00 decision record. The route tables in the
+> first half describe the pre-cutover world (they are what the matrix replaced); the
+> `Connect service and method matrix` below is the authoritative list of live procedures, and
+> `internal/registry.TestConnectServiceInventory` plus `TestRetainedRESTInventory` pin what the
+> running composition root actually mounts. `llms/endpoint-reference.md` is the row-by-row
+> contract with current evidence.
 
 This is the transport decision list for the refactor. `ConnectRPC` means the first-party API is
 served under `/rpc/`. `REST` means the existing HTTP route remains authoritative under `/api/` or
@@ -143,8 +146,8 @@ running server. Request names should use `<METHOD> <path>` for REST and
 | GET, PUT | `/api/user-groups/{id}/users` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
 | PUT | `/api/user-groups/{id}/allowed-oidc-clients` | ConnectRPC | Admin console/internal | REST route removed in phase 05. |
 | GET, PUT, DELETE | `/api/users/{id}/webauthn-credentials/*` | ConnectRPC | Admin console/internal | Management CRUD is internal; ceremony endpoints remain REST. |
-| POST | `/api/users/{id}/one-time-access-email` | ConnectRPC | Admin console/internal | Admin action; still REST until its cutover. |
-| POST | `/api/users/{id}/one-time-access-token` | ConnectRPC | Admin console/internal | Raw token remains show-once; still REST until its cutover. |
+| POST | `/api/users/{id}/one-time-access-email` | ConnectRPC | Admin console/internal | Admin action; REST route removed in phase 05 (`OneTimeAccessService.AdminSendEmail`). |
+| POST | `/api/users/{id}/one-time-access-token` | ConnectRPC | Admin console/internal | Raw token remains show-once; REST route removed in phase 05 (`OneTimeAccessService.AdminIssueToken`). |
 
 ## WebAuthn and device login
 
@@ -290,71 +293,53 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `AuthService.GetSession` | GET `/api/auth/session` | bearer | |
 | `AuthService.ForgotPassword` | POST `/api/auth/forgot-password` | public | `REST + ConnectRPC`; rate-limited. |
 | `AuthService.ResetPassword` | POST `/api/auth/reset-password` | public | `REST + ConnectRPC`; rate-limited. |
-| `UserService.List` | GET `/api/users` | bearer | Admin; `query` rides PageRequest. |
-| `UserService.Get` | GET `/api/users/{id}` | bearer | Admin; TypeID-only. |
-| `UserService.Create` | POST `/api/users` | bearer | Admin. |
-| `UserService.Update` | PUT `/api/users/{id}` | bearer | Admin. |
-| `UserService.Delete` | DELETE `/api/users/{id}` | bearer | Admin. |
-| `UserService.UpdateMe` | PUT `/api/users/me` | bearer | Self. |
-| `UserService.UpdateMyProfilePicture` | PUT `/api/users/me/profile-picture` | bearer | Self; raw bytes. |
-| `UserService.DeleteMyProfilePicture` | DELETE `/api/users/me/profile-picture` | bearer | Self. |
-| `UserService.UpdateProfilePicture` | PUT `/api/users/{id}/profile-picture` | bearer | Admin; raw bytes. |
-| `UserService.DeleteProfilePicture` | DELETE `/api/users/{id}/profile-picture` | bearer | Admin. |
-| `UserService.ListUserGroups` | GET `/api/users/{id}/groups` | bearer | Admin. |
-| `UserService.ReplaceUserGroups` | PUT `/api/users/{id}/user-groups` | bearer | Admin; atomic. |
-| `UserService.ListWebAuthnCredentials` | GET `/api/users/{id}/webauthn-credentials` | bearer | Admin. |
-| `UserService.UpdateWebAuthnCredential` | PUT `/api/users/{id}/webauthn-credentials/{id}` | bearer | Admin. |
-| `UserService.DeleteWebAuthnCredential` | DELETE `/api/users/{id}/webauthn-credentials/{id}` | bearer | Admin. |
-| `UserGroupService.*` | `/api/user-groups*` | bearer | Admin-only surface; CRUD, members, allowlist. |
 | `AccountService.GetAccount` | GET `/api/account` | bearer | Self. |
 | `AccountService.UpdateAccount` | PATCH `/api/account` | bearer | Self. |
 | `AccountService.ChangePassword` | PUT `/api/account/password` | bearer | Self; rate-limited; revokes other sessions. |
 | `AccountService.ListSessions` | GET `/api/account/sessions` | bearer | Self. |
 | `AccountService.RevokeSession` | DELETE `/api/account/sessions/{id}` | bearer | Self. |
-| `SignupService.Signup` | POST `/api/signup` | public | Cutover phase 05; REST route removed. |
-| `SignupService.GetSetupAvailability` | GET `/api/signup/setup` | public | Cutover phase 05; REST route removed. |
-| `SignupService.SetupInitialAdmin` | POST `/api/signup/setup` | public | Cutover phase 05; REST route removed. |
-| `SignupService.ListSignupTokens` | GET `/api/signup-tokens` | bearer | Admin; cutover phase 05. |
-| `SignupService.CreateSignupToken` | POST `/api/signup-tokens` | bearer | Admin; show-once; cutover phase 05. |
-| `SignupService.DeleteSignupToken` | DELETE `/api/signup-tokens/{token_id}` | bearer | Admin; cutover phase 05. |
-| `MfaService.EnrollTotp` | POST `/api/mfa/totp/enroll` | bearer | Show-once secret; cutover phase 05. |
-| `MfaService.ConfirmTotp` | POST `/api/mfa/totp/confirm` | bearer | Show-once recovery codes; cutover phase 05. |
-| `MfaService.GetTotpStatus` | GET `/api/mfa/totp/status` | bearer | Cutover phase 05. |
-| `MfaService.VerifyPending` | POST `/api/mfa/totp/verify` | pending | Pending-auth cookie unchanged; cutover phase 05. |
-| `MfaService.RotateRecoveryCodes` | POST `/api/mfa/totp/recovery-codes` | bearer | Show-once; cutover phase 05. |
-| `MfaService.DisableTotp` | DELETE `/api/mfa/totp` | bearer | Cutover phase 05. |
-| `OneTimeAccessService.RequestEmail` | POST `/api/one-time-access-email` | public | Cutover phase 05; REST route removed. |
-| `OneTimeAccessService.ExchangeToken` | POST `/api/one-time-access-token/{token}` | — | Stays `REST` (email link). |
-| `OneTimeAccessService.AdminSendEmail` | POST `/api/users/{user_id}/one-time-access-email` | bearer | Cutover phase 05. |
-| `OneTimeAccessService.AdminIssueToken` | POST `/api/users/{user_id}/one-time-access-token` | bearer | Show-once token; cutover phase 05. |
-| `EmailVerificationService.SendEmail` | POST `/api/users/me/send-email-verification` | bearer | Cutover phase 05; REST route removed. |
-| `EmailVerificationService.VerifyEmail` | POST `/api/users/me/verify-email` | — | Stays `REST` (email link). |
-| `UserService.ListUsers` | GET `/api/users` | bearer | |
-| `UserService.CreateUser` | POST `/api/users` | bearer | Show-once password. |
-| `UserService.GetUser` | GET `/api/users/{user_id}` | bearer | |
-| `UserService.UpdateUser` | PUT `/api/users/{user_id}` | bearer | |
-| `UserService.DeleteUser` | DELETE `/api/users/{user_id}` | bearer | |
-| `UserService.UpdateMe` | PUT `/api/users/me` | bearer | |
-| `UserService.UpdateMyProfilePicture` | PUT `/api/users/me/profile-picture` | bearer | `bytes` payload. |
-| `UserService.DeleteMyProfilePicture` | DELETE `/api/users/me/profile-picture` | bearer | |
-| `UserService.UpdateProfilePicture` | PUT `/api/users/{user_id}/profile-picture` | bearer | `bytes` payload. |
-| `UserService.DeleteProfilePicture` | DELETE `/api/users/{user_id}/profile-picture` | bearer | |
-| `UserService.ListUserGroups` | GET `/api/users/{user_id}/groups` | bearer | |
-| `UserService.ReplaceUserGroups` | PUT `/api/users/{user_id}/user-groups` | bearer | Atomic replacement. |
-| `UserService.ListWebAuthnCredentials` | GET `/api/users/{user_id}/webauthn-credentials` | bearer | |
-| `UserService.UpdateWebAuthnCredential` | PUT `/api/users/{user_id}/webauthn-credentials/{credential_id}` | bearer | |
-| `UserService.DeleteWebAuthnCredential` | DELETE `/api/users/{user_id}/webauthn-credentials/{credential_id}` | bearer | |
-| `UserGroupService.ListGroups` | GET `/api/user-groups` | bearer | |
-| `UserGroupService.CreateGroup` | POST `/api/user-groups` | bearer | |
-| `UserGroupService.GetGroup` | GET `/api/user-groups/{group_id}` | bearer | |
-| `UserGroupService.UpdateGroup` | PUT `/api/user-groups/{group_id}` | bearer | |
-| `UserGroupService.DeleteGroup` | DELETE `/api/user-groups/{group_id}` | bearer | |
-| `UserGroupService.ListGroupUsers` | GET `/api/user-groups/{group_id}/users` | bearer | |
-| `UserGroupService.ReplaceGroupUsers` | PUT `/api/user-groups/{group_id}/users` | bearer | Atomic replacement. |
-| `UserGroupService.ReplaceAllowedOidcClients` | PUT `/api/user-groups/{group_id}/allowed-oidc-clients` | bearer | |
+| `SignupService.Signup` | POST `/api/signup` | public | REST route removed in phase 05. |
+| `SignupService.GetSetupAvailability` | GET `/api/signup/setup` | public | REST route removed in phase 05. |
+| `SignupService.SetupInitialAdmin` | POST `/api/signup/setup` | public | REST route removed in phase 05. |
+| `SignupService.ListSignupTokens` | GET `/api/signup-tokens` | bearer | Admin; REST route removed in phase 05. |
+| `SignupService.CreateSignupToken` | POST `/api/signup-tokens` | bearer | Admin; show-once; REST route removed in phase 05. |
+| `SignupService.DeleteSignupToken` | DELETE `/api/signup-tokens/{token_id}` | bearer | Admin; REST route removed in phase 05. |
+| `MfaService.EnrollTotp` | POST `/api/mfa/totp/enroll` | bearer | Show-once secret; REST route removed in phase 05. |
+| `MfaService.ConfirmTotp` | POST `/api/mfa/totp/confirm` | bearer | Show-once recovery codes; REST route removed in phase 05. |
+| `MfaService.GetTotpStatus` | GET `/api/mfa/totp/status` | bearer | REST route removed in phase 05. |
+| `MfaService.VerifyPending` | POST `/api/mfa/totp/verify` | pending | Pending-auth cookie unchanged; REST route removed in phase 05. |
+| `MfaService.RotateRecoveryCodes` | POST `/api/mfa/totp/recovery-codes` | bearer | Show-once; REST route removed in phase 05. |
+| `MfaService.DisableTotp` | DELETE `/api/mfa/totp` | bearer | REST route removed in phase 05. |
+| `OneTimeAccessService.RequestEmail` | POST `/api/one-time-access-email` | public | REST route removed in phase 05. |
+| `OneTimeAccessService.AdminSendEmail` | POST `/api/users/{user_id}/one-time-access-email` | bearer | REST route removed in phase 05. |
+| `OneTimeAccessService.AdminIssueToken` | POST `/api/users/{user_id}/one-time-access-token` | bearer | Show-once token; REST route removed in phase 05. |
+| `EmailVerificationService.SendEmail` | POST `/api/users/me/send-email-verification` | bearer | REST route removed in phase 05. |
+| `UserService.ListUsers` | GET `/api/users` | bearer | Admin; `query` rides PageRequest. |
+| `UserService.GetUser` | GET `/api/users/{user_id}` | bearer | Admin; TypeID-only. |
+| `UserService.CreateUser` | POST `/api/users` | bearer | Admin; show-once password. |
+| `UserService.UpdateUser` | PUT `/api/users/{user_id}` | bearer | Admin. |
+| `UserService.DeleteUser` | DELETE `/api/users/{user_id}` | bearer | Admin. |
+| `UserService.UpdateMe` | PUT `/api/users/me` | bearer | Self. |
+| `UserService.UpdateMyProfilePicture` | PUT `/api/users/me/profile-picture` | bearer | Self; `bytes` payload. |
+| `UserService.DeleteMyProfilePicture` | DELETE `/api/users/me/profile-picture` | bearer | Self. |
+| `UserService.UpdateProfilePicture` | PUT `/api/users/{user_id}/profile-picture` | bearer | Admin; `bytes` payload. |
+| `UserService.DeleteProfilePicture` | DELETE `/api/users/{user_id}/profile-picture` | bearer | Admin. |
+| `UserService.ListUserGroups` | GET `/api/users/{user_id}/groups` | bearer | Admin. |
+| `UserService.ReplaceUserGroups` | PUT `/api/users/{user_id}/user-groups` | bearer | Admin; atomic replacement. |
+| `UserService.ListWebAuthnCredentials` | GET `/api/users/{user_id}/webauthn-credentials` | bearer | Admin. |
+| `UserService.UpdateWebAuthnCredential` | PUT `/api/users/{user_id}/webauthn-credentials/{credential_id}` | bearer | Admin. |
+| `UserService.DeleteWebAuthnCredential` | DELETE `/api/users/{user_id}/webauthn-credentials/{credential_id}` | bearer | Admin. |
+| `UserGroupService.ListGroups` | GET `/api/user-groups` | bearer | Admin. |
+| `UserGroupService.CreateGroup` | POST `/api/user-groups` | bearer | Admin. |
+| `UserGroupService.GetGroup` | GET `/api/user-groups/{group_id}` | bearer | Admin. |
+| `UserGroupService.UpdateGroup` | PUT `/api/user-groups/{group_id}` | bearer | Admin. |
+| `UserGroupService.DeleteGroup` | DELETE `/api/user-groups/{group_id}` | bearer | Admin. |
+| `UserGroupService.ListGroupUsers` | GET `/api/user-groups/{group_id}/users` | bearer | Admin. |
+| `UserGroupService.ReplaceGroupUsers` | PUT `/api/user-groups/{group_id}/users` | bearer | Admin; atomic replacement. |
+| `UserGroupService.ReplaceAllowedOidcClients` | PUT `/api/user-groups/{group_id}/allowed-oidc-clients` | bearer | Admin. |
 | `DeviceApprovalService.GetPendingRequest` | POST `/api/device-login/verification` | bearer | Contract fixed in phase 05: the request carries the user_code. |
-| `DeviceApprovalService.DecideRequest` | POST `/api/device-login/verification/decision` | bearer | Request carries user_code + approve; cutover phase 05. |
-| `CustomClaimService.Suggest` | GET `/api/custom-claims/suggestions` | bearer | Cutover phase 05. |
+| `DeviceApprovalService.DecideRequest` | POST `/api/device-login/verification/decision` | bearer | Request carries user_code + approve; REST route removed in phase 05. |
+| `CustomClaimService.Suggest` | GET `/api/custom-claims/suggestions` | bearer | REST route removed in phase 05. |
 | `CustomClaimService.ListUserClaims` | GET `/api/custom-claims/user/{user_id}` | bearer | |
 | `CustomClaimService.CreateUserClaim` | POST `/api/custom-claims/user/{user_id}` | bearer | |
 | `CustomClaimService.UpdateUserClaim` | PUT `/api/custom-claims/user/{user_id}/{claim_id}` | bearer | |
@@ -374,8 +359,8 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `ApiKeyService.Create` | POST `/api/api-keys` | bearer | Self-scoped; show-once secret; session-only. |
 | `ApiKeyService.Renew` | POST `/api/api-keys/{id}/renew` | bearer | Self-scoped; show-once secret; session-only. |
 | `ApiKeyService.Delete` | DELETE `/api/api-keys/{id}` | bearer or X-API-KEY | Self-scoped. |
-| `ApiService.ListApis` | GET `/api/apis` | bearer | Cutover phase 05. |
-| `ApiService.CreateApi` | POST `/api/apis` | bearer | Cutover phase 05. |
+| `ApiService.ListApis` | GET `/api/apis` | bearer | REST route removed in phase 05. |
+| `ApiService.CreateApi` | POST `/api/apis` | bearer | REST route removed in phase 05. |
 | `ApiService.GetApi` | GET `/api/apis/{id}` | bearer | See ambiguity A3 (trailing slash). |
 | `ApiService.UpdateApi` | PUT `/api/apis/{id}` | bearer | See ambiguity A3. |
 | `ApiService.DeleteApi` | DELETE `/api/apis/{id}` | bearer | See ambiguity A3. |
@@ -385,21 +370,23 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `ApiService.ListClients` | GET `/api/apis/{id}/clients` | bearer | |
 | `ApiService.GrantClient` | PUT `/api/apis/{id}/clients/{client_id}` | bearer | |
 | `ApiService.RevokeClient` | DELETE `/api/apis/{id}/clients/{client_id}` | bearer | |
+| `ApiService.ListApisForClient` | GET `/api/api-access/{clientId}/apis` | bearer | Client-scoped view added in phase 05; closes the `/api/api-access/*` gap. |
+| `ApiService.ListAssignableApisForClient` | GET `/api/api-access/{clientId}/assignable-apis` | bearer | Client-scoped view added in phase 05. |
 | `ApplicationConfigurationService.Get` | GET `/api/application-configuration` | bearer | Public bootstrap view; anonymous. |
-| `ApplicationConfigurationService.GetAll` | GET `/api/application-configuration/all` | bearer | Cutover phase 05. |
-| `ApplicationConfigurationService.Update` | PUT `/api/application-configuration` | bearer | Cutover phase 05. |
-| `ApplicationConfigurationService.TestEmail` | POST `/api/application-configuration/test-email` | bearer | Cutover phase 05. |
-| `AuditLogService.List` | GET `/api/audit-logs` | bearer | Self-scoped; cutover phase 05. |
-| `AuditLogService.ListAll` | GET `/api/audit-logs/all` | bearer | Cutover phase 05. |
-| `AuditLogService.FilterOptions` | GET `/api/audit-logs/filters/{kind}` | bearer | `kind` ∈ `client-names`, `users`; cutover phase 05. |
+| `ApplicationConfigurationService.GetAll` | GET `/api/application-configuration/all` | bearer | REST route removed in phase 05. |
+| `ApplicationConfigurationService.Update` | PUT `/api/application-configuration` | bearer | REST route removed in phase 05. |
+| `ApplicationConfigurationService.TestEmail` | POST `/api/application-configuration/test-email` | bearer | REST route removed in phase 05. |
+| `AuditLogService.List` | GET `/api/audit-logs` | bearer | Self-scoped; REST route removed in phase 05. |
+| `AuditLogService.ListAll` | GET `/api/audit-logs/all` | bearer | REST route removed in phase 05. |
+| `AuditLogService.FilterOptions` | GET `/api/audit-logs/filters/{kind}` | bearer | `kind` ∈ `client-names`, `users`; REST route removed in phase 05. |
 
 ### Package `tango.federation.v1` — `api/connect/federation.proto`
 
 | Service.Method | Replaces (method + path) | Auth | Notes |
 | --- | --- | --- | --- |
-| `OidcClientService.ListClients` | GET `/api/oidc/clients/` | bearer | Cutover phase 05. |
-| `OidcClientService.CreateClient` | POST `/api/oidc/clients/` | bearer | Show-once secret; cutover phase 05. |
-| `OidcClientService.GetClient` | GET `/api/oidc/clients/{client_id}` | bearer | Cutover phase 05. |
+| `OidcClientService.ListClients` | GET `/api/oidc/clients/` | bearer | REST route removed in phase 05. |
+| `OidcClientService.CreateClient` | POST `/api/oidc/clients/` | bearer | Show-once secret; REST route removed in phase 05. |
+| `OidcClientService.GetClient` | GET `/api/oidc/clients/{client_id}` | bearer | REST route removed in phase 05. |
 | `OidcClientService.UpdateClient` | PUT `/api/oidc/clients/{client_id}` | bearer | |
 | `OidcClientService.DeleteClient` | DELETE `/api/oidc/clients/{client_id}` | bearer | |
 | `OidcClientService.UpdateAllowedUserGroups` | PUT `/api/oidc/clients/{client_id}/allowed-user-groups` | bearer | |
@@ -411,13 +398,13 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `OidcClientService.ListSecrets` | GET `/api/oidc/clients/{client_id}/secrets` | bearer | |
 | `OidcClientService.CreateSecret` | POST `/api/oidc/clients/{client_id}/secrets` | bearer | Show-once. |
 | `OidcClientService.DeleteSecret` | DELETE `/api/oidc/clients/{client_id}/secrets/{secret_id}` | bearer | |
-| `OidcClientService.GetScimProvider` | GET `/api/oidc/clients/{client_id}/scim-service-provider` | bearer | Ambiguity A2 resolved: the scimsync store adapts onto the lookup port; cutover phase 05. |
-| `OidcConsentService.ListMyAuthorizedClients` | GET `/api/oidc/users/me/authorized-clients` | bearer | Cutover phase 05. |
+| `OidcClientService.GetScimProvider` | GET `/api/oidc/clients/{client_id}/scim-service-provider` | bearer | Ambiguity A2 resolved: the scimsync store adapts onto the lookup port; REST route removed in phase 05. |
+| `OidcConsentService.ListMyAuthorizedClients` | GET `/api/oidc/users/me/authorized-clients` | bearer | REST route removed in phase 05. |
 | `OidcConsentService.RevokeMyAuthorizedClient` | DELETE `/api/oidc/users/me/authorized-clients/{client_id}` | bearer | |
 | `OidcConsentService.ListMyClients` | GET `/api/oidc/users/me/clients` | bearer | |
-| `OidcConsentService.ListUserAuthorizedClients` | GET `/api/oidc/users/{user_id}/authorized-clients` | bearer | Ambiguity A1 resolved: both listings live in OidcConsentService, admin-guarded; cutover phase 05. |
+| `OidcConsentService.ListUserAuthorizedClients` | GET `/api/oidc/users/{user_id}/authorized-clients` | bearer | Ambiguity A1 resolved: both listings live in OidcConsentService, admin-guarded; REST route removed in phase 05. |
 | `OidcConsentService.ListAllAuthorizedClients` | GET `/api/oidc/authorized-clients` | bearer | Admin-wide listing. See ambiguity A1. |
-| `ScimProviderService.Upsert` | POST `/api/scim/service-provider` | bearer | Cutover phase 05. |
+| `ScimProviderService.Upsert` | POST `/api/scim/service-provider` | bearer | REST route removed in phase 05. |
 | `ScimProviderService.Update` | PUT `/api/scim/service-provider/{id}` | bearer | |
 | `ScimProviderService.Delete` | DELETE `/api/scim/service-provider/{id}` | bearer | |
 | `ScimProviderService.Sync` | POST `/api/scim/service-provider/{id}/sync` | bearer | Queues outbound sync. |
@@ -426,12 +413,12 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 
 | Service.Method | Replaces (method + path) | Auth | Notes |
 | --- | --- | --- | --- |
-| `WebhookService.List` | GET `/api/webhooks` | bearer | Cutover phase 05. |
-| `WebhookService.Create` | POST `/api/webhooks` | bearer | Show-once signing secret; cutover phase 05. |
+| `WebhookService.List` | GET `/api/webhooks` | bearer | REST route removed in phase 05. |
+| `WebhookService.Create` | POST `/api/webhooks` | bearer | Show-once signing secret; REST route removed in phase 05. |
 | `WebhookService.Get` | GET `/api/webhooks/{id}` | bearer | |
 | `WebhookService.Update` | PUT `/api/webhooks/{id}` | bearer | |
 | `WebhookService.Delete` | DELETE `/api/webhooks/{id}` | bearer | |
-| `WebhookService.RotateSecret` | POST `/api/webhooks/{id}/rotate-secret` | bearer | Show-once; cutover phase 05. |
+| `WebhookService.RotateSecret` | POST `/api/webhooks/{id}/rotate-secret` | bearer | Show-once; REST route removed in phase 05. |
 | `WebhookService.Test` | POST `/api/webhooks/{id}/test` | bearer | Queues delivery. |
 | `WebhookService.ListDeliveries` | GET `/api/webhooks/{id}/deliveries` | bearer | |
 | `WebhookService.ListAllDeliveries` | GET `/api/webhook-deliveries` | bearer | |
@@ -439,9 +426,12 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 ### REST routes that never move (recap)
 
 WebAuthn ceremonies (`/api/webauthn/*`), device-login request/exchange
-(`/api/device-login/requests*`), all `/api/oidc` protocol surfaces (token, introspect, par,
+(`/api/device-login/requests*`), the auth-worker cookie bridge (`/api/auth/token`) and its
+sign-out fallback, password recovery (`/api/auth/forgot-password`, `/api/auth/reset-password`),
+all `/api/oidc` protocol surfaces (token, introspect, par,
 device/authorize, device/info, device/verify, userinfo, end-session, interaction, authorize),
-`/api/one-time-access-token/{token}`, `/api/users/me/verify-email`,
+the public client-logo read (`/api/oidc/clients/{id}/logo`), the public config bootstrap
+(`/api/application-configuration`), `/api/one-time-access-token/{token}`, `/api/users/me/verify-email`,
 `/api/users/{id}/profile-picture.png`, `/healthz`, `/api/healthz`, `/.well-known/*`, `/static/*`.
 Their old REST routes are deleted after cutover; everything else in the matrices above is removed
 from `/api` once its replacement and callers are verified.
