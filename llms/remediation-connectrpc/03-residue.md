@@ -123,3 +123,58 @@ Each comment names the live consumer: `VersionService.Latest` below `/rpc`.
 Validation: `task check` (go vet) and `task lint` pass.
 
 Commit: `docs: point the version comments at the connect surface`
+
+## Status
+
+All three tasks are done and committed.
+
+| Task | Finding | Commit |
+| --- | --- | --- |
+| 03.1 | F8 | `6c2c049` |
+| 03.2 | F9 | `9405f80` |
+| 03.3 | F10 | `14f3e8b` |
+
+### Task 03.1 result
+
+`ResolveRPCPrincipal` and `RPCAdminProcedureGuard` (with the `adminProcedureGuard` type and its
+streaming stubs) are gone. `resolveRPCPrincipal` stays — `RPCPrincipalGuard` and `RPCPrincipalAuth`
+call it. `rpc_guard.go` now opens with a block naming when to use each surviving guard, including
+`RPCAPIKeyAuth`, which is a resolver rather than a guard.
+
+### Task 03.2 result
+
+`modules/identity/account/store.go` and `modules/identity/password/handler.go` are deleted.
+
+The account feature owns no persistence: `modules/identity/account/service.go` holds
+`users user.Store`, `passwords *password.Service`, and `sessions *session.Service`, so it reads and
+writes through other features' stores. Three other features already ship without a `store.go`
+(`recovery`, `onetimeaccess`, `emailverification`), so the AGENTS.md rule described a shape the
+codebase does not enforce. The rule now reads "plus `store.go` when the feature owns persistence".
+
+`modules/admin/appconfig/schema.go` and `modules/federation/schema.go` keep their package doc
+comments and are correct as they are.
+
+### Task 03.3 result
+
+The four stale comments now name `VersionService.Latest` over `/rpc`. The same sweep found one more
+stale mention in `llms/connectrpc-plan/endpoint-reference.md`, which listed `/api/version/current`
+and `/api/version/latest` as transport-owned routes that still mount; it now records that they are
+gone.
+
+Every other `/api/` hit in non-test Go is a live route: the retained recovery, bridge, WebAuthn,
+device-login, and one-time-access paths, the OIDC protocol paths, and the rate-limit rules that
+name them deliberately. The test files that reference the deleted version paths do so as negative
+assertions and stay.
+
+### Phase 03 gate
+
+| Command | Result |
+| --- | --- |
+| `go test ./...` (debug tags) | pass |
+| `go test -tags release ./...` | pass, 43 packages |
+| `go test -tags debug ./cmd/... ./database/...` | pass |
+| `pnpm exec vitest run` | 43 tests pass, 7 files |
+| `task lint` | 0 issues |
+| `task check` | clean |
+| `task typecheck` | clean |
+| `task rpc:lint`, `task rpc:breaking`, `task rpc:stale` | clean |

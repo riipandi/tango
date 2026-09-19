@@ -56,9 +56,9 @@ documentation contradicts behavior, **P2** = residue or hygiene.
 | F5 | P1 | 3 procedures exist in the proto with no document row and no Yaak request: `AccountService.UpdateAccount`, `AuthService.ForgotPassword`, `AuthService.ResetPassword` | 02.3 — **resolved** (2026-09-19) |
 | F6 | P1 | The `429` response on `/rpc` is the REST envelope, not a Connect error document; `rpcerr.ResourceExhausted` has no call site | 02.4 — **resolved** (2026-09-19) |
 | F7 | P1 | Cross-origin `/rpc` preflight cannot send `Authorization`, `X-API-KEY`, or `Connect-Timeout-Ms` | 02.5 — **resolved** (both layers, 2026-09-19) |
-| F8 | P2 | `middleware.ResolveRPCPrincipal` and `middleware.RPCAdminProcedureGuard` have no caller | 03.1 |
-| F9 | P2 | `modules/identity/account/store.go` and `modules/identity/password/handler.go` contain only a package clause | 03.2 |
-| F10 | P2 | Comments cite the deleted `/api/version/latest` route | 03.3 |
+| F8 | P2 | `middleware.ResolveRPCPrincipal` and `middleware.RPCAdminProcedureGuard` have no caller | 03.1 — **resolved** (`6c2c049`) |
+| F9 | P2 | `modules/identity/account/store.go` and `modules/identity/password/handler.go` contain only a package clause | 03.2 — **resolved** (`9405f80`) |
+| F10 | P2 | Comments cite the deleted `/api/version/latest` route | 03.3 — **resolved** (`14f3e8b`) |
 | F11 | P2 | Plan documents carry stale claims: generated Go "committed", `protoc-gen-connect-es`, the removed Yaak folder `[ConnectRPC] System (smoke)`, and the unresolved A1–A5 block | 04.1 |
 | F12 | P2 | `AGENTS.md` has zero ConnectRPC coverage and still points at `llms/phase-*.md`, which does not exist | 04.2 |
 | F13 | P2 | Pagination shape is inconsistent: some list RPCs take `common.v1.PageRequest` directly, others embed it | 05.1 |
@@ -151,7 +151,10 @@ Task 01.1 was decided on 2026-09-19: **Option A (narrow)**, recorded in
 | 02.5 | F7 | done |
 | 02.6 | F16 | done — committed `f5eb5ee` |
 | 02.7 | Y4 | done with 02.5 |
-| 03.1–06.5 | F8–F15, Y1–Y3, Y5–Y7 | not started |
+| 03.1 | F8 | done — committed `6c2c049` |
+| 03.2 | F9 | done — committed `9405f80` |
+| 03.3 | F10 | done — committed `14f3e8b` |
+| 04.1–06.5 | F11–F15, Y1–Y3, Y5–Y7 | not started |
 
 ## Phase index
 
