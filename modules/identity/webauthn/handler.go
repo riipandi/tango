@@ -17,7 +17,6 @@ import (
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/validate"
 )
 
 // Feature is the wireable webauthn unit.
@@ -31,9 +30,9 @@ func New(service *Service) Feature { return Feature{service: service} }
 // Name names the feature for logs.
 func (Feature) Name() string { return "webauthn" }
 
-// APIRoutes mounts the passkey endpoints relative to the /api group.
-// Without wired groups the affected routes are simply skipped —
-// fail closed.
+// APIRoutes mounts the passkey ceremony endpoints relative to the
+// /api group (browser WebAuthn contract). The admin credential CRUD
+// serves ConnectRPC exclusively — see the user RPC port.
 func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
 	// Anonymous: discoverable login ceremony.
 	r.Post("/webauthn/login/begin", f.service.handleBeginLogin)
@@ -43,13 +42,6 @@ func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
 		self := r.With(g.Self)
 		self.Post("/webauthn/register/begin", f.service.handleBeginRegistration)
 		self.Post("/webauthn/register/finish", f.service.handleFinishRegistration)
-	}
-
-	if g.Admin != nil {
-		admin := r.With(g.Admin)
-		admin.Get("/users/{id}/webauthn-credentials", f.service.handleListCredentials)
-		admin.Delete("/users/{id}/webauthn-credentials/{credentialId}", f.service.handleDeleteCredential)
-		admin.Put("/users/{id}/webauthn-credentials/{credentialId}", f.service.handleRenameCredential)
 	}
 }
 
@@ -153,88 +145,6 @@ func (s *Service) handleFinishLogin(w http.ResponseWriter, r *http.Request) {
 	responder.Success(w, r, http.StatusOK, u)
 }
 
-// renameCredentialRequest is the PUT credential payload.
-type renameCredentialRequest struct {
-	Name string `json:"name"`
-}
-
-// handleListCredentials serves GET /users/{id}/webauthn-credentials.
-func (s *Service) handleListCredentials(w http.ResponseWriter, r *http.Request) {
-	userID, ok := parseUserIDParam(r)
-	if !ok {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-
-	credentials, err := s.ListCredentials(r.Context(), userID)
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	views := make([]map[string]any, 0, len(credentials))
-	for _, credential := range credentials {
-		views = append(views, credentialView(credential))
-	}
-	responder.Success(w, r, http.StatusOK, views)
-}
-
-// handleDeleteCredential serves DELETE
-// /users/{id}/webauthn-credentials/{credentialId}.
-func (s *Service) handleDeleteCredential(w http.ResponseWriter, r *http.Request) {
-	userID, ok := parseUserIDParam(r)
-	if !ok {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-	credentialID, ok := parseCredentialID(r)
-	if !ok {
-		return
-	}
-
-	if err := s.DeleteCredential(r.Context(), userID, credentialID); err != nil {
-		if errors.Is(err, ErrNotFound) {
-			responder.NotFoundJSON(w, r)
-			return
-		}
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// handleRenameCredential serves PUT
-// /users/{id}/webauthn-credentials/{credentialId} — body {name}.
-func (s *Service) handleRenameCredential(w http.ResponseWriter, r *http.Request) {
-	userID, ok := parseUserIDParam(r)
-	if !ok {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-	credentialID, ok := parseCredentialID(r)
-	if !ok {
-		return
-	}
-
-	var req renameCredentialRequest
-	if verr := validate.Request(r.Body, &req); verr != nil {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(verr)))
-		return
-	}
-
-	credential, err := s.RenameCredential(r.Context(), userID, credentialID, req.Name)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			responder.NotFoundJSON(w, r)
-			return
-		}
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-	responder.Success(w, r, http.StatusOK, credentialView(*credential))
-}
-
 // writeCeremonyError maps ceremony failures to statuses.
 func (s *Service) writeCeremonyError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
@@ -247,18 +157,6 @@ func (s *Service) writeCeremonyError(w http.ResponseWriter, r *http.Request, err
 	default:
 		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
 	}
-}
-
-// parseUserIDParam resolves the {id} path segment.
-func parseUserIDParam(r *http.Request) (user.UserID, bool) {
-	id, err := identity.ParseID[user.UserID](chi.URLParam(r, "id"))
-	return id, err == nil
-}
-
-// parseCredentialID resolves the {credentialId} path segment.
-func parseCredentialID(r *http.Request) (CredentialID, bool) {
-	id, err := identity.ParseID[CredentialID](chi.URLParam(r, "credentialId"))
-	return id, err == nil
 }
 
 // base64URL encodes bytes for the wire format.

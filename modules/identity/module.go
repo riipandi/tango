@@ -233,4 +233,12 @@ func (m *Module) APIRoutes(r chi.Router, g RouteGroups) {
 	if m.recovery != nil {
 		m.recovery.APIRoutes(r, g)
 	}
+	// One-time access and email verification keep only their
+	// email-link exchange routes on REST (see their handler files).
+	if provider, ok := m.onetime.(APIFeature); ok {
+		provider.APIRoutes(r, g)
+	}
+	if provider, ok := m.emailv.(APIFeature); ok {
+		provider.APIRoutes(r, g)
+	}
 }
