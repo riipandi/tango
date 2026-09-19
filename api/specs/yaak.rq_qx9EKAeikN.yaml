@@ -2,20 +2,19 @@ type: http_request
 model: http_request
 id: rq_qx9EKAeikN
 createdAt: 2026-09-18T18:41:18.754165
-updatedAt: 2026-09-19T14:53:27.189690
+updatedAt: 2026-09-19T19:09:05.358741
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_5ohk34DQsY
 authentication: {}
 authenticationType: null
 body:
-  bodyType: application/json
   text: |-
     {
-      "name": "yaak-rpc-key",
+      "name": "yaak-${[ faker.string.alphanumeric(options='{"length": 10}') ]}",
       "expires_at": "2027-01-01T00:00:00Z"
     }
 bodyType: application/json
-description: Create an API key over /rpc with a valid bearer — 200; the response carries the plaintext token exactly once (show-once contract).
+description: The key name is generated per run; API key names are unique per user, so a fixed name makes the second send answer already_exists.
 headers:
 - enabled: true
   name: Authorization
