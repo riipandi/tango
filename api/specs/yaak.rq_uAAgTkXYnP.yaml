@@ -2,13 +2,19 @@ type: http_request
 model: http_request
 id: rq_uAAgTkXYnP
 createdAt: 2026-09-19T12:32:56.629883
-updatedAt: 2026-09-19T12:32:56.629883
+updatedAt: 2026-09-19T14:54:07.046944
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LLg3fisc5c
 authentication: {}
 authenticationType: null
 body:
-  text: '{"page":{"page":1,"limit":20}}'
+  text: |-
+    {
+      "page": {
+        "page": 1,
+        "limit": 20
+      }
+    }
 bodyType: application/json
 description: ''
 headers:

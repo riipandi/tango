@@ -2,14 +2,18 @@ type: http_request
 model: http_request
 id: rq_kvEG8CFDGS
 createdAt: 2026-09-18T23:54:33.194723
-updatedAt: 2026-09-19T12:10:42.263426
+updatedAt: 2026-09-19T14:55:40.477188
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sUMABSVJCr
 authentication: {}
 authenticationType: none
 body:
   bodyType: application/json
-  text: '{"name":"Bench API","resource":"https://bench-yaak.example/api"}'
+  text: |-
+    {
+      "name": "Bench API",
+      "resource": "https://bench-yaak.example/api"
+    }
 bodyType: application/json
 description: ''
 headers:

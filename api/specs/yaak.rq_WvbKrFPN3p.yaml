@@ -2,13 +2,17 @@ type: http_request
 model: http_request
 id: rq_WvbKrFPN3p
 createdAt: 2026-09-19T12:31:58.365374
-updatedAt: 2026-09-19T12:31:58.365374
+updatedAt: 2026-09-19T14:58:13.924193
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_WNyJqCXLvz
 authentication: {}
 authenticationType: null
 body:
-  text: '{"id":"REPLACE_CLIENT_ID","user_group_ids":[]}'
+  text: |-
+    {
+      "id": "REPLACE_CLIENT_ID",
+      "user_group_ids": []
+    }
 bodyType: application/json
 description: ''
 headers:

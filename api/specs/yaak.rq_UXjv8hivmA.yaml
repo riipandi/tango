@@ -2,13 +2,17 @@ type: http_request
 model: http_request
 id: rq_UXjv8hivmA
 createdAt: 2026-09-19T12:33:44.234710
-updatedAt: 2026-09-19T12:33:44.234715
+updatedAt: 2026-09-19T14:55:55.610337
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sUMABSVJCr
 authentication: {}
 authenticationType: null
 body:
-  text: '{"id":"REPLACE_API_ID","permissions":[]}'
+  text: |-
+    {
+      "id": "REPLACE_API_ID",
+      "permissions": []
+    }
 bodyType: application/json
 description: ''
 headers:

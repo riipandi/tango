@@ -2,13 +2,18 @@ type: http_request
 model: http_request
 id: rq_uzcztat5SY
 createdAt: 2026-09-19T12:33:10.673293
-updatedAt: 2026-09-19T12:33:10.673293
+updatedAt: 2026-09-19T14:54:15.577802
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_auMsw4bdee
 authentication: {}
 authenticationType: null
 body:
-  text: '{"user_id":"REPLACE_USER_ID","key":"REPLACE_CLAIM_KEY","value":"REPLACE_CLAIM_VALUE"}'
+  text: |-
+    {
+      "user_id": "REPLACE_USER_ID",
+      "key": "REPLACE_CLAIM_KEY",
+      "value": "REPLACE_CLAIM_VALUE"
+    }
 bodyType: application/json
 description: ''
 headers:

@@ -2,13 +2,20 @@ type: http_request
 model: http_request
 id: rq_3GfCr8UNMP
 createdAt: 2026-09-19T12:33:57.275028
-updatedAt: 2026-09-19T12:33:57.275029
+updatedAt: 2026-09-19T14:55:37.464208
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tHTGrChyrG
 authentication: {}
 authenticationType: null
 body:
-  text: '{"client_id":"REPLACE_CLIENT_ID","page":{"page":1,"limit":20}}'
+  text: |-
+    {
+      "client_id": "REPLACE_CLIENT_ID",
+      "page": {
+        "page": 1,
+        "limit": 20
+      }
+    }
 bodyType: application/json
 description: ''
 headers:

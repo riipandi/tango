@@ -2,13 +2,16 @@ type: http_request
 model: http_request
 id: rq_7kuwWUnQdT
 createdAt: 2026-09-19T12:33:10.665347
-updatedAt: 2026-09-19T12:33:10.665348
+updatedAt: 2026-09-19T14:54:08.880103
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LLg3fisc5c
 authentication: {}
 authenticationType: null
 body:
-  text: '{"kind":"users"}'
+  text: |-
+    {
+      "kind": "users"
+    }
 bodyType: application/json
 description: ''
 headers:

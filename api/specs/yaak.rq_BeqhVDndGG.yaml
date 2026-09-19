@@ -2,13 +2,18 @@ type: http_request
 model: http_request
 id: rq_BeqhVDndGG
 createdAt: 2026-09-19T12:32:10.497118
-updatedAt: 2026-09-19T12:32:10.497118
+updatedAt: 2026-09-19T14:57:50.593095
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_SRs9gwLx8j
 authentication: {}
 authenticationType: null
 body:
-  text: '{"id":"REPLACE_CLIENT_ID","content_type":"image/png","data":"REPLACE_BASE64_IMAGE"}'
+  text: |-
+    {
+      "id": "REPLACE_CLIENT_ID",
+      "content_type": "image/png",
+      "data": "REPLACE_BASE64_IMAGE"
+    }
 bodyType: application/json
 description: ''
 headers:

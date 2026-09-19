@@ -2,14 +2,18 @@ type: http_request
 model: http_request
 id: rq_QhbjTYiayg
 createdAt: 2026-09-18T22:33:58.904335
-updatedAt: 2026-09-19T12:09:42.005432
+updatedAt: 2026-09-19T14:56:54.473207
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_rhFgcRFFEJ
 authentication: {}
 authenticationType: none
 body:
   bodyType: application/json
-  text: '{"ttl":"24h","usage_limit":5}'
+  text: |-
+    {
+      "ttl": "24h",
+      "usage_limit": 5
+    }
 bodyType: application/json
 description: ''
 headers:

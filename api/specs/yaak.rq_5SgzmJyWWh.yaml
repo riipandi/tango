@@ -2,13 +2,17 @@ type: http_request
 model: http_request
 id: rq_5SgzmJyWWh
 createdAt: 2026-09-18T19:38:03.314271
-updatedAt: 2026-09-19T12:38:08.666150
+updatedAt: 2026-09-19T14:51:53.107126
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vJemVfyfFL
 authentication: {}
 authenticationType: none
 body:
-  text: '{"identity":"REPLACE_IDENTITY","secret":"REPLACE_PASSWORD"}'
+  text: |-
+    {
+      "identity": "admin@example.com",
+      "secret": "@admin123"
+    }
 bodyType: application/json
 description: ''
 headers:

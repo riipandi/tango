@@ -2,13 +2,21 @@ type: http_request
 model: http_request
 id: rq_f2XzfUJ2e4
 createdAt: 2026-09-19T12:33:57.258809
-updatedAt: 2026-09-19T12:33:57.258809
+updatedAt: 2026-09-19T14:55:32.681009
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tHTGrChyrG
 authentication: {}
 authenticationType: null
 body:
-  text: '{"id":"REPLACE_API_ID","client_id":"REPLACE_CLIENT_ID","client_access":true,"client_permission_ids":[],"user_delegated_access":false,"user_delegated_permission_ids":[]}'
+  text: |-
+    {
+      "id": "REPLACE_API_ID",
+      "client_id": "REPLACE_CLIENT_ID",
+      "client_access": true,
+      "client_permission_ids": [],
+      "user_delegated_access": false,
+      "user_delegated_permission_ids": []
+    }
 bodyType: application/json
 description: ''
 headers:

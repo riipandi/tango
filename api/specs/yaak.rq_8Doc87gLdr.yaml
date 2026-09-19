@@ -2,13 +2,16 @@ type: http_request
 model: http_request
 id: rq_8Doc87gLdr
 createdAt: 2026-09-19T12:28:04.210233
-updatedAt: 2026-09-19T12:28:04.210233
+updatedAt: 2026-09-19T14:52:15.410661
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_8fqSkwaD7C
 authentication: {}
 authenticationType: null
 body:
-  text: '{"code":"123456"}'
+  text: |-
+    {
+      "code": "123456"
+    }
 bodyType: application/json
 description: ''
 headers:

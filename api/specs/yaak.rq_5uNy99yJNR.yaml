@@ -2,13 +2,16 @@ type: http_request
 model: http_request
 id: rq_5uNy99yJNR
 createdAt: 2026-09-19T12:34:35.700013
-updatedAt: 2026-09-19T12:34:35.700013
+updatedAt: 2026-09-19T14:53:08.096203
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_E6GycS3VZ9
 authentication: {}
 authenticationType: null
 body:
-  text: '{"id":"REPLACE_WEBHOOK_ID"}'
+  text: |-
+    {
+      "id": "REPLACE_WEBHOOK_ID"
+    }
 bodyType: application/json
 description: ''
 headers:

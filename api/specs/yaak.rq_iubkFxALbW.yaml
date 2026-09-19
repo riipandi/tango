@@ -2,13 +2,17 @@ type: http_request
 model: http_request
 id: rq_iubkFxALbW
 createdAt: 2026-09-19T12:27:38.125707
-updatedAt: 2026-09-19T12:27:38.125707
+updatedAt: 2026-09-19T14:11:51.028010
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vJemVfyfFL
 authentication: {}
 authenticationType: null
 body:
-  text: '{"token":"REPLACE_RESET_TOKEN","new_password":"REPLACE_NEW_PASSWORD"}'
+  text: |-
+    {
+      "token": "REPLACE_RESET_TOKEN",
+      "new_password": "REPLACE_NEW_PASSWORD"
+    }
 bodyType: application/json
 description: ''
 headers: []

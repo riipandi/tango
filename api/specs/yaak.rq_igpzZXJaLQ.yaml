@@ -2,13 +2,18 @@ type: http_request
 model: http_request
 id: rq_igpzZXJaLQ
 createdAt: 2026-09-19T12:34:22.907177
-updatedAt: 2026-09-19T12:38:29.105202
+updatedAt: 2026-09-19T14:54:57.975459
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_Uf3pbN2b4K
 authentication: {}
 authenticationType: null
 body:
-  text: '{"id":"REPLACE_PROVIDER_ID","endpoint":"https://scim.example/v2","token":"REPLACE_SCIM_TOKEN"}'
+  text: |-
+    {
+      "id": "REPLACE_PROVIDER_ID",
+      "endpoint": "https://scim.example/v2",
+      "token": "REPLACE_SCIM_TOKEN"
+    }
 bodyType: application/json
 description: ''
 headers:

@@ -2,13 +2,16 @@ type: http_request
 model: http_request
 id: rq_Sq7RrfWbes
 createdAt: 2026-09-19T12:31:24.620621
-updatedAt: 2026-09-19T12:31:24.620621
+updatedAt: 2026-09-19T14:57:16.966428
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_fa4TrFMZZz
 authentication: {}
 authenticationType: null
 body:
-  text: '{"token":"REPLACE_EMAIL_TOKEN"}'
+  text: |-
+    {
+      "token": "REPLACE_EMAIL_TOKEN"
+    }
 bodyType: application/json
 description: ''
 headers:

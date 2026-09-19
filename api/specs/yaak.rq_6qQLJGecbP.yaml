@@ -2,14 +2,17 @@ type: http_request
 model: http_request
 id: rq_6qQLJGecbP
 createdAt: 2026-09-18T23:55:27.474214
-updatedAt: 2026-09-19T12:10:29.916877
+updatedAt: 2026-09-19T14:54:13.246221
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_auMsw4bdee
 authentication: {}
 authenticationType: none
 body:
   bodyType: application/json
-  text: '{"query":""}'
+  text: |-
+    {
+      "query": ""
+    }
 bodyType: application/json
 description: ''
 headers:

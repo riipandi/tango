@@ -2,13 +2,18 @@ type: http_request
 model: http_request
 id: rq_g3PpRvytRY
 createdAt: 2026-09-19T12:29:06.568494
-updatedAt: 2026-09-19T12:29:06.568494
+updatedAt: 2026-09-19T14:56:56.941304
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_rhFgcRFFEJ
 authentication: {}
 authenticationType: null
 body:
-  text: '{"username":"REPLACE_USERNAME","email":"user@example.com","token":"REPLACE_SIGNUP_TOKEN"}'
+  text: |-
+    {
+      "username": "REPLACE_USERNAME",
+      "email": "user@example.com",
+      "token": "REPLACE_SIGNUP_TOKEN"
+    }
 bodyType: application/json
 description: ''
 headers:

@@ -2,13 +2,17 @@ type: http_request
 model: http_request
 id: rq_pPeFwt9mFx
 createdAt: 2026-09-19T12:30:50.280436
-updatedAt: 2026-09-19T12:30:50.280436
+updatedAt: 2026-09-19T14:56:38.726112
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_JuHm4xpFbc
 authentication: {}
 authenticationType: null
 body:
-  text: '{"id":"REPLACE_USER_ID","username":"REPLACE_USERNAME"}'
+  text: |-
+    {
+      "id": "REPLACE_USER_ID",
+      "username": "REPLACE_USERNAME"
+    }
 bodyType: application/json
 description: ''
 headers:

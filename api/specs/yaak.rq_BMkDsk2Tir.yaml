@@ -2,14 +2,18 @@ type: http_request
 model: http_request
 id: rq_BMkDsk2Tir
 createdAt: 2026-09-19T00:54:36.897973
-updatedAt: 2026-09-19T12:12:18.959302
+updatedAt: 2026-09-19T14:52:48.142552
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_E6GycS3VZ9
 authentication: {}
 authenticationType: none
 body:
   bodyType: application/json
-  text: '{"name":"bench-hook-yaak","endpoint":"https://hooks.example/yaak"}'
+  text: |-
+    {
+      "name": "bench-hook-yaak",
+      "endpoint": "https://hooks.example/yaak"
+    }
 bodyType: application/json
 description: ''
 headers:

@@ -2,14 +2,20 @@ type: http_request
 model: http_request
 id: rq_vf5GCcHKNY
 createdAt: 2026-09-18T23:54:46.763293
-updatedAt: 2026-09-19T12:10:36.010529
+updatedAt: 2026-09-19T14:54:04.479742
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LLg3fisc5c
 authentication: {}
 authenticationType: none
 body:
   bodyType: application/json
-  text: '{"page":{"page":1,"limit":5}}'
+  text: |-
+    {
+      "page": {
+        "page": 1,
+        "limit": 5
+      }
+    }
 bodyType: application/json
 description: ''
 headers:

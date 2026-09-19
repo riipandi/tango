@@ -2,14 +2,18 @@ type: http_request
 model: http_request
 id: rq_2YY7XmpksB
 createdAt: 2026-09-19T01:09:32.336397
-updatedAt: 2026-09-19T12:12:51.776629
+updatedAt: 2026-09-19T14:55:11.610894
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_R5pypBKj8u
 authentication: {}
 authenticationType: none
 body:
   bodyType: application/json
-  text: '{"user_code":"P7JMQ95R","approve":true}'
+  text: |-
+    {
+      "user_code": "P7JMQ95R",
+      "approve": true
+    }
 bodyType: application/json
 description: ''
 headers:

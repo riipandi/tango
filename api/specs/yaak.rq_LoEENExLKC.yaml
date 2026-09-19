@@ -2,13 +2,16 @@ type: http_request
 model: http_request
 id: rq_LoEENExLKC
 createdAt: 2026-09-19T12:33:32.164794
-updatedAt: 2026-09-19T12:33:32.164795
+updatedAt: 2026-09-19T14:53:59.580732
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tw8Gigobcd
 authentication: {}
 authenticationType: null
 body:
-  text: '{"app_name":"Tango"}'
+  text: |-
+    {
+      "app_name": "Tango"
+    }
 bodyType: application/json
 description: ''
 headers:

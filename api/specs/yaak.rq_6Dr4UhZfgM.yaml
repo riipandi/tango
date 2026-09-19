@@ -2,13 +2,18 @@ type: http_request
 model: http_request
 id: rq_6Dr4UhZfgM
 createdAt: 2026-09-19T12:31:14.248564
-updatedAt: 2026-09-19T12:31:14.248564
+updatedAt: 2026-09-19T14:57:25.841171
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_Smm9KwfJyM
 authentication: {}
 authenticationType: null
 body:
-  text: '{"id":"REPLACE_USER_ID","credential_id":"REPLACE_CREDENTIAL_ID","name":"REPLACE_PASSKEY_NAME"}'
+  text: |-
+    {
+      "id": "REPLACE_USER_ID",
+      "credential_id": "REPLACE_CREDENTIAL_ID",
+      "name": "REPLACE_PASSKEY_NAME"
+    }
 bodyType: application/json
 description: ''
 headers:

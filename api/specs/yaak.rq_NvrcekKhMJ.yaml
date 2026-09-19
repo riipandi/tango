@@ -2,13 +2,16 @@ type: http_request
 model: http_request
 id: rq_NvrcekKhMJ
 createdAt: 2026-09-19T12:33:57.271190
-updatedAt: 2026-09-19T12:33:57.271190
+updatedAt: 2026-09-19T14:55:35.844655
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tHTGrChyrG
 authentication: {}
 authenticationType: null
 body:
-  text: '{"client_id":"REPLACE_CLIENT_ID"}'
+  text: |-
+    {
+      "client_id": "REPLACE_CLIENT_ID"
+    }
 bodyType: application/json
 description: ''
 headers:

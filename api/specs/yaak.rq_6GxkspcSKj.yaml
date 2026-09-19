@@ -2,13 +2,18 @@ type: http_request
 model: http_request
 id: rq_6GxkspcSKj
 createdAt: 2026-09-19T12:33:23.309484
-updatedAt: 2026-09-19T12:33:23.309484
+updatedAt: 2026-09-19T14:54:25.759319
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_auMsw4bdee
 authentication: {}
 authenticationType: null
 body:
-  text: '{"group_id":"REPLACE_GROUP_ID","claim_id":"REPLACE_CLAIM_ID","value":"REPLACE_CLAIM_VALUE"}'
+  text: |-
+    {
+      "group_id": "REPLACE_GROUP_ID",
+      "claim_id": "REPLACE_CLAIM_ID",
+      "value": "REPLACE_CLAIM_VALUE"
+    }
 bodyType: application/json
 description: ''
 headers:
