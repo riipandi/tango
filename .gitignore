@@ -1,11 +1,10 @@
-/.docs
 /.idea
 /.pnp
 /.husky
 .pnp.js
 .DS_Store
 .DS_Store?
-.memelord/
+.sentryclirc
 /coverage
 /coverage.out
 /[Tt]emp/
@@ -31,6 +30,13 @@ npm-debug.log*
 *.sqlite*
 *.sqlite3*
 *.db
+
+# Envars
+.env.*
+!.env.example
+compose.env*
+!compose.env.example
+.*.vars
 
 # Output directory
 build/
@@ -61,22 +67,12 @@ vitest.workspace.*
 routeTree.gen.ts
 routes.gen.ts
 
-# Envars
-.env.*
-!.env.example
-compose.env*
-!compose.env.example
-.*.vars
-
 # Disable this line in your real app
 /playwright/.cache/
 /playwright-report/
 /tests-results/
 /blob-report/
 .playwright/
-
-# Sentry Config File
-.sentryclirc
 
 # Storybook
 *storybook.log
@@ -105,13 +101,11 @@ sbom-*
 *.gen.ts
 *.gen.go
 
-# Terraform
+# Infrastructure
 .terraform/
 .terraform.lock.hcl
 terraform.tfstate*
 terraform.tfvars*
 !terraform.tfvars.example
-
-# fly.io
 fly*.toml*
 !fly*.toml.example
