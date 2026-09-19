@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_fziQd4bTFR
 createdAt: 2026-09-19T12:27:30.095403
-updatedAt: 2026-09-19T14:51:40.624185
+updatedAt: 2026-09-19T16:55:05.473329
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vJemVfyfFL
 authentication: {}
@@ -10,10 +10,10 @@ authenticationType: null
 body:
   text: |-
     {
-      "identity": "admin@example.com"
+      "identity": "${[ identity ]}"
     }
 bodyType: application/json
-description: ''
+description: Identity comes from the environment variable, so no account is hardcoded in the request.
 headers: []
 method: POST
 name: Request a password reset

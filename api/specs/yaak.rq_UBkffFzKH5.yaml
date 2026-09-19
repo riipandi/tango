@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_UBkffFzKH5
 createdAt: 2026-09-19T12:29:15.129862
-updatedAt: 2026-09-19T14:56:58.610141
+updatedAt: 2026-09-19T16:55:15.507863
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_rhFgcRFFEJ
 authentication: {}
@@ -11,10 +11,10 @@ body:
   text: |-
     {
       "username": "REPLACE_ADMIN_USERNAME",
-      "email": "admin@example.com"
+      "email": "${[ identity ]}"
     }
 bodyType: application/json
-description: ''
+description: Email comes from the environment variable; the username stays a placeholder because this request only runs on a fresh database.
 headers:
 - enabled: true
   name: Content-Type
