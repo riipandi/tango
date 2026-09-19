@@ -33,7 +33,6 @@ npm-debug.log*
 *.db
 
 # Output directory
-_data/
 build/
 dist/
 dist-ssr/
@@ -44,14 +43,10 @@ output/
 .build/
 .data
 .cache
-.nitro
 .output
-.vinxi
 .wrangler
 .netlify
 .wireit
-.temp
-.tmp
 
 # Vite & Vitest config
 vite.config.*
@@ -106,9 +101,9 @@ sbom-*
 /api/swagger.json
 /api/swagger.yaml
 /app/generated/
-/specs/
-*.gen.ts
 .rpc-gen.stamp
+*.gen.ts
+*.gen.go
 
 # Terraform
 .terraform/

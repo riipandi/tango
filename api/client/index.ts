@@ -48,8 +48,7 @@ export type { DeviceCodeInfo, DeviceVerifyAction } from './schemas/device.schema
 export type {
   DeviceLoginExchangeResult,
   DeviceLoginPending,
-  DeviceLoginRequest,
-  VerificationInfo
+  DeviceLoginRequest
 } from './schemas/devicelogin.schema'
 
 // Admin surface types.

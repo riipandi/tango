@@ -5,7 +5,7 @@ import { envelope, expectCall, mockFetch } from './helpers'
 const BASE_URL = 'http://localhost:3080'
 
 describe('deviceLogin module', () => {
-  it('creates, exchanges (pending and success), inspects, and decides', async () => {
+  it('creates the pairing request and long-polls the exchange', async () => {
     const request = {
       id: 'dl_1',
       user_code: 'EABCD12',
@@ -26,16 +26,7 @@ describe('deviceLogin module', () => {
     const { fetchMock, calls } = mockFetch([
       envelope(request, {}, 201),
       envelope({ status: 'pending', interval: 5 }, {}, 202),
-      envelope(user),
-      envelope({
-        user_code: 'EABCD12',
-        device: 'CLI',
-        ip_address: '1.2.3.4',
-        city: '',
-        country: '',
-        expires_at: 'x'
-      }),
-      envelope(null, {}, 204)
+      envelope(user)
     ])
     const c = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
@@ -44,13 +35,10 @@ describe('deviceLogin module', () => {
     expect(pending).toMatchObject({ status: 'pending' })
     const done = await c.deviceLogin.exchange('dl_1')
     expect(done).toMatchObject({ id: 'user_01j' })
-    await expect(c.deviceLogin.inspect('EABCD12')).resolves.toMatchObject({ device: 'CLI' })
-    await c.deviceLogin.decide('EABCD12', 'approve')
 
+    expect(expectCall(calls, 0).path).toBe('/api/device-login/requests')
     expect(expectCall(calls, 1).path).toBe('/api/device-login/requests/dl_1/exchange')
-    expect(expectCall(calls, 3).body).toBe(JSON.stringify({ code: 'EABCD12' }))
-    expect(expectCall(calls, 4).path).toBe('/api/device-login/verification/decision')
-    expect(expectCall(calls, 4).body).toBe(JSON.stringify({ code: 'EABCD12', decision: 'approve' }))
+    expect(expectCall(calls, 2).path).toBe('/api/device-login/requests/dl_1/exchange')
   })
 })
 

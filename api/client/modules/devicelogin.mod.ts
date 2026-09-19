@@ -1,11 +1,12 @@
-// Passwordless device pairing: a device creates the request and polls,
-// an authenticated user inspects the code and approves or denies.
+// Device-side passwordless pairing: a device creates the request and
+// polls the exchange. The approval side is the deviceApproval
+// namespace (the OIDC device-flow browser surface) and the Connect
+// DeviceApprovalService.
 
 import { isDeviceLoginPending } from '../schemas/devicelogin.schema'
 import type {
   DeviceLoginExchangeResult,
-  DeviceLoginRequest,
-  VerificationInfo
+  DeviceLoginRequest
 } from '../schemas/devicelogin.schema'
 import type { Executor } from '../types'
 
@@ -19,10 +20,6 @@ export interface DeviceLoginModule {
    * (202, use {@link isDeviceLoginPending}), or an error.
    */
   exchange(requestId: string): Promise<DeviceLoginExchangeResult>
-  /** What the approving device will see for a user code. */
-  inspect(code: string): Promise<VerificationInfo>
-  /** Approves (`decision: 'approve'`) or denies the pairing. */
-  decide(code: string, decision: 'approve' | 'deny'): Promise<void>
 }
 
 export function createDeviceLoginModule(exec: Executor): DeviceLoginModule {
@@ -31,10 +28,6 @@ export function createDeviceLoginModule(exec: Executor): DeviceLoginModule {
     exchange: (requestId) =>
       exec
         .post<DeviceLoginExchangeResult>(`/device-login/requests/${requestId}/exchange`)
-        .then((r) => r.data),
-    inspect: (code) =>
-      exec.post<VerificationInfo>('/device-login/verification', { code }).then((r) => r.data),
-    decide: (code, decision) =>
-      exec.post('/device-login/verification/decision', { code, decision }).then(() => undefined)
+        .then((r) => r.data)
   }
 }
