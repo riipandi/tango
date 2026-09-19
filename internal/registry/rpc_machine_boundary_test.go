@@ -3,6 +3,9 @@ package registry
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +56,52 @@ var machineDeniedProcedures = []string{
 	"/tango.identity.v1.OneTimeAccessService/AdminSendEmail",
 	"/tango.identity.v1.MfaService/GetTotpStatus",
 	"/tango.identity.v1.DeviceApprovalService/GetPendingRequest",
+}
+
+// TestRPCMatrixDocumentsEveryProcedure pins the contract documents
+// against the proto: every declared rpc needs a row in
+// llms/endpoint-reference.md. The row count once drifted below the
+// proto because three procedures shipped undocumented.
+func TestRPCMatrixDocumentsEveryProcedure(t *testing.T) {
+	protos, err := filepath.Glob("../../api/connect/*.proto")
+	require.NoError(t, err)
+	require.NotEmpty(t, protos)
+
+	matrix, err := os.ReadFile("../../llms/endpoint-reference.md")
+	require.NoError(t, err)
+
+	declared := map[string]string{} // procedure -> source file
+	serviceDecl := regexp.MustCompile(`^\s*service\s+(\w+)\s*\{`)
+	packageDecl := regexp.MustCompile(`^\s*package\s+([\w.]+)\s*;`)
+	rpcDecl := regexp.MustCompile(`^\s*rpc\s+(\w+)\s*\(`)
+
+	for _, path := range protos {
+		pkg, service := "", ""
+		for _, line := range strings.Split(string(mustReadFile(t, path)), "\n") {
+			if m := packageDecl.FindStringSubmatch(line); m != nil {
+				pkg = m[1]
+			}
+			if m := serviceDecl.FindStringSubmatch(line); m != nil {
+				service = m[1]
+			}
+			if m := rpcDecl.FindStringSubmatch(line); m != nil && pkg != "" && service != "" {
+				declared["/rpc/"+pkg+"."+service+"/"+m[1]] = filepath.Base(path)
+			}
+		}
+	}
+	require.NotEmpty(t, declared, "the proto scan must find procedures")
+
+	for procedure, source := range declared {
+		assert.Contains(t, string(matrix), "`"+procedure+"`",
+			"%s declares %s with no row in llms/endpoint-reference.md", source, procedure)
+	}
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return data
 }
 
 // TestRPCMachineCredentialBoundary pins the Option A boundary decided

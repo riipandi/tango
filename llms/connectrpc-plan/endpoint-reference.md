@@ -297,10 +297,10 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `AuthService.SignIn` | POST `/api/auth/sign-in` | public | Rate-limited (rule follows the /rpc procedure); sets/rotates token cookies. |
 | `AuthService.SignOut` | POST `/api/auth/sign-out` | bearer | Revokes token family, clears cookies; the REST twin is the worker fallback. |
 | `AuthService.GetSession` | GET `/api/auth/session` | bearer | |
-| `AuthService.ForgotPassword` | POST `/api/auth/forgot-password` | public | REST is authoritative for recovery; the RPC answers `unimplemented`. Rate-limited. |
-| `AuthService.ResetPassword` | POST `/api/auth/reset-password` | public | REST is authoritative for recovery; the RPC answers `unimplemented`. Rate-limited. |
-| `AccountService.GetAccount` | GET `/api/account` | bearer | Self. |
-| `AccountService.UpdateAccount` | PATCH `/api/account` | bearer | Self. |
+| `AuthService.ForgotPassword` | POST `/api/auth/forgot-password` | public | REST is authoritative for recovery; the RPC answers `unimplemented`. Rate-limited. Yaak: `Request a password reset (RPC, unimplemented)` → 501. |
+| `AuthService.ResetPassword` | POST `/api/auth/reset-password` | public | REST is authoritative for recovery; the RPC answers `unimplemented`. Rate-limited. Yaak: `Reset a password (RPC, unimplemented)` → 501. |
+| `AccountService.GetAccount` | GET `/api/account` | bearer | Self; refuses a machine credential. |
+| `AccountService.UpdateAccount` | PATCH `/api/account` | bearer | Self; refuses a machine credential. Shares `UpdateProfileRequest` and the `UpdateProfile` store call with `UserService.UpdateMe` (ambiguity A4). Yaak: `Update own account` → 200 with a bearer, 401 with a machine credential. |
 | `AccountService.ChangePassword` | PUT `/api/account/password` | bearer | Self; rate-limited; revokes other sessions. |
 | `AccountService.ListSessions` | GET `/api/account/sessions` | bearer | Self. |
 | `AccountService.RevokeSession` | DELETE `/api/account/sessions/{id}` | bearer | Self. |
@@ -495,7 +495,10 @@ Connect Protocol requests do not exist yet; each implementing phase creates
 `POST /rpc/<package>.<Service>/<Method>` requests under a new `[ConnectRPC] <Module>` folder tree
 via Yaak MCP. A matrix row without a sent Yaak request is not complete.
 
-## Ambiguities to resolve before implementation
+## Ambiguities
+
+A1, A2, A3, and A5 remain open; A4 is resolved below. Resolved entries stay in place so the
+decision is traceable rather than silently dropped.
 
 - **A1 — `GET /api/oidc/authorized-clients`**: live admin-wide listing, absent from the route
   tables. Owner module (federation) is clear; confirm intended consumer and pagination before the
@@ -506,8 +509,12 @@ via Yaak MCP. A matrix row without a sent Yaak request is not complete.
 - **A3 — `/api/apis/{id}` trailing-slash chi pattern**: `chi.Walk` reports `GET/PUT/DELETE
   /api/apis/{id}/` (trailing slash) while sibling subpaths register without it. Confirm the handler
   registration is intentional before recording the canonical path shape.
-- **A4 — `PATCH /api/account` vs `PUT /api/users/me`**: two update surfaces for overlapping
-  profile data. Confirm which fields each owns before `AccountService.UpdateAccount` and
-  `UserService.UpdateMe` protos are frozen.
+- **A4 — `PATCH /api/account` vs `PUT /api/users/me`** — **resolved**: both are intentional, and they
+  own the same field set. `AccountService.UpdateAccount` and `UserService.UpdateMe` both take
+  `UpdateProfileRequest` and both call `user.PostgresStore.UpdateProfile` with `first_name`,
+  `last_name`, `display_name`, `avatar_url`, and `locale`; neither can touch identity, credentials,
+  or admin flags. The pair exists because each replaces a distinct legacy route that the SPA and
+  the upstream client already call, and collapsing them would break one of those callers for no
+  contract gain. New self-service profile writes should extend both or neither.
 - **A5 — `POST /authorize`**: live but undocumented in the tables above (upstream parity for
   form-post authorize?). Protocol surface stays REST either way; document the method set.
