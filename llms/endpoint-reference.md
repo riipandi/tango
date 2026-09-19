@@ -23,7 +23,12 @@ application API also accepts `X-API-KEY` for machine clients. Self-service and c
 procedures — the account surface, `UserService` self procedures, email verification, one-time
 access administration, signup-token administration, MFA, and device approval — never accept a
 machine credential, so a leaked key cannot rotate its owner's password or edit its owner's profile.
-Cookie presence never authorizes an RPC. `llms/connectrpc-plan/endpoint-reference.md`
+Cookie presence never authorizes an RPC.
+
+Every procedure is called with `POST`; `GET` is reserved for procedures that declare
+`idempotency_level = NO_SIDE_EFFECTS`, and no procedure in `api/connect/` does, so a `GET` on any
+procedure answers `405` with `Allow: POST` (`internal/transport.TestRPCRejectsWrongMethods`).
+`llms/connectrpc-plan/endpoint-reference.md`
 is the authoritative transport decision record and service/method matrix; the retained REST set is
 pinned by `internal/registry.TestRetainedRESTInventory` and the machine-credential boundary by
 `internal/registry.TestRPCMachineCredentialBoundary`.
@@ -37,11 +42,11 @@ only. Contracts below define the full password lifecycle.
 | ------ | -------------------- | -------------------- | ------ | -------- |
 | POST | `/rpc/tango.identity.v1.AuthService/SignIn` | Sign in with password | done — indistinguishable failures for unknown identity vs wrong secret; disabled accounts fail closed; sets the token cookies | `modules/identity/session.TestRPCSignInIssuesCookies`, `modules/identity/session.TestRPCSignInPendingFlow` |
 | POST | `/rpc/tango.identity.v1.AuthService/SignOut` | Sign out | done — revokes the token family and clears cookies; the REST twin below is the worker's cookie-channel fallback | `modules/identity/session.TestRPCSignOutAndSession` |
-| GET | `/rpc/tango.identity.v1.AuthService/GetSession` | Inspect current session | done | `modules/identity/session.TestRPCSignOutAndSession` |
-| GET | `/rpc/tango.identity.v1.AccountService/GetAccount` | Get account | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
-| PUT | `/rpc/tango.identity.v1.AccountService/ChangePassword` | Change own password | done — current secret required; other sessions revoked; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
-| GET | `/rpc/tango.identity.v1.AccountService/ListSessions` | List own sessions | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
-| DELETE | `/rpc/tango.identity.v1.AccountService/RevokeSession` | Revoke one own session | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
+| POST | `/rpc/tango.identity.v1.AuthService/GetSession` | Inspect current session | done | `modules/identity/session.TestRPCSignOutAndSession` |
+| POST | `/rpc/tango.identity.v1.AccountService/GetAccount` | Get account | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
+| POST | `/rpc/tango.identity.v1.AccountService/ChangePassword` | Change own password | done — current secret required; other sessions revoked; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
+| POST | `/rpc/tango.identity.v1.AccountService/ListSessions` | List own sessions | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
+| POST| `/rpc/tango.identity.v1.AccountService/RevokeSession` | Revoke one own session | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
 | POST | `/api/auth/token` | Cookie bridge for the auth worker | REST — access/refresh cookies in, access token + rotation out; never bearer | `modules/identity/session.TestTokenBridgeBootstrapAndRotation`, `modules/identity/session.TestTokenBridgeRejectsAnonymous` |
 | POST | `/api/auth/sign-out` | Sign out (cookie channel) | REST — worker fallback when the bearer path is unusable | `modules/identity/session.TestRPCSignOutAndSession` |
 | POST | `/api/auth/forgot-password` | Request a password reset | REST — anonymous; always 204; queues recovery email; the RPC twin answers `unimplemented` | `modules/identity/recovery.TestForgotIsAlwaysGeneric` |
@@ -63,10 +68,10 @@ Upstream Pocket ID has no TOTP; this surface is tango-only and follows the datab
 | ------ | --------- | -------------------- | ------ | -------- |
 | POST | `/rpc/tango.identity.v1.MfaService/EnrollTotp` | Start TOTP enrollment | done — self; returns the raw secret + otpauth URI exactly once; re-enroll replaces an unconfirmed row | `modules/identity/totp.TestMfaRPCLifecycle` |
 | POST | `/rpc/tango.identity.v1.MfaService/ConfirmTotp` | Confirm and enable TOTP | done — verifies one code; sets `confirmed_at`; returns recovery codes exactly once | `modules/identity/totp.TestMfaRPCLifecycle` |
-| GET | `/rpc/tango.identity.v1.MfaService/GetTotpStatus` | TOTP status | done — confirmed flag + remaining recovery-code count | `modules/identity/totp.TestMfaRPCLifecycle` |
+| POST | `/rpc/tango.identity.v1.MfaService/GetTotpStatus` | TOTP status | done — confirmed flag + remaining recovery-code count | `modules/identity/totp.TestMfaRPCLifecycle` |
 | POST | `/rpc/tango.identity.v1.MfaService/VerifyPending` | Complete a pending sign-in | done — pending-auth cookie; accepts a TOTP code or a recovery code; issues the full session | `modules/identity/totp.TestMfaRPCVerifyPending` |
 | POST | `/rpc/tango.identity.v1.MfaService/RotateRecoveryCodes` | Rotate recovery codes | done — requires a valid TOTP code; returns the new codes exactly once | `modules/identity/totp.TestMfaRPCLifecycle` |
-| DELETE | `/rpc/tango.identity.v1.MfaService/DisableTotp` | Disable TOTP | done — requires the current password; drops all MFA state | `modules/identity/totp.TestMfaRPCLifecycle` |
+| POST| `/rpc/tango.identity.v1.MfaService/DisableTotp` | Disable TOTP | done — requires the current password; drops all MFA state | `modules/identity/totp.TestMfaRPCLifecycle` |
 
 Fixed parameters: issuer = the configured app name, 6 digits, 30-second period, SHA-1,
 ±1 step bounded skew. Sign-in composition: a confirmed TOTP enrollment turns a successful
@@ -140,9 +145,9 @@ ciphertext.
 
 | Method | Procedure / Endpoint | Summary / Yaak Title | Status | Evidence |
 | ------ | -------------------- | -------------------- | ------ | -------- |
-| GET | `/rpc/tango.admin.v1.ApplicationConfigurationService/Get` | Public bootstrap configuration | done — anonymous view the SPA reads before sign-in | `modules/admin/appconfig.TestRPCConfigBootstrapIsAnonymous` |
-| GET | `/rpc/tango.admin.v1.ApplicationConfigurationService/GetAll` | List all application configurations | done — admin | `modules/admin/appconfig.TestRPCConfigLifecycle` |
-| PUT | `/rpc/tango.admin.v1.ApplicationConfigurationService/Update` | Update application configurations | done — partial update | `modules/admin/appconfig.TestRPCConfigLifecycle` |
+| POST | `/rpc/tango.admin.v1.ApplicationConfigurationService/Get` | Public bootstrap configuration | done — anonymous view the SPA reads before sign-in | `modules/admin/appconfig.TestRPCConfigBootstrapIsAnonymous` |
+| POST | `/rpc/tango.admin.v1.ApplicationConfigurationService/GetAll` | List all application configurations | done — admin | `modules/admin/appconfig.TestRPCConfigLifecycle` |
+| POST | `/rpc/tango.admin.v1.ApplicationConfigurationService/Update` | Update application configurations | done — partial update | `modules/admin/appconfig.TestRPCConfigLifecycle` |
 | POST | `/rpc/tango.admin.v1.ApplicationConfigurationService/TestEmail` | Send test email | done — admin; defaults to the signed-in administrator | `modules/admin/appconfig.TestRPCConfigLifecycle` |
 | GET | `/api/application-configuration` | List public application configurations | REST — unauthenticated bootstrap read | `modules/admin/appconfig.TestConfigCRUD` |
 | POST | `/api/application-configuration/sync-ldap` | Synchronize LDAP | excluded | — |

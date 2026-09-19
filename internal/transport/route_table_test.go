@@ -242,12 +242,22 @@ func TestRPCMountDoesNotFallThroughToSPA(t *testing.T) {
 }
 
 // TestRPCRejectsWrongMethods pins that the Connect handler only
-// accepts unary POST procedure calls.
+// accepts unary POST procedure calls. No procedure declares
+// idempotency_level, so GET must not reach a handler for any of them.
 func TestRPCRejectsWrongMethods(t *testing.T) {
 	srv := testServer(t, testConfig())
 
-	w := httptest.NewRecorder()
-	srv.Router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/rpc/tango.system.v1.HealthService/Check", nil))
-	require.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	assert.Equal(t, "POST", w.Header().Get("Allow"), "GET on a non-idempotent unary RPC must advertise POST")
+	procedures := []string{
+		"/rpc/tango.system.v1.HealthService/Check",
+		"/rpc/tango.identity.v1.AccountService/ListSessions",
+	}
+	for _, procedure := range procedures {
+		for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+			w := httptest.NewRecorder()
+			srv.Router.ServeHTTP(w, httptest.NewRequest(method, procedure, nil))
+			require.Equal(t, http.StatusMethodNotAllowed, w.Code, "%s %s", method, procedure)
+			assert.Equal(t, "POST", w.Header().Get("Allow"),
+				"%s on a non-idempotent unary RPC must advertise POST", method)
+		}
+	}
 }

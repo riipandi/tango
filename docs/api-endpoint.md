@@ -7,8 +7,10 @@ lives in `llms/endpoint-reference.md`; the transport decision record and the ser
 ## Transport and authentication
 
 - **ConnectRPC** below `/rpc` — the SPA, the admin console, and internal tools call the generated
-  clients from `api/connect/*.proto`. Unary POST with `Content-Type: application/json` and
-  `Connect-Protocol-Version: 1`; errors use the Connect code/message document.
+  clients from `api/connect/*.proto`. Every procedure is called with `POST` and
+  `Content-Type: application/json` plus `Connect-Protocol-Version: 1`; `GET` is reserved for
+  procedures that declare `idempotency_level = NO_SIDE_EFFECTS`, and no procedure does. Errors use
+  the Connect code/message document.
 - **HTTP/REST** below `/api`, `/authorize`, or a documented root path — protocol and infrastructure
   surfaces only: OAuth/OIDC, WebAuthn ceremonies, device-login request and exchange, email links,
   the auth worker's cookie bridge, health, and discovery.
@@ -28,11 +30,11 @@ only. Recovery stays on HTTP: the `ForgotPassword` and `ResetPassword` RPCs answ
 | -------- | ------------------------------------------------------------ | ------------ | ----------------------------------- |
 | POST     | `/rpc/tango.identity.v1.AuthService/SignIn`                  | ConnectRPC   | Sign in with password               |
 | POST     | `/rpc/tango.identity.v1.AuthService/SignOut`                 | ConnectRPC   | Sign out                            |
-| GET      | `/rpc/tango.identity.v1.AuthService/GetSession`              | ConnectRPC   | Inspect current session             |
-| GET      | `/rpc/tango.identity.v1.AccountService/GetAccount`           | ConnectRPC   | Get account                         |
-| PUT      | `/rpc/tango.identity.v1.AccountService/ChangePassword`       | ConnectRPC   | Change own password                 |
-| GET      | `/rpc/tango.identity.v1.AccountService/ListSessions`         | ConnectRPC   | List own sessions                   |
-| DELETE   | `/rpc/tango.identity.v1.AccountService/RevokeSession`        | ConnectRPC   | Revoke one own session              |
+| POST      | `/rpc/tango.identity.v1.AuthService/GetSession`              | ConnectRPC   | Inspect current session             |
+| POST      | `/rpc/tango.identity.v1.AccountService/GetAccount`           | ConnectRPC   | Get account                         |
+| POST      | `/rpc/tango.identity.v1.AccountService/ChangePassword`       | ConnectRPC   | Change own password                 |
+| POST      | `/rpc/tango.identity.v1.AccountService/ListSessions`         | ConnectRPC   | List own sessions                   |
+| POST  | `/rpc/tango.identity.v1.AccountService/RevokeSession`        | ConnectRPC   | Revoke one own session              |
 | POST     | `/api/auth/token`                                            | HTTP/REST    | Cookie bridge for the auth worker   |
 | POST     | `/api/auth/sign-out`                                         | HTTP/REST    | Sign out (cookie channel)           |
 | POST     | `/api/auth/forgot-password`                                  | HTTP/REST    | Request a password reset            |
@@ -47,10 +49,10 @@ sign-in into a pending authentication that only `VerifyPending` completes.
 | -------- | ------------------------------------------------------------ | ------------ | ---------------------------- |
 | POST     | `/rpc/tango.identity.v1.MfaService/EnrollTotp`               | ConnectRPC   | Start TOTP enrollment        |
 | POST     | `/rpc/tango.identity.v1.MfaService/ConfirmTotp`              | ConnectRPC   | Confirm and enable TOTP      |
-| GET      | `/rpc/tango.identity.v1.MfaService/GetTotpStatus`            | ConnectRPC   | TOTP status                  |
+| POST      | `/rpc/tango.identity.v1.MfaService/GetTotpStatus`            | ConnectRPC   | TOTP status                  |
 | POST     | `/rpc/tango.identity.v1.MfaService/VerifyPending`            | ConnectRPC   | Complete a pending sign-in   |
 | POST     | `/rpc/tango.identity.v1.MfaService/RotateRecoveryCodes`      | ConnectRPC   | Rotate recovery codes        |
-| DELETE   | `/rpc/tango.identity.v1.MfaService/DisableTotp`              | ConnectRPC   | Disable TOTP                 |
+| POST  | `/rpc/tango.identity.v1.MfaService/DisableTotp`              | ConnectRPC   | Disable TOTP                 |
 
 ## OAuth
 
@@ -100,9 +102,9 @@ Configure application settings.
 
 | Method   | Procedure / Endpoint                                                         | Protocol     | Summary                                  |
 | -------- | ---------------------------------------------------------------------------- | ------------ | ---------------------------------------- |
-| GET      | `/rpc/tango.admin.v1.ApplicationConfigurationService/Get`                    | ConnectRPC   | Public bootstrap configuration           |
-| GET      | `/rpc/tango.admin.v1.ApplicationConfigurationService/GetAll`                 | ConnectRPC   | List all application configurations      |
-| PUT      | `/rpc/tango.admin.v1.ApplicationConfigurationService/Update`                 | ConnectRPC   | Update application configurations        |
+| POST      | `/rpc/tango.admin.v1.ApplicationConfigurationService/Get`                    | ConnectRPC   | Public bootstrap configuration           |
+| POST      | `/rpc/tango.admin.v1.ApplicationConfigurationService/GetAll`                 | ConnectRPC   | List all application configurations      |
+| POST      | `/rpc/tango.admin.v1.ApplicationConfigurationService/Update`                 | ConnectRPC   | Update application configurations        |
 | POST     | `/rpc/tango.admin.v1.ApplicationConfigurationService/TestEmail`              | ConnectRPC   | Send test email                          |
 | GET      | `/api/application-configuration`                                             | HTTP/REST    | List public application configurations   |
 

@@ -60,6 +60,10 @@ func testServer(t *testing.T, cfg *config.Config) *HTTPServer {
 		MountAPI: func(r chi.Router) {
 			idModule.APIRoutes(r, identity.RouteGroups{})
 		},
+		MountRPC: func(r chi.Router) {
+			accountPrefix, accountHandler := idModule.AccountRPCService()
+			r.Handle(accountPrefix+"*", accountHandler)
+		},
 	}, cfg, testLogger(), nil, nil, nil)
 }
 
