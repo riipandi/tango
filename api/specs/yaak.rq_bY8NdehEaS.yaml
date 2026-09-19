@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_bY8NdehEaS
 createdAt: 2026-09-19T12:33:44.245050
-updatedAt: 2026-09-19T14:55:30.657240
+updatedAt: 2026-09-19T17:35:48.515650
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tHTGrChyrG
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 body:
   text: |-
     {
-      "id": "REPLACE_API_ID",
+      "api_id": "REPLACE_API_ID",
       "page": {
         "page": 1,
         "limit": 20

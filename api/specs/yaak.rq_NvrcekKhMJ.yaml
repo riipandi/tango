@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_NvrcekKhMJ
 createdAt: 2026-09-19T12:33:57.271190
-updatedAt: 2026-09-19T14:55:35.844655
+updatedAt: 2026-09-19T17:36:22.938196
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tHTGrChyrG
 authentication: {}
@@ -10,7 +10,11 @@ authenticationType: null
 body:
   text: |-
     {
-      "client_id": "REPLACE_CLIENT_ID"
+      "client_id": "REPLACE_CLIENT_ID",
+      "page": {
+        "page": 1,
+        "limit": 20
+      }
     }
 bodyType: application/json
 description: ''

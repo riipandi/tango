@@ -110,7 +110,7 @@ service OidcClientService {
 
 message ListOidcClientsResponse {
   repeated OidcClient clients = 1;
-  common.v1.PageMetadata metadata = 2;
+  common.v1.ResponseMetadata metadata = 2;
 }
 
 message CreateOidcClientRequest {
@@ -186,6 +186,8 @@ message DeleteLogoRequest {
   string client_id = 1;
 }
 
+// ListSecretsRequest lists one client's secrets. Bounded: a client
+// carries a handful of secrets, so the list has no page window.
 message ListSecretsRequest {
   string client_id = 1;
 }
@@ -215,22 +217,24 @@ message DeleteSecretRequest {
 service OidcConsentService {
   rpc ListMyAuthorizedClients(common.v1.PageRequest) returns (ListAuthorizedClientsResponse);
   rpc RevokeMyAuthorizedClient(RevokeMyAuthorizedClientRequest) returns (google.protobuf.Empty);
-  rpc ListMyClients(google.protobuf.Empty) returns (ListMyClientsResponse);
+  rpc ListMyClients(common.v1.PageRequest) returns (ListMyClientsResponse);
   rpc ListUserAuthorizedClients(ListUserAuthorizedClientsRequest) returns (ListAuthorizedClientsResponse);
   rpc ListAllAuthorizedClients(common.v1.PageRequest) returns (ListAuthorizedClientsResponse);
 }
 
 message ListAuthorizedClientsResponse {
   repeated AuthorizedClient authorized_clients = 1;
-  common.v1.PageMetadata metadata = 2;
+  common.v1.ResponseMetadata metadata = 2;
 }
 
 message RevokeMyAuthorizedClientRequest {
   string client_id = 1;
 }
 
+// ListMyClientsResponse lists the clients the caller may access.
 message ListMyClientsResponse {
   repeated OidcClient clients = 1;
+  common.v1.ResponseMetadata metadata = 2;
 }
 
 message ListUserAuthorizedClientsRequest {

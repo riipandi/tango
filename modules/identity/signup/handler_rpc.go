@@ -17,6 +17,7 @@ import (
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -91,29 +92,23 @@ func (h *signupRPC) ListSignupTokens(ctx context.Context, req *connect.Request[c
 	if err != nil {
 		return nil, rpcerr.Internal("internal error")
 	}
-	page, limit := int(req.Msg.GetPage()), int(req.Msg.GetLimit())
+	page, limit := rpcerr.NormalizePage(int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
 	total := len(tokens)
-	if page >= 1 && limit >= 1 {
-		start := (page - 1) * limit
+	if start := responder.Offset(page, limit); start > 0 || !responder.All(page, limit) {
 		if start >= total {
 			tokens = nil
 		} else {
-			end := start + limit
-			if end > total {
-				end = total
-			}
-			tokens = tokens[start:end]
+			tokens = tokens[start:min(start+limit, total)]
 		}
 	}
 	out := make([]*identityv1.SignupToken, 0, len(tokens))
 	for _, t := range tokens {
 		out = append(out, tokenProto(t))
 	}
-	var metadata *commonv1.PageMetadata
-	if page >= 1 && limit >= 1 {
-		metadata = rpcerr.PageMetadata(page, limit, total)
-	}
-	return connect.NewResponse(&identityv1.ListSignupTokensResponse{Tokens: out, Metadata: metadata}), nil
+	return connect.NewResponse(&identityv1.ListSignupTokensResponse{
+		Tokens:   out,
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
+	}), nil
 }
 
 func (h *signupRPC) CreateSignupToken(ctx context.Context, req *connect.Request[identityv1.CreateSignupTokenRequest]) (*connect.Response[identityv1.SignupTokenSecret], error) {

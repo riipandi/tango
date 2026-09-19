@@ -463,6 +463,21 @@ from `/api` once its replacement and callers are verified.
 - TypeScript runtime: `@bufbuild/protobuf` + `@connectrpc/connect` (pinned devDeps; the
   `protoc-gen-es` plugin resolves through `pnpm exec` and emits the service descriptors —
   connect-es v2 removed the separate `protoc-gen-connect-es` plugin).
+- List RPCs have one shape:
+  1. `common.v1.PageRequest` **is** the request when the list has no scope and no filter;
+  2. a dedicated `List*Request` **embeds** `common.v1.PageRequest page = N` when the list is scoped
+     or filtered;
+  3. a list that cannot paginate documents why on its request message instead of silently omitting
+     the field (a bounded per-owner collection such as passkeys, sessions, secrets, or claims).
+- Every wrapper response carries `common.v1.ResponseMetadata metadata`, which mirrors the REST
+  envelope metadata block: `status_code`, `request_id`, `rate_limit`, and the pagination fields.
+  The item indices are zero-based and every field is `optional`, so an unknown value is omitted
+  from the JSON exactly as the REST envelope omits it. Entity returns (`User`, `Webhook`, ...) and
+  `google.protobuf.Empty` carry no metadata by design.
+- Pagination rules are defined once in `pkg/responder` and consumed by both transports:
+  `page` starts at 1, `limit` defaults to 25 and caps at 100, and `-1` returns every record. On the
+  RPC surface a proto3 `int32` cannot express "unset", so `0` takes the default rather than
+  returning an unbounded result.
 - Task targets: `rpc:generate`, `rpc:lint`, `rpc:breaking`, `rpc:stale`.
 
 ## Connect error mapping (contract)

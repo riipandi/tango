@@ -1,5 +1,22 @@
 # API Response
 
+Two transports, one contract: REST answers the envelope below, and
+ConnectRPC answers the same metadata block under protobuf field names.
+The rules are defined once in `pkg/responder` and both transports use
+them, so a client reads the same page, limit, totals, and item range
+from either surface.
+
+| REST envelope | ConnectRPC |
+| --- | --- |
+| `status` | the Connect error code (`ok` is the absence of an error) |
+| `message` | the Connect error message |
+| `data` | the response message's own payload field (`users`, `api_keys`, ...) |
+| `metadata.status_code` | `metadata.status_code` |
+| `metadata.request_id` | `metadata.request_id` |
+| `metadata.rate_limit` | `metadata.rate_limit` |
+| `metadata.page` … `metadata.last_item_index` | the same fields on `metadata` |
+| `links` | not modelled yet; RPCs that need it add the field explicitly |
+
 Minimal sucess response:
 
 ```json
@@ -65,6 +82,22 @@ PaginationParams (query params):
     sort_order?: 'asc' | 'desc' // sort direction
 }
 ```
+
+Pagination rules (enforced once in `pkg/responder`, shared by REST and
+ConnectRPC):
+
+- `page` starts at 1; a value below 1 becomes 1.
+- `limit` defaults to 25 and caps at 100.
+- `-1` in either field returns every record.
+- On the REST query surface an empty `page`/`limit` takes the default; a
+  present but invalid value is rejected. On the ConnectRPC surface a proto3
+  `int32` cannot express "unset" separately from zero, so `0` takes the
+  default rather than returning an unbounded result.
+- `first_item_index` and `last_item_index` are zero-based and inclusive.
+  Both are omitted when the range is unknown (empty result, or every record
+  requested with no rows).
+- `sort_by`/`sort_order` are parsed by `ParsePagination` but no store applies
+  them yet; each list keeps its own fixed order.
 
 Error response:
 

@@ -9,7 +9,6 @@ import (
 	"connectrpc.com/connect"
 	adminv1 "github.com/riipandi/tango/codegen/proto/go/tango/admin/v1"
 	adminv1connect "github.com/riipandi/tango/codegen/proto/go/tango/admin/v1/adminv1connect"
-	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/internal/transport/middleware"
@@ -80,8 +79,8 @@ func (h *logRPC) list(ctx context.Context, msg *adminv1.ListAuditLogsRequest, sc
 		filters.To = &parsed
 	}
 
-	page := Page{Page: int(msg.GetPage().GetPage()), Limit: int(msg.GetPage().GetLimit())}
-	entries, total, err := h.module.store.List(ctx, filters, page)
+	page, limit := rpcerr.NormalizePage(int(msg.GetPage().GetPage()), int(msg.GetPage().GetLimit()))
+	entries, total, err := h.module.store.List(ctx, filters, Page{Page: page, Limit: limit})
 	if err != nil {
 		return nil, rpcerr.Internal("internal error")
 	}
@@ -90,11 +89,10 @@ func (h *logRPC) list(ctx context.Context, msg *adminv1.ListAuditLogsRequest, sc
 	for _, e := range entries {
 		logs = append(logs, entryProto(e))
 	}
-	var metadata *commonv1.PageMetadata
-	if page.Page >= 1 && page.Limit >= 1 {
-		metadata = rpcerr.PageMetadata(page.Page, page.Limit, total)
-	}
-	return connect.NewResponse(&adminv1.ListAuditLogsResponse{Logs: logs, Metadata: metadata}), nil
+	return connect.NewResponse(&adminv1.ListAuditLogsResponse{
+		Logs:     logs,
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
+	}), nil
 }
 
 func (h *logRPC) FilterOptions(ctx context.Context, req *connect.Request[adminv1.FilterOptionsRequest]) (*connect.Response[adminv1.FilterOptionsResponse], error) {

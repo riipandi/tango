@@ -35,8 +35,8 @@ func (m *Module) RPCService() (string, http.Handler) {
 }
 
 func (h *hookRPC) List(ctx context.Context, req *connect.Request[commonv1.PageRequest]) (*connect.Response[webhookv1.ListWebhooksResponse], error) {
-	page := Page{Page: int(req.Msg.GetPage()), Limit: int(req.Msg.GetLimit())}
-	hooks, total, err := h.service.List(ctx, ListParams{Page: page})
+	page, limit := rpcerr.NormalizePage(int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
+	hooks, total, err := h.service.List(ctx, ListParams{Page: Page{Page: page, Limit: limit}})
 	if err != nil {
 		return nil, rpcError(err)
 	}
@@ -46,7 +46,7 @@ func (h *hookRPC) List(ctx context.Context, req *connect.Request[commonv1.PageRe
 	}
 	return connect.NewResponse(&webhookv1.ListWebhooksResponse{
 		Webhooks: out,
-		Metadata: metadataFrom(page, total),
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
 	}), nil
 }
 
@@ -156,8 +156,8 @@ func (h *hookRPC) ListAllDeliveries(ctx context.Context, req *connect.Request[co
 }
 
 func (h *hookRPC) listDeliveries(ctx context.Context, id *WebhookID, page *commonv1.PageRequest) (*connect.Response[webhookv1.ListDeliveriesResponse], error) {
-	window := Page{Page: int(page.GetPage()), Limit: int(page.GetLimit())}
-	deliveries, total, err := h.service.ListDeliveries(ctx, id, ListParams{Page: window})
+	pn, limit := rpcerr.NormalizePage(int(page.GetPage()), int(page.GetLimit()))
+	deliveries, total, err := h.service.ListDeliveries(ctx, id, ListParams{Page: Page{Page: pn, Limit: limit}})
 	if err != nil {
 		return nil, rpcError(err)
 	}
@@ -165,13 +165,9 @@ func (h *hookRPC) listDeliveries(ctx context.Context, id *WebhookID, page *commo
 	for _, d := range deliveries {
 		out = append(out, deliveryProto(d))
 	}
-	var metadata *commonv1.PageMetadata
-	if window.Page >= 1 && window.Limit >= 1 {
-		metadata = rpcerr.PageMetadata(window.Page, window.Limit, total)
-	}
 	return connect.NewResponse(&webhookv1.ListDeliveriesResponse{
 		Deliveries: out,
-		Metadata:   metadata,
+		Metadata:   rpcerr.ListMetadata(ctx, pn, limit, total),
 	}), nil
 }
 
@@ -200,15 +196,6 @@ func rpcError(err error) error {
 // 404.
 func parseHookID(raw string) (WebhookID, error) {
 	return parseWebhookID(raw)
-}
-
-// metadataFrom builds the shared pagination block. An unpaged or
-// all-marker page returns nil, so only paged responses carry metadata.
-func metadataFrom(page Page, total int) *commonv1.PageMetadata {
-	if page.Page < 1 || page.Limit < 1 {
-		return nil
-	}
-	return rpcerr.PageMetadata(page.Page, page.Limit, total)
 }
 
 func hookProto(w Webhook) *webhookv1.Webhook {

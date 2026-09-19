@@ -15,6 +15,7 @@ import (
 	federationv1 "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1"
 	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -37,8 +38,8 @@ func (s *Service) RPCService() (string, http.Handler) {
 }
 
 func (h *apiRPC) ListApis(ctx context.Context, req *connect.Request[commonv1.PageRequest]) (*connect.Response[adminv1.ListApisResponse], error) {
-	page := pageFrom(req.Msg)
-	apis, total, err := h.service.List(ctx, ListParams{Query: req.Msg.GetQuery(), Page: page})
+	page, limit := pageFrom(req.Msg)
+	apis, total, err := h.service.List(ctx, ListParams{Query: req.Msg.GetQuery(), Page: Page{Page: page, Limit: limit}})
 	if err != nil {
 		return nil, rpcError(err)
 	}
@@ -48,7 +49,7 @@ func (h *apiRPC) ListApis(ctx context.Context, req *connect.Request[commonv1.Pag
 	}
 	return connect.NewResponse(&adminv1.ListApisResponse{
 		Apis:     out,
-		Metadata: metadataFrom(page, total),
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
 	}), nil
 }
 
@@ -137,30 +138,32 @@ func (h *apiRPC) SetCimdAccess(ctx context.Context, req *connect.Request[adminv1
 	return connect.NewResponse(&emptypb.Empty{}), nil
 }
 
-func (h *apiRPC) ListAssignableClients(ctx context.Context, req *connect.Request[adminv1.GetApiRequest]) (*connect.Response[adminv1.ListClientRefsResponse], error) {
-	id, err := parseAPIID(req.Msg.GetId())
+func (h *apiRPC) ListAssignableClients(ctx context.Context, req *connect.Request[adminv1.ListApiClientsRequest]) (*connect.Response[adminv1.ListClientRefsResponse], error) {
+	id, err := parseAPIID(req.Msg.GetApiId())
 	if err != nil {
 		return nil, rpcerr.NotFound("api not found")
 	}
 	return h.listClients(ctx, id, req, false)
 }
 
-func (h *apiRPC) ListClients(ctx context.Context, req *connect.Request[adminv1.GetApiRequest]) (*connect.Response[adminv1.ListClientRefsResponse], error) {
-	id, err := parseAPIID(req.Msg.GetId())
+func (h *apiRPC) ListClients(ctx context.Context, req *connect.Request[adminv1.ListApiClientsRequest]) (*connect.Response[adminv1.ListClientRefsResponse], error) {
+	id, err := parseAPIID(req.Msg.GetApiId())
 	if err != nil {
 		return nil, rpcerr.NotFound("api not found")
 	}
 	return h.listClients(ctx, id, req, true)
 }
 
-func (h *apiRPC) listClients(ctx context.Context, id APIID, req *connect.Request[adminv1.GetApiRequest], granted bool) (*connect.Response[adminv1.ListClientRefsResponse], error) {
-	listParams := ListParams{}
+func (h *apiRPC) listClients(ctx context.Context, id APIID, req *connect.Request[adminv1.ListApiClientsRequest], granted bool) (*connect.Response[adminv1.ListClientRefsResponse], error) {
+	page, limit := rpcerr.NormalizePage(int(req.Msg.GetPage().GetPage()), int(req.Msg.GetPage().GetLimit()))
+	params := ListParams{Page: Page{Page: page, Limit: limit}}
 	var clients []ClientRef
+	var total int
 	var err error
 	if granted {
-		clients, _, err = h.service.ClientsWithAccess(ctx, id, listParams)
+		clients, total, err = h.service.ClientsWithAccess(ctx, id, params)
 	} else {
-		clients, _, err = h.service.AssignableClients(ctx, id, listParams)
+		clients, total, err = h.service.AssignableClients(ctx, id, params)
 	}
 	if err != nil {
 		return nil, rpcError(err)
@@ -175,7 +178,10 @@ func (h *apiRPC) listClients(ctx context.Context, id APIID, req *connect.Request
 			HasLogo:    c.HasLogo,
 		})
 	}
-	return connect.NewResponse(&adminv1.ListClientRefsResponse{Clients: refs}), nil
+	return connect.NewResponse(&adminv1.ListClientRefsResponse{
+		Clients:  refs,
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
+	}), nil
 }
 
 func (h *apiRPC) GrantClient(ctx context.Context, req *connect.Request[adminv1.GrantClientRequest]) (*connect.Response[emptypb.Empty], error) {
@@ -205,10 +211,19 @@ func (h *apiRPC) RevokeClient(ctx context.Context, req *connect.Request[adminv1.
 	return connect.NewResponse(&emptypb.Empty{}), nil
 }
 
-func (h *apiRPC) ListApisForClient(ctx context.Context, req *connect.Request[adminv1.ClientApisRequest]) (*connect.Response[adminv1.ListClientApiGrantsResponse], error) {
+func (h *apiRPC) ListApisForClient(ctx context.Context, req *connect.Request[adminv1.ListClientApisRequest]) (*connect.Response[adminv1.ListClientApiGrantsResponse], error) {
+	page, limit := rpcerr.NormalizePage(int(req.Msg.GetPage().GetPage()), int(req.Msg.GetPage().GetLimit()))
 	grants, err := h.service.GrantsForClient(ctx, req.Msg.GetClientId())
 	if err != nil {
 		return nil, rpcError(err)
+	}
+	total := len(grants)
+	if start := responder.Offset(page, limit); start > 0 || !responder.All(page, limit) {
+		if start >= total {
+			grants = nil
+		} else {
+			grants = grants[start:min(start+limit, total)]
+		}
 	}
 	out := make([]*adminv1.ClientApiGrant, 0, len(grants))
 	for _, g := range grants {
@@ -231,11 +246,15 @@ func (h *apiRPC) ListApisForClient(ctx context.Context, req *connect.Request[adm
 			CimdGrantedPermissionIds:   cimdPerms,
 		})
 	}
-	return connect.NewResponse(&adminv1.ListClientApiGrantsResponse{Grants: out}), nil
+	return connect.NewResponse(&adminv1.ListClientApiGrantsResponse{
+		Grants:   out,
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
+	}), nil
 }
 
-func (h *apiRPC) ListAssignableApisForClient(ctx context.Context, req *connect.Request[adminv1.ClientApisRequest]) (*connect.Response[adminv1.ListApisResponse], error) {
-	apis, _, err := h.service.AssignableAPIs(ctx, req.Msg.GetClientId(), ListParams{})
+func (h *apiRPC) ListAssignableApisForClient(ctx context.Context, req *connect.Request[adminv1.ListClientApisRequest]) (*connect.Response[adminv1.ListApisResponse], error) {
+	page, limit := rpcerr.NormalizePage(int(req.Msg.GetPage().GetPage()), int(req.Msg.GetPage().GetLimit()))
+	apis, total, err := h.service.AssignableAPIs(ctx, req.Msg.GetClientId(), ListParams{Page: Page{Page: page, Limit: limit}})
 	if err != nil {
 		return nil, rpcError(err)
 	}
@@ -243,7 +262,10 @@ func (h *apiRPC) ListAssignableApisForClient(ctx context.Context, req *connect.R
 	for _, a := range apis {
 		out = append(out, apiProto(a))
 	}
-	return connect.NewResponse(&adminv1.ListApisResponse{Apis: out}), nil
+	return connect.NewResponse(&adminv1.ListApisResponse{
+		Apis:     out,
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
+	}), nil
 }
 
 // cimdAccessFor computes the CIMD access split for one grant: the
@@ -322,18 +344,11 @@ func permissionProto(p Permission) *adminv1.Permission {
 	}
 }
 
-// metadataFrom builds the shared pagination block. An unpaged or
-// all-marker page returns nil, so only paged responses carry metadata.
-func metadataFrom(page Page, total int) *commonv1.PageMetadata {
-	if page.Page < 1 || page.Limit < 1 {
-		return nil
-	}
-	return rpcerr.PageMetadata(page.Page, page.Limit, total)
-}
-
-// pageFrom converts the wire page into the store window.
-func pageFrom(msg *commonv1.PageRequest) Page {
-	return Page{Page: int(msg.GetPage()), Limit: int(msg.GetLimit())}
+// pageFrom converts the wire page into the store window, applying the
+// shared pagination rules so an unset limit never reaches the store as
+// "no LIMIT".
+func pageFrom(msg *commonv1.PageRequest) (int, int) {
+	return rpcerr.NormalizePage(int(msg.GetPage()), int(msg.GetLimit()))
 }
 
 // parseAPIID accepts only the TypeID form (api_...); raw UUIDs 404.

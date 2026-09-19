@@ -13,7 +13,6 @@ import (
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/usergroup"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func mustParseClientID(t *testing.T, raw string) OIDCClientID {
@@ -136,7 +135,7 @@ func TestRPCConsentScopes(t *testing.T) {
 	// decides, the handler only resolves.
 	assert.NotNil(t, mineAll.Msg)
 
-	accessible, err := h.ListMyClients(selfCtx, connect.NewRequest(&emptypb.Empty{}))
+	accessible, err := h.ListMyClients(selfCtx, connect.NewRequest(&commonv1.PageRequest{Page: 1, Limit: 20}))
 	require.NoError(t, err)
 	assert.NotEmpty(t, accessible.Msg.GetClients())
 

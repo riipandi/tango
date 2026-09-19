@@ -149,22 +149,22 @@ func TestRPCGrantLifecycle(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	withAccess, err := h.ListClients(ctx, connect.NewRequest(&adminv1.GetApiRequest{Id: apiID}))
+	withAccess, err := h.ListClients(ctx, connect.NewRequest(&adminv1.ListApiClientsRequest{ApiId: apiID}))
 	require.NoError(t, err)
 	require.Len(t, withAccess.Msg.GetClients(), 1)
 	assert.Equal(t, clientID, withAccess.Msg.GetClients()[0].GetId())
 
-	assignable, err := h.ListAssignableClients(ctx, connect.NewRequest(&adminv1.GetApiRequest{Id: apiID}))
+	assignable, err := h.ListAssignableClients(ctx, connect.NewRequest(&adminv1.ListApiClientsRequest{ApiId: apiID}))
 	require.NoError(t, err)
 	assert.Empty(t, assignable.Msg.GetClients())
 
-	grants, err := h.ListApisForClient(ctx, connect.NewRequest(&adminv1.ClientApisRequest{ClientId: clientID}))
+	grants, err := h.ListApisForClient(ctx, connect.NewRequest(&adminv1.ListClientApisRequest{ClientId: clientID}))
 	require.NoError(t, err)
 	require.Len(t, grants.Msg.GetGrants(), 1)
 	assert.True(t, grants.Msg.GetGrants()[0].GetClientAccess())
 	assert.Equal(t, apiID, grants.Msg.GetGrants()[0].GetApi().GetId())
 
-	assignableAPIs, err := h.ListAssignableApisForClient(ctx, connect.NewRequest(&adminv1.ClientApisRequest{ClientId: clientID}))
+	assignableAPIs, err := h.ListAssignableApisForClient(ctx, connect.NewRequest(&adminv1.ListClientApisRequest{ClientId: clientID}))
 	require.NoError(t, err)
 	assert.Empty(t, assignableAPIs.Msg.GetApis())
 
@@ -173,7 +173,7 @@ func TestRPCGrantLifecycle(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	withAccess, err = h.ListClients(ctx, connect.NewRequest(&adminv1.GetApiRequest{Id: apiID}))
+	withAccess, err = h.ListClients(ctx, connect.NewRequest(&adminv1.ListApiClientsRequest{ApiId: apiID}))
 	require.NoError(t, err)
 	assert.Empty(t, withAccess.Msg.GetClients())
 }

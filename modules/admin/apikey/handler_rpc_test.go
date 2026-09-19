@@ -18,6 +18,7 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
@@ -145,7 +146,10 @@ func TestRPCKeyErrors(t *testing.T) {
 	assert.Contains(t, cerr.Message(), "validation failed")
 }
 
-// TestRPCPagination pins the shared pagination block contract.
+// TestRPCPagination pins the shared pagination block contract: the
+// same rules and the same zero-based item range the REST metadata
+// uses, and a zero limit taking the default instead of returning
+// every row.
 func TestRPCPagination(t *testing.T) {
 	ctx, h := rpcTestStack(t)
 	for i := range 3 {
@@ -162,14 +166,24 @@ func TestRPCPagination(t *testing.T) {
 	require.NotNil(t, meta)
 	assert.Equal(t, int32(3), meta.GetTotalItems())
 	assert.Equal(t, int32(2), meta.GetTotalPages())
-	assert.Equal(t, int32(1), meta.GetFirstItemIndex())
-	assert.Equal(t, int32(2), meta.GetLastItemIndex())
+	assert.Equal(t, int32(0), meta.GetFirstItemIndex())
+	assert.Equal(t, int32(1), meta.GetLastItemIndex())
 	assert.Len(t, listed.Msg.GetApiKeys(), 2)
 
-	// The all-marker shape (REST "all" convention) stays unpaged.
+	// An unset limit takes the default page size rather than returning
+	// an unbounded result.
+	unset, err := h.List(ctx, connect.NewRequest(&commonv1.PageRequest{Page: 1}))
+	require.NoError(t, err)
+	assert.Equal(t, int32(responder.DefaultPageSize), unset.Msg.GetMetadata().GetLimit())
+	assert.Len(t, unset.Msg.GetApiKeys(), 3, "the fixture fits one default page")
+
+	// The all-marker shape (REST "all" convention) stays unpaged but
+	// still reports the totals.
 	all, err := h.List(ctx, connect.NewRequest(&commonv1.PageRequest{Page: -1, Limit: -1}))
 	require.NoError(t, err)
-	assert.Nil(t, all.Msg.GetMetadata())
+	assert.Equal(t, int32(3), all.Msg.GetMetadata().GetTotalItems())
+	assert.Equal(t, int32(0), all.Msg.GetMetadata().GetFirstItemIndex())
+	assert.Equal(t, int32(2), all.Msg.GetMetadata().GetLastItemIndex())
 	assert.Len(t, all.Msg.GetApiKeys(), 3)
 }
 

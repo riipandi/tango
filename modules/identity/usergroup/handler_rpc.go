@@ -15,6 +15,7 @@ import (
 	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -32,7 +33,7 @@ type groupRPC struct {
 }
 
 func (h *groupRPC) ListGroups(ctx context.Context, req *connect.Request[commonv1.PageRequest]) (*connect.Response[identityv1.ListGroupsResponse], error) {
-	page, limit := int(req.Msg.GetPage()), int(req.Msg.GetLimit())
+	page, limit := rpcerr.NormalizePage(int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
 	groups, total, err := h.service.List(ctx, ListParams{
 		Query: req.Msg.GetQuery(),
 		Page:  Page{Page: page, Limit: limit},
@@ -44,11 +45,10 @@ func (h *groupRPC) ListGroups(ctx context.Context, req *connect.Request[commonv1
 	for _, g := range groups {
 		out = append(out, groupView(g))
 	}
-	var metadata *commonv1.PageMetadata
-	if page >= 1 && limit >= 1 {
-		metadata = rpcerr.PageMetadata(page, limit, total)
-	}
-	return connect.NewResponse(&identityv1.ListGroupsResponse{Groups: out, Metadata: metadata}), nil
+	return connect.NewResponse(&identityv1.ListGroupsResponse{
+		Groups:   out,
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
+	}), nil
 }
 
 func (h *groupRPC) GetGroup(ctx context.Context, req *connect.Request[identityv1.GetUserGroupRequest]) (*connect.Response[identityv1.UserGroup], error) {
@@ -107,7 +107,7 @@ func (h *groupRPC) ListGroupUsers(ctx context.Context, req *connect.Request[iden
 	if err != nil {
 		return nil, err
 	}
-	page, limit := int(req.Msg.GetPage().GetPage()), int(req.Msg.GetPage().GetLimit())
+	page, limit := rpcerr.NormalizePage(int(req.Msg.GetPage().GetPage()), int(req.Msg.GetPage().GetLimit()))
 	members, err := h.service.MemberIDs(ctx, id)
 	if err != nil {
 		return nil, rpcError(err)
@@ -115,8 +115,7 @@ func (h *groupRPC) ListGroupUsers(ctx context.Context, req *connect.Request[iden
 
 	// The store keeps full membership; the page slices it in place.
 	total := len(members)
-	if page >= 1 && limit >= 1 {
-		start := (page - 1) * limit
+	if start := responder.Offset(page, limit); start > 0 || !responder.All(page, limit) {
 		if start >= total {
 			members = nil
 		} else {
@@ -138,11 +137,10 @@ func (h *groupRPC) ListGroupUsers(ctx context.Context, req *connect.Request[iden
 		}
 		out = append(out, user.ProtoView(member))
 	}
-	var metadata *commonv1.PageMetadata
-	if page >= 1 && limit >= 1 {
-		metadata = rpcerr.PageMetadata(page, limit, total)
-	}
-	return connect.NewResponse(&identityv1.ListGroupUsersResponse{Users: out, Metadata: metadata}), nil
+	return connect.NewResponse(&identityv1.ListGroupUsersResponse{
+		Users:    out,
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
+	}), nil
 }
 
 func (h *groupRPC) ReplaceGroupUsers(ctx context.Context, req *connect.Request[identityv1.ReplaceGroupUsersRequest]) (*connect.Response[emptypb.Empty], error) {

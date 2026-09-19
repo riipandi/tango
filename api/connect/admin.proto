@@ -92,7 +92,7 @@ service ApiKeyService {
 
 message ListApiKeysResponse {
   repeated APIKey api_keys = 1;
-  common.v1.PageMetadata metadata = 2;
+  common.v1.ResponseMetadata metadata = 2;
 }
 
 message CreateApiKeyRequest {
@@ -119,18 +119,28 @@ service ApiService {
   rpc DeleteApi(DeleteApiRequest) returns (google.protobuf.Empty);
   rpc SetPermissions(SetPermissionsRequest) returns (google.protobuf.Empty);
   rpc SetCimdAccess(SetCimdAccessRequest) returns (google.protobuf.Empty);
-  rpc ListAssignableClients(GetApiRequest) returns (ListClientRefsResponse);
-  rpc ListClients(GetApiRequest) returns (ListClientRefsResponse);
+  rpc ListAssignableClients(ListApiClientsRequest) returns (ListClientRefsResponse);
+  rpc ListClients(ListApiClientsRequest) returns (ListClientRefsResponse);
   rpc GrantClient(GrantClientRequest) returns (google.protobuf.Empty);
   rpc RevokeClient(RevokeClientRequest) returns (google.protobuf.Empty);
-  rpc ListApisForClient(ClientApisRequest) returns (ListClientApiGrantsResponse);
-  rpc ListAssignableApisForClient(ClientApisRequest) returns (ListApisResponse);
+  rpc ListApisForClient(ListClientApisRequest) returns (ListClientApiGrantsResponse);
+  rpc ListAssignableApisForClient(ListClientApisRequest) returns (ListApisResponse);
 }
 
-// ClientApisRequest addresses the grant surface of one relying-party
-// client.
-message ClientApisRequest {
+// ListApiClientsRequest addresses the client-grant surface of one API.
+// The grant list grows with the deployment's client count, so it
+// carries the shared page window.
+message ListApiClientsRequest {
+  string api_id = 1;
+  common.v1.PageRequest page = 2;
+}
+
+// ListClientApisRequest addresses the grant surface of one relying-party
+// client. The list grows with the deployment's API count, so it carries
+// the shared page window.
+message ListClientApisRequest {
   string client_id = 1;
+  common.v1.PageRequest page = 2;
 }
 
 // ClientApiGrant is one client's access to an API with the per-subject
@@ -146,13 +156,15 @@ message ClientApiGrant {
   repeated string cimd_granted_permission_ids = 7;
 }
 
+// ListClientApiGrantsResponse lists one client's API grants.
 message ListClientApiGrantsResponse {
   repeated ClientApiGrant grants = 1;
+  common.v1.ResponseMetadata metadata = 2;
 }
 
 message ListApisResponse {
   repeated API apis = 1;
-  common.v1.PageMetadata metadata = 2;
+  common.v1.ResponseMetadata metadata = 2;
 }
 
 message CreateApiRequest {
@@ -187,8 +199,10 @@ message SetCimdAccessRequest {
   repeated string permission_ids = 3;
 }
 
+// ListClientRefsResponse lists the clients holding a grant on one API.
 message ListClientRefsResponse {
   repeated federation.v1.ClientRef clients = 1;
+  common.v1.ResponseMetadata metadata = 2;
 }
 
 message GrantClientRequest {
@@ -239,7 +253,7 @@ message ListAuditLogsRequest {
 
 message ListAuditLogsResponse {
   repeated AuditLog logs = 1;
-  common.v1.PageMetadata metadata = 2;
+  common.v1.ResponseMetadata metadata = 2;
 }
 
 message FilterOptionsRequest {

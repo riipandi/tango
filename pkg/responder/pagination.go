@@ -50,6 +50,60 @@ func (p PaginationParams) Offset() int {
 	return (p.Page - 1) * p.Limit
 }
 
+// NormalizePage applies the shared pagination rules to raw page and
+// limit values and returns the effective pair: a page below 1 becomes
+// the first page, a limit below 1 takes defaultLimit, and a limit above
+// maxLimit is clamped. A transport that can express "unset" separately
+// from zero (query parameters) rejects the zero before calling; a
+// transport that cannot (proto3 int32) relies on the default here, so
+// an unset limit never reaches a store as "no LIMIT".
+func NormalizePage(page, limit, defaultLimit, maxLimit int) (int, int) {
+	if page != PaginationAll && page < 1 {
+		page = 1
+	}
+	switch {
+	case limit == PaginationAll:
+	case limit < 1:
+		limit = defaultLimit
+	case maxLimit > 0 && limit > maxLimit:
+		limit = maxLimit
+	}
+	return page, limit
+}
+
+// All reports whether a normalized page and limit select every record.
+func All(page, limit int) bool {
+	return page == PaginationAll || limit == PaginationAll
+}
+
+// Offset returns the SQL offset for a page and limit.
+func Offset(page, limit int) int {
+	if All(page, limit) || page < 1 || limit < 1 {
+		return 0
+	}
+	return (page - 1) * limit
+}
+
+// ItemRange returns the zero-based inclusive range of items a page
+// covers for totalItems records. ok is false when the range is unknown
+// (every record requested, an empty result, or an out-of-range page).
+func ItemRange(page, limit, totalItems int) (first, last int, ok bool) {
+	if totalItems < 0 {
+		return 0, 0, false
+	}
+	if All(page, limit) || limit < 1 {
+		if totalItems == 0 {
+			return 0, 0, false
+		}
+		return 0, totalItems - 1, true
+	}
+	start := (page - 1) * limit
+	if page < 1 || start >= totalItems {
+		return 0, 0, false
+	}
+	return start, min(start+limit-1, totalItems-1), true
+}
+
 // ParsePagination reads pagination parameters from the request.
 func ParsePagination(r *http.Request) (PaginationParams, error) {
 	return ParsePaginationSized(r, DefaultPageSize, MaxPageSize)
@@ -111,27 +165,20 @@ func NewPagination(params PaginationParams, totalItems int) Pagination {
 	}
 	p.TotalItems = &totalItems
 
+	page, limit := params.Page, params.Limit
 	if params.All() || params.Limit < 1 {
-		if totalItems > 0 {
-			first, last := 0, totalItems-1
-			p.FirstItemIndex, p.LastItemIndex = &first, &last
-		}
+		page, limit = PaginationAll, PaginationAll
+	}
+	if first, last, ok := ItemRange(page, limit, totalItems); ok {
+		p.FirstItemIndex, p.LastItemIndex = &first, &last
+	}
+	if All(page, limit) {
 		return p
 	}
 
-	p.Page = &params.Page
-	limit := params.Limit
+	p.Page = &page
 	p.Limit = &limit
-
-	totalPages := (totalItems + limit - 1) / limit
-	p.TotalPages = &totalPages
-
-	first := (params.Page - 1) * limit
-	if params.Page < 1 || first >= totalItems {
-		return p // empty or out-of-range page: item range stays unset
-	}
-	last := min(first+limit-1, totalItems-1)
-	p.FirstItemIndex, p.LastItemIndex = &first, &last
+	p.TotalPages = new((totalItems + limit - 1) / limit)
 	return p
 }
 

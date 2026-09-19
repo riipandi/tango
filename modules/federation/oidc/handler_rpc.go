@@ -14,6 +14,7 @@ import (
 	federationv1connect "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1/federationv1connect"
 	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/pkg/responder"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -367,20 +368,32 @@ func (h *consentRPC) RevokeMyAuthorizedClient(ctx context.Context, req *connect.
 	return connect.NewResponse(&emptypb.Empty{}), nil
 }
 
-func (h *consentRPC) ListMyClients(ctx context.Context, _ *connect.Request[emptypb.Empty]) (*connect.Response[federationv1.ListMyClientsResponse], error) {
+func (h *consentRPC) ListMyClients(ctx context.Context, req *connect.Request[commonv1.PageRequest]) (*connect.Response[federationv1.ListMyClientsResponse], error) {
 	p, ok := middleware.PrincipalFromContext(ctx)
 	if !ok || p.UserID == "" {
 		return nil, rpcerr.Unauthenticated("bearer token required")
 	}
+	page, limit := rpcerr.NormalizePage(int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
 	clients, err := h.service.store.AccessibleClients(ctx, p.UserID)
 	if err != nil {
 		return nil, rpcerr.Internal("internal error")
+	}
+	total := len(clients)
+	if start := responder.Offset(page, limit); start > 0 || !responder.All(page, limit) {
+		if start >= total {
+			clients = nil
+		} else {
+			clients = clients[start:min(start+limit, total)]
+		}
 	}
 	out := make([]*federationv1.OidcClient, 0, len(clients))
 	for _, c := range clients {
 		out = append(out, clientProto(c))
 	}
-	return connect.NewResponse(&federationv1.ListMyClientsResponse{Clients: out}), nil
+	return connect.NewResponse(&federationv1.ListMyClientsResponse{
+		Clients:  out,
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
+	}), nil
 }
 
 func (h *consentRPC) ListUserAuthorizedClients(ctx context.Context, req *connect.Request[federationv1.ListUserAuthorizedClientsRequest]) (*connect.Response[federationv1.ListAuthorizedClientsResponse], error) {
@@ -409,21 +422,18 @@ func (h *consentRPC) listAuthorized(ctx context.Context, userID *string, page *c
 			LastUsedAt: r.LastUsedAt.UTC().Format(time.RFC3339),
 		})
 	}
-	pn, limit := int(page.GetPage()), int(page.GetLimit())
-	var metadata *commonv1.PageMetadata
-	if pn >= 1 && limit >= 1 {
-		metadata = rpcerr.PageMetadata(pn, limit, len(out))
-		start := (pn - 1) * limit
-		if start >= len(out) {
+	pn, limit := rpcerr.NormalizePage(int(page.GetPage()), int(page.GetLimit()))
+	total := len(out)
+	if start := responder.Offset(pn, limit); start > 0 || !responder.All(pn, limit) {
+		if start >= total {
 			out = nil
 		} else {
-			end := min(start+limit, len(out))
-			out = out[start:end]
+			out = out[start:min(start+limit, total)]
 		}
 	}
 	return connect.NewResponse(&federationv1.ListAuthorizedClientsResponse{
 		AuthorizedClients: out,
-		Metadata:          metadata,
+		Metadata:          rpcerr.ListMetadata(ctx, pn, limit, total),
 	}), nil
 }
 

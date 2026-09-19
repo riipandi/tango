@@ -56,7 +56,7 @@ service WebhookService {
 
 message ListWebhooksResponse {
   repeated Webhook webhooks = 1;
-  common.v1.PageMetadata metadata = 2;
+  common.v1.ResponseMetadata metadata = 2;
 }
 
 message CreateWebhookRequest {
@@ -108,5 +108,5 @@ message ListDeliveriesRequest {
 
 message ListDeliveriesResponse {
   repeated Delivery deliveries = 1;
-  common.v1.PageMetadata metadata = 2;
+  common.v1.ResponseMetadata metadata = 2;
 }

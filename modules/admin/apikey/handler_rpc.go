@@ -49,8 +49,8 @@ func (h *apiKeyRPC) List(ctx context.Context, req *connect.Request[commonv1.Page
 	if err != nil {
 		return nil, err
 	}
-	page := Page{Page: int(req.Msg.GetPage()), Limit: int(req.Msg.GetLimit())}
-	keys, total, err := h.service.List(ctx, userID, ListParams{Page: page})
+	page, limit := rpcerr.NormalizePage(int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
+	keys, total, err := h.service.List(ctx, userID, ListParams{Page: Page{Page: page, Limit: limit}})
 	if err != nil {
 		return nil, rpcError(err)
 	}
@@ -60,7 +60,7 @@ func (h *apiKeyRPC) List(ctx context.Context, req *connect.Request[commonv1.Page
 	}
 	return connect.NewResponse(&adminv1.ListApiKeysResponse{
 		ApiKeys:  out,
-		Metadata: metadataFrom(page, total),
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
 	}), nil
 }
 
@@ -175,15 +175,6 @@ func apiKeyView(k APIKey) *adminv1.APIKey {
 		view.LastUsedAt = &v
 	}
 	return view
-}
-
-// metadataFrom builds the shared pagination block. An unpaged or
-// all-marker page returns nil, so only paged responses carry metadata.
-func metadataFrom(page Page, total int) *commonv1.PageMetadata {
-	if page.Page < 1 || page.Limit < 1 {
-		return nil
-	}
-	return rpcerr.PageMetadata(page.Page, page.Limit, total)
 }
 
 // parseRPCTime parses an RFC 3339 timestamp from the wire.

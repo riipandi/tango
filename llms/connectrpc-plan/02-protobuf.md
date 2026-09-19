@@ -65,7 +65,11 @@ more focused files. Do not create nested contract directories under `api/connect
 - Every Connect service has an explicit package and method name. The mapping is recorded in the
   endpoint reference before the generated code is produced (generated output is a gitignored build
   artifact, never committed).
-- Pagination has one shared message shape across internal list RPCs.
+- Pagination has one shared message shape across internal list RPCs: `common.v1.PageRequest` is the
+  request when the list has no scope and no filter, a dedicated `List*Request` embeds
+  `common.v1.PageRequest page = N` when the list is scoped or filtered, and a bounded list documents
+  why it cannot paginate. The rules themselves live in `pkg/responder` and are shared with the REST
+  transport.
 - Empty success responses use `google.protobuf.Empty` or an explicit result only when metadata is
   needed; do not encode HTTP 204 semantics into every RPC.
 - Protocol REST DTOs remain hand-written where RFC wire behavior requires it.

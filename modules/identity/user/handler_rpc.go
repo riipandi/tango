@@ -205,7 +205,7 @@ func targetID(raw string) (UserID, error) {
 }
 
 func (h *userRPC) ListUsers(ctx context.Context, req *connect.Request[commonv1.PageRequest]) (*connect.Response[identityv1.ListUsersResponse], error) {
-	page, limit := int(req.Msg.GetPage()), int(req.Msg.GetLimit())
+	page, limit := rpcerr.NormalizePage(int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
 	users, total, err := h.service.List(ctx, ListParams{
 		Query: req.Msg.GetQuery(),
 		Page:  Page{Page: page, Limit: limit},
@@ -217,11 +217,10 @@ func (h *userRPC) ListUsers(ctx context.Context, req *connect.Request[commonv1.P
 	for _, u := range users {
 		out = append(out, ProtoView(u))
 	}
-	var metadata *commonv1.PageMetadata
-	if page >= 1 && limit >= 1 {
-		metadata = rpcerr.PageMetadata(page, limit, total)
-	}
-	return connect.NewResponse(&identityv1.ListUsersResponse{Users: out, Metadata: metadata}), nil
+	return connect.NewResponse(&identityv1.ListUsersResponse{
+		Users:    out,
+		Metadata: rpcerr.ListMetadata(ctx, page, limit, total),
+	}), nil
 }
 
 func (h *userRPC) GetUser(ctx context.Context, req *connect.Request[identityv1.GetUserRequest]) (*connect.Response[identityv1.User], error) {
