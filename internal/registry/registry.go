@@ -247,15 +247,20 @@ func (rt *Runtime) MountRPC(r chi.Router) {
 	// SCIM provider configuration: admin-only.
 	scimPrefix, scimHandler := rt.Federation.ScimRPCService()
 	r.Handle(scimPrefix+"*", middleware.RPCAdminGuard(auth)(scimHandler))
+
+	// Webhooks: admin-only registration and delivery inspection.
+	hookPrefix, hookHandler := rt.Webhook.RPCService()
+	r.Handle(hookPrefix+"*", middleware.RPCAdminGuard(auth)(hookHandler))
 }
 
-// MountAPI mounts API routes in registration order.
+// MountAPI mounts API routes in registration order. The webhook and
+// appconfig admin surfaces serve ConnectRPC exclusively; the appconfig
+// public bootstrap view is the retained REST read.
 func (rt *Runtime) MountAPI(api chi.Router) {
 	api.NotFound(responder.NotFoundJSON)
 	api.MethodNotAllowed(responder.MethodNotAllowedJSON)
 
 	rt.Identity.APIRoutes(api, rt.identityGroups)
-	rt.Webhook.APIRoutes(api)
 	rt.AppConfig.APIRoutes(api)
 	rt.Federation.APIRoutes(api, rt.federationGroups)
 }

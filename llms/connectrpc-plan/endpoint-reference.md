@@ -203,10 +203,10 @@ running server. Request names should use `<METHOD> <path>` for REST and
 | --- | --- | --- | --- | --- |
 | POST, PUT, DELETE | `/api/scim/service-provider*` | ConnectRPC | Admin console/internal | Configuration of Tango's outbound SCIM provider; REST routes removed in phase 05. |
 | POST | `/api/scim/service-provider/{id}/sync` | ConnectRPC | Admin console/internal | Internal command that triggers outbound HTTP; REST route removed in phase 05. |
-| GET, POST, PUT, DELETE | `/api/webhooks*` | ConnectRPC | Admin console/internal | Registration and secret lifecycle. |
-| POST | `/api/webhooks/{id}/test` | ConnectRPC | Admin console/internal | Queues an outbound delivery. |
-| GET | `/api/webhooks/{id}/deliveries` | ConnectRPC | Admin console/internal | |
-| GET | `/api/webhook-deliveries` | ConnectRPC | Admin console/internal | |
+| GET, POST, PUT, DELETE | `/api/webhooks*` | ConnectRPC | Admin console/internal | Registration and secret lifecycle; REST routes removed in phase 05. |
+| POST | `/api/webhooks/{id}/test` | ConnectRPC | Admin console/internal | Queues an outbound delivery; REST route removed in phase 05. |
+| GET | `/api/webhooks/{id}/deliveries` | ConnectRPC | Admin console/internal | REST route removed in phase 05. |
+| GET | `/api/webhook-deliveries` | ConnectRPC | Admin console/internal | REST route removed in phase 05. |
 | Outbound delivery | Configured webhook URL | REST/HTTP | External application | HMAC signature, retry, and canonical body are HTTP contracts. |
 | Outbound sync | Configured SCIM provider URL | REST/SCIM | External provider | Use the SCIM protocol, not ConnectRPC. |
 
@@ -415,12 +415,12 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 
 | Service.Method | Replaces (method + path) | Auth | Notes |
 | --- | --- | --- | --- |
-| `WebhookService.List` | GET `/api/webhooks` | bearer | |
-| `WebhookService.Create` | POST `/api/webhooks` | bearer | Show-once signing secret. |
+| `WebhookService.List` | GET `/api/webhooks` | bearer | Cutover phase 05. |
+| `WebhookService.Create` | POST `/api/webhooks` | bearer | Show-once signing secret; cutover phase 05. |
 | `WebhookService.Get` | GET `/api/webhooks/{id}` | bearer | |
 | `WebhookService.Update` | PUT `/api/webhooks/{id}` | bearer | |
 | `WebhookService.Delete` | DELETE `/api/webhooks/{id}` | bearer | |
-| `WebhookService.RotateSecret` | POST `/api/webhooks/{id}/rotate-secret` | bearer | Show-once. |
+| `WebhookService.RotateSecret` | POST `/api/webhooks/{id}/rotate-secret` | bearer | Show-once; cutover phase 05. |
 | `WebhookService.Test` | POST `/api/webhooks/{id}/test` | bearer | Queues delivery. |
 | `WebhookService.ListDeliveries` | GET `/api/webhooks/{id}/deliveries` | bearer | |
 | `WebhookService.ListAllDeliveries` | GET `/api/webhook-deliveries` | bearer | |

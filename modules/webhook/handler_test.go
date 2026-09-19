@@ -1,412 +1,189 @@
 package webhook
 
 import (
-	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"strings"
+	"errors"
 	"testing"
 
-	"encoding/json/jsontext"
-	jsonv2 "encoding/json/v2"
-
-	"github.com/go-chi/chi/v5"
+	"connectrpc.com/connect"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.jetify.com/typeid"
+
+	commonv1 "github.com/riipandi/tango/gen/proto/go/tango/common/v1"
+	webhookv1 "github.com/riipandi/tango/gen/proto/go/tango/webhook/v1"
 )
 
-// mountRouter wires the module the way the registry does: inside the
-// /api group, behind a guard that any request passes with X-Admin.
-func mountRouter(t *testing.T, stack *testStack) chi.Router {
+// rpcStack builds the Connect adapter over the service test stack.
+func rpcStack(t *testing.T) (*hookRPC, *testStack) {
 	t.Helper()
+	stack := newTestStack(t, okSender())
+	return &hookRPC{service: stack.Service}, stack
+}
 
-	module := New(stack.Service, WithGuard(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get("X-Admin") == "" {
-				w.WriteHeader(http.StatusForbidden)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
+// connectCode decodes a Connect error; a non-Connect error fails.
+func connectCode(t *testing.T, err error) *connect.Error {
+	t.Helper()
+	require.Error(t, err)
+	var cerr *connect.Error
+	require.True(t, errors.As(err, &cerr), "must decode as *connect.Error")
+	return cerr
+}
+
+// mustCreateViaRPC registers an endpoint and returns the wire row.
+func mustCreateViaRPC(t *testing.T, h *hookRPC, name, endpoint string) *webhookv1.Webhook {
+	t.Helper()
+	created, err := h.Create(t.Context(), connect.NewRequest(&webhookv1.CreateWebhookRequest{
+		Name:     name,
+		Endpoint: endpoint,
 	}))
-
-	r := chi.NewRouter()
-	r.Route("/api", module.APIRoutes)
-	return r
-}
-
-// do sends one request with the admin header set. An empty body sends
-// no body at all, so the handler's decoder sees a clean EOF rather
-// than a malformed document.
-func do(t *testing.T, router chi.Router, method, path, body string) *httptest.ResponseRecorder {
-	t.Helper()
-
-	var req *http.Request
-	if body == "" {
-		req = httptest.NewRequest(method, path, nil)
-	} else {
-		req = httptest.NewRequest(method, path, strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-	}
-	req.Header.Set("X-Admin", "1")
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	return w
-}
-
-// envelope pulls the status/message/data triple out of the response.
-type envelope struct {
-	Status   string         `json:"status"`
-	Message  string         `json:"message"`
-	Data     jsontext.Value `json:"data"`
-	Error    jsontext.Value `json:"error"`
-	Metadata struct {
-		TotalItems *int `json:"total_items"`
-		Page       *int `json:"page"`
-	} `json:"metadata"`
-}
-
-func decodeEnvelope(t *testing.T, w *httptest.ResponseRecorder) envelope {
-	t.Helper()
-	var env envelope
-	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &env))
-	return env
-}
-
-func TestRoutesRequireTheAdminGuard(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	module := New(stack.Service, WithGuard(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusForbidden)
-		})
-	}))
-
-	r := chi.NewRouter()
-	r.Route("/api", module.APIRoutes)
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/webhooks", nil))
-	assert.Equal(t, http.StatusForbidden, w.Code, "the guard must run before the handler")
-}
-
-func TestRoutesNotMountedWithoutAGuard(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	module := New(stack.Service) // no guard: fail closed
-
-	r := chi.NewRouter()
-	r.Route("/api", module.APIRoutes)
-
-	for _, path := range []string{"/api/webhooks", "/api/webhook-deliveries"} {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
-		assert.Equal(t, http.StatusNotFound, w.Code, path)
-	}
-}
-
-func TestNewRejectsNilService(t *testing.T) {
-	require.Panics(t, func() { New(nil) })
-}
-
-func TestCreateListGetUpdateDeleteLifecycle(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	// Create.
-	w := do(t, router, http.MethodPost, "/api/webhooks",
-		`{"name":"http-lifecycle","endpoint":"https://example.test/hook","event_types":["user.created"]}`)
-	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-
-	env := decodeEnvelope(t, w)
-	assert.Equal(t, "success", env.Status)
-	var created Webhook
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &created))
-	assert.Equal(t, "http-lifecycle", created.Name)
-	require.NotNil(t, created.Secret, "create must return the plaintext secret once")
-
-	// List.
-	w = do(t, router, http.MethodGet, "/api/webhooks?page=1&limit=10", "")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	env = decodeEnvelope(t, w)
-	var listed []Webhook
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &listed))
-	require.Len(t, listed, 1)
-	assert.Nil(t, listed[0].Secret, "listings must not carry the secret")
-	require.NotNil(t, env.Metadata.TotalItems)
-	assert.Equal(t, 1, *env.Metadata.TotalItems)
-
-	// Get.
-	w = do(t, router, http.MethodGet, "/api/webhooks/"+created.ID.String(), "")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	env = decodeEnvelope(t, w)
-	var fetched Webhook
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &fetched))
-	assert.Equal(t, created.ID.String(), fetched.ID.String())
-	assert.Nil(t, fetched.Secret)
-
-	// Update.
-	newName := "http-renamed"
-	body := fmt.Sprintf(`{"name":%q,"enabled":false}`, newName)
-	w = do(t, router, http.MethodPut, "/api/webhooks/"+created.ID.String(), body)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	env = decodeEnvelope(t, w)
-	var updated Webhook
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &updated))
-	assert.Equal(t, newName, updated.Name)
-	assert.False(t, updated.Enabled)
-
-	// Delete.
-	w = do(t, router, http.MethodDelete, "/api/webhooks/"+created.ID.String(), "")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	w = do(t, router, http.MethodGet, "/api/webhooks/"+created.ID.String(), "")
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestCreateRejectsInvalidPayload(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	cases := []struct {
-		name string
-		body string
-	}{
-		{"short name", `{"name":"ab","endpoint":"https://example.test"}`},
-		{"missing endpoint", `{"name":"valid-name"}`},
-		{"bad scheme", `{"name":"valid-name","endpoint":"ftp://example.test"}`},
-		{"relative endpoint", `{"name":"valid-name","endpoint":"/hook"}`},
-		{"malformed json", `{"name":`},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			w := do(t, router, http.MethodPost, "/api/webhooks", tc.body)
-			assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
-
-			env := decodeEnvelope(t, w)
-			assert.Equal(t, "error", env.Status)
-			assert.NotEmpty(t, env.Error, "validation failures carry field errors")
-		})
-	}
-}
-
-func TestCreateDuplicateNameConflicts(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	body := `{"name":"dup-name","endpoint":"https://example.test/hook"}`
-	require.Equal(t, http.StatusCreated, do(t, router, http.MethodPost, "/api/webhooks", body).Code)
-	assert.Equal(t, http.StatusConflict, do(t, router, http.MethodPost, "/api/webhooks", body).Code)
-}
-
-func TestGetUnknownIDIs404(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	// A well-formed but unknown typed ID.
-	missing := newWebhookID(t)
-
-	w := do(t, router, http.MethodGet, "/api/webhooks/"+missing.String(), "")
-	assert.Equal(t, http.StatusNotFound, w.Code)
-
-	// A malformed ID never reaches the store.
-	w = do(t, router, http.MethodGet, "/api/webhooks/not-a-typeid", "")
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestUpdateUnknownIDIs404(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	w := do(t, router, http.MethodPut, "/api/webhooks/not-a-typeid", `{"name":"whatever"}`)
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestDeleteUnknownIDIs404(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	w := do(t, router, http.MethodDelete, "/api/webhooks/not-a-typeid", "")
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestRotateSecretEndpoint(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	created := mustCreateViaAPI(t, router, "rotate-http", "https://example.test/hook")
-
-	w := do(t, router, http.MethodPost, "/api/webhooks/"+created.ID.String()+"/rotate-secret", "")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	env := decodeEnvelope(t, w)
-	var payload struct {
-		ID     string `json:"id"`
-		Secret string `json:"secret"`
-	}
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &payload))
-	assert.Equal(t, created.ID.String(), payload.ID)
-	assert.NotEmpty(t, payload.Secret)
-	assert.NotEqual(t, *created.Secret, payload.Secret, "rotation must issue a new secret")
-
-	// Rotation of an unknown endpoint is a 404.
-	w = do(t, router, http.MethodPost, "/api/webhooks/not-a-typeid/rotate-secret", "")
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestTestEndpointAcceptsAndQueues(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	created := mustCreateViaAPI(t, router, "test-http", "https://example.test/hook")
-
-	w := do(t, router, http.MethodPost, "/api/webhooks/"+created.ID.String()+"/test", "")
-	require.Equal(t, http.StatusAccepted, w.Code, w.Body.String())
-
-	env := decodeEnvelope(t, w)
-	var payload struct {
-		DeliveryID string `json:"delivery_id"`
-		Event      string `json:"event"`
-	}
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &payload))
-	assert.Equal(t, defaultTestEvent, payload.Event)
-	assert.Equal(t, "webhook_delivery", mustDeliveryIDFromString(t, payload.DeliveryID).Prefix())
-
-	// Unknown endpoint: 404.
-	w = do(t, router, http.MethodPost, "/api/webhooks/not-a-typeid/test", "")
-	assert.Equal(t, http.StatusNotFound, w.Code)
-
-	// Malformed body: 422.
-	w = do(t, router, http.MethodPost, "/api/webhooks/"+created.ID.String()+"/test", `{"payload":`)
-	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
-}
-
-func TestDeliveriesEndpointsListScopedAndGlobal(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	created := mustCreateViaAPI(t, router, "deliveries-http", "https://example.test/hook")
-	_, err := stack.Service.DeliverTo(t.Context(), created.ID, "user.created", map[string]any{"event": "user.created"})
 	require.NoError(t, err)
-
-	// Per endpoint.
-	w := do(t, router, http.MethodGet, "/api/webhooks/"+created.ID.String()+"/deliveries", "")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	env := decodeEnvelope(t, w)
-	var scoped []Delivery
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &scoped))
-	require.Len(t, scoped, 1)
-	assert.Equal(t, created.ID.String(), scoped[0].WebhookID.String())
-
-	// Global.
-	w = do(t, router, http.MethodGet, "/api/webhook-deliveries", "")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	env = decodeEnvelope(t, w)
-	var all []Delivery
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &all))
-	assert.Len(t, all, 1)
-
-	// Unknown endpoint for the scoped listing.
-	w = do(t, router, http.MethodGet, "/api/webhooks/not-a-typeid/deliveries", "")
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	return created.Msg
 }
 
-func TestListRejectsMalformedQuery(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	w := do(t, router, http.MethodGet, "/api/webhooks?page=nope", "")
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	w = do(t, router, http.MethodGet, "/api/webhooks?enabled=perhaps", "")
-	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
-
-	w = do(t, router, http.MethodGet, "/api/webhook-deliveries?limit=-5", "")
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestListFiltersThroughQueryParameters(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	router := mountRouter(t, stack)
-
-	mustCreateViaAPI(t, router, "filter-user", "https://one.test/hook")
-	// A second endpoint that does NOT subscribe to user.created.
-	w := do(t, router, http.MethodPost, "/api/webhooks",
-		`{"name":"filter-api","endpoint":"https://two.test/hook","event_types":["api_key.created"]}`)
-	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-
-	w = do(t, router, http.MethodGet, "/api/webhooks?event=user.created", "")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	env := decodeEnvelope(t, w)
-	var listed []Webhook
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &listed))
-	require.Len(t, listed, 1)
-	assert.Equal(t, "filter-user", listed[0].Name)
-
-	// Enabled filter.
-	w = do(t, router, http.MethodGet, "/api/webhooks?enabled=true", "")
-	require.Equal(t, http.StatusOK, w.Code)
-	env = decodeEnvelope(t, w)
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &listed))
-	assert.Len(t, listed, 2)
-}
-
-func TestStoreAccessorExposesPruner(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	module := New(stack.Service)
-
-	// The recurring cleanup job depends on this accessor.
-	assert.NotNil(t, module.Store())
-	assert.Equal(t, ModuleName, module.Name())
-}
-
-// TestEmitThroughModuleSink covers the module-level event sink the
-// registry hands to other modules: the same outbox write, behind the
-// public surface.
-func TestEmitThroughModuleSink(t *testing.T) {
-	stack := newTestStack(t, okSender())
-	module := New(stack.Service)
+// TestRPCWebhookLifecycle covers the endpoint surface through the
+// generated contract: create (show-once secret), list with metadata,
+// get, update, and delete.
+func TestRPCWebhookLifecycle(t *testing.T) {
+	h, _ := rpcStack(t)
 	ctx := t.Context()
 
-	// Without subscribers the sink is a no-op.
-	require.NoError(t, module.Emit(ctx, "user.created", map[string]any{"event": "user.created"}))
-
-	stack.create(t, "sink-target", "https://example.test/hook", AllEvents)
-	require.NoError(t, module.Emit(ctx, "user.created", map[string]any{"event": "user.created"}))
-
-	_, total, err := stack.Store.ListDeliveries(ctx, ListParams{}, nil)
+	created, err := h.Create(ctx, connect.NewRequest(&webhookv1.CreateWebhookRequest{
+		Name:       "rpc-lifecycle",
+		Endpoint:   "https://example.test/hook",
+		EventTypes: []string{"user.created"},
+	}))
 	require.NoError(t, err)
-	assert.Equal(t, 1, total)
+	assert.Equal(t, "rpc-lifecycle", created.Msg.GetName())
+	require.NotNil(t, created.Msg.GetSecret(), "create must return the plaintext secret once")
+	hookID := created.Msg.GetId()
+
+	listed, err := h.List(ctx, connect.NewRequest(&commonv1.PageRequest{Page: 1, Limit: 10}))
+	require.NoError(t, err)
+	require.Len(t, listed.Msg.GetWebhooks(), 1)
+	assert.Empty(t, listed.Msg.GetWebhooks()[0].GetSecret(), "listings must not carry the secret")
+	require.NotNil(t, listed.Msg.GetMetadata())
+	assert.Equal(t, int32(1), listed.Msg.GetMetadata().GetTotalItems())
+
+	fetched, err := h.Get(ctx, connect.NewRequest(&webhookv1.GetWebhookRequest{Id: hookID}))
+	require.NoError(t, err)
+	assert.Empty(t, fetched.Msg.GetSecret())
+
+	newName := "rpc-renamed"
+	enabled := false
+	updated, err := h.Update(ctx, connect.NewRequest(&webhookv1.UpdateWebhookRequest{
+		Id: hookID, Name: &newName, Enabled: &enabled,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, newName, updated.Msg.GetName())
+	assert.False(t, updated.Msg.GetEnabled())
+
+	_, err = h.Delete(ctx, connect.NewRequest(&webhookv1.DeleteWebhookRequest{Id: hookID}))
+	require.NoError(t, err)
+
+	_, err = h.Get(ctx, connect.NewRequest(&webhookv1.GetWebhookRequest{Id: hookID}))
+	assert.Equal(t, connect.CodeNotFound, connectCode(t, err).Code())
 }
 
-// mustCreateViaAPI creates an endpoint through the HTTP surface and
-// returns the decoded entity.
-func mustCreateViaAPI(t *testing.T, router chi.Router, name, endpoint string) Webhook {
-	t.Helper()
+// TestRPCWebhookValidation pins the create contract: short names,
+// missing endpoints, and bad schemes answer invalid_argument.
+func TestRPCWebhookValidation(t *testing.T) {
+	h, _ := rpcStack(t)
+	ctx := t.Context()
 
-	body := fmt.Sprintf(`{"name":%q,"endpoint":%q}`, name, endpoint)
-	w := do(t, router, http.MethodPost, "/api/webhooks", body)
-	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-
-	env := decodeEnvelope(t, w)
-	var created Webhook
-	require.NoError(t, jsonv2.Unmarshal(env.Data, &created))
-	return created
+	for _, tc := range []struct {
+		name string
+		req  *webhookv1.CreateWebhookRequest
+	}{
+		{"short name", &webhookv1.CreateWebhookRequest{Name: "ab", Endpoint: "https://example.test"}},
+		{"missing endpoint", &webhookv1.CreateWebhookRequest{Name: "valid-name"}},
+		{"bad scheme", &webhookv1.CreateWebhookRequest{Name: "valid-name", Endpoint: "ftp://example.test"}},
+		{"relative endpoint", &webhookv1.CreateWebhookRequest{Name: "valid-name", Endpoint: "/hook"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := h.Create(ctx, connect.NewRequest(tc.req))
+			assert.Equal(t, connect.CodeInvalidArgument, connectCode(t, err).Code())
+		})
+	}
 }
 
-func mustDeliveryIDFromString(t *testing.T, raw string) DeliveryID {
-	t.Helper()
-	id, err := parseDeliveryID(raw)
+// TestRPCWebhookDuplicateNameConflicts pins the unique-name rule.
+func TestRPCWebhookDuplicateNameConflicts(t *testing.T) {
+	h, _ := rpcStack(t)
+	ctx := t.Context()
+
+	body := &webhookv1.CreateWebhookRequest{Name: "rpc-dup", Endpoint: "https://example.test/hook"}
+	_, err := h.Create(ctx, connect.NewRequest(body))
 	require.NoError(t, err)
-	return id
+	_, err = h.Create(ctx, connect.NewRequest(body))
+	assert.Equal(t, connect.CodeAlreadyExists, connectCode(t, err).Code())
 }
 
-// newWebhookID mints a syntactically valid typed ID that no row owns,
-// so a 404 test never trips the parser instead of the store.
-func newWebhookID(t *testing.T) WebhookID {
-	t.Helper()
-	id, err := typeid.New[WebhookID]()
+// TestRPCWebhookUnknownIDs pins the not-found boundary: malformed and
+// unknown IDs never distinguish existence.
+func TestRPCWebhookUnknownIDs(t *testing.T) {
+	h, _ := rpcStack(t)
+	ctx := t.Context()
+
+	_, err := h.Get(ctx, connect.NewRequest(&webhookv1.GetWebhookRequest{Id: "not-a-typeid"}))
+	assert.Equal(t, connect.CodeNotFound, connectCode(t, err).Code())
+
+	_, err = h.Update(ctx, connect.NewRequest(&webhookv1.UpdateWebhookRequest{Id: "not-a-typeid"}))
+	assert.Equal(t, connect.CodeNotFound, connectCode(t, err).Code())
+
+	_, err = h.Delete(ctx, connect.NewRequest(&webhookv1.DeleteWebhookRequest{Id: "not-a-typeid"}))
+	assert.Equal(t, connect.CodeNotFound, connectCode(t, err).Code())
+
+	_, err = h.RotateSecret(ctx, connect.NewRequest(&webhookv1.GetWebhookRequest{Id: "not-a-typeid"}))
+	assert.Equal(t, connect.CodeNotFound, connectCode(t, err).Code())
+
+	_, err = h.Test(ctx, connect.NewRequest(&webhookv1.TestWebhookRequest{Id: "not-a-typeid"}))
+	assert.Equal(t, connect.CodeNotFound, connectCode(t, err).Code())
+}
+
+// TestRPCRotateSecret covers rotation: a new show-once secret.
+func TestRPCRotateSecret(t *testing.T) {
+	h, _ := rpcStack(t)
+	ctx := t.Context()
+
+	created := mustCreateViaRPC(t, h, "rpc-rotate", "https://example.test/hook")
+	firstSecret := created.GetSecret()
+
+	rotated, err := h.RotateSecret(ctx, connect.NewRequest(&webhookv1.GetWebhookRequest{Id: created.GetId()}))
 	require.NoError(t, err)
-	return id
+	assert.NotEmpty(t, rotated.Msg.GetSecret())
+	assert.NotEqual(t, firstSecret, rotated.Msg.GetSecret(), "rotation must issue a new secret")
+}
+
+// TestRPCTestDelivery covers the synthetic delivery: a queued log row
+// addressable through the delivery listings.
+func TestRPCTestDelivery(t *testing.T) {
+	h, _ := rpcStack(t)
+	ctx := t.Context()
+
+	created := mustCreateViaRPC(t, h, "rpc-test", "https://example.test/hook")
+
+	sent, err := h.Test(ctx, connect.NewRequest(&webhookv1.TestWebhookRequest{Id: created.GetId()}))
+	require.NoError(t, err)
+	assert.NotEmpty(t, sent.Msg.GetDeliveryId())
+
+	scoped, err := h.ListDeliveries(ctx, connect.NewRequest(&webhookv1.ListDeliveriesRequest{
+		WebhookId: created.GetId(),
+		Page:      &commonv1.PageRequest{Page: 1, Limit: 10},
+	}))
+	require.NoError(t, err)
+	require.Len(t, scoped.Msg.GetDeliveries(), 1)
+	assert.Equal(t, created.GetId(), scoped.Msg.GetDeliveries()[0].GetWebhookId())
+
+	global, err := h.ListAllDeliveries(ctx, connect.NewRequest(&commonv1.PageRequest{Page: 1, Limit: 10}))
+	require.NoError(t, err)
+	assert.Len(t, global.Msg.GetDeliveries(), 1)
+}
+
+// TestRPCRegistrationPrefix pins the registration contract the
+// composition root relies on.
+func TestRPCRegistrationPrefix(t *testing.T) {
+	stack := newTestStack(t, okSender())
+	module := New(stack.Service)
+	prefix, handler := module.RPCService()
+	assert.Equal(t, "/tango.webhook.v1.WebhookService/", prefix)
+	assert.NotNil(t, handler)
 }
