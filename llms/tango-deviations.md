@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-18
+updated: 2026-09-20
 ---
 
 # Tango Deviations from Upstream Pocket ID
@@ -25,6 +25,12 @@ match the upstream endpoint contract.
   self-service account endpoints. The full contract lives in the endpoint reference
   ("Authentication (tango-only)"): generic enumeration-safe failures, SHA-256 hashed single-use
   reset tokens (15-minute TTL), session invalidation on reset, and per-endpoint rate limits.
+- **`AccountService`** — tango-only, and deliberately narrow: `ChangePassword`, `ListSessions`,
+  and `RevokeSession`. Upstream has no password or session API because it authenticates with
+  passkeys. Self-profile read and write are **not** here — they stay on `UserService`, matching
+  upstream's `GET`/`PUT /api/users/me` (read via `AuthService.GetSession`, which already returns
+  the full user; write via `UserService.UpdateMe`). Upstream has no `/api/account` route at all,
+  so nothing may be added to this service without a deviation entry.
 - **Rate limiting** — upstream throttles every `/api` route with a shared token-bucket budget
   plus per-route limiters. Tango instead limits only sensitive endpoints, each with its own
   fixed-window per-IP budget (`internal/transport/middleware/ratelimit.go`): sign-in,

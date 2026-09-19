@@ -45,8 +45,6 @@ only. Contracts below define the full password lifecycle.
 | POST | `/rpc/tango.identity.v1.AuthService/GetSession` | Inspect current session | done | `modules/identity/session.TestRPCSignOutAndSession` |
 | POST | `/rpc/tango.identity.v1.AuthService/ForgotPassword` | Request a password reset (RPC, unimplemented) | done — declared for contract completeness; answers `unimplemented`; recovery is served by the retained REST routes | `modules/identity/recovery.TestForgotIsAlwaysGeneric` |
 | POST | `/rpc/tango.identity.v1.AuthService/ResetPassword` | Reset a password (RPC, unimplemented) | done — declared for contract completeness; answers `unimplemented`; recovery is served by the retained REST routes | `modules/identity/recovery.TestResetLifecycle` |
-| POST | `/rpc/tango.identity.v1.AccountService/GetAccount` | Get account | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
-| POST | `/rpc/tango.identity.v1.AccountService/UpdateAccount` | Update own account | done — self-service; profile fields only; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
 | POST | `/rpc/tango.identity.v1.AccountService/ChangePassword` | Change own password | done — current secret required; other sessions revoked; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
 | POST | `/rpc/tango.identity.v1.AccountService/ListSessions` | List own sessions | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
 | POST | `/rpc/tango.identity.v1.AccountService/RevokeSession` | Revoke one own session | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |

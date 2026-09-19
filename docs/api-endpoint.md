@@ -1,8 +1,19 @@
 # API Endpoint
 
-Summary of the public API surface, grouped by area. The row-by-row contract with test evidence
-lives in `llms/endpoint-reference.md`; the transport decision record and the service matrix live in
-`llms/connectrpc-plan/endpoint-reference.md`.
+Summary of the public API surface, grouped by area.
+
+## Reference
+
+This document is self-contained: the tables below are the authoritative description of every route
+the server mounts, and a route that is not listed is not served.
+
+Two conventions apply throughout:
+
+- **Upstream parity** — a section notes where the surface diverges from Pocket ID. Sections marked
+  *tango-only* have no upstream equivalent; the rest mirror the upstream contract so a Pocket ID
+  client can be pointed at this server.
+- **Transport** — an operation is served either as ConnectRPC below `/rpc` or as HTTP/REST. The
+  protocol column states which, and the two never overlap for the same operation.
 
 ## Transport and authentication
 
@@ -25,16 +36,17 @@ lives in `llms/endpoint-reference.md`; the transport decision record and the ser
 
 Password authentication is a tango-only surface; upstream Pocket ID signs users in with passkeys
 only. Recovery stays on HTTP: the `ForgotPassword` and `ResetPassword` RPCs answer `unimplemented`.
+Reading and updating the caller's own profile live on `UserService` (`GetSession` for the read),
+matching upstream's `GET`/`PUT /api/users/me`; the account surface carries only the tango-only
+password and session procedures.
 
 | Method   | Procedure / Endpoint                                         | Protocol     | Summary                             |
 | -------- | ------------------------------------------------------------ | ------------ | ----------------------------------- |
 | POST     | `/rpc/tango.identity.v1.AuthService/SignIn`                  | ConnectRPC   | Sign in with password               |
 | POST     | `/rpc/tango.identity.v1.AuthService/SignOut`                 | ConnectRPC   | Sign out                            |
-| POST     | `/rpc/tango.identity.v1.AuthService/GetSession`              | ConnectRPC   | Inspect current session             |
+| POST     | `/rpc/tango.identity.v1.AuthService/GetSession`              | ConnectRPC   | Inspect current session, including the caller's user |
 | POST     | `/rpc/tango.identity.v1.AuthService/ForgotPassword`          | ConnectRPC   | Request a password reset (unimplemented; use the REST route) |
 | POST     | `/rpc/tango.identity.v1.AuthService/ResetPassword`           | ConnectRPC   | Reset a password (unimplemented; use the REST route) |
-| POST     | `/rpc/tango.identity.v1.AccountService/GetAccount`           | ConnectRPC   | Get account                         |
-| POST     | `/rpc/tango.identity.v1.AccountService/UpdateAccount`        | ConnectRPC   | Update own account                  |
 | POST     | `/rpc/tango.identity.v1.AccountService/ChangePassword`       | ConnectRPC   | Change own password                 |
 | POST     | `/rpc/tango.identity.v1.AccountService/ListSessions`         | ConnectRPC   | List own sessions                   |
 | POST     | `/rpc/tango.identity.v1.AccountService/RevokeSession`        | ConnectRPC   | Revoke one own session              |
@@ -70,11 +82,11 @@ Relying-party protocol surfaces. Client administration moved to ConnectRPC (see 
 | POST        | `/api/oidc/device/authorize`              | HTTP/REST    | Device authorization grant (RFC 8628)    |
 | GET         | `/api/oidc/device/info`                   | HTTP/REST    | Device code info for the consent page    |
 | POST        | `/api/oidc/device/verify`                 | HTTP/REST    | Approve or deny a device code            |
-| GET         | `/api/oidc/userinfo`                      | HTTP/REST    | Get user information                     |
+| GET, POST   | `/api/oidc/userinfo`                      | HTTP/REST    | Get user information                     |
 | GET, POST   | `/api/oidc/end-session`                   | HTTP/REST    | RP-initiated logout                      |
 | GET         | `/api/oidc/interaction/{id}`              | HTTP/REST    | Read the authorization interaction       |
 | POST        | `/api/oidc/interaction/{id}/approve`      | HTTP/REST    | Approve the authorization interaction    |
-| GET         | `/api/oidc/clients/{id}/logo`             | HTTP/REST    | Get client logo                          |
+| GET         | `/api/oidc/clients/{clientId}/logo`       | HTTP/REST    | Get client logo                          |
 
 ## WebAuthn
 
@@ -298,6 +310,18 @@ Healthcheck endpoints plus the transport smoke target.
 
 | Method   | Procedure / Endpoint                               | Protocol     | Summary                    |
 | -------- | -------------------------------------------------- | ------------ | -------------------------- |
-| GET      | `/healthz`                                         | HTTP/REST    | Responds to healthchecks   |
+| GET      | `/healthz`                                         | HTTP/REST    | Liveness; touches no dependency |
 | GET      | `/api/healthz`                                     | HTTP/REST    | Readiness document         |
 | POST     | `/rpc/tango.system.v1.HealthService/Check`         | ConnectRPC   | Connect transport smoke    |
+
+## Infrastructure
+
+Non-API routes the server mounts. They serve the deployment and the SPA, not the application
+contract.
+
+| Method   | Endpoint                | Protocol   | Summary                                    |
+| -------- | ----------------------- | ---------- | ------------------------------------------ |
+| GET      | `/`                     | HTTP/REST  | SPA document; every unmatched path falls back to it |
+| GET      | `/api/`                 | HTTP/REST  | API root document (name, version, platform) |
+| GET      | `/.well-known/version`  | HTTP/REST  | Bare version document for tooling          |
+| GET      | `/static/*`             | HTTP/REST  | Embedded static assets                     |

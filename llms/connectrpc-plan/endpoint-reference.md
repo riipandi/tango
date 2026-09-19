@@ -300,8 +300,6 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `AuthService.GetSession` | GET `/api/auth/session` | bearer | |
 | `AuthService.ForgotPassword` | POST `/api/auth/forgot-password` | public | REST is authoritative for recovery; the RPC answers `unimplemented`. Rate-limited. Yaak: `Request a password reset (RPC, unimplemented)` → 501. |
 | `AuthService.ResetPassword` | POST `/api/auth/reset-password` | public | REST is authoritative for recovery; the RPC answers `unimplemented`. Rate-limited. Yaak: `Reset a password (RPC, unimplemented)` → 501. |
-| `AccountService.GetAccount` | GET `/api/account` | bearer | Self; refuses a machine credential. |
-| `AccountService.UpdateAccount` | PATCH `/api/account` | bearer | Self; refuses a machine credential. Shares `UpdateProfileRequest` and the `UpdateProfile` store call with `UserService.UpdateMe` (ambiguity A4). Yaak: `Update own account` → 200 with a bearer, 401 with a machine credential. |
 | `AccountService.ChangePassword` | PUT `/api/account/password` | bearer | Self; rate-limited; revokes other sessions. |
 | `AccountService.ListSessions` | GET `/api/account/sessions` | bearer | Self. |
 | `AccountService.RevokeSession` | DELETE `/api/account/sessions/{id}` | bearer | Self. |
@@ -529,13 +527,16 @@ deleted when the ConnectRPC cutover retired them, so no decision is outstanding.
   deleted with the API-registry cutover (`internal/registry/rpc_inventory_test.go` lists it under
   `retiredREST`), so the canonical path shape question no longer applies. The ConnectRPC
   replacement is `ApiService`.
-- **A4 — `PATCH /api/account` vs `PUT /api/users/me`** — **resolved**: both are intentional, and they
-  own the same field set. `AccountService.UpdateAccount` and `UserService.UpdateMe` both take
-  `UpdateProfileRequest` and both call `user.PostgresStore.UpdateProfile` with `first_name`,
-  `last_name`, `display_name`, `avatar_url`, and `locale`; neither can touch identity, credentials,
-  or admin flags. The pair exists because each replaces a distinct legacy route that the SPA and
-  the upstream client already call, and collapsing them would break one of those callers for no
-  contract gain. New self-service profile writes should extend both or neither.
+- **A4 — `PATCH /api/account` vs `PUT /api/users/me`** — **resolved by upstream parity**: the
+  duplicate pair was removed. Upstream has no `/api/account` route at all — its only self-profile
+  surface is `GET`/`PUT /api/users/me` (`UserController.getCurrentUserHandler` /
+  `updateCurrentUserHandler`, confirmed against <https://pocket-id.org/swagger.yaml>). The earlier
+  "both are intentional" decision justified the pair by callers that no longer exist: no SPA or
+  client code calls either procedure. `AccountService.GetAccount` and
+  `AccountService.UpdateAccount` were deleted; profile read is `AuthService.GetSession` (which
+  already carries the full user) and profile write is `UserService.UpdateMe`. `AccountService`
+  keeps only the tango-only password and session procedures, which upstream has no equivalent for
+  because it authenticates with passkeys and exposes no session API.
 - **A5 — `POST /authorize`** — **resolved**: the route serves both `GET` and `POST`
   (`modules/federation/oidc/handler.go:24-25`); `POST` is the form-post entry the provider needs for
   upstream parity. It stays a root-path REST protocol surface.
