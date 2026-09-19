@@ -133,9 +133,10 @@ func New(deps Deps) (*Runtime, error) {
 		WithCipher(settingsCipher)
 
 	// Register the identity provider surface.
+	scimFeature, scimStore := withSCIMSync(deps)
 	rt.Federation = federation.New(
-		withOIDC(deps, rt.AuditLog, keyService, sessions, apiAccess, blobStore, rt.AppConfig),
-		withSCIMSync(deps),
+		withOIDC(deps, rt.AuditLog, keyService, sessions, apiAccess, blobStore, rt.AppConfig, scimBindingLookup(scimStore)),
+		scimFeature,
 		keyService,
 		withDiscovery(deps, keyService),
 	)
@@ -233,6 +234,19 @@ func (rt *Runtime) MountRPC(r chi.Router) {
 	// are admin-only; the public bootstrap view is anonymous.
 	cfgPrefix, cfgHandler := rt.AppConfig.RPCService(auth)
 	r.Handle(cfgPrefix+"*", cfgHandler)
+
+	// OIDC client administration: admin-only.
+	ocPrefix, ocHandler := rt.Federation.ClientRPCService()
+	r.Handle(ocPrefix+"*", middleware.RPCAdminGuard(auth)(ocHandler))
+
+	// Consents: self-service listing/revocation plus the admin-wide
+	// views — the per-procedure guard rides the handler.
+	consentPrefix, consentHandler := rt.Federation.ConsentRPCService()
+	r.Handle(consentPrefix+"*", consentHandler)
+
+	// SCIM provider configuration: admin-only.
+	scimPrefix, scimHandler := rt.Federation.ScimRPCService()
+	r.Handle(scimPrefix+"*", middleware.RPCAdminGuard(auth)(scimHandler))
 }
 
 // MountAPI mounts API routes in registration order.

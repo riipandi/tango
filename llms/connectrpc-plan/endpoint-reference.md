@@ -178,10 +178,10 @@ running server. Request names should use `<METHOD> <path>` for REST and
 
 | Methods | Endpoint | Protocol | Consumer | Notes |
 | --- | --- | --- | --- | --- |
-| GET, POST, PUT, DELETE | `/api/oidc/clients*` | ConnectRPC | Admin console/internal | Client administration, metadata, logos, secrets, and group access. |
-| GET, DELETE | `/api/oidc/users/me/authorized-clients*` | ConnectRPC | SPA/internal | User consent/revocation management. |
-| GET | `/api/oidc/users/me/clients` | ConnectRPC | SPA/internal | |
-| GET | `/api/oidc/users/{id}/authorized-clients` | ConnectRPC | Admin console/internal | |
+| GET, POST, PUT, DELETE | `/api/oidc/clients*` | ConnectRPC | Admin console/internal | Client administration, metadata, logos, secrets, and group access; REST routes removed in phase 05 (logo read stays REST). |
+| GET, DELETE | `/api/oidc/users/me/authorized-clients*` | ConnectRPC | SPA/internal | User consent/revocation management; REST routes removed in phase 05. |
+| GET | `/api/oidc/users/me/clients` | ConnectRPC | SPA/internal | REST route removed in phase 05. |
+| GET | `/api/oidc/users/{id}/authorized-clients` | ConnectRPC | Admin console/internal | REST route removed in phase 05. |
 | GET | `/api/oidc/interaction/{id}` | REST | Tango authorization UI | OIDC interaction state is part of the browser protocol flow. |
 | POST | `/api/oidc/interaction/{id}/approve` | REST | Tango authorization UI | Preserve browser session and redirect behavior. |
 | GET | `/authorize` | REST | External OIDC RP/browser | Redirect and OAuth error contract. |
@@ -201,8 +201,8 @@ running server. Request names should use `<METHOD> <path>` for REST and
 
 | Methods | Endpoint | Protocol | Consumer | Notes |
 | --- | --- | --- | --- | --- |
-| POST, PUT, DELETE | `/api/scim/service-provider*` | ConnectRPC | Admin console/internal | Configuration of Tango's outbound SCIM provider. |
-| POST | `/api/scim/service-provider/{id}/sync` | ConnectRPC | Admin console/internal | Internal command that triggers outbound HTTP. |
+| POST, PUT, DELETE | `/api/scim/service-provider*` | ConnectRPC | Admin console/internal | Configuration of Tango's outbound SCIM provider; REST routes removed in phase 05. |
+| POST | `/api/scim/service-provider/{id}/sync` | ConnectRPC | Admin console/internal | Internal command that triggers outbound HTTP; REST route removed in phase 05. |
 | GET, POST, PUT, DELETE | `/api/webhooks*` | ConnectRPC | Admin console/internal | Registration and secret lifecycle. |
 | POST | `/api/webhooks/{id}/test` | ConnectRPC | Admin console/internal | Queues an outbound delivery. |
 | GET | `/api/webhooks/{id}/deliveries` | ConnectRPC | Admin console/internal | |
@@ -386,9 +386,9 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 
 | Service.Method | Replaces (method + path) | Auth | Notes |
 | --- | --- | --- | --- |
-| `OidcClientService.ListClients` | GET `/api/oidc/clients/` | bearer | |
-| `OidcClientService.CreateClient` | POST `/api/oidc/clients/` | bearer | Show-once secret. |
-| `OidcClientService.GetClient` | GET `/api/oidc/clients/{client_id}` | bearer | |
+| `OidcClientService.ListClients` | GET `/api/oidc/clients/` | bearer | Cutover phase 05. |
+| `OidcClientService.CreateClient` | POST `/api/oidc/clients/` | bearer | Show-once secret; cutover phase 05. |
+| `OidcClientService.GetClient` | GET `/api/oidc/clients/{client_id}` | bearer | Cutover phase 05. |
 | `OidcClientService.UpdateClient` | PUT `/api/oidc/clients/{client_id}` | bearer | |
 | `OidcClientService.DeleteClient` | DELETE `/api/oidc/clients/{client_id}` | bearer | |
 | `OidcClientService.UpdateAllowedUserGroups` | PUT `/api/oidc/clients/{client_id}/allowed-user-groups` | bearer | |
@@ -400,13 +400,13 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `OidcClientService.ListSecrets` | GET `/api/oidc/clients/{client_id}/secrets` | bearer | |
 | `OidcClientService.CreateSecret` | POST `/api/oidc/clients/{client_id}/secrets` | bearer | Show-once. |
 | `OidcClientService.DeleteSecret` | DELETE `/api/oidc/clients/{client_id}/secrets/{secret_id}` | bearer | |
-| `OidcClientService.GetScimProvider` | GET `/api/oidc/clients/{client_id}/scim-service-provider` | bearer | See ambiguity A2. |
-| `OidcConsentService.ListMyAuthorizedClients` | GET `/api/oidc/users/me/authorized-clients` | bearer | |
+| `OidcClientService.GetScimProvider` | GET `/api/oidc/clients/{client_id}/scim-service-provider` | bearer | Ambiguity A2 resolved: the scimsync store adapts onto the lookup port; cutover phase 05. |
+| `OidcConsentService.ListMyAuthorizedClients` | GET `/api/oidc/users/me/authorized-clients` | bearer | Cutover phase 05. |
 | `OidcConsentService.RevokeMyAuthorizedClient` | DELETE `/api/oidc/users/me/authorized-clients/{client_id}` | bearer | |
 | `OidcConsentService.ListMyClients` | GET `/api/oidc/users/me/clients` | bearer | |
-| `OidcConsentService.ListUserAuthorizedClients` | GET `/api/oidc/users/{user_id}/authorized-clients` | bearer | See ambiguity A1. |
+| `OidcConsentService.ListUserAuthorizedClients` | GET `/api/oidc/users/{user_id}/authorized-clients` | bearer | Ambiguity A1 resolved: both listings live in OidcConsentService, admin-guarded; cutover phase 05. |
 | `OidcConsentService.ListAllAuthorizedClients` | GET `/api/oidc/authorized-clients` | bearer | Admin-wide listing. See ambiguity A1. |
-| `ScimProviderService.Upsert` | POST `/api/scim/service-provider` | bearer | |
+| `ScimProviderService.Upsert` | POST `/api/scim/service-provider` | bearer | Cutover phase 05. |
 | `ScimProviderService.Update` | PUT `/api/scim/service-provider/{id}` | bearer | |
 | `ScimProviderService.Delete` | DELETE `/api/scim/service-provider/{id}` | bearer | |
 | `ScimProviderService.Sync` | POST `/api/scim/service-provider/{id}/sync` | bearer | Queues outbound sync. |

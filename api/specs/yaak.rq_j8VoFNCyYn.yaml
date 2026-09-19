@@ -1,0 +1,50 @@
+type: http_request
+model: http_request
+id: rq_j8VoFNCyYn
+createdAt: 2026-09-19T00:36:42.113746
+updatedAt: 2026-09-19T00:36:42.113746
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_Zg3xFLU2hm
+authentication: {}
+authenticationType: none
+body:
+  bodyType: application/json
+  text: '{}'
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+- enabled: true
+  name: Authorization
+  value: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6Imp3a18wMW0ydHp3czFwZXE4c2U1MjUzY2N0emZ2biIsInR5cCI6IkpXVCJ9.eyJhZG1pbiI6dHJ1ZSwiYXVkIjpbInRhbmdvOnJwYyJdLCJleHAiOjE3ODk3Nzg0MTUsImlhdCI6MTc4OTc3NzgxNSwiaXNzIjoidGFuZ286aW50ZXJuYWwiLCJzaWQiOiJzZXNzaW9uXzAxbTJ2aDRhNnRlNnc5eGNkamIzZTNuemh4Iiwic3ViIjoidXNlcl8wMW0ydHp3aGgwZmc1OTJteGM1OHljM3BnZCJ9.JaOVSxC05WoQ23-UFyHPzOzFROzjSkRunNedPWtaE-zbgcRbv6rQQBqGFQn94HtgVPCPJGl2T1jiJ7x8hHNyz8c3SlWZmsXA8jJDZv_nXFM5gljIA8rABeR4e2lm1Aue_B-CZ2rDJUiaKPg3a0I8nCDqTMe6NPZoZ_pDWU7ZK8Fw7dZZwUbmDTTZhusIEbg0bySP_WY62tz38GyhVhfnd7MNJtP2f_toUa0hKf3jKxWVuvy4Y6tlASPF8HN4BrtMo1xLXH_IXf88LePHIiAQmeJrylqUxsCJDabDl6yKk41VDvDhf4sxpcX5jKqEul-3LlRWUMhgq4ElcvZtXEFPfw
+  id: null
+method: POST
+name: POST /rpc/tango.federation.v1.OidcConsentService/ListMyAuthorizedClients
+sortPriority: 0.0
+url: https://localhost:8443/rpc/tango.federation.v1.OidcConsentService/ListMyAuthorizedClients
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

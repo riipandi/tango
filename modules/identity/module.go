@@ -105,10 +105,15 @@ type userRPCProvider interface {
 	RPCService(auth kernel.AccessAuthenticator) (string, http.Handler)
 }
 
-// notFoundRPC is the stub for unwired surfaces; unknown procedures
-// already answer Connect 404s at the mount.
+// notFoundRPC is the stub for unwired surfaces; the prefix stays a
+// valid chi pattern that never matches real traffic, and the handler
+// answers a Connect-style 404 document.
 func notFoundRPC() (string, http.Handler) {
-	return "", http.NotFoundHandler()
+	return "/tango.void.v1.NotFound/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"code":"not_found","message":"procedure not found"}`))
+	})
 }
 
 // UserRPCService returns the user-core Connect registration.

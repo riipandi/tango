@@ -27,6 +27,15 @@ type Service struct {
 
 	metadataFetcher DocumentFetcher
 	cimdAllowlist   func() []string
+
+	// scimBinding resolves one client's SCIM provider projection for
+	// the GetScimProvider procedure; the scimsync feature owns the
+	// data, so the registry adapts its store onto this function.
+	scimBinding func(ctx context.Context, clientID string) (*ScimBinding, error)
+
+	// access resolves the internal bearer token for the consent
+	// surface's per-procedure guard.
+	access kernel.AccessAuthenticator
 }
 
 // AuditLogger receives audit events; the registry adapts auditlog.
@@ -51,6 +60,18 @@ func WithAudit(l AuditLogger) Option { return func(s *Service) { s.audit = l } }
 // WithAPIAccess attaches the resource-API resolver used to enforce
 // RFC 8707 resource audiences and permission scopes.
 func WithAPIAccess(p APIAccessProvider) Option { return func(s *Service) { s.apiAccess = p } }
+
+// WithScimBinding attaches the per-client SCIM provider lookup used
+// by the GetScimProvider procedure.
+func WithScimBinding(fn func(ctx context.Context, clientID string) (*ScimBinding, error)) Option {
+	return func(s *Service) { s.scimBinding = fn }
+}
+
+// WithAccessAuthenticator attaches the internal bearer resolver used
+// by the consent surface's per-procedure guard.
+func WithAccessAuthenticator(auth kernel.AccessAuthenticator) Option {
+	return func(s *Service) { s.access = auth }
+}
 
 // WithAuthenticator injects the session cookie resolver used by the
 // optional-auth /authorize flow.

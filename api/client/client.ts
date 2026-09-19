@@ -3,11 +3,8 @@
 import { createHttp } from './http'
 import { createAPIKeysModule, type APIKeysModule } from './modules/apikeys.mod'
 import { createAuthModule, type AuthModule } from './modules/auth.mod'
-import { createConsentModule, type ConsentModule } from './modules/consent.mod'
 import { createDeviceApprovalModule, type DeviceApprovalModule } from './modules/deviceapproval.mod'
 import { createDeviceLoginModule, type DeviceLoginModule } from './modules/devicelogin.mod'
-import { createOidcClientsModule, type OidcClientsModule } from './modules/oidcclients.mod'
-import { createScimModule, type ScimModule } from './modules/scim.mod'
 import { createSystemModule, type SystemModule } from './modules/system.mod'
 import { createWebhooksModule, type WebhooksModule } from './modules/webhooks.mod'
 import type { CallInit, CallResult, HttpMethod } from './types'
@@ -27,12 +24,6 @@ export interface ApiClientOptions {
 export interface ApiClient {
   /** Sign-in, recovery, signup, MFA, WebAuthn, one-time access. */
   auth: AuthModule
-  /** Admin relying-party registry. */
-  oidcClients: OidcClientsModule
-  /** The user's consents plus the admin view of any user's consents. */
-  consent: ConsentModule
-  /** SCIM service providers. */
-  scim: ScimModule
   /** The user's own X-API-KEY machine credentials. */
   apiKeys: APIKeysModule
   webhooks: WebhooksModule
@@ -64,9 +55,6 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
   return {
     auth: createAuthModule(exec),
-    oidcClients: createOidcClientsModule(exec),
-    consent: createConsentModule(exec),
-    scim: createScimModule(exec),
     apiKeys: createAPIKeysModule(exec),
     webhooks: createWebhooksModule(exec),
     deviceLogin: createDeviceLoginModule(exec),

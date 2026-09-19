@@ -1,24 +1,37 @@
 package oidc
 
-// cimd_test.go drives the CIMD-lite surface against a stub metadata
-// document server: create-with-url materializes the document, refresh
-// rewrites document-owned columns, the allowlist denies unknown URLs,
-// and admin updates never clobber document-owned columns.
+// cimd_test.go drives the CIMD-lite surface through the generated
+// Connect contract against a stub metadata document server: create-
+// with-url materializes the document, refresh rewrites document-owned
+// columns, the allowlist denies unknown URLs, and admin updates never
+// clobber document-owned columns.
 
 import (
 	"context"
 	"crypto/tls"
 	jsonv2 "encoding/json/v2"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"connectrpc.com/connect"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	federationv1 "github.com/riipandi/tango/gen/proto/go/tango/federation/v1"
 )
 
 // testTLSInsecure accepts the stub server's self-signed cert.
 var testTLSInsecure = &tls.Config{InsecureSkipVerify: true} //nolint:gosec — test stub only
+
+func connectError(t *testing.T, err error) *connect.Error {
+	t.Helper()
+	require.Error(t, err)
+	var cerr *connect.Error
+	require.True(t, errors.As(err, &cerr), "must decode as *connect.Error")
+	return cerr
+}
 
 // metadataServer serves one document (TLS — the fetcher enforces
 // https) and counts fetches.
@@ -33,10 +46,10 @@ func metadataServer(t *testing.T, doc map[string]any) (*httptest.Server, *int) {
 	})
 	server := httptest.NewTLSServer(mux)
 	t.Cleanup(server.Close)
+	server.TLS = testTLSInsecure
 	return server, &fetches
 }
 
-// cimdStack wires the service with the stub fetcher + allowlist.
 func cimdStack(t *testing.T, docServer *httptest.Server, allowAll bool) (*Service, Store) {
 	t.Helper()
 	service, store, _ := testStack(t)
@@ -67,7 +80,9 @@ func (fetcherAdapter) SendRaw(ctx context.Context, method, url string, _ map[str
 	return resp.StatusCode, buf[:n], nil
 }
 
-func TestCIMDClientLifecycle(t *testing.T) {
+// TestRPCIMDClientLifecycle drives create-with-url, refresh, and the
+// document-ownership rule through the generated contract.
+func TestRPCIMDClientLifecycle(t *testing.T) {
 	// One shared document map: the server encodes THIS instance, so
 	// later mutations are visible to the fetcher.
 	docMap := map[string]any{
@@ -79,66 +94,60 @@ func TestCIMDClientLifecycle(t *testing.T) {
 	}
 	server, fetches := metadataServer(t, docMap)
 	service, store := cimdStack(t, server, false) // allowlist NOT configured yet
+	h := &clientRPC{service: service}
+	ctx := t.Context()
 
-	createBody := `{"metadata_url":"` + server.URL + `/metadata.json"}`
-	req := signInRequest(http.MethodPost, clientsAPIPrefix, createBody)
-	rec := httptest.NewRecorder()
-	router := newRouter(t, service, &fakeAuthenticator{validToken: "session-token-1", principal: principalFixture("01a00000-0000-0000-0000-000000000000")})
-	router.ServeHTTP(rec, req)
+	createURL := server.URL + "/metadata.json"
 
-	// Default deny: the allowlist getter is nil → 422.
-	require.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
+	// Default deny: the allowlist getter is nil → invalid_argument.
+	_, err := h.CreateClient(ctx, connect.NewRequest(&federationv1.CreateOidcClientRequest{
+		MetadataUrl: &createURL,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connectError(t, err).Code())
 
 	// Now allow it: create materializes the document.
 	service.cimdAllowlist = func() []string { return []string{server.URL + "/*"} }
-	req = signInRequest(http.MethodPost, clientsAPIPrefix, createBody)
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
-
-	var created struct {
-		Data struct {
-			ID          string `json:"id"`
-			Name        string `json:"name"`
-			ClientType  string `json:"client_type"`
-			MetadataURL string `json:"metadata_url"`
-			IsPublic    bool   `json:"is_public"`
-		} `json:"data"`
-	}
-	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &created))
-	assert.Equal(t, "Metadata RP", created.Data.Name)
-	assert.Equal(t, "cimd", created.Data.ClientType)
-	assert.Equal(t, server.URL+"/metadata.json", created.Data.MetadataURL)
-	assert.True(t, created.Data.IsPublic)
+	created, err := h.CreateClient(ctx, connect.NewRequest(&federationv1.CreateOidcClientRequest{
+		MetadataUrl: &createURL,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, "Metadata RP", created.Msg.GetClient().GetName())
+	assert.Equal(t, "cimd", created.Msg.GetClient().GetClientType())
+	assert.Equal(t, server.URL+"/metadata.json", created.Msg.GetClient().GetMetadataUrl())
+	assert.True(t, created.Msg.GetClient().GetIsPublic())
 	assert.Equal(t, 1, *fetches)
 
-	// Update the document server-side, then refresh (admin endpoint).
+	// Update the document server-side, then refresh.
 	docMap["client_name"] = "Refreshed RP"
-	req = signInRequest(http.MethodPost, clientsAPIPrefix+"/"+created.Data.ID+"/refresh")
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Contains(t, rec.Body.String(), "Refreshed RP")
+	refreshed, err := h.RefreshClient(ctx, connect.NewRequest(&federationv1.GetOidcClientRequest{
+		ClientId: created.Msg.GetClient().GetId(),
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, "Refreshed RP", refreshed.Msg.GetName())
 	assert.Equal(t, 2, *fetches)
 
 	// Admin update must NOT write back document-owned columns: an
 	// update carrying a stale name leaves the refreshed name intact.
-	req = signInRequest(http.MethodPut, clientsAPIPrefix+"/"+created.Data.ID, `{"name":"Stale Admin Name","description":"Admin note"}`)
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-
-	clientID, err := OIDCParseClientID(created.Data.ID)
+	updated, err := h.UpdateClient(ctx, connect.NewRequest(&federationv1.UpdateOidcClientRequest{
+		ClientId:    created.Msg.GetClient().GetId(),
+		Name:        "Stale Admin Name",
+		Description: &[]string{"Admin note"}[0],
+	}))
 	require.NoError(t, err)
-	fresh, err := store.GetClient(t.Context(), clientID)
+
+	clientID, err := OIDCParseClientID(created.Msg.GetClient().GetId())
+	require.NoError(t, err)
+	fresh, err := store.GetClient(ctx, clientID)
 	require.NoError(t, err)
 	assert.Equal(t, "Refreshed RP", fresh.Name, "metadata owns name")
 	assert.Equal(t, "Admin note", fresh.Description, "description stays locally managed")
+	_ = updated
 
-	// Refresh on a standard client → 422.
-	standard := clientFixture(t.Context(), t, store, "std-"+stamp())
-	req = signInRequest(http.MethodPost, clientsAPIPrefix+"/"+standard.ID.String()+"/refresh")
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	// Refresh on a standard client → invalid_argument.
+	standard := clientFixture(ctx, t, store, "std-"+stamp())
+	_, err = h.RefreshClient(ctx, connect.NewRequest(&federationv1.GetOidcClientRequest{
+		ClientId: standard.ID.String(),
+	}))
+	assert.Equal(t, connect.CodeInvalidArgument, connectError(t, err).Code())
 }

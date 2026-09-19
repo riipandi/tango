@@ -5,6 +5,7 @@ package federation
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
@@ -21,10 +22,19 @@ type Feature interface {
 	Name() string
 }
 
-// APIFeature mounts endpoints inside the shared /api group.
+// APIFeature mounts endpoints inside the shared /api group. A
+// feature that serves ConnectRPC exclusively implements
+// RPCServiceProvider instead — the two are mutually exclusive.
 type APIFeature interface {
 	Feature
 	APIRoutes(r chi.Router, g RouteGroups)
+}
+
+// RPCServiceProvider exposes a Connect registration instead of REST
+// routes; the composition root mounts it under /rpc.
+type RPCServiceProvider interface {
+	Feature
+	RPCService() (string, http.Handler)
 }
 
 // StartableFeature holds resources with a lifecycle: started in
@@ -62,14 +72,14 @@ type ProviderFeature interface {
 // discovery or late registration.
 type Module struct {
 	provider  ProviderFeature
-	scim      APIFeature
+	scim      RPCServiceProvider
 	keys      StartableFeature
 	discovery RootRoutableFeature
 }
 
 // New wires the federation surface. The signing-key service is
 // mandatory; a nil one is a wiring bug.
-func New(provider ProviderFeature, scim APIFeature, keys StartableFeature, discovery RootRoutableFeature) *Module {
+func New(provider ProviderFeature, scim RPCServiceProvider, keys StartableFeature, discovery RootRoutableFeature) *Module {
 	if provider == nil || scim == nil || keys == nil || discovery == nil {
 		panic("federation: nil module dependency")
 	}
@@ -79,10 +89,58 @@ func New(provider ProviderFeature, scim APIFeature, keys StartableFeature, disco
 func (m *Module) Name() string { return ModuleName }
 
 // APIRoutes mounts the provider feature endpoints inside the shared
-// /api group.
+// /api group. The SCIM surface serves ConnectRPC exclusively.
 func (m *Module) APIRoutes(r chi.Router, g RouteGroups) {
 	m.provider.APIRoutes(r, g)
-	m.scim.APIRoutes(r, g)
+}
+
+// rpcServiceProvider is implemented by features exposing a Connect
+// service beside their REST routes.
+type rpcServiceProvider interface {
+	RPCService() (string, http.Handler)
+}
+
+// consentRPCProvider is the consent surface's Connect registration.
+type consentRPCProvider interface {
+	ConsentRPCService() (string, http.Handler)
+}
+
+// notFoundRPC is the stub for unwired surfaces; the prefix stays a
+// valid chi pattern that never matches real traffic, and the handler
+// answers a Connect-style 404 document.
+func notFoundRPC() (string, http.Handler) {
+	return "/tango.void.v1.NotFound/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"code":"not_found","message":"procedure not found"}`))
+	})
+}
+
+// ClientRPCService returns the OIDC client administration Connect
+// registration (admin-only surface).
+func (m *Module) ClientRPCService() (string, http.Handler) {
+	if p, ok := m.provider.(rpcServiceProvider); ok {
+		return p.RPCService()
+	}
+	return notFoundRPC()
+}
+
+// ConsentRPCService returns the consent Connect registration (mixed
+// self/admin visibility).
+func (m *Module) ConsentRPCService() (string, http.Handler) {
+	if p, ok := m.provider.(consentRPCProvider); ok {
+		return p.ConsentRPCService()
+	}
+	return notFoundRPC()
+}
+
+// ScimRPCService returns the SCIM provider Connect registration
+// (admin-only surface).
+func (m *Module) ScimRPCService() (string, http.Handler) {
+	if p, ok := m.scim.(rpcServiceProvider); ok {
+		return p.RPCService()
+	}
+	return notFoundRPC()
 }
 
 // Routes mounts the root-router routes (OIDC /authorize, discovery)

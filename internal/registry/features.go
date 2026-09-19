@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/admin/apiaccess"
@@ -255,7 +257,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 }
 
 // withOIDC builds the OIDC provider feature.
-func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore, appconfigModule *appconfig.Module) federation.ProviderFeature {
+func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore, appconfigModule *appconfig.Module, scimBinding func(context.Context, string) (*oidc.ScimBinding, error)) federation.ProviderFeature {
 	issuer := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service := oidc.NewService(
 		oidc.NewPostgresStore(deps.DB),
@@ -268,6 +270,8 @@ func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *s
 		oidc.WithImages(images),
 		oidc.WithMetadataFetcher(deps.Fetcher),
 		oidc.WithCIMDAllowlist(cimdAllowlistGetter(appconfigModule)),
+		oidc.WithScimBinding(scimBinding),
+		oidc.WithAccessAuthenticator(sessions),
 		oidc.WithCookieSecure(deps.Config.App.Mode != "development"),
 	)
 	return oidc.New(service)
@@ -315,8 +319,9 @@ func emailVerificationAdapter(users user.Store) emailverification.Verifier {
 	return emailVerificationVerifier{users: users}
 }
 
-// withSCIMSync builds the SCIM provisioning feature.
-func withSCIMSync(deps Deps) federation.APIFeature {
+// withSCIMSync builds the SCIM provisioning feature; the store rides
+// along for the OIDC client surface's per-client binding lookup.
+func withSCIMSync(deps Deps) (federation.RPCServiceProvider, *scimsync.PostgresStore) {
 	cipherKey := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
 	cipher, err := crypto.NewCipher(cipherKey[:])
 	if err != nil {
@@ -325,7 +330,32 @@ func withSCIMSync(deps Deps) federation.APIFeature {
 	store := scimsync.NewPostgresStore(deps.DB, cipher)
 	source := scimsync.NewIdentitySnapshotSource(deps.DB)
 	service := scimsync.NewService(store, source, newSCIMPoster(), logger.Slog(deps.Logger))
-	return scimsync.New(service)
+	return scimsync.New(service), store
+}
+
+// scimBindingLookup adapts the scimsync store onto the oidc
+// GetScimProvider port; store sentinels map onto Connect codes.
+func scimBindingLookup(store *scimsync.PostgresStore) func(context.Context, string) (*oidc.ScimBinding, error) {
+	return func(ctx context.Context, clientID string) (*oidc.ScimBinding, error) {
+		p, err := store.GetByClient(ctx, clientID)
+		if err != nil {
+			switch {
+			case errors.Is(err, scimsync.ErrNotFound):
+				return nil, rpcerr.NotFound("scim service provider not found")
+			case errors.Is(err, scimsync.ErrUnknownClient):
+				return nil, rpcerr.InvalidArgument("unknown oidc client")
+			default:
+				return nil, rpcerr.Internal("internal error")
+			}
+		}
+		return &oidc.ScimBinding{
+			ID:           p.ID.String(),
+			Endpoint:     p.Endpoint,
+			OIDCClientID: p.OIDCClientID,
+			LastSyncedAt: p.LastSyncedAt,
+			CreatedAt:    p.CreatedAt,
+		}, nil
+	}
 }
 
 // scimPoster executes outbound SCIM requests over net/http; the

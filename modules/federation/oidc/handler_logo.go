@@ -75,69 +75,6 @@ func (s *Service) serveClientLogo(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, reader)
 }
 
-// updateClientLogo handles POST /oidc/clients/{id}/logo: multipart
-// 'file' → blob store → path column (the meta view derives
-// has_logo from it).
-func (s *Service) updateClientLogo(w http.ResponseWriter, r *http.Request) {
-	client, ok := s.clientForLogo(w, r)
-	if !ok {
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		responder.Fail(w, r, http.StatusBadRequest, "validation failed",
-			responder.WithError("multipart field 'file' is required"))
-		return
-	}
-	defer file.Close()
-	if header.Size > maxLogoUpload {
-		responder.Fail(w, r, http.StatusRequestEntityTooLarge, "file too large")
-		return
-	}
-
-	ext := path.Ext(header.Filename)
-	if logoMime[ext] == "" {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "unsupported_file_type")
-		return
-	}
-
-	logoPath := "client-logos/" + client.ID.String() + ext
-	if err := s.images.Save(r.Context(), logoPath, file); err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if err := s.store.SetClientLogoPath(r.Context(), client.ID, &logoPath); err != nil {
-		_ = s.images.Delete(r.Context(), logoPath)
-		writeClientError(w, r, err)
-		return
-	}
-
-	// The replaced blob may carry a different extension — remove it.
-	if client.LogoPath != nil && *client.LogoPath != logoPath {
-		_ = s.images.Delete(r.Context(), *client.LogoPath)
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// deleteClientLogo handles DELETE: clear columns, remove the blob
-// (a missing blob stays a success).
-func (s *Service) deleteClientLogo(w http.ResponseWriter, r *http.Request) {
-	client, ok := s.clientForLogo(w, r)
-	if !ok {
-		return
-	}
-
-	if err := s.store.SetClientLogoPath(r.Context(), client.ID, nil); err != nil {
-		writeClientError(w, r, err)
-		return
-	}
-	if client.LogoPath != nil {
-		_ = s.images.Delete(r.Context(), *client.LogoPath)
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // clientForLogo resolves + validates the {clientId} URL param.
 func (s *Service) clientForLogo(w http.ResponseWriter, r *http.Request) (Client, bool) {
 	id, ok := clientIDParam(w, r)

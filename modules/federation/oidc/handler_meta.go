@@ -12,60 +12,6 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// handleClientMeta serves GET /api/oidc/clients/{id}/meta: the
-// trimmed client view used by the SPA.
-func (s *Service) handleClientMeta(w http.ResponseWriter, r *http.Request) {
-	id, ok := clientIDParam(w, r)
-	if !ok {
-		return
-	}
-	client, err := s.store.GetClient(r.Context(), id)
-	if err != nil {
-		writeClientError(w, r, err)
-		return
-	}
-	responder.Success(w, r, http.StatusOK, client.metaView())
-}
-
-// handleClientPreview serves GET /api/oidc/clients/{id}/preview/{userId}:
-// the id_token / access_token / user_info claim maps a real
-// authorization would produce for this user and the requested scopes.
-// It returns claim maps, not signed bearer tokens.
-func (s *Service) handleClientPreview(w http.ResponseWriter, r *http.Request) {
-	id, ok := clientIDParam(w, r)
-	if !ok {
-		return
-	}
-	client, err := s.store.GetClient(r.Context(), id)
-	if err != nil {
-		writeClientError(w, r, err)
-		return
-	}
-
-	userID := chi.URLParam(r, "userId")
-	if _, lookupErr := s.store.UserByID(r.Context(), userID); lookupErr != nil {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-
-	scope := r.URL.Query().Get("scopes")
-	claims, err := s.claimsFor(r.Context(), userID, scope, "", time.Now().UTC())
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	now := time.Now().UTC()
-	idToken := s.idTokenClaims(client, claims, now, AccessTokenTTL)
-	accessToken := s.accessTokenClaims(client, claims, scope, now, AccessTokenTTL)
-
-	responder.Success(w, r, http.StatusOK, map[string]any{
-		"id_token":     idToken,
-		"access_token": accessToken,
-		"user_info":    profileClaimsMap(scope, claims),
-	})
-}
-
 // idTokenClaims mirrors signIDToken's private-claim assembly minus
 // nonce/sid (a preview has no session).
 func (s *Service) idTokenClaims(client Client, claims UserClaims, now time.Time, ttl time.Duration) map[string]any {
@@ -143,17 +89,6 @@ func putProfileClaims(out map[string]any, claims UserClaims) {
 
 // metaView is the trimmed client payload for discovery/configuration
 // surfaces use snake_case.
-func (c Client) metaView() map[string]any {
-	return map[string]any{
-		"id":                        c.ID.String(),
-		"name":                      c.Name,
-		"description":               c.Description,
-		"has_logo":                  c.LogoPath != nil,
-		"launch_url":                c.LaunchURL,
-		"requires_reauthentication": c.RequiresReauthentication,
-		"client_type":               c.ClientType,
-	}
-}
 
 // clientIDParam parses the {clientId} URL param; invalid ids fail
 // with a 400 like the rest of the client CRUD surface.

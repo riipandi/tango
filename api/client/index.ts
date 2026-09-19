@@ -54,20 +54,11 @@ export type {
 
 // Admin surface types.
 export type {
-  AuthorizedClient,
-  OidcClient,
-  OidcClientMeta,
-  OidcClientParams,
-  OidcSecretEntry,
-  OidcTokenPreview
-} from './schemas/oidcclient.schema'
-export type {
   APIKey,
   APIKeySecret,
   CreateAPIKeyParams,
   RenewAPIKeyParams
 } from './schemas/apikey.schema'
-export type { CreateScimProviderParams, ScimProvider } from './schemas/scim.schema'
 export type {
   CreateWebhookParams,
   UpdateWebhookParams,

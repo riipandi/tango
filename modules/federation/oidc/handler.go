@@ -10,15 +10,12 @@ import (
 	"errors"
 	"net/http"
 
-	jsonv2 "encoding/json/v2"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 
 	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/validate"
 )
 
 // Routes mounts the root-router endpoints (/authorize) — implements
@@ -30,48 +27,18 @@ func (f Feature) Routes(r chi.Router) {
 
 // APIRoutes mounts /api/oidc endpoints — implements
 // federation.APIFeature. Paths are RELATIVE to the /api group (the
-// discovery document advertises the absolute /api/oidc/* URLs).
-// Client management mounts only when an admin group is wired —
-// fail closed.
-func (f Feature) APIRoutes(r chi.Router, g federation.RouteGroups) {
+// discovery document advertises the absolute /api/oidc/* URLs). The
+// client administration and consent surfaces serve ConnectRPC
+// exclusively (see handler_rpc.go); what remains here is the OIDC
+// protocol surface, the public logo read, and the interaction flow.
+func (f Feature) APIRoutes(r chi.Router, _ federation.RouteGroups) {
 	r.Post(tokenAPIPath, f.service.handleToken)
 	r.Post(userinfoAPIPath, f.service.handleUserInfo)
 	r.Get(userinfoAPIPath, f.service.handleUserInfo)
 
-	if g.Admin != nil {
-		clients := r.With(g.Admin)
-		clients.Route(clientsAPIPrefix, func(cr chi.Router) {
-			cr.Get("/", f.service.handleListClients)
-			cr.Post("/", f.service.handleCreateClient)
-			cr.Get("/{clientId}", f.service.handleGetClient)
-			cr.Put("/{clientId}", f.service.handleUpdateClient)
-			cr.Delete("/{clientId}", f.service.handleDeleteClient)
-			cr.Put("/{clientId}/allowed-user-groups", f.service.handleUpdateAllowedGroups)
-			cr.Get("/{clientId}/meta", f.service.handleClientMeta)
-			cr.Get("/{clientId}/preview/{userId}", f.service.handleClientPreview)
-			cr.Get("/{clientId}/secrets", f.service.handleListSecrets)
-			cr.Post("/{clientId}/secrets", f.service.handleCreateSecret)
-			cr.Delete("/{clientId}/secrets/{secretId}", f.service.handleDeleteSecret)
-			if f.service.images != nil {
-				cr.Post("/{clientId}/logo", f.service.updateClientLogo)
-				cr.Delete("/{clientId}/logo", f.service.deleteClientLogo)
-			}
-			cr.Post("/{clientId}/refresh", f.service.handleRefreshClient)
-		})
-		clients.Get(authorizedClientsAPIPrefix, f.service.handleListAuthorizedClients)
-		clients.Get("/oidc/users/{id}/authorized-clients", f.service.handleListUserAuthorizedClients)
-	}
-
 	// Public logo read: bare bytes, no guard.
 	if f.service.images != nil {
 		r.Get("/oidc/clients/{clientId}/logo", f.service.serveClientLogo)
-	}
-
-	if g.Self != nil {
-		self := r.With(g.Self)
-		self.Get("/oidc/users/me/clients", f.service.handleAccessibleClients)
-		self.Get("/oidc/users/me/authorized-clients", f.service.handleMyAuthorizedClients)
-		self.Delete("/oidc/users/me/authorized-clients/{clientId}", f.service.handleRevokeMyAuthorization)
 	}
 
 	r.Route(interactionAPIPrefix, func(ir chi.Router) {
@@ -94,11 +61,9 @@ func (f Feature) APIRoutes(r chi.Router, g federation.RouteGroups) {
 
 // API mount prefixes (relative to the /api group).
 const (
-	clientsAPIPrefix           = "/oidc/clients"
-	authorizedClientsAPIPrefix = "/oidc/authorized-clients"
-	interactionAPIPrefix       = "/oidc/interaction"
-	introspectAPIPath          = "/oidc/introspect"
-	endSessionAPIPath          = "/oidc/end-session"
+	interactionAPIPrefix = "/oidc/interaction"
+	introspectAPIPath    = "/oidc/introspect"
+	endSessionAPIPath    = "/oidc/end-session"
 
 	tokenAPIPath    = "/oidc/token"
 	userinfoAPIPath = "/oidc/userinfo"
@@ -145,163 +110,11 @@ func (r clientRequest) validateWith(metadataOwned bool) error {
 	)
 }
 
-// decodeClientBody decodes the JSON body WITHOUT running the
-// strict Validate() — CIMD updates relax the document-owned fields,
-// so validation runs after the client type is known.
-func decodeClientBody(r *http.Request, dst any) error {
-	return jsonv2.UnmarshalRead(r.Body, dst)
-}
-
-// handleListClients serves GET /api/oidc/clients.
-func (s *Service) handleListClients(w http.ResponseWriter, r *http.Request) {
-	clients, err := s.store.ListClients(r.Context())
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to list clients")
-		return
-	}
-
-	views := make([]map[string]any, 0, len(clients))
-	for _, client := range clients {
-		views = append(views, client.view())
-	}
-	responder.Success(w, r, http.StatusOK, views)
-}
-
-// handleGetClient serves GET /api/oidc/clients/{clientId}.
-func (s *Service) handleGetClient(w http.ResponseWriter, r *http.Request) {
-	id, err := OIDCParseClientID(chi.URLParam(r, "clientId"))
-	if err != nil {
-		responder.Fail(w, r, http.StatusBadRequest, "invalid client id")
-		return
-	}
-
-	client, err := s.store.GetClient(r.Context(), id)
-	if err != nil {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-	responder.Success(w, r, http.StatusOK, client.view())
-}
-
-// handleCreateClient serves POST /api/oidc/clients; the raw secret
-// is returned exactly once.
-func (s *Service) handleCreateClient(w http.ResponseWriter, r *http.Request) {
-	var request clientRequest
-	if verr := validate.Request(r.Body, &request); verr != nil {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(verr)))
-		return
-	}
-
-	created, rawSecret, err := s.createClient(r.Context(), request)
-	if err != nil {
-		if errors.Is(err, errNotCIMD) || isMetadataError(err) {
-			responder.Fail(w, r, http.StatusUnprocessableEntity, err.Error())
-			return
-		}
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to create client")
-		return
-	}
-
-	view := created.view()
-	view["client_secret"] = rawSecret
-	responder.Success(w, r, http.StatusCreated, view)
-}
-
 // isMetadataError reports whether the error came from the CIMD fetch/
 // validate/policy path (caller-facing message).
 func isMetadataError(err error) bool {
 	var me metadataError
 	return errors.As(err, &me)
-}
-
-// handleUpdateClient serves PUT /api/oidc/clients/{clientId}.
-func (s *Service) handleUpdateClient(w http.ResponseWriter, r *http.Request) {
-	id, err := OIDCParseClientID(chi.URLParam(r, "clientId"))
-	if err != nil {
-		responder.Fail(w, r, http.StatusBadRequest, "invalid client id")
-		return
-	}
-
-	var request clientRequest
-	if decodeErr := decodeClientBody(r, &request); decodeErr != nil {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(decodeErr)))
-		return
-	}
-
-	// Validation depends on the client type: a CIMD client's
-	// document-owned fields (name, redirect URIs) are optional.
-	existing, lookupErr := s.store.GetClient(r.Context(), id)
-	if lookupErr != nil {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-	if verr := request.validateWith(existing.ClientType == "cimd"); verr != nil {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "validation failed",
-			responder.WithError(validate.FieldErrors(verr)))
-		return
-	}
-
-	client, err := s.updateClient(r.Context(), id, request)
-	if err != nil {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-	responder.Success(w, r, http.StatusOK, client.view())
-}
-
-// handleDeleteClient serves DELETE /api/oidc/clients/{clientId}.
-func (s *Service) handleDeleteClient(w http.ResponseWriter, r *http.Request) {
-	id, err := OIDCParseClientID(chi.URLParam(r, "clientId"))
-	if err != nil {
-		responder.Fail(w, r, http.StatusBadRequest, "invalid client id")
-		return
-	}
-	if err := s.deleteClient(r.Context(), id); err != nil {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// handleRefreshClient serves POST /api/oidc/clients/{clientId}/refresh:
-// re-fetch a CIMD client's metadata document, bypassing any cached
-// state, and answer with the refreshed view.
-func (s *Service) handleRefreshClient(w http.ResponseWriter, r *http.Request) {
-	id, err := OIDCParseClientID(chi.URLParam(r, "clientId"))
-	if err != nil {
-		responder.Fail(w, r, http.StatusBadRequest, "invalid client id")
-		return
-	}
-
-	client, err := s.store.GetClient(r.Context(), id)
-	if err != nil {
-		responder.NotFoundJSON(w, r)
-		return
-	}
-
-	refreshed, err := s.refreshClientMetadata(r.Context(), client)
-	if err != nil {
-		if errors.Is(err, errNotCIMD) || isMetadataError(err) {
-			responder.Fail(w, r, http.StatusUnprocessableEntity, err.Error())
-			return
-		}
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to refresh client metadata")
-		return
-	}
-	responder.Success(w, r, http.StatusOK, refreshed.view())
-}
-
-// handleListAuthorizedClients serves GET
-// /api/oidc/authorized-clients (consent records, all users).
-func (s *Service) handleListAuthorizedClients(w http.ResponseWriter, r *http.Request) {
-	records, err := s.store.AuthorizedClients(r.Context(), nil)
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to list authorized clients")
-		return
-	}
-	responder.Success(w, r, http.StatusOK, records)
 }
 
 // handleGetInteraction returns the interaction state for the SPA
@@ -369,30 +182,4 @@ func (s *Service) handleApproveInteraction(w http.ResponseWriter, r *http.Reques
 	responder.Success(w, r, http.StatusOK, map[string]any{
 		"redirect_uri": buildCallback(params.RedirectURI, code, params.State),
 	})
-}
-
-// view converts a client row to the API payload.
-func (c Client) view() map[string]any {
-	view := map[string]any{
-		"id":                             c.ID.String(),
-		"name":                           c.Name,
-		"description":                    c.Description,
-		"has_secret":                     hasUsableSecret(c),
-		"callback_urls":                  c.CallbackURLs,
-		"logout_callback_urls":           c.LogoutCallbackURLs,
-		"launch_url":                     c.LaunchURL,
-		"is_public":                      c.IsPublic,
-		"pkce_enabled":                   c.PKCEEnabled,
-		"pkce_supported":                 c.PKCESupported,
-		"skip_consent":                   c.SkipConsent,
-		"is_group_restricted":            c.IsGroupRestricted,
-		"access_token_duration_minutes":  c.AccessTokenDurationMinutes,
-		"refresh_token_duration_minutes": c.RefreshTokenDurationMinutes,
-		"allowed_user_group_ids":         c.AllowedGroupIDs,
-		"client_type":                    c.ClientType,
-	}
-	if c.MetadataURL != nil {
-		view["metadata_url"] = *c.MetadataURL
-	}
-	return view
 }
