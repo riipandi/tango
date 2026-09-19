@@ -37,37 +37,6 @@ type accountRPC struct {
 	service *Service
 }
 
-func (h *accountRPC) GetAccount(ctx context.Context, _ *connect.Request[emptypb.Empty]) (*connect.Response[identityv1.User], error) {
-	id, err := h.principalID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	u, err := h.service.users.GetByID(ctx, id)
-	if err != nil {
-		return nil, rpcError(err)
-	}
-	return connect.NewResponse(user.ProtoView(u)), nil
-}
-
-func (h *accountRPC) UpdateAccount(ctx context.Context, req *connect.Request[identityv1.UpdateProfileRequest]) (*connect.Response[identityv1.User], error) {
-	id, err := h.principalID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	params := user.UpdateProfileParams{
-		FirstName:   req.Msg.FirstName,
-		LastName:    req.Msg.LastName,
-		DisplayName: req.Msg.DisplayName,
-		AvatarURL:   req.Msg.AvatarUrl,
-		Locale:      req.Msg.Locale,
-	}
-	u, err := h.service.users.UpdateProfile(ctx, id, params)
-	if err != nil {
-		return nil, rpcError(err)
-	}
-	return connect.NewResponse(user.ProtoView(u)), nil
-}
-
 // accountChangePasswordRequest mirrors the REST payload rules: both
 // fields required, minimum length 8.
 type accountChangePasswordRequest struct {

@@ -106,21 +106,11 @@ func TestAccountRPCSelfService(t *testing.T) {
 	ctx := t.Context()
 
 	// Anonymous → the session guard rejects.
-	req := httptest.NewRequest(http.MethodPost, "/tango.identity.v1.AccountService/GetAccount", strings.NewReader("{}"))
+	req := httptest.NewRequest(http.MethodPost, "/tango.identity.v1.AccountService/ListSessions", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
-
-	// GetAccount echoes the caller's profile.
-	w = rpcPost(t, h, "GetAccount", "{}")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), u.Username)
-
-	// UpdateAccount patches the display name.
-	w = rpcPost(t, h, "UpdateAccount", `{"display_name":"Renamed Self"}`)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), "Renamed Self")
 
 	// ListSessions shows the live session.
 	w = rpcPost(t, h, "ListSessions", "{}")

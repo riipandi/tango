@@ -113,9 +113,12 @@ message ResetPasswordRequest {
 }
 
 // AccountService is the self-service surface for the signed-in user.
+// AccountService covers the tango-only self-service surfaces that
+// upstream has no equivalent for: upstream signs users in with
+// passkeys and exposes no password or session API. Profile read and
+// write stay on UserService, matching upstream's `GET/PUT
+// /api/users/me`.
 service AccountService {
-  rpc GetAccount(google.protobuf.Empty) returns (User);
-  rpc UpdateAccount(UpdateProfileRequest) returns (User);
   rpc ChangePassword(ChangePasswordRequest) returns (google.protobuf.Empty);
   rpc ListSessions(google.protobuf.Empty) returns (ListSessionsResponse);
   rpc RevokeSession(RevokeSessionRequest) returns (google.protobuf.Empty);

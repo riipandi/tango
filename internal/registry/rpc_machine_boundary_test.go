@@ -44,10 +44,9 @@ var machineAllowedProcedures = []struct {
 // not rotate its owner's password, edit its owner's profile, mint a
 // signup token, or send verification mail.
 var machineDeniedProcedures = []string{
-	"/tango.identity.v1.AccountService/GetAccount",
-	"/tango.identity.v1.AccountService/UpdateAccount",
 	"/tango.identity.v1.AccountService/ChangePassword",
 	"/tango.identity.v1.AccountService/ListSessions",
+	"/tango.identity.v1.AccountService/RevokeSession",
 	"/tango.identity.v1.UserService/UpdateMe",
 	"/tango.identity.v1.UserService/UpdateMyProfilePicture",
 	"/tango.identity.v1.UserService/DeleteMyProfilePicture",
@@ -185,7 +184,7 @@ func TestRPCMachineBoundaryKeepsBearerWorking(t *testing.T) {
 	rt.MountRPC(rpc)
 
 	// A machine credential alone is refused on the self-service mount.
-	req, _ := http.NewRequest(http.MethodPost, "/tango.identity.v1.AccountService/GetAccount", strings.NewReader("{}"))
+	req, _ := http.NewRequest(http.MethodPost, "/tango.identity.v1.AccountService/ListSessions", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Connect-Protocol-Version", "1")
 	req.Header.Set("X-API-KEY", raw)
@@ -196,7 +195,7 @@ func TestRPCMachineBoundaryKeepsBearerWorking(t *testing.T) {
 	// The same request without the credential is refused for the
 	// missing bearer, not because of the key. RPCPrincipalAuth answers
 	// one enumeration-safe message for every failure mode.
-	req, _ = http.NewRequest(http.MethodPost, "/tango.identity.v1.AccountService/GetAccount", strings.NewReader("{}"))
+	req, _ = http.NewRequest(http.MethodPost, "/tango.identity.v1.AccountService/ListSessions", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Connect-Protocol-Version", "1")
 	w = httptest.NewRecorder()
