@@ -2,6 +2,9 @@ package appconfig
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -68,6 +71,32 @@ func TestRPCRegistrationPrefix(t *testing.T) {
 	prefix, handler := module.RPCService(nil)
 	assert.Equal(t, "/tango.admin.v1.ApplicationConfigurationService/", prefix)
 	assert.NotNil(t, handler)
+}
+
+// TestRPCConfigBootstrapIsAnonymous pins the pre-sign-in contract the
+// SPA reads: Get answers without a credential, and the admin read
+// stays protected. The guard is the only thing that could demand a
+// principal here, so the request goes through the mounted handler.
+func TestRPCConfigBootstrapIsAnonymous(t *testing.T) {
+	_, _, module := newStoreStack(t)
+	prefix, handler := module.RPCService(nil)
+
+	call := func(procedure string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, prefix+procedure, strings.NewReader("{}"))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Connect-Protocol-Version", "1")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		return w
+	}
+
+	bootstrap := call("Get")
+	require.Equal(t, http.StatusOK, bootstrap.Code, bootstrap.Body.String())
+	assert.Contains(t, bootstrap.Body.String(), "app_name")
+
+	admin := call("GetAll")
+	require.Equal(t, http.StatusUnauthorized, admin.Code, admin.Body.String())
+	assert.Contains(t, admin.Body.String(), `"code":"unauthenticated"`)
 }
 
 func connectErrAs(err error, target **connect.Error) bool {

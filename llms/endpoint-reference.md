@@ -140,7 +140,7 @@ ciphertext.
 
 | Method | Procedure / Endpoint | Summary / Yaak Title | Status | Evidence |
 | ------ | -------------------- | -------------------- | ------ | -------- |
-| GET | `/rpc/tango.admin.v1.ApplicationConfigurationService/Get` | Public bootstrap configuration | done — anonymous view the SPA reads before sign-in | `modules/admin/appconfig.TestRPCConfigLifecycle` |
+| GET | `/rpc/tango.admin.v1.ApplicationConfigurationService/Get` | Public bootstrap configuration | done — anonymous view the SPA reads before sign-in | `modules/admin/appconfig.TestRPCConfigBootstrapIsAnonymous` |
 | GET | `/rpc/tango.admin.v1.ApplicationConfigurationService/GetAll` | List all application configurations | done — admin | `modules/admin/appconfig.TestRPCConfigLifecycle` |
 | PUT | `/rpc/tango.admin.v1.ApplicationConfigurationService/Update` | Update application configurations | done — partial update | `modules/admin/appconfig.TestRPCConfigLifecycle` |
 | POST | `/rpc/tango.admin.v1.ApplicationConfigurationService/TestEmail` | Send test email | done — admin; defaults to the signed-in administrator | `modules/admin/appconfig.TestRPCConfigLifecycle` |
