@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_5SgzmJyWWh
 createdAt: 2026-09-18T19:38:03.314271
-updatedAt: 2026-09-19T15:14:18.213709
+updatedAt: 2026-09-19T16:50:10.847272
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vJemVfyfFL
 authentication: {}
@@ -10,11 +10,11 @@ authenticationType: none
 body:
   text: |-
     {
-      "identity": "admin@example.com",
-      "secret": "@admin123"
-      }
+      "identity": "${[ identity ]}",
+      "secret": "${[ password ]}"
+    }
 bodyType: application/json
-description: ''
+description: Credentials come from the `identity` and `password` environment variables, so the request needs no editing per environment. Development values are seeded by the Yaak environment; override them there rather than in the body.
 headers:
 - enabled: true
   name: Content-Type

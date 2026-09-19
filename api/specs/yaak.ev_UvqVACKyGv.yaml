@@ -3,7 +3,7 @@ model: environment
 id: ev_UvqVACKyGv
 workspaceId: wk_kBiMYTkhPP
 createdAt: 2026-09-17T18:31:24.819966
-updatedAt: 2026-09-19T15:41:11.281726
+updatedAt: 2026-09-19T16:46:13.040962
 name: Local Testing
 public: true
 base: false
@@ -13,18 +13,22 @@ variables:
 - enabled: true
   name: apiBaseURL
   value: https://localhost:3443
-  id: nBbSZj8RQ2
+  id: Tht99ImqmU
+- enabled: true
+  name: identity
+  value: admin@example.com
+  id: yAm99p4YdX
+- enabled: true
+  name: password
+  value: ''
+  id: mN9KaAupbu
 - enabled: true
   name: accessToken
   value: dummy
-  id: s6QGArZZgb
-- enabled: true
-  name: refreshToken
-  value: dummy
-  id: kkd6G9fzCf
+  id: QXB6HA8gDW
 - enabled: true
   name: apiKey
   value: sk_dummy
-  id: 9swiGUsWcG
+  id: 2J0V56vA9U
 color: null
 sortPriority: 4.115226337448559
