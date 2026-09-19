@@ -240,6 +240,14 @@ func rpcError(err error) error {
 		return rpcerr.AlreadyExists(err.Error())
 	case errors.Is(err, user.ErrInvalidUsername), errors.Is(err, user.ErrInvalidEmail):
 		return rpcerr.InvalidArgument(err.Error())
+	case errors.Is(err, ErrNotFound):
+		// Enumeration-safe: an unknown, expired, and exhausted signup
+		// token are indistinguishable.
+		return rpcerr.Unauthenticated("signup token is invalid or expired")
+	case errors.Is(err, ErrExhausted):
+		return rpcerr.PermissionDenied("signup token usage limit reached")
+	case errors.Is(err, ErrInvalidIDs):
+		return rpcerr.InvalidArgument("unknown user group id")
 	default:
 		return rpcerr.Internal("internal error")
 	}

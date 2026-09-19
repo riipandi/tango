@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 
+	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
 
 	"github.com/go-ozzo/ozzo-validation/v4"
@@ -38,7 +39,11 @@ func IsValidationError(err error) bool {
 	return errors.As(err, &errs)
 }
 
-// FieldErrors converts an error into field-level response entries.
+// FieldErrors converts an error into field-level response entries. An
+// error that carries ozzo field detail is expanded; any other error is
+// reported with its own message, so a domain sentinel (an invalid
+// username, say) is not misreported as a malformed body. Only a decode
+// failure reads as "malformed JSON".
 func FieldErrors(err error) []FieldError {
 	if err == nil {
 		return nil
@@ -52,5 +57,20 @@ func FieldErrors(err error) []FieldError {
 		return out
 	}
 
-	return []FieldError{{Field: "body", Message: "malformed JSON"}}
+	if isDecodeError(err) {
+		return []FieldError{{Field: "body", Message: "malformed JSON"}}
+	}
+
+	return []FieldError{{Field: "body", Message: err.Error()}}
+}
+
+// isDecodeError reports whether err came from decoding the request body
+// rather than from a validation rule.
+func isDecodeError(err error) bool {
+	var syntaxErr *jsontext.SyntacticError
+	if errors.As(err, &syntaxErr) {
+		return true
+	}
+	var typeErr *jsonv2.SemanticError
+	return errors.As(err, &typeErr)
 }

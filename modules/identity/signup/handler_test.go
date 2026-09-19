@@ -138,12 +138,14 @@ func TestSetupAvailabilityAndInitialAdmin(t *testing.T) {
 }
 
 // TestSignupRequiresValidToken pins the token-gated signup: an
-// unknown token fails, a minted one creates the account.
+// unknown token answers one enumeration-safe rejection, a minted one
+// creates the account.
 func TestSignupRequiresValidToken(t *testing.T) {
 	h, svc := newRPCStack(t)
 
 	w := rpcPost(t, h, "Signup", "", `{"username":"signup_`+stamp()+`","email":"signup-`+stamp()+`@example.com","token":"bogus"}`)
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	require.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "signup token is invalid or expired")
 
 	token, raw, err := svc.CreateToken(t.Context(), CreateParams{UsageLimit: 1})
 	require.NoError(t, err)

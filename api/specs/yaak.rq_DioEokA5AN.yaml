@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_DioEokA5AN
 createdAt: 2026-09-19T12:29:53.078784
-updatedAt: 2026-09-19T14:56:34.424566
+updatedAt: 2026-09-19T18:01:37.935490
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_JuHm4xpFbc
 authentication: {}
@@ -10,11 +10,11 @@ authenticationType: null
 body:
   text: |-
     {
-      "username": "REPLACE_USERNAME",
-      "email": "user@example.com"
+      "username": "yaak_${[ regex.match(input=uuid.v4(), regex='[a-f0-9]{8}$') ]}",
+      "email": "${[ request.body.path() ]}@example.com"
     }
 bodyType: application/json
-description: ''
+description: The username and email are generated per run, so repeated sends do not collide on the unique constraint.
 headers:
 - enabled: true
   name: Content-Type
