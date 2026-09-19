@@ -69,6 +69,23 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
 - Commits are local only; never push without being asked.
 - Never commit on your own — even when the work is done and the gate is green. Recommend a commit message and let the user run the commit (the only exception is an explicit "commit" instruction in that turn).
 
+## Committing
+
+- Only commit files YOU changed in THIS session.
+- Stage explicit paths (`git add <path1> <path2>`); never `git add -A` / `git add .`.
+- Before committing, run `git status` and verify you are only staging your files.
+- Message format: `{feat,fix,docs}[(...)]: <commit message> (optionally multiple lines)`. Message is informative and concise.
+
+Never run (destroys other agents' work or bypasses checks):
+
+- `git reset --hard`, `git checkout .`, `git clean -fd`, `git stash`, `git add -A`, `git add .`, `git commit --no-verify`.
+
+If rebase conflicts occur:
+
+- Resolve conflicts only in files you modified.
+- If a conflict is in a file you did not modify, abort and ask the user.
+- Never force push.
+
 ## Related Agent Instructions
 
 - None found. `AGENTS.md` is the single instruction source for all agents (Codex, Elph, Copilot, Cursor, Gemini CLI).
