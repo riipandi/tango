@@ -21,7 +21,11 @@ services:
     hostname: tango
     expose: ["3000"]
     volumes: ["./storage:/srv/storage:rw"]
-    env_file: "./.env.container"
+    env_file: "./.env.local"
+    environment:
+      DATABASE_URL: postgresql://postgres:securedb@pgsql:5432/postgres?sslmode=disable
+      STORAGE_S3_ENDPOINT_URL: http://silo:9100
+      MAILER_SMTP_HOST: mailpit
     healthcheck:
       test: ["CMD", "/srv/tango", "health"]
       interval: 3s
@@ -206,7 +210,7 @@ configs:
       add_header X-Content-Type-Options "nosniff" always;
       add_header Access-Control-Allow-Origin "*" always;
       add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, HEAD, OPTIONS" always;
-      add_header Access-Control-Allow-Headers "DNT, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type, Range, Authorization" always;
+      add_header Access-Control-Allow-Headers "DNT, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type, Range, Authorization, X-API-KEY, Connect-Protocol-Version, Connect-Timeout-Ms, Connect-Accept-Encoding, Connect-Content-Encoding, X-Grpc-Web, X-User-Agent" always;
       add_header Access-Control-Expose-Headers "Content-Length, Content-Range, ETag" always;
       proxy_http_version 1.1;
       proxy_set_header Connection "";
