@@ -102,14 +102,16 @@ func (h *authRPC) GetSession(ctx context.Context, _ *connect.Request[emptypb.Emp
 	return connect.NewResponse(signedInProto(u, Session{ID: principal.SessionID, Provider: principal.Provider}, false)), nil
 }
 
-// ForgotPassword and ResetPassword keep the REST+ConnectRPC duality;
-// their Connect cutover lands with the password-flow phase.
+// ForgotPassword and ResetPassword stay REST-only: recovery is an
+// unauthenticated email flow the SPA reaches through the retained
+// HTTP routes, so the declared RPC procedures answer unimplemented
+// with a pointer to the live contract.
 func (h *authRPC) ForgotPassword(_ context.Context, _ *connect.Request[identityv1.ForgotPasswordRequest]) (*connect.Response[emptypb.Empty], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("forgot_password: use the REST endpoint"))
+	return nil, rpcerr.Unimplemented("password recovery serves the retained HTTP endpoints")
 }
 
 func (h *authRPC) ResetPassword(_ context.Context, _ *connect.Request[identityv1.ResetPasswordRequest]) (*connect.Response[emptypb.Empty], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("reset_password: use the REST endpoint"))
+	return nil, rpcerr.Unimplemented("password recovery serves the retained HTTP endpoints")
 }
 
 // rpcError maps store sentinels onto Connect codes.

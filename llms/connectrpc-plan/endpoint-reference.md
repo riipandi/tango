@@ -291,8 +291,8 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 | `AuthService.SignIn` | POST `/api/auth/sign-in` | public | Rate-limited (rule follows the /rpc procedure); sets/rotates token cookies. |
 | `AuthService.SignOut` | POST `/api/auth/sign-out` | bearer | Revokes token family, clears cookies; the REST twin is the worker fallback. |
 | `AuthService.GetSession` | GET `/api/auth/session` | bearer | |
-| `AuthService.ForgotPassword` | POST `/api/auth/forgot-password` | public | `REST + ConnectRPC`; rate-limited. |
-| `AuthService.ResetPassword` | POST `/api/auth/reset-password` | public | `REST + ConnectRPC`; rate-limited. |
+| `AuthService.ForgotPassword` | POST `/api/auth/forgot-password` | public | REST is authoritative for recovery; the RPC answers `unimplemented`. Rate-limited. |
+| `AuthService.ResetPassword` | POST `/api/auth/reset-password` | public | REST is authoritative for recovery; the RPC answers `unimplemented`. Rate-limited. |
 | `AccountService.GetAccount` | GET `/api/account` | bearer | Self. |
 | `AccountService.UpdateAccount` | PATCH `/api/account` | bearer | Self. |
 | `AccountService.ChangePassword` | PUT `/api/account/password` | bearer | Self; rate-limited; revokes other sessions. |
