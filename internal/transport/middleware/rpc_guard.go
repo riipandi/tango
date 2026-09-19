@@ -1,3 +1,21 @@
+// RPC guards, by shape of the service they protect. Pick exactly one
+// mount-level guard, then add a per-procedure interceptor only when
+// one service mixes visibility:
+//
+//   - RPCPrincipalGuard — a service that mixes admin, self, and public
+//     procedures. Names the guarded procedures; everything else passes
+//     through anonymously.
+//   - RPCPrincipalAuth — every procedure needs a principal, none needs
+//     an admin.
+//   - RPCAdminGuard — every procedure needs an admin.
+//   - RPCSessionAuth — like RPCPrincipalAuth, but also rejects a
+//     machine credential (browser ceremonies).
+//   - RPCMachineDenied — a per-procedure interceptor for a service
+//     that a machine credential may reach, where named procedures must
+//     stay session-only.
+//
+// RPCAPIKeyAuth is not a guard: it resolves the machine credential into
+// the context before whichever guard runs.
 package middleware
 
 import (
@@ -102,13 +120,6 @@ func resolveRPCPrincipal(ctx context.Context, auth kernel.AccessAuthenticator, h
 	return ResolveBearer(ctx, auth, h)
 }
 
-// ResolveRPCPrincipal maps a Connect request onto a principal for
-// handlers that guard their own procedures: a machine credential wins
-// when the mount resolved one, otherwise the bearer header decides.
-func ResolveRPCPrincipal(ctx context.Context, auth kernel.AccessAuthenticator, h http.Header) (kernel.Principal, error) {
-	return resolveRPCPrincipal(ctx, auth, h)
-}
-
 // RPCPrincipalAuth requires an authenticated principal — from a
 // machine credential or from the bearer access token — without an
 // admin requirement. Pair it with RPCAPIKeyAuth at the mount when the
@@ -148,35 +159,6 @@ func (i machineDenyInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryF
 		if i.procedures[req.Spec().Procedure] {
 			if _, ok := machinePrincipal(ctx); ok {
 				return nil, rpcerr.PermissionDenied("session authentication required")
-			}
-		}
-		return next(ctx, req)
-	}
-}
-
-// RPCAdminProcedureGuard rejects procedures named in admin unless
-// the request context already carries an admin principal — pair it
-// with RPCSessionAuth so authentication happens once at the mount.
-func RPCAdminProcedureGuard(admin map[string]bool) connect.Interceptor {
-	return adminProcedureGuard{admin: admin}
-}
-
-type adminProcedureGuard struct{ admin map[string]bool }
-
-func (g adminProcedureGuard) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
-	return next
-}
-
-func (g adminProcedureGuard) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
-	return next
-}
-
-func (g adminProcedureGuard) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
-	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		if g.admin[req.Spec().Procedure] {
-			principal, ok := PrincipalFromContext(ctx)
-			if !ok || !principal.IsAdmin {
-				return nil, rpcerr.PermissionDenied("admin access required")
 			}
 		}
 		return next(ctx, req)
