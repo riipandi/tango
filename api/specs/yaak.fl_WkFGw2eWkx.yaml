@@ -1,16 +1,16 @@
 type: folder
 model: folder
-id: fl_SzVg4waCk2
-createdAt: 2026-09-19T08:22:53.272541
-updatedAt: 2026-09-19T08:22:53.272541
+id: fl_WkFGw2eWkx
+createdAt: 2026-09-19T12:02:22.598215
+updatedAt: 2026-09-19T12:02:22.598216
 workspaceId: wk_kBiMYTkhPP
-folderId: null
+folderId: fl_i7bQDawNJK
 authentication: {}
 authenticationType: null
-description: ''
+description: 'SCIM service provider per client: get, set, remove'
 headers: []
-name: '[ConnectRPC] Admin (machine)'
-sortPriority: 0.0
+name: SCIM Providers
+sortPriority: 6000.0
 settingSendCookies:
   enabled: false
   value: true

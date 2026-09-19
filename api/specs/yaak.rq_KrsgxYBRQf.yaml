@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_KrsgxYBRQf
 createdAt: 2026-09-18T18:40:52.054616
-updatedAt: 2026-09-18T18:40:52.054617
+updatedAt: 2026-09-19T12:11:37.867837
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_FirJqL3vmS
 authentication: {}
 authenticationType: null
 body:
@@ -22,7 +22,7 @@ headers:
   value: '1'
   id: null
 method: POST
-name: POST /rpc/tango.system.v1.VersionService/Latest
+name: Get latest available version
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.system.v1.VersionService/Latest
 urlParameters: []

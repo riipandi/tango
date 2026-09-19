@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_9j8WJKwiuS
 createdAt: 2026-09-18T22:35:16.635992
-updatedAt: 2026-09-19T11:06:41.656829
+updatedAt: 2026-09-19T12:09:08.523076
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_8fqSkwaD7C
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: MfaService GetTotpStatus
+name: TOTP status
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.MfaService/GetTotpStatus
 urlParameters: []

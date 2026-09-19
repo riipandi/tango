@@ -1,16 +1,16 @@
 type: folder
 model: folder
-id: fl_Zg3xFLU2hm
-createdAt: 2026-09-18T17:35:36.481614
-updatedAt: 2026-09-18T17:35:36.481615
+id: fl_auMsw4bdee
+createdAt: 2026-09-19T12:04:13.563724
+updatedAt: 2026-09-19T12:04:13.563725
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
-description: 'Connect Protocol smoke requests: /rpc/tango.system.v1.HealthService — direct Go :3080 and via nginx HTTPS :8443'
+description: Custom claim listing and CRUD for users and user groups
 headers: []
-name: '[ConnectRPC] System (smoke)'
-sortPriority: 18000.0
+name: Custom Claims
+sortPriority: 13010.21
 settingSendCookies:
   enabled: false
   value: true

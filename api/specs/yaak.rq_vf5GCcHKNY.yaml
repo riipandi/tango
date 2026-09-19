@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_vf5GCcHKNY
 createdAt: 2026-09-18T23:54:46.763293
-updatedAt: 2026-09-19T11:12:37.664552
+updatedAt: 2026-09-19T12:10:36.010529
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_LLg3fisc5c
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: POST /rpc/tango.admin.v1.AuditLogService/ListAll
+name: List all audit logs
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.admin.v1.AuditLogService/ListAll
 urlParameters: []

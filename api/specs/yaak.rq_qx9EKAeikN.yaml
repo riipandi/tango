@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_qx9EKAeikN
 createdAt: 2026-09-18T18:41:18.754165
-updatedAt: 2026-09-18T18:41:18.754165
+updatedAt: 2026-09-19T12:11:16.887484
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_5ohk34DQsY
 authentication: {}
 authenticationType: null
 body:
@@ -19,7 +19,7 @@ description: Create an API key over /rpc with a valid bearer — 200; the respon
 headers:
 - enabled: true
   name: Authorization
-  value: Bearer bearer-yaak-evidence-token-0123456789
+  value: Bearer ${[ accessToken ]}
   id: null
 - enabled: true
   name: Content-Type
@@ -30,7 +30,7 @@ headers:
   value: '1'
   id: null
 method: POST
-name: POST /rpc/tango.admin.v1.ApiKeyService/Create
+name: Create API key
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiKeyService/Create
 urlParameters: []

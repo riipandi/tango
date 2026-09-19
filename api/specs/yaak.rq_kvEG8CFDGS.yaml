@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_kvEG8CFDGS
 createdAt: 2026-09-18T23:54:33.194723
-updatedAt: 2026-09-19T11:10:22.839941
+updatedAt: 2026-09-19T12:10:42.263426
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_sUMABSVJCr
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: POST /rpc/tango.admin.v1.ApiService/CreateApi
+name: Create API
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.admin.v1.ApiService/CreateApi
 urlParameters: []

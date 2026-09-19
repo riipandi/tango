@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_M2M6Ujaing
 createdAt: 2026-09-19T01:09:16.494579
-updatedAt: 2026-09-19T11:10:53.328158
+updatedAt: 2026-09-19T12:12:44.578614
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_R5pypBKj8u
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: POST /rpc/tango.identity.v1.DeviceApprovalService/GetPendingRequest
+name: Inspect device login request
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.identity.v1.DeviceApprovalService/GetPendingRequest
 urlParameters: []

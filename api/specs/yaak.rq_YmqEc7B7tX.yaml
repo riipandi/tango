@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_YmqEc7B7tX
 createdAt: 2026-09-18T20:57:31.549584
-updatedAt: 2026-09-19T11:13:52.181313
+updatedAt: 2026-09-19T12:09:47.923350
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_JuHm4xpFbc
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: UserService ListUsers
+name: List users
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/ListUsers
 urlParameters: []

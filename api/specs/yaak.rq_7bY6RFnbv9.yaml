@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_7bY6RFnbv9
 createdAt: 2026-09-18T19:38:17.460786
-updatedAt: 2026-09-18T19:38:17.460787
+updatedAt: 2026-09-19T12:08:26.991297
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_vJemVfyfFL
 authentication: {}
 authenticationType: none
 body:
@@ -18,7 +18,7 @@ headers:
   value: application/json
   id: null
 method: POST
-name: Auth Token Bridge (REST)
+name: Cookie bridge for the auth worker
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/auth/token
 urlParameters: []

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_UMpYMGevsB
 createdAt: 2026-09-13T07:28:46.403887
-updatedAt: 2026-09-14T09:59:45.364916
+updatedAt: 2026-09-19T12:14:48.892655
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_wq663t6sTL
 authentication: {}
@@ -26,7 +26,7 @@ bodyType: null
 description: Issues OAuth tokens (authorization_code / client_credentials / refresh_token) — client auth via Basic or form credentials; not in the upstream swagger paths
 headers: []
 method: POST
-name: Issue OIDC token
+name: Token endpoint
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/api/oidc/token
 urlParameters: []

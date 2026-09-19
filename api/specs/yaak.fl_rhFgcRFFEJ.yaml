@@ -1,21 +1,16 @@
-type: http_request
-model: http_request
-id: rq_YqheRWskKv
-createdAt: 2026-09-12T06:27:47.763631
-updatedAt: 2026-09-19T12:13:26.923121
+type: folder
+model: folder
+id: fl_rhFgcRFFEJ
+createdAt: 2026-09-19T12:02:43.675298
+updatedAt: 2026-09-19T12:02:43.675298
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_RCex2QKoSF
+folderId: fl_uiBa3W8SVu
 authentication: {}
 authenticationType: null
-body: {}
-bodyType: null
-description: Responds with a successful status code to healthcheck requests
+description: Sign-up, initial admin setup, signup token management
 headers: []
-method: GET
-name: Readiness document
-sortPriority: 0.0
-url: ${[ apiBaseURL ]}/api/healthz
-urlParameters: []
+name: Sign-up & Setup
+sortPriority: 3000.0
 settingSendCookies:
   enabled: false
   value: true
@@ -31,6 +26,9 @@ settingFollowRedirects:
 settingRequestTimeout:
   enabled: false
   value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
 settingHttpVersion:
   enabled: false
   value: auto

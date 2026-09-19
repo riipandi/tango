@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_rBtHPCtmht
 createdAt: 2026-09-18T19:41:10.176163
-updatedAt: 2026-09-19T11:12:01.658959
+updatedAt: 2026-09-19T12:08:15.067991
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_vJemVfyfFL
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: Auth SignOut (bearer)
+name: Sign out
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.AuthService/SignOut
 urlParameters: []

@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_6qQLJGecbP
 createdAt: 2026-09-18T23:55:27.474214
-updatedAt: 2026-09-19T11:05:19.114762
+updatedAt: 2026-09-19T12:10:29.916877
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_auMsw4bdee
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: POST /rpc/tango.identity.v1.CustomClaimService/Suggest
+name: Get custom claim suggestions
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.identity.v1.CustomClaimService/Suggest
 urlParameters: []

@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_BMkDsk2Tir
 createdAt: 2026-09-19T00:54:36.897973
-updatedAt: 2026-09-19T11:07:40.188628
+updatedAt: 2026-09-19T12:12:18.959302
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_E6GycS3VZ9
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: POST /rpc/tango.webhook.v1.WebhookService/Create
+name: Create a webhook endpoint
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.webhook.v1.WebhookService/Create
 urlParameters: []

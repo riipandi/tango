@@ -1,17 +1,16 @@
 type: http_request
 model: http_request
-id: rq_o3cpcGiTWL
-createdAt: 2026-09-18T18:04:52.269952
-updatedAt: 2026-09-18T18:04:52.269952
+id: rq_xVKZojTa6G
+createdAt: 2026-09-19T12:14:02.128102
+updatedAt: 2026-09-19T12:14:02.128102
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_FirJqL3vmS
 authentication: {}
 authenticationType: null
 body:
-  bodyType: application/json
   text: '{}'
 bodyType: application/json
-description: 'Connect Protocol representative list call for the generated identity contract: tango.identity.v1.UserService/ListUsers. Expect 200 with {users, metadata} once the phase-05 service lands; until then the server answers unimplemented — the call pins routing, procedure path, and metadata.'
+description: Protected version metadata WITHOUT a bearer header — must answer the Connect unauthenticated error (HTTP 401). Pins the anonymous-rejection branch.
 headers:
 - enabled: true
   name: Content-Type
@@ -22,9 +21,9 @@ headers:
   value: '1'
   id: null
 method: POST
-name: POST /rpc/tango.identity.v1.UserService/ListUsers
+name: Get current deployed version (anonymous)
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/ListUsers
+url: ${[ apiBaseURL ]}/rpc/tango.system.v1.VersionService/Current
 urlParameters: []
 settingSendCookies:
   enabled: false

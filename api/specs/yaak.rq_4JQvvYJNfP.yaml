@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_4JQvvYJNfP
 createdAt: 2026-09-18T22:34:34.069700
-updatedAt: 2026-09-18T22:34:34.069700
+updatedAt: 2026-09-19T12:09:35.543660
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_rhFgcRFFEJ
 authentication: {}
 authenticationType: none
 body:
@@ -22,7 +22,7 @@ headers:
   value: '1'
   id: null
 method: POST
-name: SignupService GetSetupAvailability
+name: Check initial admin setup availability
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.SignupService/GetSetupAvailability
 urlParameters: []

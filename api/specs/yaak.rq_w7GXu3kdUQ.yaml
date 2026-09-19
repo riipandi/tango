@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_w7GXu3kdUQ
 createdAt: 2026-09-18T20:58:49.320890
-updatedAt: 2026-09-19T11:13:37.566337
+updatedAt: 2026-09-19T12:10:10.215466
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_UwXpNWCV47
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: AccountService GetAccount
+name: Get account
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.AccountService/GetAccount
 urlParameters: []

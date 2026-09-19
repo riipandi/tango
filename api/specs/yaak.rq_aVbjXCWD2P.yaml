@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_aVbjXCWD2P
 createdAt: 2026-09-18T19:40:55.541799
-updatedAt: 2026-09-19T11:07:15.053615
+updatedAt: 2026-09-19T12:08:20.443152
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_vJemVfyfFL
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: Auth GetSession (bearer)
+name: Inspect current session
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.AuthService/GetSession
 urlParameters: []

@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_fiEE5dCtqy
 createdAt: 2026-09-19T00:36:25.423311
-updatedAt: 2026-09-19T11:15:38.806354
+updatedAt: 2026-09-19T12:12:12.737239
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_Uf3pbN2b4K
 authentication: {}
 authenticationType: none
 body:
@@ -25,7 +25,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: POST /rpc/tango.federation.v1.ScimProviderService/Upsert
+name: Create SCIM service provider
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.federation.v1.ScimProviderService/Upsert
 urlParameters: []

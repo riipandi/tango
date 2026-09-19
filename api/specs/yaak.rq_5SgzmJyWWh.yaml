@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_5SgzmJyWWh
 createdAt: 2026-09-18T19:38:03.314271
-updatedAt: 2026-09-19T11:18:25.618071
+updatedAt: 2026-09-19T12:08:09.452696
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_vJemVfyfFL
 authentication: {}
 authenticationType: none
 body:
@@ -21,7 +21,7 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Auth SignIn (Connect)
+name: Sign in with password
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.AuthService/SignIn
 urlParameters: []

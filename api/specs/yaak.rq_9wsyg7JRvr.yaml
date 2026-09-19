@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_9wsyg7JRvr
 createdAt: 2026-09-19T08:24:03.430213
-updatedAt: 2026-09-19T08:24:31.821718
+updatedAt: 2026-09-19T12:14:36.828387
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_SzVg4waCk2
+folderId: fl_5ohk34DQsY
 authentication: {}
 authenticationType: null
 body:
@@ -25,7 +25,7 @@ headers:
   value: ${[ apiKey ]}
   id: null
 method: POST
-name: POST /rpc/tango.admin.v1.ApiKeyService/Create (X-API-KEY denied)
+name: Create API key (X-API-KEY denied)
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.admin.v1.ApiKeyService/Create
 urlParameters: []

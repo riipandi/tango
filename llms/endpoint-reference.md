@@ -34,6 +34,7 @@ only. Contracts below define the full password lifecycle.
 | POST | `/rpc/tango.identity.v1.AuthService/SignIn` | Sign in with password | done — indistinguishable failures for unknown identity vs wrong secret; disabled accounts fail closed; sets the token cookies | `modules/identity/session.TestRPCSignInIssuesCookies`, `modules/identity/session.TestRPCSignInPendingFlow` |
 | POST | `/rpc/tango.identity.v1.AuthService/SignOut` | Sign out | done — revokes the token family and clears cookies; the REST twin below is the worker's cookie-channel fallback | `modules/identity/session.TestRPCSignOutAndSession` |
 | GET | `/rpc/tango.identity.v1.AuthService/GetSession` | Inspect current session | done | `modules/identity/session.TestRPCSignOutAndSession` |
+| GET | `/rpc/tango.identity.v1.AccountService/GetAccount` | Get account | done | `modules/identity/account.TestAccountRPCSelfService` |
 | PUT | `/rpc/tango.identity.v1.AccountService/ChangePassword` | Change own password | done — current secret required; other sessions revoked | `modules/identity/account.TestAccountRPCSelfService` |
 | GET | `/rpc/tango.identity.v1.AccountService/ListSessions` | List own sessions | done | `modules/identity/account.TestAccountRPCSelfService` |
 | DELETE | `/rpc/tango.identity.v1.AccountService/RevokeSession` | Revoke one own session | done | `modules/identity/account.TestAccountRPCSelfService` |

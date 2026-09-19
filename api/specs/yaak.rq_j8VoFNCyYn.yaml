@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_j8VoFNCyYn
 createdAt: 2026-09-19T00:36:42.113746
-updatedAt: 2026-09-19T11:08:35.452163
+updatedAt: 2026-09-19T12:12:06.381076
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_eXRcxMKbSw
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: POST /rpc/tango.federation.v1.OidcConsentService/ListMyAuthorizedClients
+name: List authorized clients for current user
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.federation.v1.OidcConsentService/ListMyAuthorizedClients
 urlParameters: []

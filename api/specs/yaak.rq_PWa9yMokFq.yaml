@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_PWa9yMokFq
 createdAt: 2026-09-18T17:35:52.966112
-updatedAt: 2026-09-18T17:35:52.966112
+updatedAt: 2026-09-19T12:13:33.380802
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_RCex2QKoSF
 authentication: {}
 authenticationType: null
 body:
@@ -22,7 +22,7 @@ headers:
   value: '1'
   id: null
 method: POST
-name: POST /rpc/tango.system.v1.HealthService/Check
+name: Connect transport smoke
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.system.v1.HealthService/Check
 urlParameters: []

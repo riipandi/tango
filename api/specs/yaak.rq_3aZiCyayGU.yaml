@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_3aZiCyayGU
 createdAt: 2026-09-19T00:34:24.838883
-updatedAt: 2026-09-19T11:04:48.839008
+updatedAt: 2026-09-19T12:12:00.120639
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_WNyJqCXLvz
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: POST /rpc/tango.federation.v1.OidcClientService/ListClients
+name: List OIDC clients
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.federation.v1.OidcClientService/ListClients
 urlParameters: []

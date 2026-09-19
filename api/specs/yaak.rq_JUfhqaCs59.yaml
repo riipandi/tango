@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_JUfhqaCs59
 createdAt: 2026-09-19T01:09:48.786
-updatedAt: 2026-09-19T11:09:30.080304
+updatedAt: 2026-09-19T12:13:05.110713
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_FirJqL3vmS
 authentication: {}
 authenticationType: none
 body:
@@ -26,7 +26,7 @@ headers:
   value: Bearer ${[ accessToken ]}
   id: null
 method: POST
-name: POST /rpc/tango.system.v1.VersionService/Current
+name: Get current deployed version
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.system.v1.VersionService/Current
 urlParameters: []

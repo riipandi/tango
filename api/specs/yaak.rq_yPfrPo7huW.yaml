@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_yPfrPo7huW
 createdAt: 2026-09-18T17:35:57.265553
-updatedAt: 2026-09-18T17:35:57.265554
+updatedAt: 2026-09-19T12:11:32.029105
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_Zg3xFLU2hm
+folderId: fl_RCex2QKoSF
 authentication: {}
 authenticationType: null
 body:
@@ -22,7 +22,7 @@ headers:
   value: '1'
   id: null
 method: POST
-name: POST /rpc/tango.system.v1.HealthService/Check (nginx HTTPS)
+name: Connect transport smoke (nginx HTTPS)
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.system.v1.HealthService/Check
 urlParameters: []

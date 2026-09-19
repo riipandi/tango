@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_QdrFFNMHRW
 createdAt: 2026-09-19T08:23:02.290657
-updatedAt: 2026-09-19T08:24:22.436963
+updatedAt: 2026-09-19T12:14:30.347454
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_SzVg4waCk2
+folderId: fl_5ohk34DQsY
 authentication: {}
 authenticationType: null
 body:
@@ -25,7 +25,7 @@ headers:
   value: ${[ apiKey ]}
   id: null
 method: POST
-name: POST /rpc/tango.admin.v1.ApiKeyService/List (X-API-KEY)
+name: List API keys (X-API-KEY)
 sortPriority: 0.0
 url: https://localhost:8443/rpc/tango.admin.v1.ApiKeyService/List
 urlParameters: []
