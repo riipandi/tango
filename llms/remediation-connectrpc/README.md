@@ -51,11 +51,11 @@ documentation contradicts behavior, **P2** = residue or hygiene.
 | --- | --- | --- | --- |
 | F1 | P0 | `X-API-KEY` reaches self-service and credential-lifecycle procedures far beyond the documented "admin application API" — including `AccountService.ChangePassword`, which rotates the key owner's password | 01.1 — **resolved** (Option A, 2026-09-19) |
 | F2 | P1 | `ApplicationConfigurationService.Get` is documented anonymous in three files but guarded as a `self` procedure; anonymous callers get 401 | 01.2 — **resolved** (2026-09-19) |
-| F3 | P1 | `docs/api-endpoint.md` and `llms/endpoint-reference.md` list `GET`/`PUT`/`DELETE` for 10 `/rpc` procedures; the transport is POST-only and answers 405 | 02.1 |
-| F4 | P1 | `llms/connectrpc-plan/03-server.md` claims gRPC and gRPC-Web "are not mounted and answer not_found"; the generated handlers serve both | 02.2 |
-| F5 | P1 | 3 procedures exist in the proto with no document row and no Yaak request: `AccountService.UpdateAccount`, `AuthService.ForgotPassword`, `AuthService.ResetPassword` | 02.3 |
-| F6 | P1 | The `429` response on `/rpc` is the REST envelope, not a Connect error document; `rpcerr.ResourceExhausted` has no call site | 02.4 |
-| F7 | P1 | Cross-origin `/rpc` preflight cannot send `Authorization`, `X-API-KEY`, or `Connect-Timeout-Ms` | 02.5 |
+| F3 | P1 | `docs/api-endpoint.md` and `llms/endpoint-reference.md` list `GET`/`PUT`/`DELETE` for 10 `/rpc` procedures; the transport is POST-only and answers 405 | 02.1 — **resolved** (2026-09-19) |
+| F4 | P1 | `llms/connectrpc-plan/03-server.md` claims gRPC and gRPC-Web "are not mounted and answer not_found"; the generated handlers serve both | 02.2 — **resolved** (Option B, 2026-09-19) |
+| F5 | P1 | 3 procedures exist in the proto with no document row and no Yaak request: `AccountService.UpdateAccount`, `AuthService.ForgotPassword`, `AuthService.ResetPassword` | 02.3 — **resolved** (2026-09-19) |
+| F6 | P1 | The `429` response on `/rpc` is the REST envelope, not a Connect error document; `rpcerr.ResourceExhausted` has no call site | 02.4 — **resolved** (2026-09-19) |
+| F7 | P1 | Cross-origin `/rpc` preflight cannot send `Authorization`, `X-API-KEY`, or `Connect-Timeout-Ms` | 02.5 — **resolved** (both layers, 2026-09-19) |
 | F8 | P2 | `middleware.ResolveRPCPrincipal` and `middleware.RPCAdminProcedureGuard` have no caller | 03.1 |
 | F9 | P2 | `modules/identity/account/store.go` and `modules/identity/password/handler.go` contain only a package clause | 03.2 |
 | F10 | P2 | Comments cite the deleted `/api/version/latest` route | 03.3 |
@@ -64,10 +64,11 @@ documentation contradicts behavior, **P2** = residue or hygiene.
 | F13 | P2 | Pagination shape is inconsistent: some list RPCs take `common.v1.PageRequest` directly, others embed it | 05.1 |
 | F14 | P1 | Tracked Yaak requests carry a plaintext password at `HEAD`: `api/specs/yaak.rq_5SgzmJyWWh.yaml` holds `"secret": "@admin123"` | 05.2 |
 | F15 | P2 | `llms/connectrpc-plan/` is marked `status: done` while its own completion criteria are unmet (no SPA, so the caller-migration criterion cannot pass) | 04.1, 05.3 |
+| F16 | P1 | The rate limiter was silently disabled on **every** policy: `rateKey` embedded the policy name verbatim (`forgot-password`), and the `rate_limits` key check only accepts `[a-z0-9_:]`, so each insert raised `23514` and the middleware failed open | 02.6 |
 | Y1 | P0 | The Yaak workspace header `X-API-KEY: ${[ apiKey ]}` was inherited by every request, so "anonymous" evidence carried a machine credential — **removed during the audit**, task 06.1 keeps it scoped | 06.1 |
 | Y2 | P1 | No Yaak request obtains a real token; `accessToken` is `dummy`, so all 110 protected requests answer 401 | 06.2 |
 | Y3 | P1 | No Yaak auth type is configured: 130 requests `null`, 23 `none`, zero folders or workspaces set one | 06.3 |
-| Y4 | P1 | Neither CORS layer (nginx `compose.yaml:209`, Go `middleware/cors.go`) allows `X-API-KEY` or `Connect-Timeout-Ms` | 06.4 |
+| Y4 | P1 | Neither CORS layer (nginx `compose.yaml:209`, Go `middleware/cors.go`) allows `X-API-KEY` or `Connect-Timeout-Ms` | 06.4 — **resolved** by 02.5 (2026-09-19) |
 | Y5 | P2 | `refreshToken` is defined in every Yaak environment and referenced by no request | 06.5 |
 | Y6 | P2 | ~40 `REPLACE_*` placeholders are typed by hand where `uuid.v7()`, `faker.*`, and `response.body.path()` apply | 06.5 |
 | Y7 | P2 | Zero Yaak template functions are used anywhere in the collection | 06.5 |
@@ -141,9 +142,16 @@ Task 01.1 was decided on 2026-09-19: **Option A (narrow)**, recorded in
 
 | Task | Finding | State |
 | --- | --- | --- |
-| 01.1 | F1 | implemented, awaiting the owner's commit |
-| 01.2 | F2 | implemented, awaiting the owner's commit |
-| 02.1–06.5 | F3–F15, Y1–Y7 | not started |
+| 01.1 | F1 | done — committed `a0e633b` |
+| 01.2 | F2 | done — committed `19112f3` |
+| 02.1 | F3 | done — committed `7393b1e` |
+| 02.2 | F4 | done — committed `f125111` |
+| 02.3 | F5 | done — committed `6635cb0` |
+| 02.4 | F6 | done — committed `689b7cd` |
+| 02.5 | F7 | done |
+| 02.6 | F16 | done — committed `f5eb5ee` |
+| 02.7 | Y4 | done with 02.5 |
+| 03.1–06.5 | F8–F15, Y1–Y3, Y5–Y7 | not started |
 
 ## Phase index
 

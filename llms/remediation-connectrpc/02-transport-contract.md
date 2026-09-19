@@ -241,9 +241,130 @@ The preflight allowlist covers every header a first-party RPC client sends: `Aut
 
 Validation: the extended CORS test passes; `task test:go -- ./internal/transport/...` passes.
 
+Shipped: the Go allowlist in `internal/transport/middleware/cors.go` and the nginx allowlist in
+`compose.yaml` both carry the set now. Verified live against both layers:
+
+```
+$ curl -X OPTIONS http://localhost:3080/rpc/... -H 'Access-Control-Request-Headers: ...,x-api-key'
+Access-Control-Allow-Headers: Content-Type, Connect-Protocol-Version, Connect-Timeout-Ms, Authorization, X-Api-Key
+
+$ curl -k -X OPTIONS https://localhost:3443/rpc/... -H 'Access-Control-Request-Headers: ...,x-api-key'
+Access-Control-Allow-Headers: DNT, ..., Authorization, X-API-KEY, Connect-Protocol-Version,
+  Connect-Timeout-Ms, Connect-Accept-Encoding, Connect-Content-Encoding, X-Grpc-Web, X-User-Agent
+```
+
+The nginx config is a compose `configs.content` block, so the container needs
+`docker compose up -d --force-recreate nginx`; a plain `up -d` keeps the old config. This also
+closes finding Y4 (task 06.4).
+
 Commit: `fix(rpc): allow the rpc credential headers in cors`
+
+## Task 02.6 — Repair the rate-limit key so the budgets actually apply
+
+**Finding F16 (P1), found while verifying task 02.4.** No rate-limit policy was enforced. Every
+budget silently failed open.
+
+`rateKey` (`internal/transport/middleware/ratelimit.go`) built the database key by embedding the
+policy name verbatim:
+
+```go
+return fmt.Sprintf("rl_%s_%s", policy, ip)
+```
+
+`rate_limits` carries `CONSTRAINT chk_key_format CHECK (key ~ '^[a-z0-9_:]+$')`
+(`database/migrations/00007_create_rate_limits_table.sql:19`). Every policy name except `signup`
+contains a hyphen (`sign-in`, `forgot-password`, `totp-enroll`, `one-time-access-email`,
+`device-login-create`, `email-verification-send`, `account-password`, …), so the insert raised
+`SQLSTATE 23514`; the middleware treats any non-`42901` error as "store unavailable" and calls
+`next.ServeHTTP`.
+
+Verified before the fix, with a real Postgres store:
+
+```
+store called sql="SELECT fn_check_rate_limit($1, $2, $3)" args=[rl_forgot-password_192_0_2_1 2 600]
+scan err=ERROR: new row for relation "rate_limits" violates check constraint "chk_key_format" (SQLSTATE 23514)
+```
+
+Live confirmation: 30 consecutive `SignIn` requests answered 401, never 429, and no `X-RateLimit-*`
+header appeared on any response. A direct `SELECT fn_check_rate_limit('rl_probe', 20, 60)` in psql
+raises at call 21, so the SQL side was correct — only the key shape was wrong.
+
+This also explains why the unit suite stayed green: `fakeLimiter` accepts any key, and
+`TestRateLimitEnforcesPolicyBudgets` asserted `strings.HasPrefix(limiter.key, "rl_sign-in_")`,
+which pinned the broken format.
+
+### Required final shape
+
+Every policy produces a key the `rate_limits` check accepts, so each budget applies.
+
+### Steps
+
+1. Normalize both key fragments onto `[a-z0-9_:]` instead of replacing only `.` and `:`.
+2. Update the assertion in `TestRateLimitEnforcesPolicyBudgets` that pinned the hyphenated key.
+3. Add `internal/transport/middleware/ratelimit_key_test.go`: the key shape matches the database
+   constraint for IPv4, IPv6, and a hyphenated policy, and **every** entry in `policies` produces an
+   accepted key.
+4. Verified live after the fix: `forgot-password` answers 429 with the REST envelope on its third
+   call, and `SignIn` answers 429 with `resource_exhausted` on its 21st.
+
+Validation: `go test ./internal/transport/middleware/...` passes; the live probe trips both budgets.
+
+Commit: `fix(rpc): normalize the rate limit key so budgets apply`
 
 ## Decision (Task 02.2)
 
-Not yet taken. Option B (keep gRPC and gRPC-Web mounted, correct the document) is the recommended
-default.
+**Option B — keep the capability.** Taken by the owner on 2026-09-19.
+
+gRPC and gRPC-Web stay mounted; `llms/connectrpc-plan/03-server.md` now states all three served
+protocols and `internal/transport.TestRPCServesAllProtocols` pins them (gRPC-Web status rides a
+trailer frame, so the assertion reads the framed body). Reflection stays the transport that is
+genuinely absent.
+
+## Status
+
+| Task | State | Evidence |
+| --- | --- | --- |
+| 02.1 | done | 10 rows per document now read `POST`; `TestRPCRejectsWrongMethods` covers a mounted procedure |
+| 02.2 | done | `TestRPCServesAllProtocols`; the phase 03 note corrected |
+| 02.3 | done | 3 rows added to both documents; `TestRPCMatrixDocumentsEveryProcedure`; A4 resolved |
+| 02.4 | done | `writeRateLimited` writes a Connect document for `/rpc`; `TestRateLimitedRPCUsesConnectError` + `TestRateLimitedRESTKeepsEnvelope`; verified live (429 `resource_exhausted` with `Retry-After: 57`) |
+| 02.5 | done | the Go allowlist mirrors the real client headers; the nginx layer in `compose.yaml` carries the same set; verified by preflight against both `:3080` and `:3443` |
+| 02.6 | done | found while verifying 02.4; the key is normalized and every budget now applies |
+
+### Task 02.4 evidence
+
+Live against the local server, after task 02.6 made the limiter effective:
+
+| Request | Result |
+| --- | --- |
+| `POST /api/auth/forgot-password` past its budget | 429 `{"status":"error","message":"rate limit exceeded",...}` — the REST envelope, unchanged |
+| `POST /rpc/tango.identity.v1.AuthService/SignIn` past its budget | 429 `{"code":"resource_exhausted","message":"rate limit exceeded"}` with `Retry-After: 57` |
+
+`rpcerr.ResourceExhausted` now has a call site; the limiter builds its error through it and the
+error writer renders it, so the codebase keeps one constructor per code.
+
+### Task 02.3 evidence
+
+Live against the local server (`Development` environment, `http://localhost:3080`):
+
+| Yaak request | Id | Result |
+| --- | --- | --- |
+| `Update own account` | `rq_5QeVQTPxvG` | 401 `invalid or expired token` — the workspace sends `Bearer dummy`, so this also demonstrates finding Y2 |
+| `Request a password reset (RPC, unimplemented)` | `rq_a5RrhdfWn5` | 501 `unimplemented` |
+| `Reset a password (RPC, unimplemented)` | `rq_FrT5R4ETfA` | 501 `unimplemented` |
+
+The same three procedures were also exercised with a real token obtained out of band (sign-in with
+the local admin password `@dmin123`, then the `/api/auth/token` bridge):
+
+| Request | Result |
+| --- | --- |
+| `AccountService/UpdateAccount` with a real bearer | 200, profile updated |
+| `AccountService/UpdateAccount` with `X-API-KEY: pik_bogus` alone | 401 `invalid or expired token` (task 01.1 boundary holds) |
+| `AuthService/ForgotPassword`, `AuthService/ResetPassword` | 501 `unimplemented` |
+
+Note: the credential committed in `api/specs/yaak.rq_5SgzmJyWWh.yaml` is `@admin123`, which the local
+server rejects. The working local password is `@dmin123`. Task 05.2/06.2 must correct the request
+rather than the password.
+
+`TestRPCMatrixDocumentsEveryProcedure` scans `api/connect/*.proto` for `rpc` declarations and asserts
+each procedure appears in `llms/endpoint-reference.md`, so the three missing rows cannot recur.
