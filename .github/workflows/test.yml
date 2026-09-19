@@ -84,6 +84,11 @@ jobs:
         if: steps.gotestsum.outputs.cache-hit != 'true'
         run: go install gotest.tools/gotestsum@v1.13.0
 
+      - name: Generate ConnectRPC code
+        run: |
+          go tool buf generate
+          gofmt -w gen/proto/go
+
       - name: Generate email template
         run: pnpm exec vite build
         env:

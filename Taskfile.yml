@@ -46,10 +46,12 @@ tasks:
 
   build:release:
     desc: Build release binaries via goreleaser
+    deps: [rpc:generate]
     cmd: goreleaser build --clean --auto-snapshot
 
   release:
     desc: Publish a release via goreleaser
+    deps: [rpc:generate]
     cmd: goreleaser release --clean --auto-snapshot
 
   start:
@@ -134,17 +136,17 @@ tasks:
   rpc:generate:
     desc: Generate Go + TypeScript from api/connect/*.proto
     cmds:
-      - buf generate
+      - go tool buf generate
       - gofmt -w gen/proto/go
       - task: rpc:stamp
 
   rpc:lint:
     desc: Lint protobuf contracts
-    cmd: buf lint
+    cmd: go tool buf lint
 
   rpc:breaking:
     desc: Check protobuf contracts for breaking changes
-    cmd: buf breaking --against '.git#ref=HEAD~1,subdir=api/connect'
+    cmd: go tool buf breaking --against '.git#ref=HEAD~1,subdir=api/connect'
 
   rpc:stamp:
     desc: Refresh the contract stamp used by stale detection
@@ -168,7 +170,7 @@ tasks:
       - go install github.com/goreleaser/goreleaser/v2@latest
       - go install github.com/anchore/grype/cmd/grype@latest
       - go install github.com/swaggo/swag/cmd/swag@latest
-      - go install github.com/bufbuild/buf/cmd/buf@latest
+      - go get -tool github.com/bufbuild/buf/cmd/buf@latest
       - go get -tool google.golang.org/protobuf/cmd/protoc-gen-go@latest
       - go get -tool connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
 

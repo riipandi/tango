@@ -1,14 +1,14 @@
 # yaml-language-server: $schema=https://json.schemastore.org/buf.gen.json
 
-# ConnectRPC code generation. Plugin versions are pinned via @version
-# for Go (module-resolved by `go run`); the TS plugin resolves through
-# pnpm exec against the devDependencies. No globally installed
-# binaries required. Contracts live in api/connect/*.proto; generated
-# Go lands in gen/proto/go/ and is committed (CI compiles and vets
-# without a buf step); generated TypeScript lands in app/generated/rpc/
-# (untracked) and is produced by the generation task before
-# dev/build/typecheck. Connect-ES v2 has no separate plugin:
-# protoc-gen-es emits the service descriptors with the message code.
+# ConnectRPC code generation. buf itself resolves through the go.mod tool
+# directive (`go tool buf`); the Go plugins are pinned via @version and
+# module-resolved, the TS plugin resolves through pnpm exec against the
+# devDependencies. No globally installed binaries required. Contracts live
+# in api/connect/*.proto; generated Go lands in gen/proto/go/ and generated
+# TypeScript in app/generated/rpc/. Both are build outputs and stay
+# untracked, so every build compiles them first: the Dockerfile, GoReleaser,
+# and both CI workflows run the generation before they compile, type-check,
+# or bundle.
 version: v2
 
 clean: true

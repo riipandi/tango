@@ -52,6 +52,11 @@ jobs:
           fi
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
+      - name: Generate ConnectRPC code
+        run: |
+          go tool buf generate
+          gofmt -w gen/proto/go
+
       - name: Generate email template
         run: pnpm exec vite build
         env:

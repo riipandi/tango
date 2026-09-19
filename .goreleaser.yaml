@@ -20,6 +20,11 @@ before:
     - go mod download
     - go mod tidy
     - pnpm install --ignore-scripts --frozen-lockfile
+    # gen/proto/go is generated, not committed: the Go build below fails
+    # without it, and the Vite build bundles the generated TypeScript.
+    # go tool buf resolves the pinned version from go.mod.
+    - go tool buf generate
+    - gofmt -w gen/proto/go
     - pnpm exec vite build
     # - swag init --output ./api -d cmd,internal,modules,pkg -g tango/main.go --quiet
     # - swag fmt --dir ./api
