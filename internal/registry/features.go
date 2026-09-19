@@ -123,17 +123,17 @@ func registerRecurringJobs(deps Deps, reg *jobs.Registry, feed *jobs.VersionFeed
 // audit module second (its guards need sessions), then the guarded
 // features. It also returns the session service, route groups, and
 // API-access store shared with the federation surface.
-func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Recorder, keys *jwks.Service) (*identity.Module, identity.RouteGroups, *session.Service, *auditlog.Module, *apiaccess.PostgresStore, storage.Store, error) {
+func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Recorder, keys *jwks.Service) (*identity.Module, identity.RouteGroups, *session.Service, *auditlog.Module, *apiaccess.PostgresStore, *apikey.Service, storage.Store, error) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	// Share one blob backend across images and client logos.
 	blobStore, err := storage.New(deps.Config.Storage)
 	if err != nil {
-		return nil, identity.RouteGroups{}, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
+		return nil, identity.RouteGroups{}, nil, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
 	}
 	bundled, err := storage.SeedBundledImages(context.Background(), blobStore, web.ImagesDir)
 	if err != nil {
-		return nil, identity.RouteGroups{}, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
+		return nil, identity.RouteGroups{}, nil, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
 	}
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, recorder)
@@ -181,7 +181,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 	groups := identity.RouteGroups{
 		Admin:  adminAuth,
 		Self:   auth,
-		APIKey: middleware.RequireAPIKey(apiKeys.Verify),
+		APIKey: middleware.RPCAPIKeyAuth(apiKeys.Verify),
 	}
 
 	core := user.NewService(
@@ -253,7 +253,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		totp.NewFeature(totpService).WithCookie(deps.Config.App.Mode != "development").WithAccessAuthenticator(sessions),
 	)
 
-	return module, groups, sessions, audit, apiaccess.NewPostgresStore(deps.DB), blobStore, nil
+	return module, groups, sessions, audit, apiaccess.NewPostgresStore(deps.DB), apiKeys, blobStore, nil
 }
 
 // withOIDC builds the OIDC provider feature.

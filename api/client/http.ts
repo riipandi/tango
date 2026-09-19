@@ -25,7 +25,9 @@ export interface HttpOptions {
   apiKey?: string
 }
 
-/** Header the server reads for machine credentials (`RequireAPIKey`). */
+// Machine credentials (X-API-KEY) authenticate the ConnectRPC admin
+// application API; the SDK keeps the option for raw() calls against
+// any retained endpoint that accepts one.
 const API_KEY_HEADER = 'X-API-KEY'
 
 interface RawResponse {

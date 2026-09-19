@@ -27,12 +27,20 @@ type apiKeyRPC struct {
 }
 
 // RPCService returns the Connect registration for the API key
-// surface: the procedure prefix and the unwrapped handler. The
-// surface is always session-authenticated and scoped to the caller —
-// the same contract as the REST routes — so the composition root
-// wraps it with the RPC bearer middleware.
+// surface: the procedure prefix and the handler. The surface is
+// scoped to the caller — the same contract as the REST routes — so
+// the composition root wraps it with the RPC authentication
+// middleware. Minting and renewing demand a session principal: a
+// machine credential must not extend itself.
 func (s *Service) RPCService() (string, http.Handler) {
-	prefix, handler := adminv1connect.NewApiKeyServiceHandler(&apiKeyRPC{service: s}, rpcerr.RecoverOption())
+	sessionOnly := map[string]bool{
+		adminv1connect.ApiKeyServiceCreateProcedure: true,
+		adminv1connect.ApiKeyServiceRenewProcedure:  true,
+	}
+	prefix, handler := adminv1connect.NewApiKeyServiceHandler(&apiKeyRPC{service: s},
+		connect.WithInterceptors(middleware.RPCMachineDenied(sessionOnly)),
+		rpcerr.RecoverOption(),
+	)
 	return prefix, handler
 }
 

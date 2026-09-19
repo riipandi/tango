@@ -5,12 +5,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/riipandi/tango/internal/transport"
+	"github.com/riipandi/tango/modules/admin/apikey"
+	"github.com/riipandi/tango/modules/identity/user"
 )
 
 // connectServices lists every Connect service prefix the refactor
@@ -174,4 +177,61 @@ func TestProtectedRPCRequiresBearer(t *testing.T) {
 	w := httptest.NewRecorder()
 	rpc.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
+}
+
+// TestRPCAPIKeyAuthenticatesAdminSurface pins the machine-credential
+// contract end to end through the real mount: a valid X-API-KEY
+// reaches an admin procedure, an unknown key is refused, and API key
+// self-management (create/renew) stays session-only so a leaked key
+// cannot extend itself.
+func TestRPCAPIKeyAuthenticatesAdminSurface(t *testing.T) {
+	deps := testDeps(t)
+	rt, err := New(deps)
+	require.NoError(t, err)
+
+	// Seed a machine credential owned by an admin user.
+	userStore := user.NewPostgresStore(deps.DB)
+	admin, err := userStore.Create(t.Context(), user.CreateParams{
+		Username:    "machine_owner",
+		Email:       "machine@tango.test",
+		DisplayName: "Machine Owner",
+		IsAdmin:     true,
+	})
+	require.NoError(t, err)
+
+	_, raw, err := rt.apiKeys.Create(t.Context(), admin.ID.String(), apikey.CreateParams{
+		Name:      "ci-agent",
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
+	})
+	require.NoError(t, err)
+
+	rpc := chi.NewRouter()
+	rt.MountRPC(rpc)
+
+	call := func(procedure, key string) *httptest.ResponseRecorder {
+		body := strings.NewReader("{}")
+		req, _ := http.NewRequest(http.MethodPost, procedure, body)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Connect-Protocol-Version", "1")
+		if key != "" {
+			req.Header.Set("X-API-KEY", key)
+		}
+		w := httptest.NewRecorder()
+		rpc.ServeHTTP(w, req)
+		return w
+	}
+
+	// The machine credential reaches an admin procedure.
+	listed := call("/tango.admin.v1.ApiKeyService/List", raw)
+	require.Equal(t, http.StatusOK, listed.Code, listed.Body.String())
+
+	// An unknown key is refused.
+	denied := call("/tango.admin.v1.ApiKeyService/List", "pik_not_a_key")
+	require.Equal(t, http.StatusUnauthorized, denied.Code)
+	assert.Contains(t, denied.Body.String(), "invalid API key")
+
+	// Minting and renewing demand a session principal.
+	minted := call("/tango.admin.v1.ApiKeyService/Create", raw)
+	require.Equal(t, http.StatusForbidden, minted.Code)
+	assert.Contains(t, minted.Body.String(), "session authentication required")
 }

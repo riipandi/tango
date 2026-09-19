@@ -43,6 +43,9 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
   encoding, redirects, Basic authentication, or bare protocol errors.
 - First-party application RPCs authenticate with `Authorization: Bearer <access-token>`. Cookies
   are storage for the access and refresh tokens, not the primary RPC authentication transport.
+- Machine clients authenticate the admin application API with `X-API-KEY`; the credential is
+  resolved into the same principal shape as a browser bearer, and API key self-management
+  (create/renew) stays session-only so a leaked key cannot extend itself.
 - The browser token lifecycle is handled by a dedicated web worker. The implementation must resolve
   the browser security boundary before coding: web workers cannot read `HttpOnly` cookies, so the
   plan must not assume that a worker can extract tokens from secure cookies.

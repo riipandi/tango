@@ -20,10 +20,13 @@ type Feature interface {
 // RouteGroups carries the authentication middleware chains a feature
 // applies at mount time; the composition root builds each chain once.
 // A nil group leaves its guarded routes unmounted (fail closed).
+// APIKey is the machine-credential chain: it resolves an X-API-KEY
+// header into a principal for the admin RPC surface and passes
+// requests without the header through to the bearer path.
 type RouteGroups struct {
 	Admin  kernel.Guard // session auth + admin requirement
 	Self   kernel.Guard // session auth (cookie)
-	APIKey kernel.Guard // API-key auth
+	APIKey kernel.Guard // X-API-KEY machine auth
 }
 
 // APIFeature mounts endpoints inside the shared /api group.

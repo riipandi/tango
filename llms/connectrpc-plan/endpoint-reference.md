@@ -45,6 +45,14 @@ Protected ConnectRPC methods require:
 Authorization: Bearer <internal-access-token>
 ```
 
+Machine clients may instead send `X-API-KEY: <api-key>` against the admin application API. The
+credential resolves into the same principal shape and is attached to the request context as a
+machine principal; a request carrying both uses the API key. API key self-management is the one
+exception: `ApiKeyService.Create` and `ApiKeyService.Renew` demand a session principal so a leaked
+key cannot extend itself, and the browser ceremony surfaces (device approval, WebAuthn, OIDC
+protocol, the auth lifecycle) never accept a machine credential. A cookie-backed principal never
+satisfies an RPC guard: only a bearer token or an API key resolves one.
+
 Access and refresh tokens remain stored in secure cookies. Cookie presence alone must not authorize
 an RPC. The frontend worker is responsible for obtaining/refreshing the access token and injecting
 the bearer metadata, but the implementation must resolve the browser boundary first: a web worker
@@ -83,9 +91,9 @@ For each route group, the Yaak request must verify the active wire contract:
 - REST: HTTP method, URL, query, headers, cookies/API key, body encoding, status, headers, and
   response body.
 - Connect Protocol: HTTP method, `/rpc` routing prefix, package/service/method procedure path,
-  `Connect-Protocol-Version`, content type (`application/json` or `application/proto`), bearer
-  metadata, timeout/compression headers, credentials, protobuf/JSON message, HTTP status, Connect
-  error body, and response metadata.
+  `Connect-Protocol-Version`, content type (`application/json` or `application/proto`), bearer or
+  `X-API-KEY` metadata, timeout/compression headers, credentials, protobuf/JSON message, HTTP
+  status, Connect error body, and response metadata.
 
 The endpoint row is not complete until the request has been sent through Yaak MCP against the
 running server. Request names should use `<METHOD> <path>` for REST and
@@ -155,7 +163,7 @@ running server. Request names should use `<METHOD> <path>` for REST and
 
 | Methods | Endpoint | Protocol | Consumer | Notes |
 | --- | --- | --- | --- | --- |
-| GET, DELETE, POST | `/api/api-keys/*` | ConnectRPC | Admin console/internal | API keys remain a machine-auth credential, but management is internal. |
+| GET, DELETE, POST | `/api/api-keys/*` | ConnectRPC | Admin console/internal | API keys remain a machine-auth credential, but management is internal; create/renew demand a session. |
 | GET, POST, PUT, DELETE | `/api/apis/*` | ConnectRPC | Admin console/internal | REST routes removed in phase 05. |
 | GET | `/api/api-access/{clientId}/apis` | ConnectRPC | Admin console/internal | `ApiService.ListApisForClient`; REST route removed in phase 05. |
 | GET | `/api/api-access/{clientId}/assignable-apis` | ConnectRPC | Admin console/internal | `ApiService.ListAssignableApisForClient`; REST route removed in phase 05. |
@@ -258,8 +266,11 @@ health/version tables above.
 
 Canonical protobuf contract for every ConnectRPC entry. Packages express module ownership; every
 first-party route maps to exactly one service method. Auth column: `bearer` = protected RPC
-(`Authorization: Bearer <internal-access-token>` required), `public` = anonymous, `pending` =
-pending-auth cookie ceremony as today. Yaak request names follow `<METHOD> /rpc/<package>.<Service>/<Method>`;
+(`Authorization: Bearer <internal-access-token>` required, and the admin/self application
+procedures also accept `X-API-KEY` for machine clients), `public` = anonymous, `pending` =
+pending-auth cookie ceremony as today. Browser ceremony surfaces (device approval, MFA, the auth
+lifecycle, OIDC protocol) never accept a machine credential, and API key create/renew stay
+session-only. Yaak request names follow `<METHOD> /rpc/<package>.<Service>/<Method>`;
 they are created via Yaak MCP in the implementing phase and the row is not complete until sent.
 
 ### Package `tango.system.v1` — `api/connect/system.proto`
@@ -359,10 +370,10 @@ they are created via Yaak MCP in the implementing phase and the row is not compl
 
 | Service.Method | Replaces (method + path) | Auth | Notes |
 | --- | --- | --- | --- |
-| `ApiKeyService.List` | GET `/api/api-keys` | bearer | Self-scoped. |
-| `ApiKeyService.Create` | POST `/api/api-keys` | bearer | Self-scoped; show-once secret. |
-| `ApiKeyService.Renew` | POST `/api/api-keys/{id}/renew` | bearer | Self-scoped; show-once secret. |
-| `ApiKeyService.Delete` | DELETE `/api/api-keys/{id}` | bearer | Self-scoped. |
+| `ApiKeyService.List` | GET `/api/api-keys` | bearer or X-API-KEY | Self-scoped. |
+| `ApiKeyService.Create` | POST `/api/api-keys` | bearer | Self-scoped; show-once secret; session-only. |
+| `ApiKeyService.Renew` | POST `/api/api-keys/{id}/renew` | bearer | Self-scoped; show-once secret; session-only. |
+| `ApiKeyService.Delete` | DELETE `/api/api-keys/{id}` | bearer or X-API-KEY | Self-scoped. |
 | `ApiService.ListApis` | GET `/api/apis` | bearer | Cutover phase 05. |
 | `ApiService.CreateApi` | POST `/api/apis` | bearer | Cutover phase 05. |
 | `ApiService.GetApi` | GET `/api/apis/{id}` | bearer | See ambiguity A3 (trailing slash). |

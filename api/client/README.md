@@ -11,7 +11,8 @@ await apiClient.auth.signOut()
 await apiClient.auth.forgotPassword({ identity: 'abbey' })
 await apiClient.auth.exchangeOneTimeToken('otat_...')
 
-// Machine-to-machine: X-API-KEY rides every request.
+// Machine-to-machine: X-API-KEY rides every request (the admin
+// application API accepts it in place of a bearer token).
 const script = createApiClient({ baseUrl: 'https://tango.local', apiKey: 'k-123' })
 await script.system.health()
 

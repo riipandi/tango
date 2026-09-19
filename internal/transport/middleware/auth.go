@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/pkg/responder"
@@ -66,25 +65,4 @@ func RequireAdmin(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-// RequireAPIKey resolves the X-API-KEY header for machine clients.
-func RequireAPIKey(verifier APIKeyVerifier) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := strings.TrimSpace(r.Header.Get("X-API-KEY"))
-			if key == "" {
-				responder.Fail(w, r, http.StatusUnauthorized, "API key required")
-				return
-			}
-
-			principal, err := verifier(r.Context(), key)
-			if err != nil {
-				responder.Fail(w, r, http.StatusUnauthorized, "invalid API key")
-				return
-			}
-
-			next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), principal)))
-		})
-	}
 }

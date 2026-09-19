@@ -92,34 +92,6 @@ func TestRequireAdmin(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestRequireAPIKey(t *testing.T) {
-	verifier := func(_ context.Context, key string) (Principal, error) {
-		if key != "pik_secret" {
-			return Principal{}, errors.New("nope")
-		}
-		return Principal{UserID: "k1", Provider: "api_key"}, nil
-	}
-	handler := RequireAPIKey(verifier)(probe)
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("X-API-KEY", "pik_secret")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "user:k1", w.Header().Get("X-Principal"))
-
-	// Missing and invalid keys return 401.
-	req = httptest.NewRequest(http.MethodGet, "/", nil)
-	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-
-	req.Header.Set("X-API-KEY", "nope")
-	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
 // The 401 body uses the standard envelope.
 func TestRequireAuthEnvelopeShape(t *testing.T) {
 	handler := RequireAuth(fakeAuthenticator{token: "x"}, "sid")(probe)
