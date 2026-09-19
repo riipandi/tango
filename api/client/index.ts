@@ -53,18 +53,6 @@ export type {
 } from './schemas/devicelogin.schema'
 
 // Admin surface types.
-export type {
-  APIKey,
-  APIKeySecret,
-  CreateAPIKeyParams,
-  RenewAPIKeyParams
-} from './schemas/apikey.schema'
-export type {
-  CreateWebhookParams,
-  UpdateWebhookParams,
-  Webhook,
-  WebhookDelivery
-} from './schemas/webhook.schema'
 
 /**
  * Default client for the embedded SPA: same origin, cookie-backed session.

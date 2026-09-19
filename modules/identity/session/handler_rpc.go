@@ -3,9 +3,7 @@ package session
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -16,7 +14,6 @@ import (
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/user"
-	"github.com/riipandi/tango/pkg/validate"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -42,12 +39,12 @@ type authRPC struct {
 }
 
 func (h *authRPC) SignIn(ctx context.Context, req *connect.Request[identityv1.SignInRequest]) (*connect.Response[identityv1.SignedIn], error) {
-	params := signInRequest{Identity: req.Msg.GetIdentity(), Secret: req.Msg.GetSecret()}
-	if err := params.Validate(); err != nil {
-		return nil, validationError(err)
+	identity, secret := req.Msg.GetIdentity(), req.Msg.GetSecret()
+	if identity == "" || secret == "" {
+		return nil, rpcerr.InvalidArgument("identity and secret are required")
 	}
 
-	result, err := h.service.SignInWithPending(ctx, params.Identity, params.Secret, Meta{
+	result, err := h.service.SignInWithPending(ctx, identity, secret, Meta{
 		UserAgent: req.Header().Get("User-Agent"),
 	})
 	if err != nil {
@@ -123,15 +120,6 @@ func rpcError(err error) error {
 	default:
 		return rpcerr.Internal("internal error")
 	}
-}
-
-// validationError maps ozzo field errors onto invalid_argument.
-func validationError(verr error) error {
-	parts := make([]string, 0, 4)
-	for _, fe := range validate.FieldErrors(verr) {
-		parts = append(parts, fmt.Sprintf("%s: %s", fe.Field, fe.Message))
-	}
-	return rpcerr.InvalidArgument("validation failed: " + strings.Join(parts, "; "))
 }
 
 // signedInProto maps the domain result onto the shared response.

@@ -80,6 +80,9 @@ func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limit
 	// handlers match procedure paths exactly.
 	rpcRouter := newRPCRouter(routes.MountRPC)
 	r.Group(func(r chi.Router) {
+		if limiter != nil {
+			r.Use(limiter)
+		}
 		r.Use(middleware.RequestTimeout(rpcRequestTimeout))
 		r.Mount("/rpc", http.StripPrefix("/rpc", rpcRouter))
 	})

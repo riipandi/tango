@@ -47,7 +47,7 @@ type Module struct {
 	emailv    Feature
 	signup    Feature
 	apiaccess Feature
-	apikeys   APIFeature
+	apikeys   Feature
 	recovery  APIFeature
 	totp      Feature
 }
@@ -67,7 +67,7 @@ func New(
 	emailv Feature,
 	signup Feature,
 	apiaccess Feature,
-	apikeys APIFeature,
+	apikeys Feature,
 	recovery APIFeature,
 	totp Feature,
 ) *Module {
@@ -229,9 +229,6 @@ func (m *Module) APIRoutes(r chi.Router, g RouteGroups) {
 	}
 	if m.devices != nil {
 		m.devices.APIRoutes(r, g)
-	}
-	if m.apikeys != nil {
-		m.apikeys.APIRoutes(r, g)
 	}
 	if m.recovery != nil {
 		m.recovery.APIRoutes(r, g)

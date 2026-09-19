@@ -61,7 +61,7 @@ func linkToken(t *testing.T, message mailer.Message) string {
 	return raw
 }
 
-func newTestRouter(t *testing.T, record func(context.Context, identity.AuditEvent, datastore.Executor)) (chi.Router, *password.Service, user.Store, *token.PostgresStore, *stubMail) {
+func newTestRouter(t *testing.T, record func(context.Context, identity.AuditEvent, datastore.Executor)) (chi.Router, *password.Service, user.Store, *token.PostgresStore, *stubMail, *session.Service) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -99,7 +99,7 @@ func newTestRouter(t *testing.T, record func(context.Context, identity.AuditEven
 		sessions.APIRoutes(r, identity.RouteGroups{})
 		NewFeature(recoverySvc).WithCookie(session.CookieName, false).APIRoutes(r, identity.RouteGroups{})
 	})
-	return r, passwords, users, tokens, mail
+	return r, passwords, users, tokens, mail, sessions
 }
 
 func provisionUser(t *testing.T, users user.Store, passwords *password.Service) user.User {
@@ -123,33 +123,18 @@ func postJSON(t *testing.T, r chi.Router, path, body string) *httptest.ResponseR
 	return w
 }
 
-// getWithCookie issues a GET with the session cookie.
-func getWithCookie(t *testing.T, r chi.Router, path, cookie string) *httptest.ResponseRecorder {
+// signIn mints a session through the service and returns the raw
+// cookie value.
+func signIn(t *testing.T, sessions *session.Service, identity, secret string) string {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	return w
-}
-
-// signIn submits the sign-in form and returns the raw cookie value.
-func signIn(t *testing.T, r chi.Router, identity, secret string) string {
-	t.Helper()
-	body := `{"identity":"` + identity + `","secret":"` + secret + `"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/sign-in", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	cookies := w.Result().Cookies()
-	require.NotEmpty(t, cookies)
-	return cookies[0].Value
+	result, err := sessions.SignInWithPending(t.Context(), identity, secret, session.Meta{})
+	require.NoError(t, err)
+	require.False(t, result.Pending)
+	return result.Token
 }
 
 func TestForgotIsAlwaysGeneric(t *testing.T) {
-	r, passwords, users, _, mail := newTestRouter(t, nil)
+	r, passwords, users, _, mail, _ := newTestRouter(t, nil)
 
 	// An unknown address and a malformed body behave like anything
 	// else: no enumeration, no mail.
@@ -172,13 +157,13 @@ func TestForgotIsAlwaysGeneric(t *testing.T) {
 
 func TestResetLifecycle(t *testing.T) {
 	var events []identity.AuditEvent
-	r, passwords, users, _, mail := newTestRouter(t, func(ctx context.Context, e identity.AuditEvent, exec datastore.Executor) {
+	r, passwords, users, _, mail, sessions := newTestRouter(t, func(ctx context.Context, e identity.AuditEvent, exec datastore.Executor) {
 		events = append(events, e)
 	})
 	u := provisionUser(t, users, passwords)
 
 	// The requester holds an old session.
-	oldSession := signIn(t, r, u.Username, "old-s3cret-p@ss")
+	oldSession := signIn(t, sessions, u.Username, "old-s3cret-p@ss")
 
 	// Mint the token through the forgot flow; the raw value travels
 	// by email only.
@@ -199,9 +184,13 @@ func TestResetLifecycle(t *testing.T) {
 	require.NotEmpty(t, cookies)
 	newSession := cookies[0].Value
 
-	// The old session died with the old secret; the fresh one lives.
-	assert.Equal(t, http.StatusUnauthorized, getWithCookie(t, r, "/api/auth/session", oldSession).Code)
-	assert.Equal(t, http.StatusOK, getWithCookie(t, r, "/api/auth/session", newSession).Code)
+	// The old session died with the old secret; the fresh one lives —
+	// probed through the session resolver (the REST session read is
+	// gone with the ConnectRPC cutover).
+	_, _, oldErr := sessions.Resolve(t.Context(), oldSession)
+	assert.Error(t, oldErr)
+	_, _, newErr := sessions.Resolve(t.Context(), newSession)
+	assert.NoError(t, newErr)
 
 	// Audit: request + completion, no secrets in events.
 	require.Len(t, events, 2)
@@ -215,14 +204,14 @@ func TestResetLifecycle(t *testing.T) {
 }
 
 func TestResetUnknownToken(t *testing.T) {
-	r, _, _, _, _ := newTestRouter(t, nil)
+	r, _, _, _, _, _ := newTestRouter(t, nil)
 
 	w := postJSON(t, r, "/api/auth/reset-password", `{"token":"deadbeef","new_password":"whatever123"}`)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestResetExpiredToken(t *testing.T) {
-	r, passwords, users, tokens, _ := newTestRouter(t, nil)
+	r, passwords, users, tokens, _, _ := newTestRouter(t, nil)
 	u := provisionUser(t, users, passwords)
 
 	// The column CHECK forbids inserting an already-expired token, so
@@ -240,7 +229,7 @@ func TestResetExpiredToken(t *testing.T) {
 }
 
 func TestConcurrentResetSingleUse(t *testing.T) {
-	r, passwords, users, _, mail := newTestRouter(t, nil)
+	r, passwords, users, _, mail, _ := newTestRouter(t, nil)
 	u := provisionUser(t, users, passwords)
 
 	require.Equal(t, http.StatusNoContent,

@@ -55,40 +55,44 @@ var policies = map[string]Policy{
 	"webauthn-reauthenticate":   {Name: "webauthn-reauthenticate", Max: 6, Window: 60},
 	"email-verification-send":   {Name: "email-verification-send", Max: 2, Window: 600},
 	"email-verification-verify": {Name: "email-verification-verify", Max: 6, Window: 60},
+	"account-password":          {Name: "account-password", Max: 10, Window: 60},
 }
 
 // rule binds one endpoint shape to a policy. Matching requires the
 // path to continue the prefix at a segment boundary (or end there), so
-// /api/signup never shadows /api/signup-tokens. An optional suffix pins
-// the tail, and an empty method matches any. Rules are evaluated in
-// order and the first match wins.
+// /rpc/…Service/SignUp never shadows a longer procedure name. An
+// optional suffix pins the tail, and an empty method matches any.
+// Rules cover the retained REST paths plus the Connect procedures that
+// replaced rate-limited REST routes (the /rpc mount runs the same
+// limiter middleware).
 var rules = []struct {
 	Policy string
 	Method string
 	Prefix string
 	Suffix string
 }{
-	{"sign-in", http.MethodPost, "/api/auth/sign-in", ""},
+	{"sign-in", http.MethodPost, "/rpc/tango.identity.v1.AuthService/SignIn", ""},
 	{"forgot-password", http.MethodPost, "/api/auth/forgot-password", ""},
 	{"reset-password", http.MethodPost, "/api/auth/reset-password", ""},
-	{"totp-enroll", http.MethodPost, "/api/mfa/totp/enroll", ""},
-	{"totp-confirm", http.MethodPost, "/api/mfa/totp/confirm", ""},
-	{"totp-verify", http.MethodPost, "/api/mfa/totp/verify", ""},
-	{"totp-recovery-codes", http.MethodPost, "/api/mfa/totp/recovery-codes", ""},
-	{"totp-disable", http.MethodDelete, "/api/mfa/totp", ""},
-	{"signup-setup", http.MethodPost, "/api/signup/setup", ""},
-	{"signup", http.MethodPost, "/api/signup", ""},
-	{"one-time-access-email", http.MethodPost, "/api/one-time-access-email", ""},
+	{"totp-enroll", http.MethodPost, "/rpc/tango.identity.v1.MfaService/EnrollTotp", ""},
+	{"totp-confirm", http.MethodPost, "/rpc/tango.identity.v1.MfaService/ConfirmTotp", ""},
+	{"totp-verify", http.MethodPost, "/rpc/tango.identity.v1.MfaService/VerifyPending", ""},
+	{"totp-recovery-codes", http.MethodPost, "/rpc/tango.identity.v1.MfaService/RotateRecoveryCodes", ""},
+	{"totp-disable", http.MethodPost, "/rpc/tango.identity.v1.MfaService/DisableTotp", ""},
+	{"signup-setup", http.MethodPost, "/rpc/tango.identity.v1.SignupService/SetupInitialAdmin", ""},
+	{"signup", http.MethodPost, "/rpc/tango.identity.v1.SignupService/Signup", ""},
+	{"one-time-access-email", http.MethodPost, "/rpc/tango.identity.v1.OneTimeAccessService/RequestEmail", ""},
+	{"one-time-access-email", http.MethodPost, "/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail", ""},
 	{"one-time-access-token", http.MethodPost, "/api/one-time-access-token/", ""},
 	{"device-login-exchange", http.MethodPost, "/api/device-login/requests/", "/exchange"},
 	{"device-login-create", http.MethodPost, "/api/device-login/requests", ""},
-	{"device-login-decision", http.MethodPost, "/api/device-login/verification/decision", ""},
-	{"device-login-verify", http.MethodPost, "/api/device-login/verification", ""},
+	{"device-login-decision", http.MethodPost, "/rpc/tango.identity.v1.DeviceApprovalService/DecideRequest", ""},
+	{"device-login-verify", http.MethodPost, "/rpc/tango.identity.v1.DeviceApprovalService/GetPendingRequest", ""},
 	{"webauthn-login", http.MethodPost, "/api/webauthn/login/finish", ""},
 	{"webauthn-reauthenticate", http.MethodPost, "/api/webauthn/reauthenticate", ""},
-	{"email-verification-send", http.MethodPost, "/api/users/me/send-email-verification", ""},
+	{"email-verification-send", http.MethodPost, "/rpc/tango.identity.v1.EmailVerificationService/SendEmail", ""},
 	{"email-verification-verify", http.MethodPost, "/api/users/me/verify-email", ""},
-	{"one-time-access-email", http.MethodPost, "/api/users/", "/one-time-access-email"},
+	{"account-password", http.MethodPost, "/rpc/tango.identity.v1.AccountService/ChangePassword", ""},
 }
 
 // PolicyFor returns the enforced policy for a request, or false when the

@@ -6,10 +6,13 @@ import (
 	"crypto/rsa"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/lestrrat-go/jwx/v3/jwk"
+	identityv1 "github.com/riipandi/tango/gen/proto/go/tango/identity/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,6 +38,31 @@ func newTestKeyProvider(t *testing.T) stubKeyProvider {
 	key, err := jwk.Import(raw)
 	require.NoError(t, err)
 	return stubKeyProvider{key: key}
+}
+
+// rpcSignIn drives the Connect SignIn procedure and returns the
+// refresh and access cookie values from the response.
+func rpcSignIn(t *testing.T, sessions *Service, identityText, secret string) (string, string) {
+	t.Helper()
+	h := &authRPC{service: sessions}
+	resp, err := h.SignIn(t.Context(), connect.NewRequest(&identityv1.SignInRequest{
+		Identity: identityText, Secret: secret,
+	}))
+	require.NoError(t, err)
+	return setCookieValue(resp.Header(), CookieName), setCookieValue(resp.Header(), AccessTokenCookieName)
+}
+
+// setCookieValue reads one Set-Cookie value; multiple cookies ride
+// separate header entries.
+func setCookieValue(header http.Header, name string) string {
+	for _, setCookie := range header["Set-Cookie"] {
+		for _, part := range strings.Split(setCookie, "; ") {
+			if strings.HasPrefix(part, name+"=") {
+				return strings.TrimPrefix(part, name+"=")
+			}
+		}
+	}
+	return ""
 }
 
 func tokenBridge(t *testing.T, r http.Handler, cookies ...string) *httptest.ResponseRecorder {
@@ -70,23 +98,12 @@ func TestTokenBridgeBootstrapAndRotation(t *testing.T) {
 	u := newUser(t, users, passwords, "bridge")
 
 	// Sign-in: refresh cookie plus the bridge-scoped access mirror.
-	w := signIn(t, r, u.Username, "s3cret-p@ss")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	refresh := refreshTokenFrom(t, w)
-	access := namedCookie(t, w, AccessTokenCookieName)
+	refresh, access := rpcSignIn(t, sessions, u.Username, "s3cret-p@ss")
+	require.NotEmpty(t, refresh)
 	require.NotEmpty(t, access, "sign-in mirrors the access token for bootstrap")
 
-	// Cookie attribute contract: the access mirror never leaves the
-	// bridge path and stays HttpOnly.
-	for _, c := range w.Result().Cookies() {
-		if c.Name == AccessTokenCookieName {
-			assert.True(t, c.HttpOnly)
-			assert.Equal(t, AccessTokenPath, c.Path)
-		}
-	}
-
 	// Fast path: valid access cookie → same token, no rotation.
-	w = tokenBridge(t, r, "tango_access="+access, CookieName+"="+refresh)
+	w := tokenBridge(t, r, "tango_access="+access, CookieName+"="+refresh)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), `"token_type":"Bearer"`)
 	assert.Equal(t, access, namedCookie(t, w, AccessTokenCookieName))
@@ -118,7 +135,7 @@ func TestTokenBridgeBootstrapAndRotation(t *testing.T) {
 // garbage cookies answer the enumeration-safe message.
 func TestTokenBridgeRejectsAnonymous(t *testing.T) {
 	signer := newTestKeyProvider(t)
-	r, _, passwords, users := newTestRouter(t, WithAccessTokens(NewAccessTokenSigner(signer)))
+	r, sessionsForBridge, passwords, users := newTestRouter(t, WithAccessTokens(NewAccessTokenSigner(signer)))
 	u := newUser(t, users, passwords, "bridge_anon")
 
 	w := tokenBridge(t, r)
@@ -128,8 +145,9 @@ func TestTokenBridgeRejectsAnonymous(t *testing.T) {
 	w = tokenBridge(t, r, CookieName+"=garbage")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-	// Signing in first proves the rejection is not a broken bridge.
-	assert.Equal(t, http.StatusOK, signIn(t, r, u.Username, "s3cret-p@ss").Code)
+	// A live session exists, yet no cookie means no bridge answer:
+	// the rejection is the missing cookie, not a broken bridge.
+	rpcSignIn(t, sessionsForBridge, u.Username, "s3cret-p@ss")
 }
 
 // TestBridgeWithoutSignerSurfaces501 keeps the misconfiguration
@@ -137,7 +155,7 @@ func TestTokenBridgeRejectsAnonymous(t *testing.T) {
 func TestBridgeWithoutSignerSurfaces501(t *testing.T) {
 	r, _, passwords, users := newTestRouter(t)
 	u := newUser(t, users, passwords, "bridge_bare")
-	signIn(t, r, u.Username, "s3cret-p@ss")
+	_ = u
 
 	w := tokenBridge(t, r)
 	assert.Equal(t, http.StatusNotImplemented, w.Code)

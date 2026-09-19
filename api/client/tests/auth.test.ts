@@ -15,34 +15,6 @@ const user = {
 }
 
 describe('auth module', () => {
-  it('signs in with password and returns the session result', async () => {
-    const { fetchMock, calls } = mockFetch([
-      envelope({ user, session_id: 'st_a', provider: 'password' })
-    ])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    const result = await client.auth.signInWithPassword({ identity: 'abbey', secret: 's3cret' })
-
-    expect(result.provider).toBe('password')
-    const call = expectCall(calls)
-    expect(call.method).toBe('POST')
-    expect(call.path).toBe('/api/auth/sign-in')
-    expect(call.body).toBe(JSON.stringify({ identity: 'abbey', secret: 's3cret' }))
-  })
-
-  it('reads the current session', async () => {
-    const { fetchMock, calls } = mockFetch([
-      envelope({ user, session_id: 'st_a', provider: 'password' })
-    ])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    const result = await client.auth.getSession()
-
-    expect(result.user.id).toBe('user_01j')
-    expect(expectCall(calls).method).toBe('GET')
-    expect(expectCall(calls).path).toBe('/api/auth/session')
-  })
-
   it('signs out with POST', async () => {
     const { fetchMock, calls } = mockFetch([envelope(null)])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })

@@ -24,7 +24,7 @@ describe('error normalization', () => {
     ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.auth.signInWithPassword({ identity: '', secret: '' }))
+    const error = await catchError(client.auth.forgotPassword({ identity: '' }))
 
     expect(error).toBeInstanceOf(ApiClientError)
     expect(error.status).toBe(422)
@@ -53,9 +53,7 @@ describe('error normalization', () => {
     ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(
-      client.auth.signInWithPassword({ identity: 'abbey', secret: 'x' })
-    )
+    const error = await catchError(client.auth.forgotPassword({ identity: 'abbey' }))
 
     expect(error.status).toBe(429)
     expect(error.rateLimit).toEqual({ limit: 5, remaining: 0, reset: 1760000000 })
@@ -65,7 +63,7 @@ describe('error normalization', () => {
     const { fetchMock } = mockFetch([errorEnvelope(401, 'authentication required')])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.auth.getSession())
+    const error = await catchError(client.auth.signOut())
 
     expect(error.message).toBe('authentication required')
     expect(error.status).toBe(401)

@@ -61,27 +61,28 @@ func TestPolicyForMapsSensitiveEndpoints(t *testing.T) {
 		policy string
 		max    int
 	}{
-		{http.MethodPost, "/api/auth/sign-in", "sign-in", 20},
+		{http.MethodPost, "/rpc/tango.identity.v1.AuthService/SignIn", "sign-in", 20},
 		{http.MethodPost, "/api/auth/forgot-password", "forgot-password", 2},
 		{http.MethodPost, "/api/auth/reset-password", "reset-password", 5},
-		{http.MethodPost, "/api/mfa/totp/enroll", "totp-enroll", 5},
-		{http.MethodPost, "/api/mfa/totp/confirm", "totp-confirm", 10},
-		{http.MethodPost, "/api/mfa/totp/verify", "totp-verify", 10},
-		{http.MethodPost, "/api/mfa/totp/recovery-codes", "totp-recovery-codes", 5},
-		{http.MethodDelete, "/api/mfa/totp", "totp-disable", 5},
-		{http.MethodPost, "/api/signup", "signup", 5},
-		{http.MethodPost, "/api/signup/setup", "signup-setup", 5},
-		{http.MethodPost, "/api/one-time-access-email", "one-time-access-email", 2},
+		{http.MethodPost, "/rpc/tango.identity.v1.MfaService/EnrollTotp", "totp-enroll", 5},
+		{http.MethodPost, "/rpc/tango.identity.v1.MfaService/ConfirmTotp", "totp-confirm", 10},
+		{http.MethodPost, "/rpc/tango.identity.v1.MfaService/VerifyPending", "totp-verify", 10},
+		{http.MethodPost, "/rpc/tango.identity.v1.MfaService/RotateRecoveryCodes", "totp-recovery-codes", 5},
+		{http.MethodPost, "/rpc/tango.identity.v1.MfaService/DisableTotp", "totp-disable", 5},
+		{http.MethodPost, "/rpc/tango.identity.v1.SignupService/Signup", "signup", 5},
+		{http.MethodPost, "/rpc/tango.identity.v1.SignupService/SetupInitialAdmin", "signup-setup", 5},
+		{http.MethodPost, "/rpc/tango.identity.v1.OneTimeAccessService/RequestEmail", "one-time-access-email", 2},
+		{http.MethodPost, "/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail", "one-time-access-email", 2},
 		{http.MethodPost, "/api/one-time-access-token/tok_123", "one-time-access-token", 10},
 		{http.MethodPost, "/api/device-login/requests", "device-login-create", 10},
 		{http.MethodPost, "/api/device-login/requests/dev_1/exchange", "device-login-exchange", 30},
-		{http.MethodPost, "/api/device-login/verification", "device-login-verify", 10},
-		{http.MethodPost, "/api/device-login/verification/decision", "device-login-decision", 10},
+		{http.MethodPost, "/rpc/tango.identity.v1.DeviceApprovalService/GetPendingRequest", "device-login-verify", 10},
+		{http.MethodPost, "/rpc/tango.identity.v1.DeviceApprovalService/DecideRequest", "device-login-decision", 10},
 		{http.MethodPost, "/api/webauthn/login/finish", "webauthn-login", 10},
 		{http.MethodPost, "/api/webauthn/reauthenticate", "webauthn-reauthenticate", 6},
-		{http.MethodPost, "/api/users/me/send-email-verification", "email-verification-send", 2},
+		{http.MethodPost, "/rpc/tango.identity.v1.EmailVerificationService/SendEmail", "email-verification-send", 2},
 		{http.MethodPost, "/api/users/me/verify-email", "email-verification-verify", 6},
-		{http.MethodPost, "/api/users/usr_1/one-time-access-email", "one-time-access-email", 2},
+		{http.MethodPost, "/rpc/tango.identity.v1.AccountService/ChangePassword", "account-password", 10},
 	}
 	for _, tc := range cases {
 		policy, ok := PolicyFor(tc.method, tc.path)
@@ -132,7 +133,7 @@ func TestPolicyForIgnoresEverydayRoutes(t *testing.T) {
 		{http.MethodGet, "/api/users/usr_1/profile-picture.png"},
 		// Method mismatches stay unthrottled: a GET on a sensitive path
 		// is a routing error, not an attack surface.
-		{http.MethodGet, "/api/auth/sign-in"},
+		{http.MethodGet, "/rpc/tango.identity.v1.AuthService/SignIn"},
 		{http.MethodGet, "/api/one-time-access-email"},
 	}
 	for _, tc := range cases {
@@ -148,7 +149,7 @@ func TestRateLimitEnforcesPolicyBudgets(t *testing.T) {
 	}))
 
 	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/auth/sign-in", strings.NewReader("")))
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/rpc/tango.identity.v1.AuthService/SignIn", strings.NewReader("")))
 	assert.Equal(t, http.StatusTeapot, w.Code)
 	assert.Equal(t, 1, limiter.calls)
 	assert.Equal(t, 20, limiter.max)
@@ -171,7 +172,7 @@ func TestRateLimitFailOpenOnStoreError(t *testing.T) {
 		}))
 
 	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/auth/sign-in", strings.NewReader("")))
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/rpc/tango.identity.v1.AuthService/SignIn", strings.NewReader("")))
 	assert.Equal(t, http.StatusTeapot, w.Code, "store failures fail open")
 }
 
@@ -196,7 +197,7 @@ func TestRateLimitedResponseUsesEnvelope(t *testing.T) {
 		}))
 
 	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/auth/sign-in", strings.NewReader("")))
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/rpc/tango.identity.v1.AuthService/SignIn", strings.NewReader("")))
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 	assert.Contains(t, w.Body.String(), "rate limit exceeded")

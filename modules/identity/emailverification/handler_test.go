@@ -32,7 +32,7 @@ import (
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
-func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Service, *token.PostgresStore) {
+func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Service, *token.PostgresStore, *session.Service) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -68,10 +68,10 @@ func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Ser
 		sessions.APIRoutes(r, identity.RouteGroups{})
 		feature.APIRoutes(r, identity.RouteGroups{Self: selfGuard})
 	})
-	return r, users, passwords, tokens
+	return r, users, passwords, tokens, sessions
 }
 
-func signIn(t *testing.T, r chi.Router, users *user.PostgresStore, passwords *password.Service) (string, user.User) {
+func signIn(t *testing.T, r chi.Router, users *user.PostgresStore, passwords *password.Service, sessions *session.Service) (string, user.User) {
 	t.Helper()
 	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
 
@@ -82,21 +82,15 @@ func signIn(t *testing.T, r chi.Router, users *user.PostgresStore, passwords *pa
 	require.NoError(t, err)
 	require.NoError(t, passwords.SetPassword(t.Context(), u.ID, "s3cret-p@ss"))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/sign-in",
-		strings.NewReader(`{"identity":"verify_`+stamp+`","secret":"s3cret-p@ss"}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	cookies := w.Result().Cookies()
-	require.NotEmpty(t, cookies)
-	return cookies[0].Value, u
+	result, err := sessions.SignInWithPending(t.Context(), u.Username, "s3cret-p@ss", session.Meta{})
+	require.NoError(t, err)
+	require.False(t, result.Pending)
+	return result.Token, u
 }
 
 func TestVerifyConsumesScopedToken(t *testing.T) {
-	r, users, passwords, tokens := newTestRouter(t)
-	cookie, u := signIn(t, r, users, passwords)
+	r, users, passwords, tokens, sessions := newTestRouter(t)
+	cookie, u := signIn(t, r, users, passwords, sessions)
 
 	// Mint through the store and keep the raw value only here.
 	raw := "rawver_" + strconv.FormatInt(time.Now().UnixNano(), 10)
@@ -140,7 +134,7 @@ func TestVerifyConsumesScopedToken(t *testing.T) {
 }
 
 func TestVerifyRequiresSession(t *testing.T) {
-	r, _, _, _ := newTestRouter(t)
+	r, _, _, _, _ := newTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/users/me/verify-email", strings.NewReader(`{"token":"x"}`))
 	req.Header.Set("Content-Type", "application/json")

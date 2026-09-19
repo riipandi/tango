@@ -1,12 +1,10 @@
 // Public SDK factory: composes the feature namespaces over one executor.
 
 import { createHttp } from './http'
-import { createAPIKeysModule, type APIKeysModule } from './modules/apikeys.mod'
 import { createAuthModule, type AuthModule } from './modules/auth.mod'
 import { createDeviceApprovalModule, type DeviceApprovalModule } from './modules/deviceapproval.mod'
 import { createDeviceLoginModule, type DeviceLoginModule } from './modules/devicelogin.mod'
 import { createSystemModule, type SystemModule } from './modules/system.mod'
-import { createWebhooksModule, type WebhooksModule } from './modules/webhooks.mod'
 import type { CallInit, CallResult, HttpMethod } from './types'
 
 export interface ApiClientOptions {
@@ -24,9 +22,6 @@ export interface ApiClientOptions {
 export interface ApiClient {
   /** Sign-in, recovery, signup, MFA, WebAuthn, one-time access. */
   auth: AuthModule
-  /** The user's own X-API-KEY machine credentials. */
-  apiKeys: APIKeysModule
-  webhooks: WebhooksModule
   /** Passwordless device pairing (QR + polling). */
   deviceLogin: DeviceLoginModule
   /** Browser side of the OAuth device flow: consent info + decision. */
@@ -55,8 +50,6 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
   return {
     auth: createAuthModule(exec),
-    apiKeys: createAPIKeysModule(exec),
-    webhooks: createWebhooksModule(exec),
     deviceLogin: createDeviceLoginModule(exec),
     deviceApproval: createDeviceApprovalModule(exec),
     system: createSystemModule(exec),
