@@ -1,7 +1,8 @@
 package emailverification
 
-// handler.go owns the email verification HTTP surface: send (self)
-// and verify (self, token body). Mail delivery uses the built-in queue.
+// handler.go owns the email verification HTTP surface: the verify
+// email link. SendEmail serves ConnectRPC (handler_rpc.go); mail
+// delivery uses the built-in queue.
 
 import (
 	"context"

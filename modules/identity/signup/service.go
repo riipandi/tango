@@ -71,7 +71,8 @@ type Result struct {
 var ErrSetupCompleted = errors.New("initial setup has already been completed")
 
 // SetupAvailable reports whether the initial-admin setup can run:
-// upstream counts every existing user, not only admins.
+// any existing user — not only an admin — means the instance is
+// already initialized.
 func (s *Service) SetupAvailable(ctx context.Context) (bool, error) {
 	exists, err := s.users.HasAnyUser(ctx)
 	if err != nil {

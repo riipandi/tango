@@ -32,8 +32,8 @@ type Policy struct {
 
 // policies holds every enforced budget. Only sensitive endpoints appear
 // here; all other routes pass through unchecked. Budgets mirror the
-// intent of upstream Pocket ID's per-route limiters, adapted to the
-// tango-only surfaces.
+// per-route limiter set the port inherited, adapted to the tango-only
+// surfaces.
 var policies = map[string]Policy{
 	"sign-in":                   {Name: "sign-in", Max: 20, Window: 60},
 	"forgot-password":           {Name: "forgot-password", Max: 2, Window: 600},

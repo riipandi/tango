@@ -1,78 +1,80 @@
 # API Endpoint
 
-## OAuth
+Summary of the public API surface. The row-by-row contract with test evidence lives in
+`llms/endpoint-reference.md`; the transport decision record and service matrix live in
+`llms/connectrpc-plan/endpoint-reference.md`.
 
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
+## Transport
 
-## WebAuthn
+- **ConnectRPC** below `/rpc`: the SPA, admin console, and internal tools call the generated
+  clients from `api/connect/*.proto`. Unary POST with `Content-Type: application/json` and
+  `Connect-Protocol-Version: 1`; Connect error bodies use the code/message document.
+- **REST** below `/api` (or the documented root path): protocol and infrastructure surfaces only —
+  OAuth/OIDC, WebAuthn ceremonies, device-login request/exchange, email links, the auth worker's
+  cookie bridge, health, and discovery.
+- **Auth**: `Authorization: Bearer <access-token>` for protected RPCs; machine clients may send
+  `X-API-KEY` on the admin application API (API key create/renew stay session-only). Cookies are
+  token storage and never authorize an RPC.
 
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
+## OAuth (protocol, REST)
 
-## API Key
+| Method | Endpoint                                   | Protocol   | Auth                 | Summary                          |
+| ------ | ------------------------------------------ | ---------- | -------------------- | -------------------------------- |
+| GET    | `/authorize`                               | HTTP/REST  | none                 | Authorization endpoint           |
+| POST   | `/api/oidc/token`                          | HTTP/REST  | client credentials   | Token endpoint (form encoded)    |
+| POST   | `/api/oidc/introspect`                     | HTTP/REST  | client credentials   | Token introspection (RFC 7662)   |
+| POST   | `/api/oidc/par`                            | HTTP/REST  | client credentials   | Pushed authorization (RFC 9126)  |
+| POST   | `/api/oidc/device/authorize`               | HTTP/REST  | client credentials   | Device authorization (RFC 8628)  |
+| GET    | `/api/oidc/userinfo`                       | HTTP/REST  | relying-party bearer | UserInfo (RFC-style errors)      |
+| GET, POST | `/api/oidc/end-session`                 | HTTP/REST  | none                 | RP-initiated logout              |
 
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
-| POST   | `/rpc/tango.admin.v1.ApiKeyService/List` | ConnectRPC | bearer | List API keys |
+## Well Known (REST)
 
-## Application Configuration
+| Method | Endpoint                                  | Protocol   | Auth | Summary                                     |
+| ------ | ----------------------------------------- | ---------- | ---- | ------------------------------------------- |
+| GET    | `/.well-known/openid-configuration`       | HTTP/REST  | none | OpenID Connect discovery                    |
+| GET    | `/.well-known/oauth-authorization-server` | HTTP/REST  | none | OAuth 2.0 authorization server metadata     |
+| GET    | `/.well-known/jwks.json`                  | HTTP/REST  | none | JSON Web Key Set (JWKS)                     |
 
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
+## WebAuthn (REST)
 
-## Audit Logs
+| Method | Endpoint                        | Protocol   | Auth                    | Summary                                  |
+| ------ | ------------------------------- | ---------- | ----------------------- | ---------------------------------------- |
+| POST   | `/api/webauthn/register/begin`  | HTTP/REST  | bearer                  | Begin passkey registration               |
+| POST   | `/api/webauthn/register/finish` | HTTP/REST  | bearer                  | Finish passkey registration              |
+| POST   | `/api/webauthn/login/begin`     | HTTP/REST  | none                    | Begin discoverable passkey login         |
+| POST   | `/api/webauthn/login/finish`    | HTTP/REST  | pending session         | Finish discoverable passkey login        |
 
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
+## Health
 
-## Custom Claim
+| Method | Endpoint   | Protocol   | Auth | Summary                                 |
+| ------ | ---------- | ---------- | ---- | --------------------------------------- |
+| GET    | `/healthz` | HTTP/REST  | none | Liveness probe (process up)             |
+| GET    | `/api/healthz` | HTTP/REST | none | Readiness with per-dependency results |
 
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
+## ConnectRPC (first-party)
 
-## OIDC
+Everything else the SPA and admin console call lives below `/rpc`, generated from
+`api/connect/*.proto`. Highlights per service:
 
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
-
-## Users
-
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
-
-## User Groups
-
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
-
-## Well Known
-
-| Method | Procedure / Endpoint         | Protocol  | Auth  | Summary                     |
-| ------ | ---------------------------- | --------- | ----- | --------------------------- |
-| GET    | `/api/.well-known/jwks.json` | HTTP/REST | none  | Get JSON Web Key Set (JWKS) |
-
-## APIs
-
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
-
-## Device Login
-
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
-
-## SCIM
-
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
-
-## Version
-
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
-
-## Health Check
-
-| Method | Procedure / Endpoint                     | Protocol   | Auth   | Summary       |
-| ------ | ---------------------------------------- | ---------- | ------ | ------------- |
+| Service                                  | Package          | Auth                    | Summary                                          |
+| ---------------------------------------- | ---------------- | ----------------------- | ------------------------------------------------ |
+| `AuthService`                            | `tango.identity` | public + bearer         | Password sign-in, sign-out, session read         |
+| `AccountService`                         | `tango.identity` | bearer                  | Self-service profile, password, sessions         |
+| `MfaService`                             | `tango.identity` | bearer + pending cookie | TOTP enrollment, verification, recovery codes    |
+| `SignupService`                          | `tango.identity` | public + bearer         | Sign-up, initial admin, signup-token admin       |
+| `OneTimeAccessService`                   | `tango.identity` | public + bearer         | Email request, admin minting                     |
+| `EmailVerificationService`               | `tango.identity` | bearer                  | Send the verification email                      |
+| `UserService`                            | `tango.identity` | bearer                  | Admin user CRUD, profile, passkeys               |
+| `UserGroupService`                       | `tango.identity` | bearer                  | Admin groups, members, OIDC allowlist            |
+| `DeviceApprovalService`                  | `tango.identity` | bearer                  | Approve or deny a device pairing                 |
+| `CustomClaimService`                     | `tango.identity` | bearer                  | Admin custom claims for users and groups         |
+| `ApiKeyService`                          | `tango.admin`    | bearer + `X-API-KEY`    | Self-scoped machine credentials (create is session-only) |
+| `ApiService`                             | `tango.admin`    | bearer + `X-API-KEY`    | Resource API registry and client grants          |
+| `ApplicationConfigurationService`        | `tango.admin`    | public + bearer         | Public bootstrap read, admin settings            |
+| `AuditLogService`                        | `tango.admin`    | bearer                  | Self listing, admin listing and facets           |
+| `OidcClientService`                      | `tango.federation` | bearer + `X-API-KEY`  | OIDC client CRUD, secrets, logos, CIMD           |
+| `OidcConsentService`                     | `tango.federation` | bearer                | Authorized-client listing and revocation         |
+| `ScimProviderService`                    | `tango.federation` | bearer + `X-API-KEY`  | Outbound SCIM provider configuration             |
+| `WebhookService`                         | `tango.webhook`  | bearer + `X-API-KEY`    | Webhook registration, secrets, deliveries        |
+| `VersionService`, `HealthService`        | `tango.system`   | mixed                   | Deployed version, transport smoke                |

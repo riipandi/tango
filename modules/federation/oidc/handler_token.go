@@ -114,8 +114,8 @@ func (s *Service) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 // userInfoError writes the RFC 6750 §3 WWW-Authenticate error form
-// with a bare RFC 6749 error body, matching upstream's fosite
-// rendering — no responder envelope on protocol errors.
+// with a bare RFC 6749 error body — no responder envelope on
+// protocol errors.
 func userInfoError(w http.ResponseWriter, r *http.Request, status int, code, description string) {
 	w.Header().Set("WWW-Authenticate", `Bearer error="`+code+`", error_description="`+description+`"`)
 	responder.WriteJSON(w, status, map[string]any{

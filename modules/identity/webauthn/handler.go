@@ -1,9 +1,10 @@
 package webauthn
 
 // handler.go owns the passkey HTTP surface: ceremonies (self for
-// registration, anonymous for login) plus the admin credential
-// CRUD. Begin endpoints return the raw WebAuthn options JSON; finish
-// endpoints take the browser's JSON assertion body.
+// registration, anonymous for login). Admin credential management
+// serves ConnectRPC through the user RPC port. Begin endpoints
+// return the raw WebAuthn options JSON; finish endpoints take the
+// browser's JSON assertion body.
 
 import (
 	"encoding/base64"
@@ -64,7 +65,7 @@ func (s *Service) handleBeginRegistration(w http.ResponseWriter, r *http.Request
 		responder.Fail(w, r, http.StatusInternalServerError, "failed to start passkey registration")
 		return
 	}
-	// The browser-facing shape is upstream's bare {publicKey}
+	// The browser-facing shape is the bare {publicKey} object
 	// document; the ceremony id rides in the body because tango
 	// tracks ceremonies statelessly instead of by cookie.
 	responder.WriteJSON(w, http.StatusOK, map[string]any{

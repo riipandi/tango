@@ -1,9 +1,9 @@
 package devicelogin
 
 // handler.go owns the device login HTTP surface: the anonymous
-// create/exchange pair (QR device side) and the authenticated
-// inspect/decision pair (approving device side). Sign-in exchange
-// sets the session cookie via the shared helper contract.
+// create/exchange pair (QR device side). Approval serves ConnectRPC
+// (handler_rpc.go); the exchange sets the session cookie via the
+// shared helper contract.
 
 import (
 	"net/http"

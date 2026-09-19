@@ -1,8 +1,9 @@
 package onetimeaccess
 
-// handler.go owns the one-time access HTTP surface: admin minting
-// (token + email per user), the unauthenticated email request, and
-// the token→session exchange. Mail delivery uses the mailer contract.
+// handler_rest.go owns the one-time access HTTP surface: the
+// email-link token→session exchange. Admin minting and the email
+// request serve ConnectRPC (handler_rpc.go); mail delivery uses the
+// mailer contract.
 
 import (
 	"context"
