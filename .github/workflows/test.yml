@@ -77,17 +77,20 @@ jobs:
           if [[ "${{ steps.setup-sdk.outputs.nodeModules }}" != "true" ]]; then
             pnpm install --ignore-scripts --frozen-lockfile
           fi
-          go mod download && go mod tidy
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Generate ConnectRPC code
+        run: |
+          go mod download
+          go tool buf generate
+          gofmt -w codegen/proto/go
+
+      - name: Tidy dependencies
+        run: go mod tidy
 
       - name: Install gotestsum
         if: steps.gotestsum.outputs.cache-hit != 'true'
         run: go install gotest.tools/gotestsum@v1.13.0
-
-      - name: Generate ConnectRPC code
-        run: |
-          go tool buf generate
-          gofmt -w codegen/proto/go
 
       - name: Generate email template
         run: pnpm exec vite build
