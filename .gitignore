@@ -61,6 +61,11 @@ vitest.config.*
 vitest.workspace.*
 !vitest.workspace.ts
 
+# TanStack Router
+.tanstack/
+routeTree.gen.ts
+routes.gen.ts
+
 # Envars
 .env.*
 !.env.example
@@ -85,10 +90,9 @@ storybook-static/
 # Application data
 /.storage/
 /storage/
-web/output/*
-web/email/*
-!web/output/.gitkeep
-!web/email/.gitkeep
+/web/output/
+/web/email/
+/web/storybook/
 
 # Miscellaneous
 pnpm-exec-summary.json
@@ -102,15 +106,9 @@ sbom-*
 /api/swagger.json
 /api/swagger.yaml
 /app/generated/
- /specs/
- /gen/
- *.gen.ts
+/specs/
+*.gen.ts
 .rpc-gen.stamp
-
-# TanStack Router
-.tanstack/
-routeTree.gen.ts
-routes.gen.ts
 
 # Terraform
 .terraform/

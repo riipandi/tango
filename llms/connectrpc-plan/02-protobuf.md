@@ -8,12 +8,12 @@ updated: 2026-09-19
 > Completed 2026-09-19. Contracts frozen flat in `api/connect/*.proto` (common, system, identity,
 > admin, federation, webhook) with module-owning packages `tango.<module>.v1`; TypeIDs and
 > timestamps are strings; show-once secrets are dedicated response fields documented never to
-> return from reads. buf generation produces untracked Go (`gen/proto/go/`) and TypeScript
-> (`app/generated/rpc/`) through pinned, locally resolved plugins — no global binaries;
+> return from reads. buf generation produces committed Go (`gen/proto/go/`) and untracked
+> TypeScript (`app/generated/rpc/`) through pinned, locally resolved plugins — no global binaries;
 > `test`/`dev`/`build`/`typecheck` depend on generation, and `.rpc-gen.stamp` detects stale
 > contracts (`task rpc:stale`). Task targets: `rpc:generate`, `rpc:lint`, `rpc:breaking`,
 > `rpc:stale`. Connect error mapping frozen in the endpoint reference with helper constructors in
-> `internal/transport/rpcerr.go`. Representative compatibility test:
+> `internal/rpcerr`. Representative compatibility test:
 > `internal/transport/rpc_contract_test.go` (User message vs REST DTO document, including the
 > proto-JSON default-omission rule). Yaak evidence: `POST /rpc/tango.identity.v1.UserService/ListUsers`
 > (`rq_o3cpcGiTWL`) answers `not_found` until the service implementation lands in phase 05 — it

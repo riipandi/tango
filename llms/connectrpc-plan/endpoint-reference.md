@@ -442,12 +442,13 @@ from `/api` once its replacement and callers are verified.
   (`PACKAGE_DIRECTORY_MATCH`, `PACKAGE_SAME_DIRECTORY`, `DIRECTORY_SAME_PACKAGE`) and the RPC
   request/response naming rules (shared `PageRequest`/`Get*Request` reuse) are excluded in
   `buf.yaml` for that reason.
-- Generated output is **never committed** (see `8e515d2`): Go lands in `gen/proto/go/` (package
-  option `github.com/riipandi/tango/gen/proto/go/tango/<module>/v1`, Go package suffix
-  `<module>v1`), TypeScript lands in `app/generated/rpc/` — both untracked. `task rpc:generate`
-  produces both and refreshes `.rpc-gen.stamp` (hash of contracts + buf configs, committed);
-  `test`, `dev`, `build`, and `typecheck` depend on it, so a clean checkout always generates
-  before compiling. `task rpc:stale` fails when the stamp no longer matches the contracts.
+- Generated Go is **committed** under `gen/proto/go/` (package option
+  `github.com/riipandi/tango/gen/proto/go/tango/<module>/v1`, Go package suffix `<module>v1`): CI
+  runs `go vet`, the Go suites, and the release build without a buf step, so the tree must compile
+  on a clean checkout. Generated TypeScript lands in `app/generated/rpc/` and stays untracked.
+  `task rpc:generate` produces both and refreshes `.rpc-gen.stamp` (hash of contracts + buf
+  configs, local tooling — gitignored); `test`, `dev`, `build`, and `typecheck` depend on the
+  generation task, and `task rpc:stale` fails when the contracts change without regeneration.
 - TypeScript runtime: `@bufbuild/protobuf` + `@connectrpc/connect` (pinned devDeps; plugins
   `protoc-gen-es` / `protoc-gen-connect-es` resolve through `pnpm exec`).
 - Task targets: `rpc:generate`, `rpc:lint`, `rpc:breaking`, `rpc:stale`.
@@ -455,17 +456,17 @@ from `/api` once its replacement and callers are verified.
 ## Connect error mapping (contract)
 
 First-party RPC failures use Connect codes; REST equivalents listed for the cutover. Helper
-constructors live in `internal/transport/rpcerr.go` and are the only approved call sites.
+constructors live in `internal/rpcerr` and are the only approved call sites.
 
 | REST status | Connect code | Constructor |
 | --- | --- | --- |
-| 400 / 422 (validation) | `invalid_argument` | `RPCInvalidArgument` |
-| 401 | `unauthenticated` | `RPCUnauthenticated` |
-| 403 | `permission_denied` | `RPCPermissionDenied` |
-| 404 | `not_found` | `RPCNotFound` |
-| 409 | `already_exists` | `RPCAlreadyExists` |
-| 429 | `resource_exhausted` | `RPCResourceExhausted` |
-| 5xx | `internal` | `RPCInternal` |
+| 400 / 422 (validation) | `invalid_argument` | `rpcerr.InvalidArgument` |
+| 401 | `unauthenticated` | `rpcerr.Unauthenticated` |
+| 403 | `permission_denied` | `rpcerr.PermissionDenied` |
+| 404 | `not_found` | `rpcerr.NotFound` |
+| 409 | `already_exists` | `rpcerr.AlreadyExists` |
+| 429 | `resource_exhausted` | `rpcerr.ResourceExhausted` |
+| 5xx | `internal` | `rpcerr.Internal` |
 
 Wire notes: proto JSON omits default-valued scalars (`disabled: false` is never emitted — RPC
 consumers apply proto default semantics, not the REST "always present" convention); field-level
