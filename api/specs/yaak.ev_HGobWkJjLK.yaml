@@ -3,8 +3,8 @@ model: environment
 id: ev_HGobWkJjLK
 workspaceId: wk_kBiMYTkhPP
 createdAt: 2026-09-18T18:57:02.405679
-updatedAt: 2026-09-18T18:59:28.896975
-name: Local Testing
+updatedAt: 2026-09-19T13:33:42.850206
+name: Proxy 8443
 public: true
 base: false
 parentModel: environment
@@ -27,4 +27,4 @@ variables:
   value: sk_dummy
   id: gStPbkfYyr
 color: null
-sortPriority: 1000.0
+sortPriority: 111.1111111111111

@@ -8,28 +8,28 @@ x-common: &common
   restart: unless-stopped
 
 services:
-  # tango:
-  #   <<: *common
-  #   build:
-  #     context: .
-  #     dockerfile: ./deploy/Dockerfile
-  #     args:
-  #       DISTROLESS_TAG: ${DISTROLESS_TAG:-nonroot}
-  #       NODE_VERSION: ${NODE_VERSION:-24.21}
-  #       GO_VERSION: ${GO_VERSION:-1.27.1}
-  #   # platform: linux/amd64
-  #   hostname: tango
-  #   expose: ["3000"]
-  #   volumes: ["./storage:/srv/storage:rw"]
-  #   env_file: "./.env.local"
-  #   healthcheck:
-  #     test: ["CMD", "/srv/tango", "health"]
-  #     interval: 3s
-  #     timeout: 5s
-  #     retries: 3
-  #   depends_on:
-  #     pgsql: { condition: service_healthy }
-  #     silo: { condition: service_healthy }
+  tango:
+    <<: *common
+    build:
+      context: .
+      dockerfile: ./deploy/Dockerfile
+      args:
+        DISTROLESS_TAG: ${DISTROLESS_TAG:-nonroot}
+        NODE_VERSION: ${NODE_VERSION:-24.21}
+        GO_VERSION: ${GO_VERSION:-1.27.1}
+    # platform: linux/amd64
+    hostname: tango
+    expose: ["3000"]
+    volumes: ["./storage:/srv/storage:rw"]
+    env_file: "./.env.container"
+    healthcheck:
+      test: ["CMD", "/srv/tango", "health"]
+      interval: 3s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      pgsql: { condition: service_healthy }
+      silo: { condition: service_healthy }
 
   pgsql:
     <<: *common
@@ -197,6 +197,7 @@ services:
       retries: 3
     depends_on:
       silo: { condition: service_started }
+      tango: { condition: service_healthy }
 
 configs:
   nginx_config:
@@ -233,7 +234,7 @@ configs:
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers HIGH:!aNULL:!MD5;
         location / {
-          proxy_pass http://host.docker.internal:3000;
+          proxy_pass http://tango:3000;
           proxy_set_header X-Forwarded-Proto https;
           proxy_set_header X-Forwarded-Ssl on;
         }
