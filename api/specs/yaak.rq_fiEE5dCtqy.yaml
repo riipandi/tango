@@ -6,7 +6,7 @@ updatedAt: 2026-09-19T14:54:55.991983
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_Uf3pbN2b4K
 authentication: {}
-authenticationType: none
+authenticationType: null
 body:
   text: |-
     {
@@ -24,10 +24,6 @@ headers:
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
-- enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
   id: null
 method: POST
 name: Create SCIM service provider

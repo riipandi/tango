@@ -24,10 +24,6 @@ headers:
   name: Connect-Protocol-Version
   value: '1'
   id: null
-- enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
-  id: null
 method: POST
 name: Update OIDC client
 sortPriority: 0.0

@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
   token: ${[ accessToken ]}
-authenticationType: null
+authenticationType: bearer
 description: 'Upstream tag: Device Login — pairing flow (create request, verification inspect/decision, long-poll exchange)'
 headers: []
 name: Device Login

@@ -6,7 +6,7 @@ updatedAt: 2026-09-19T14:52:54.810815
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_E6GycS3VZ9
 authentication: {}
-authenticationType: none
+authenticationType: null
 body:
   bodyType: application/json
   text: |-
@@ -23,10 +23,6 @@ headers:
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
-- enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
   id: null
 method: POST
 name: Send a test delivery

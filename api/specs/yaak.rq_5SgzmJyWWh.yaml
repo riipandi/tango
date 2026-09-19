@@ -6,7 +6,7 @@ updatedAt: 2026-09-19T16:50:10.847272
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vJemVfyfFL
 authentication: {}
-authenticationType: none
+authenticationType: null
 body:
   text: |-
     {

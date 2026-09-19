@@ -2,12 +2,12 @@ type: folder
 model: folder
 id: fl_iMD6Wv2JMZ
 createdAt: 2026-09-19T12:04:18.781456
-updatedAt: 2026-09-19T15:35:41.785148
+updatedAt: 2026-09-19T19:50:28.006881
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
   token: ${[ accessToken ]}
-authenticationType: null
+authenticationType: bearer
 description: User group CRUD, members, per-user group assignment
 headers: []
 name: User Groups

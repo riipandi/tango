@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
   token: ${[ accessToken ]}
-authenticationType: null
+authenticationType: bearer
 description: OIDC client management (admin) + consent records
 headers: []
 name: OIDC

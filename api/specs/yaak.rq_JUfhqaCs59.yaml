@@ -2,11 +2,11 @@ type: http_request
 model: http_request
 id: rq_JUfhqaCs59
 createdAt: 2026-09-19T01:09:48.786
-updatedAt: 2026-09-19T14:54:45.360675
+updatedAt: 2026-09-19T19:49:28.051374
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_FirJqL3vmS
 authentication: {}
-authenticationType: none
+authenticationType: null
 body:
   bodyType: application/json
   text: '{}'
@@ -20,10 +20,6 @@ headers:
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
-- enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
   id: null
 method: POST
 name: Get current deployed version

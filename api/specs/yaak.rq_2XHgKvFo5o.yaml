@@ -27,10 +27,6 @@ headers:
   name: Connect-Protocol-Version
   value: '1'
   id: null
-- enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
-  id: null
 method: POST
 name: List deliveries of one endpoint
 sortPriority: 0.0

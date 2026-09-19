@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
   token: ${[ accessToken ]}
-authenticationType: null
+authenticationType: bearer
 description: 'Healthcheck endpoints: root text healthz (upstream) and JSON variant (tango extension)'
 headers: []
 name: Health Check

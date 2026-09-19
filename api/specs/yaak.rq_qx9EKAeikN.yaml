@@ -17,10 +17,6 @@ bodyType: application/json
 description: The key name is generated per run; API key names are unique per user, so a fixed name makes the second send answer already_exists.
 headers:
 - enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
-  id: null
-- enabled: true
   name: Content-Type
   value: application/json
   id: null

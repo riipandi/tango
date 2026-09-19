@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
   token: ${[ accessToken ]}
-authenticationType: null
+authenticationType: bearer
 description: 'Upstream tag: WebAuthn — passkey registration and discoverable login ceremonies'
 headers: []
 name: WebAuthn

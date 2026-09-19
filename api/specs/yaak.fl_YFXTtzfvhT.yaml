@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
   token: ${[ accessToken ]}
-authenticationType: null
+authenticationType: bearer
 description: 'Tango-only password authentication: session, password, MFA, OAuth extension flows'
 headers: []
 name: '[Tango] Authentication'

@@ -6,7 +6,7 @@ updatedAt: 2026-09-19T14:58:03.442763
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_WNyJqCXLvz
 authentication: {}
-authenticationType: none
+authenticationType: null
 body:
   bodyType: application/json
   text: '{}'
@@ -20,10 +20,6 @@ headers:
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
-- enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
   id: null
 method: POST
 name: List OIDC clients

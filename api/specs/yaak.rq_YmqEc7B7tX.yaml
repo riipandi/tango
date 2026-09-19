@@ -6,7 +6,7 @@ updatedAt: 2026-09-19T14:56:32.779474
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_JuHm4xpFbc
 authentication: {}
-authenticationType: none
+authenticationType: null
 body:
   bodyType: application/json
   text: |-
@@ -24,10 +24,6 @@ headers:
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
-- enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
   id: null
 method: POST
 name: List users

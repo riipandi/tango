@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
   token: ${[ accessToken ]}
-authenticationType: null
+authenticationType: bearer
 description: 'SCIM service-provider endpoints: CRUD + sync push'
 headers: []
 name: SCIM

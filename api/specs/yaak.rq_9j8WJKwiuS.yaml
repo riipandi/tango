@@ -6,7 +6,7 @@ updatedAt: 2026-09-19T14:52:12.575456
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_8fqSkwaD7C
 authentication: {}
-authenticationType: none
+authenticationType: null
 body:
   bodyType: application/json
   text: '{}'
@@ -20,10 +20,6 @@ headers:
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
-- enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
   id: null
 method: POST
 name: TOTP status

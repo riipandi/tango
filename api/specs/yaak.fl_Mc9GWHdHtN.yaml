@@ -2,12 +2,11 @@ type: folder
 model: folder
 id: fl_Mc9GWHdHtN
 createdAt: 2026-09-19T12:03:08.560235
-updatedAt: 2026-09-19T15:35:41.786126
+updatedAt: 2026-09-19T19:50:07.136767
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication:
-  token: ${[ accessToken ]}
-authenticationType: null
+authentication: {}
+authenticationType: bearer
 description: Resource APIs, permissions, client grants
 headers: []
 name: APIs

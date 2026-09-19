@@ -23,10 +23,6 @@ headers:
   name: Connect-Protocol-Version
   value: '1'
   id: null
-- enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
-  id: null
 method: POST
 name: Update current user
 sortPriority: 0.0

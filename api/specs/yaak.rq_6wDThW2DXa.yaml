@@ -6,7 +6,7 @@ updatedAt: 2026-09-19T18:11:37.543020
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
 authentication: {}
-authenticationType: none
+authenticationType: null
 body:
   text: |-
     {
@@ -23,10 +23,6 @@ headers:
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
-- enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
   id: null
 method: POST
 name: Create user group

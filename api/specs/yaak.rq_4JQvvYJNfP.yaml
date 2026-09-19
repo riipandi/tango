@@ -6,7 +6,7 @@ updatedAt: 2026-09-19T14:56:52.526152
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_rhFgcRFFEJ
 authentication: {}
-authenticationType: none
+authenticationType: null
 body:
   bodyType: application/json
   text: '{}'

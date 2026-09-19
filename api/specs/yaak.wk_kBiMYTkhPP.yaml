@@ -4,7 +4,7 @@ id: wk_kBiMYTkhPP
 createdAt: 2026-09-12T06:21:47.119344
 updatedAt: 2026-09-19T15:18:58.429370
 authentication: {}
-authenticationType: none
+authenticationType: null
 description: ''
 headers: []
 name: Tango

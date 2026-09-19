@@ -18,10 +18,6 @@ bodyType: application/json
 description: Create an API key with a malformed expiry — must answer the Connect invalid_argument error (HTTP 400). Pins the validation branch of the error mapping.
 headers:
 - enabled: true
-  name: Authorization
-  value: Bearer ${[ accessToken ]}
-  id: null
-- enabled: true
   name: Content-Type
   value: application/json
   id: null

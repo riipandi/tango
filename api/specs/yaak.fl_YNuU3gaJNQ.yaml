@@ -7,7 +7,7 @@ workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
   token: ${[ accessToken ]}
-authenticationType: null
+authenticationType: bearer
 description: Discovery endpoints for OpenID Connect (RFC 8615)
 headers: []
 name: Well Known
