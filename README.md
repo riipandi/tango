@@ -27,11 +27,32 @@ You will need [`Go >= 1.27`][golang], [`Node.js >= 24.21`][nodejs], [`PNPM >= 12
 3. Install the frontend dependencies: `pnpm install`
 4. Create your development env file: `cp .env.example .env.local`
 5. Start the local Postgres: `docker compose up -d pgsql`
-6. Run the database migrations: `go run -tags debug ./cmd migrate:up --env-file=.env.local`
-7. Start the development servers: `task dev`
+6. Set `DATABASE_URL` in `.env.local` (see `.env.example`)
+7. Run the database migrations: `task db:migrate`
+8. Start the development servers: `task dev`
 
 Vite serves the frontend on `:3000` and proxies `/api`, `/rpc`, `/.well-known`, and `/static` to Go on `:3080`.
 Go files are watched and rebuilt automatically.
+
+### Database
+
+Migrations are embedded in the binary and tracked in the `app_migration` table. `migrate:up` asks for
+confirmation when it runs in a terminal and applies immediately when piped, so `task db:migrate` works
+unattended.
+
+```bash
+# Apply everything pending.
+task db:migrate
+
+# List what would be applied.
+go run -tags debug ./cmd migrate:up --env-file=.env.local --dry-run
+
+# Stop at a version.
+go run -tags debug ./cmd migrate:up --env-file=.env.local --to=3
+```
+
+Concurrent runs are safe: the migrator holds a Postgres session advisory lock, so a second process
+waits instead of applying the same migration twice.
 
 ### Secret keys
 

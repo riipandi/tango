@@ -11,25 +11,26 @@ var migrateUpCmd = &cli.Command{
 	Name:     "migrate:up",
 	Category: "Database operation",
 	Usage:    "Run database migrations",
+	Description: `Applies the migrations embedded in the binary, in version order.
+Migrations already recorded in the app_migration table are skipped.
+A concurrent run is safe: the migrator takes a Postgres session 
+advisory lock the duration.`,
 	Flags: []cli.Flag{
-		&cli.UintFlag{
+		&cli.Uint64Flag{
 			Name:        "to",
 			Usage:       "Apply migrations only up to this version",
 			HideDefault: true,
 		},
 		&cli.BoolFlag{
 			Name:  "dry-run",
-			Usage: "Print what would be seeded without changing anything",
+			Usage: "List the pending migrations without applying them",
 		},
 		&cli.BoolFlag{
 			Name:  "force",
 			Usage: "Skip the confirmation prompt",
 		},
 	},
-	Action: func(ctx context.Context, cmd *cli.Command) error {
-		fmt.Println("not yet implemented")
-		return nil
-	},
+	Action: runMigrateUp,
 }
 
 var migrateDownCmd = &cli.Command{
@@ -45,7 +46,7 @@ var migrateDownCmd = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:  "dry-run",
-			Usage: "Print what would be seeded without changing anything",
+			Usage: "Print the migration that would be rolled back without changing anything",
 		},
 		&cli.BoolFlag{
 			Name:  "force",

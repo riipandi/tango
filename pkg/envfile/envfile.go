@@ -13,6 +13,14 @@ import (
 // DefaultMode is the permission of a newly created secrets file.
 const DefaultMode fs.FileMode = 0o600
 
+// DatabaseURL names the variable holding the Postgres connection string. It is
+// the one key shared by the CLI, the config layer, and deployment tooling, so
+// it lives here instead of being spelled out at each call site.
+//
+// TODO: read this from the config layer once internal/config lands, instead of
+// resolving it from the env file and the process environment directly.
+const DatabaseURL = "DATABASE_URL"
+
 // File is an in-memory dotenv file.
 type File struct {
 	lines []string

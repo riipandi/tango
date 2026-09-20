@@ -4,9 +4,9 @@ Modular-monolith Go boilerplate (`tango`): one binary serving an HTTP/ConnectRPC
 
 ## Project Overview
 
-- The binary is built from `cmd/` and exposes `serve`, `migrate:up|down|status|version` (plus `migrate:create|reset|seed|validate` in debug builds), `db:export`/`db:import`, `key:generate`/`key:rotate`, and `health` (CLI framework: `urfave/cli/v3`). Only `key:generate` is implemented; the other actions print `not yet implemented`.
+- The binary is built from `cmd/` and exposes `serve`, `migrate:up|down|status|version` (plus `migrate:create|reset|seed|validate` in debug builds), `db:export`/`db:import`, `key:generate`/`key:rotate`, and `health` (CLI framework: `urfave/cli/v3`). Implemented: `key:generate` and `migrate:up`; the other actions print `not yet implemented`.
 - The SPA (React 19 + TanStack + Vite) builds into `web/output/` and embeds into the same binary; the Vite dev server proxies `/api`, `/rpc`, `/.well-known`, and `/static` to the Go server on `:3080`.
-- The backend is mid-rebuild. Implemented today: `database/migrations`, `pkg/{crypto,envfile,jwtutils,responder,validate,testutils}`, `api/connect`, `email/templates`, and `web`. Scaffolds only: `internal/**` and `modules/**` are mostly single-line packages with no API. Read the file before assuming behavior.
+- The backend is mid-rebuild. Implemented today: `database` (migrations + engine), `internal/datastore`, `pkg/{crypto,envfile,jwtutils,responder,validate,testutils}`, `api/connect`, `email/templates`, and `web`. Scaffolds only: most of `internal/**` and all of `modules/**` are single-line packages with no API. Read the file before assuming behavior.
 - Never add, remove, or rename a top-level package or directory without an explicit request. Extend an existing package instead of creating a sibling one.
 - Porting a plan or a doc into code means implementing it, not copying it. Several docs describe a larger surface than the code has.
 
@@ -28,14 +28,17 @@ Modular-monolith Go boilerplate (`tango`): one binary serving an HTTP/ConnectRPC
 - `task key:generate` runs `go run -tags debug ./cmd key:generate --env-file=.env.local --overwrite`; `task db:migrate` runs `migrate:up`. Pass extra flags after `--`.
 - `task cert:generate` writes `storage/certs/localhost_{key,crt}.pem` via `mkcert`, falling back to a self-signed `openssl` certificate; `task cert:trust` installs the mkcert CA. The nginx service in `compose.yaml` reads those paths.
 - Integration tests use `pkg/testutils.StartPostgres` / `StartMailpit` / `StartMinIO` (testcontainers). They need a Docker daemon; call `testutils.SkipWithoutDocker(t)` when one may be absent (macOS CI has none).
+- Check library documentation before writing code against a third-party package: use the Context7 MCP (`mcp_context7__resolve_library_id` then `mcp_context7__query_docs`) for usage and options, and the DeepWiki MCP (`mcp_deepwiki__ask_question`) for design intent and behavior questions about a GitHub repository. See "Library Documentation" below.
 
 ## Architecture
 
 Implemented today — treat as the contract:
 
-- `database/migrations/` — goose SQL migrations, the single source of schema truth (9 files, `00000`–`00008`). Never embed DDL or create tables at runtime. Editing an applied migration does not re-run it — roll back with `migrate:down` and re-apply.
+- `database/migrations/` — goose SQL migrations, the single source of schema truth (9 files, `00001`–`00009`). Numbering starts at 1: goose reserves version 0 as the sentinel row in `app_migration`, and silently skips any file whose numeric prefix is below 1. Never embed DDL or create tables at runtime. Editing an applied migration does not re-run it — roll back with `migrate:down` and re-apply.
+- `database/` — the migration engine over goose v3. `NewMigrator` loads the migrations embedded in the binary (`go:embed migrations/*.sql`) and builds a `goose.Provider` with a Postgres session locker and `app_migration` as the version table. Migrations run on the single-connection handle from `datastore.OpenMigrationDB`, never the pool. `Up`, `UpTo`, `Status`, `Version`, `Pending`, `HighestVersion` return plain structs so `cmd/` never imports goose.
+- `cmd/migration.go` — DSN resolution and the migration commands. The DSN comes from `envfile.DatabaseURL`, resolved from the root `--env-file` first and the process environment second; nothing else opens a connection. `migrate:up` asks for confirmation only when stdin is a real terminal (checked with `golang.org/x/term`, because `/dev/null` is also a character device) and applies immediately when piped, so `task db:migrate` and CI never block. `--to` caps the run, `--dry-run` lists, `--force` skips the prompt.
 - `pkg/crypto` — `Cipher` seals recoverable values with AES-256-GCM and the exact `enc:` prefix; `PasswordHasher` produces PHC strings (scrypt default, Argon2id opt-in). Keys are 32 bytes and stored as 64 hex characters (`GenerateKeyHex`, `ParseKeyHex`, `NewCipherFromHex`). `KeyGenerator` always emits all four variables: `APP_SECRET_KEY`, `AUTH_PRIVATE_KEY`/`AUTH_PUBLIC_KEY` as base64 (raw, unpadded) JWK JSON with `alg` and a thumbprint `kid`, and `AUTH_SECRET_KEY`. The key pair and the HMAC secret are independent: defaults are `ES256` and `HS256`, and a passed algorithm replaces only the role it can fill (asymmetric → key pair, `HS*` → secret). Passwords are hashed, never encrypted. Do not add another encryption or hashing format.
-- `pkg/envfile` — dotenv reader/writer that preserves comments, blank lines, and key order; new files are written `0600`. `key:generate` declares its own `--env-file` flag (the root flag only loads config) and owns the I/O: it only prints unless that flag is given, creates a missing file, and asks before replacing the values of an existing one (`--overwrite` skips the prompt).
+- `pkg/envfile` — dotenv reader/writer that preserves comments, blank lines, and key order; new files are written `0600`. Owns the `DatabaseURL` key constant (`DATABASE_URL`) so the CLI and future config layer cannot drift. `key:generate` declares its own `--env-file` flag (the root flag only loads config) and owns the I/O: it only prints unless that flag is given, creates a missing file, and asks before replacing the values of an existing one (`--overwrite` skips the prompt).
 - `pkg/responder` — the API envelope, pagination, and request IDs (envelope documented in `docs/api-response.md`). `pkg/validate` — request decoding and ozzo v4 code-first validation. Handlers use these; no hand-built envelopes or ad-hoc field guards.
 - `pkg/jwtutils` — JWT signing/verification with typed private claims. `pkg/testutils` — shared testcontainers Postgres, Mailpit, MinIO.
 - `internal/datastore` — the Postgres adapter. `NewPostgres` owns the single `pgxpool` of the process (sane pool defaults, connect-time ping, `Ping`/`Stats`/`Close`), `Querier` is the shared pool/transaction surface, and `WithTx` commits on a nil callback and rolls back otherwise (including on panic). Every pooled connection sets `search_path` and `timezone` through `RuntimeParams`, so a recycled connection keeps the same session defaults. `Acquire` hands out a connection for work that must stay on one backend (LISTEN, session advisory locks); callers must release it. `ErrNoRows` is re-exported so repositories do not import pgx. Migrations never use the pool: `OpenMigrationDB` / `(*Postgres).MigrationDB` return a `database/sql` handle pinned to one connection, because goose holds a session advisory lock and needs every statement of a run on the same backend. `internal/datastore/valkey.go` is still a stub.
@@ -48,7 +51,14 @@ Planned layout — the target shape of the scaffold packages:
 - `modules/<area>/<feature>/` owns one feature: `schema.go`, `repository.go`, `service.go`, `handler_rpc.go` (plus `handler.go` when a REST surface exists), `module.go`. Business logic lives in `service.go`; handlers do transport mapping only. Follow this layout when implementing; do not invent a different file set.
 - Persistence goes through `internal/datastore`; never open a second pool or a raw driver connection inside a module.
 - Typed IDs come from `go.jetify.com/typeid`; the prefix is declared in the module's `schema.go`. Token and code rows use hashes plus DB `uuidv7()` instead of TypeIDs.
-- Background work runs on `internal/queue`: register typed queues, enqueue typed tasks, keep the schema in migrations (`00007_create_queue_tables.sql`). Recurring maintenance belongs in `internal/jobs`.
+- Background work runs on `internal/queue`: register typed queues, enqueue typed tasks, keep the schema in migrations (`00008_create_queue_tables.sql`). Recurring maintenance belongs in `internal/jobs`.
+
+## Library Documentation
+
+- Before writing code against a third-party package, look it up instead of guessing: Context7 MCP (`mcp_context7__resolve_library_id`, then `mcp_context7__query_docs`) for API usage and options, DeepWiki MCP (`mcp_deepwiki__ask_question` with `owner/repo`) for design intent and behavior.
+- Use them when the answer depends on a version, when the README is thin, or when comparing two candidate libraries. Do not use them for this repo's own code — read the source.
+- The pinned source of truth is the module cache (`go env GOMODCACHE`). When docs and code disagree, the code wins; say so and follow the code.
+- Record the outcome of a library comparison in this file when it settles a decision, so the next agent does not re-run it.
 
 ## Conventions
 
@@ -65,15 +75,17 @@ Planned layout — the target shape of the scaffold packages:
 
 - Add a feature module: create `modules/<area>/<feature>/` with the standard file set, implement the `internal/kernel` module contract in `module.go`, and register it in `internal/registry`.
 - Add an endpoint: write the proto in `api/connect/*.proto`, run `task rpc:generate`, implement the handler, then mount it in the registry.
-- Add a migration: create `database/migrations/<NNNNN>_<name>.sql` with goose Up/Down blocks, then run `task db:migrate`.
+- Add a migration: create `database/migrations/<NNNNN>_<name>.sql` with goose Up/Down blocks, then run `task db:migrate`. The version must be `>= 1` and higher than the last file; `00001` is the lowest. Migrations are embedded in the binary, so a new file only runs after a rebuild.
+- Add a test that touches the schema: get a database per test with `testutils.StartPostgres(t).NewDatabase(t)`. The shared container DSN points at one database for the whole test binary, so migrations applied by one test leak into the next.
 - Add a config key: define it in `internal/config` with a default and validation, document it in `.env.example`, and honor the precedence order above.
 - Add a background job: define a task type plus queue config in `internal/queue`, register the queue, and enqueue from the owning module.
 - Local services: `docker compose up -d pgsql` for the database; the full stack (pgsql, redis, mailpit, silo, nginx) is in `compose.yaml`.
+- The migration engine is goose v3 as a library. Every migration must define both `-- +goose Up` and `-- +goose Down`. goose requires one `Up`; the CLI's `migrate:down` requires the `Down`.
 
 ## Gotchas / Anti-patterns
 
 - `codegen/` is gitignored build output. Never edit or commit it; regenerate with `task rpc:generate`.
-- Migration numbering is sequential and 5 digits (`00007` is the highest today). Bump the version assertions in the migrator tests when adding one.
+- Migration numbering is sequential and 5 digits (`00009` is the highest today) and starts at `00001`. goose treats version 0 as the sentinel row and silently skips a file numbered below 1, so a `00000_*.sql` file never runs and never errors. Bump the version assertions in the migrator tests when adding one.
 - `internal/queue/README.md` documents an API, a `module.go`, and migration `00010` that do not exist — the engine was removed and only the doc remains. Trust the code and `database/migrations/` over that file.
 - Keep `Taskfile.yml` targets aligned with the CLI (`key:generate`, `db:migrate` → `migrate:up`). A renamed command silently breaks the task.
 - The root `--env-file` flag loads configuration for the server commands. A subcommand that writes a file must declare its own flag of that name; never treat the root flag as a write target, or `task run -- <cmd>` will rewrite `.env.local`.

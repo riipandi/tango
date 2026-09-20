@@ -18,6 +18,12 @@ PORT=3080
 APP_SECRET_KEY=deadbeef
 `
 
+// The key is shared by the CLI, the config layer, and deployment tooling, so a
+// rename here must be deliberate rather than incidental.
+func TestDatabaseURLKey(t *testing.T) {
+	assert.Equal(t, "DATABASE_URL", DatabaseURL)
+}
+
 func TestParsePreservesLayout(t *testing.T) {
 	file := Parse(sample)
 	assert.Equal(t, sample, file.Render())
