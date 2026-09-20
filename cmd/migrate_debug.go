@@ -76,7 +76,9 @@ var migrateSeedCmd = &cli.Command{
 }
 
 // runMigrateReset rolls back every applied migration and, with --up, applies
-// them again. --dry-run lists both halves without touching the database.
+// them again. On a database with nothing applied, --up alone applies the
+// migrations, so resetting a fresh database still builds the schema.
+// --dry-run lists both halves without touching the database.
 func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 	migrator, closeDB, err := openMigrator(ctx, cmd, database.MigratorOptions{})
 	if err != nil {
@@ -85,33 +87,27 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 	defer closeDB()
 
 	out := cmd.Root().Writer
+	reapply := cmd.Bool("up")
 
 	applied, err := migrator.Applied(ctx)
 	if err != nil {
 		return err
 	}
-	if len(applied) == 0 {
+
+	// Nothing to roll back. Without --up that is the whole answer, because
+	// there is no up half to run either.
+	if len(applied) == 0 && !reapply {
 		_, writeErr := fmt.Fprintln(out, "no applied migrations")
 		return writeErr
 	}
 
-	reapply := cmd.Bool("up")
 	if cmd.Bool("dry-run") {
-		if err := printRollback(out, applied); err != nil {
-			return err
-		}
-		if !reapply {
-			return nil
-		}
-		// Every migration comes back, so the pending list is the full set.
-		pending, err := migrator.Pending(ctx)
-		if err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintln(out); err != nil {
-			return err
-		}
-		return printPending(out, pending)
+		return planReset(ctx, migrator, out, applied, reapply)
+	}
+
+	// A fresh database has no rollback to do, so --up is a plain apply.
+	if len(applied) == 0 {
+		return applyResetUp(ctx, cmd, migrator, out)
 	}
 
 	question := fmt.Sprintf("roll back all %d migration(s)?", len(applied))
@@ -143,14 +139,78 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 	if !reapply {
 		return nil
 	}
+	if _, err := fmt.Fprintln(out); err != nil {
+		return err
+	}
 	reapplied, err := migrator.Up(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(out); err != nil {
+	return printResults(out, reapplied, "applied")
+}
+
+// applyResetUp runs the --up half on a database with nothing applied. It asks
+// the same question migrate:up asks, because it does the same work.
+func applyResetUp(
+	ctx context.Context,
+	cmd *cli.Command,
+	migrator *database.Migrator,
+	out io.Writer,
+) error {
+	pending, err := migrator.Pending(ctx)
+	if err != nil {
 		return err
 	}
-	return printResults(out, reapplied, "applied")
+	if len(pending) == 0 {
+		_, writeErr := fmt.Fprintln(out, "no pending migrations")
+		return writeErr
+	}
+
+	proceed, err := confirm(cmd, terminalCheck(cmd),
+		fmt.Sprintf("apply all %d pending migration(s)?", len(pending)))
+	if err != nil {
+		return err
+	}
+	if !proceed {
+		_, writeErr := fmt.Fprintf(out, "\n%d pending migration(s) left unapplied\n", len(pending))
+		return writeErr
+	}
+
+	results, err := migrator.Up(ctx)
+	if err != nil {
+		return err
+	}
+	return printResults(out, results, "applied")
+}
+
+// planReset prints both halves of a reset without touching the database. The
+// rollback half is skipped when the database has nothing applied.
+func planReset(
+	ctx context.Context,
+	migrator *database.Migrator,
+	out io.Writer,
+	applied []database.MigrationStatus,
+	reapply bool,
+) error {
+	if len(applied) > 0 {
+		if err := printRollback(out, applied); err != nil {
+			return err
+		}
+	}
+	if !reapply {
+		return nil
+	}
+	if len(applied) > 0 {
+		if _, err := fmt.Fprintln(out); err != nil {
+			return err
+		}
+	}
+
+	pending, err := migrator.Pending(ctx)
+	if err != nil {
+		return err
+	}
+	return printPending(out, pending)
 }
 
 // runMigrateValidate checks the embedded migrations and reports every problem.

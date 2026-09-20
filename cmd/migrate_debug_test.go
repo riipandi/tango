@@ -109,6 +109,57 @@ func TestMigrateResetWithoutAppliedMigrations(t *testing.T) {
 	assert.Contains(t, out, "no applied migrations")
 }
 
+// On a fresh database --up alone applies the migrations, so `reset --up` is
+// also the way to build a schema from nothing.
+func TestMigrateResetWithUpOnFreshDatabaseApplies(t *testing.T) {
+	container := testutils.StartPostgres(t.Context(), t)
+	dsn := container.NewDatabase(t)
+	envFile := writeEnvFile(t, dsn)
+
+	out, err := runMigrateResetCmd(t, "", "--env-file="+envFile, "--force", "--up")
+	require.NoError(t, err)
+	assert.NotContains(t, out, "no applied migrations")
+	assert.Contains(t, out, "9 migration(s) applied")
+	assert.Equal(t, int64(9), currentVersion(t, dsn))
+}
+
+// A fresh database has nothing to roll back, so only the up half is asked
+// about. The question matches migrate:up, because the work is the same.
+func TestMigrateResetWithUpOnFreshDatabasePromptsToApply(t *testing.T) {
+	container := testutils.StartPostgres(t.Context(), t)
+	dsn := container.NewDatabase(t)
+	envFile := writeEnvFile(t, dsn)
+
+	terminalCheck = func(*cli.Command) bool { return true }
+	t.Cleanup(func() { terminalCheck = isTerminal })
+
+	out, err := runMigrateResetCmd(t, "n\n", "--env-file="+envFile, "--up")
+	require.NoError(t, err)
+	assert.Contains(t, out, "apply all 9 pending migration(s)? [y/N]")
+	assert.NotContains(t, out, "roll back")
+	assert.Contains(t, out, "9 pending migration(s) left unapplied")
+	assert.Zero(t, currentVersion(t, dsn))
+}
+
+// --dry-run on a fresh database lists the up half and changes nothing.
+func TestMigrateResetDryRunOnFreshDatabase(t *testing.T) {
+	container := testutils.StartPostgres(t.Context(), t)
+	dsn := container.NewDatabase(t)
+	envFile := writeEnvFile(t, dsn)
+
+	out, err := runMigrateResetCmd(t, "", "--env-file="+envFile, "--dry-run", "--up")
+	require.NoError(t, err)
+	assert.NotContains(t, out, "to roll back")
+	assert.Contains(t, out, "9 pending migration(s)")
+	assert.Zero(t, currentVersion(t, dsn))
+
+	// Without --up there is nothing to report at all.
+	out, err = runMigrateResetCmd(t, "", "--env-file="+envFile, "--dry-run")
+	require.NoError(t, err)
+	assert.Contains(t, out, "no applied migrations")
+	assert.Zero(t, currentVersion(t, dsn))
+}
+
 func TestMigrateResetDeclinedLeavesDatabase(t *testing.T) {
 	container := testutils.StartPostgres(t.Context(), t)
 	dsn := container.NewDatabase(t)

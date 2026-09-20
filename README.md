@@ -54,7 +54,8 @@ go run -tags debug ./cmd migrate:up --env-file=.env.local --to=3
 task db:rollback
 task db:rollback -- --count=3
 
-# Rebuild the schema from scratch.
+# Rebuild the schema from scratch. On a database with nothing applied, --up
+# applies the migrations, so this also initializes a fresh database.
 task db:reset -- --up
 
 # Inspect the current state.
