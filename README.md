@@ -36,9 +36,9 @@ Go files are watched and rebuilt automatically.
 
 ### Database
 
-Migrations are embedded in the binary and tracked in the `app_migration` table. `migrate:up` asks for
-confirmation when it runs in a terminal and applies immediately when piped, so `task db:migrate` works
-unattended.
+Migrations are embedded in the binary and tracked in the `app_migration` table. `migrate:up` and
+`migrate:down` ask for confirmation when they run in a terminal and proceed immediately when piped,
+so `task db:migrate` works unattended.
 
 ```bash
 # Apply everything pending.
@@ -49,6 +49,14 @@ go run -tags debug ./cmd migrate:up --env-file=.env.local --dry-run
 
 # Stop at a version.
 go run -tags debug ./cmd migrate:up --env-file=.env.local --to=3
+
+# Roll back the last migration, or several.
+task db:rollback
+task db:rollback -- --count=3
+
+# Inspect the current state.
+task db:status
+task db:version
 ```
 
 Concurrent runs are safe: the migrator holds a Postgres session advisory lock, so a second process

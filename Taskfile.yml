@@ -68,6 +68,18 @@ tasks:
     desc: Run database migrations
     cmd: go run -tags debug ./cmd migrate:up --env-file=.env.local {{.CLI_ARGS}}
 
+  db:rollback:
+    desc: Roll back the most recent migration
+    cmd: go run -tags debug ./cmd migrate:down --env-file=.env.local {{.CLI_ARGS}}
+
+  db:status:
+    desc: Show database migration status
+    cmd: go run -tags debug ./cmd migrate:status --env-file=.env.local {{.CLI_ARGS}}
+
+  db:version:
+    desc: Print the current migration version
+    cmd: go run -tags debug ./cmd migrate:version --env-file=.env.local {{.CLI_ARGS}}
+
   key:generate:
     desc: Generate application secret keys
     cmd: go run -tags debug ./cmd key:generate {{.CLI_ARGS}}

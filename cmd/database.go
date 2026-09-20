@@ -28,3 +28,13 @@ var dbExportCmd = &cli.Command{
 		return nil
 	},
 }
+
+var dbImportCmd = &cli.Command{
+	Name:     "db:import",
+	Category: "Database operation",
+	Usage:    "Import database from backup file",
+	Action: func(ctx context.Context, cmd *cli.Command) error {
+		fmt.Println("not yet implemented")
+		return nil
+	},
+}

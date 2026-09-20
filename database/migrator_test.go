@@ -140,12 +140,96 @@ func TestMigratorUpToStopsAtVersion(t *testing.T) {
 	// The queue tables arrive in a later migration, so they must not exist yet.
 	var exists bool
 	require.NoError(t, db.QueryRowContext(ctx,
-		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tasks')").Scan(&exists))
+		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'queue_tasks')").Scan(&exists))
 	assert.False(t, exists, "migration 00008 must not have run")
 
 	rest, err := migrator.UpTo(ctx, highestVersion)
 	require.NoError(t, err)
 	assert.Len(t, rest, migrationCount-3)
+}
+
+func TestMigratorDownRollsBackNewestFirst(t *testing.T) {
+	migrator, db := newMigrator(t)
+	ctx := t.Context()
+
+	_, err := migrator.Up(ctx)
+	require.NoError(t, err)
+
+	rolled, err := migrator.Down(ctx, 2)
+	require.NoError(t, err)
+	require.Len(t, rolled, 2)
+	assert.Equal(t, int64(9), rolled[0].Version)
+	assert.Equal(t, int64(8), rolled[1].Version)
+
+	version, err := migrator.Version(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(7), version)
+
+	// 00009 adds the remember column and 00008 creates queue_tasks; both must be
+	// gone, while the tables from earlier migrations stay.
+	var exists bool
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sessions' AND column_name = 'remember')").Scan(&exists))
+	assert.False(t, exists)
+
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'queue_tasks')").Scan(&exists))
+	assert.False(t, exists)
+
+	// The applied rows are gone too, so a later up reapplies them.
+	pending, err := migrator.Pending(ctx)
+	require.NoError(t, err)
+	assert.Len(t, pending, 2)
+}
+
+// A count above what is applied rolls back everything and reports only what it
+// actually rolled back.
+func TestMigratorDownStopsWhenDatabaseIsEmpty(t *testing.T) {
+	migrator, _ := newMigrator(t)
+	ctx := t.Context()
+
+	_, err := migrator.UpTo(ctx, 2)
+	require.NoError(t, err)
+
+	rolled, err := migrator.Down(ctx, 10)
+	require.NoError(t, err)
+	assert.Len(t, rolled, 2)
+
+	version, err := migrator.Version(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, version, "the goose sentinel row keeps the version at 0")
+
+	rolled, err = migrator.Down(ctx, 1)
+	require.NoError(t, err)
+	assert.Empty(t, rolled, "an empty database is not an error")
+}
+
+func TestMigratorDownRejectsZeroCount(t *testing.T) {
+	migrator, _ := newMigrator(t)
+
+	_, err := migrator.Down(t.Context(), 0)
+	require.Error(t, err)
+}
+
+func TestMigratorAppliedIsNewestFirst(t *testing.T) {
+	migrator, _ := newMigrator(t)
+	ctx := t.Context()
+
+	applied, err := migrator.Applied(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, applied)
+
+	_, err = migrator.UpTo(ctx, 3)
+	require.NoError(t, err)
+
+	applied, err = migrator.Applied(ctx)
+	require.NoError(t, err)
+	require.Len(t, applied, 3)
+	assert.Equal(t, int64(3), applied[0].Version)
+	assert.Equal(t, int64(1), applied[2].Version)
+	for _, status := range applied {
+		assert.True(t, status.Applied)
+	}
 }
 
 // Migrations run on one pinned connection: a multi-statement file would break if

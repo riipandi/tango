@@ -64,10 +64,11 @@ func openMigrator(
 	return migrator, func() { _ = db.Close() }, nil
 }
 
-// printApplied reports the migrations that ran, one line each.
-func printApplied(w io.Writer, results []database.Migration) error {
+// printResults reports the migrations that ran, one line each. verb describes
+// the direction: "applied" or "rolled back".
+func printResults(w io.Writer, results []database.Migration, verb string) error {
 	for _, result := range results {
-		state := "applied"
+		state := verb
 		if result.Empty {
 			state = "empty"
 		}
@@ -75,7 +76,7 @@ func printApplied(w io.Writer, results []database.Migration) error {
 			return err
 		}
 	}
-	_, err := fmt.Fprintf(w, "\n%d migration(s) applied\n", len(results))
+	_, err := fmt.Fprintf(w, "\n%d migration(s) %s\n", len(results), verb)
 	return err
 }
 
@@ -94,16 +95,45 @@ func printPending(w io.Writer, pending []database.MigrationStatus) error {
 	return err
 }
 
-// confirmApply reports whether the pending migrations may be applied. A
-// non-interactive run applies without asking so that CI and `task db:migrate`
+// printRollback reports the migrations a rollback would consume, newest first.
+func printRollback(w io.Writer, selected []database.MigrationStatus) error {
+	for _, status := range selected {
+		if _, err := fmt.Fprintf(w, "%05d %s\n", status.Version, status.Name); err != nil {
+			return err
+		}
+	}
+	_, err := fmt.Fprintf(w, "\n%d migration(s) to roll back\n", len(selected))
+	return err
+}
+
+// printStatus reports every embedded migration and the database version, which
+// is the highest applied migration.
+func printStatus(w io.Writer, statuses []database.MigrationStatus, version int64) error {
+	applied := 0
+	for _, status := range statuses {
+		state := "pending"
+		if status.Applied {
+			state = "applied"
+			applied++
+		}
+		if _, err := fmt.Fprintf(w, "%05d %-7s %s\n", status.Version, state, status.Name); err != nil {
+			return err
+		}
+	}
+	_, err := fmt.Fprintf(w, "\nversion %05d; %d of %d applied\n", version, applied, len(statuses))
+	return err
+}
+
+// confirm asks the question and reports whether the user agreed. A
+// non-interactive run agrees without asking so that CI and `task db:migrate`
 // never block; an interactive run asks unless --force is passed.
-func confirmApply(cmd *cli.Command, interactive bool, pending int) (bool, error) {
+func confirm(cmd *cli.Command, interactive bool, question string) (bool, error) {
 	if cmd.Bool("force") || !interactive {
 		return true, nil
 	}
 
 	out := cmd.Root().Writer
-	if _, err := fmt.Fprintf(out, "apply %d pending migration(s)? [y/N] ", pending); err != nil {
+	if _, err := fmt.Fprintf(out, "%s [y/N] ", question); err != nil {
 		return false, err
 	}
 
@@ -160,7 +190,8 @@ func runMigrateUp(ctx context.Context, cmd *cli.Command) error {
 		return printNothingToApply(out, pending, target)
 	}
 
-	apply, err := confirmApply(cmd, isTerminal(cmd), len(selected))
+	apply, err := confirm(cmd, terminalCheck(cmd),
+		fmt.Sprintf("apply %d pending migration(s)?", len(selected)))
 	if err != nil {
 		return err
 	}
@@ -173,7 +204,100 @@ func runMigrateUp(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	return printApplied(out, results)
+	return printResults(out, results, "applied")
+}
+
+// runMigrateDown rolls back the most recent migrations. --dry-run lists them
+// instead and changes nothing.
+func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
+	count := cmd.Int("count")
+	if count <= 0 {
+		return fmt.Errorf("database: --count must be greater than zero, got %d", count)
+	}
+
+	migrator, closeDB, err := openMigrator(ctx, cmd, database.MigratorOptions{})
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+
+	out := cmd.Root().Writer
+
+	applied, err := migrator.Applied(ctx)
+	if err != nil {
+		return err
+	}
+	if len(applied) == 0 {
+		_, writeErr := fmt.Fprintln(out, "no applied migrations")
+		return writeErr
+	}
+
+	// A count above what the database has rolls back everything, which is the
+	// only sensible reading.
+	count = min(count, len(applied))
+	if cmd.Bool("dry-run") {
+		return printRollback(out, applied[:count])
+	}
+
+	proceed, err := confirm(cmd, terminalCheck(cmd),
+		fmt.Sprintf("roll back %d migration(s)?", count))
+	if err != nil {
+		return err
+	}
+	if !proceed {
+		_, writeErr := fmt.Fprintf(out, "\n%d migration(s) left applied\n", count)
+		return writeErr
+	}
+
+	results, err := migrator.Down(ctx, count)
+	if err != nil {
+		// Some migrations may have rolled back before the failure; report them
+		// before surfacing the error.
+		if len(results) > 0 {
+			if writeErr := printResults(out, results, "rolled back"); writeErr != nil {
+				return writeErr
+			}
+		}
+		return err
+	}
+	return printResults(out, results, "rolled back")
+}
+
+// runMigrateStatus lists every embedded migration and whether the database has
+// it.
+func runMigrateStatus(ctx context.Context, cmd *cli.Command) error {
+	migrator, closeDB, err := openMigrator(ctx, cmd, database.MigratorOptions{})
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+
+	statuses, err := migrator.Status(ctx)
+	if err != nil {
+		return err
+	}
+	version, err := migrator.Version(ctx)
+	if err != nil {
+		return err
+	}
+	return printStatus(cmd.Root().Writer, statuses, version)
+}
+
+// runMigrateVersion prints the version the database sits on, which is the
+// highest applied migration. A database that has never been migrated reports 0.
+func runMigrateVersion(ctx context.Context, cmd *cli.Command) error {
+	migrator, closeDB, err := openMigrator(ctx, cmd, database.MigratorOptions{})
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+
+	version, err := migrator.Version(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(cmd.Root().Writer, version)
+	return err
 }
 
 // pendingUpTo keeps the migrations that a run targeting version would apply.
@@ -214,3 +338,7 @@ func isTerminal(cmd *cli.Command) bool {
 	}
 	return term.IsTerminal(int(file.Fd()))
 }
+
+// terminalCheck is the seam the tests replace to exercise both branches of the
+// confirmation prompt, which otherwise needs a real terminal.
+var terminalCheck = isTerminal

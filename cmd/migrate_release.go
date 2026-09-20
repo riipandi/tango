@@ -1,9 +1,6 @@
 package main
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/urfave/cli/v3"
 )
 
@@ -37,8 +34,11 @@ var migrateDownCmd = &cli.Command{
 	Name:     "migrate:down",
 	Category: "Database operation",
 	Usage:    "Rollback database migrations",
+	Description: `Rolls back applied migrations, newest first, by running each file's
+-- +goose Down block. A concurrent run is safe: the migrator takes
+a Postgres session advisory lock for the duration.`,
 	Flags: []cli.Flag{
-		&cli.UintFlag{
+		&cli.IntFlag{
 			Name:        "count",
 			Usage:       "Number of migrations to roll back",
 			DefaultText: "1",
@@ -46,35 +46,30 @@ var migrateDownCmd = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:  "dry-run",
-			Usage: "Print the migration that would be rolled back without changing anything",
+			Usage: "List the migrations that would be rolled back without changing anything",
 		},
 		&cli.BoolFlag{
 			Name:  "force",
 			Usage: "Skip the confirmation prompt",
 		},
 	},
-	Action: func(ctx context.Context, cmd *cli.Command) error {
-		fmt.Println("not yet implemented")
-		return nil
-	},
+	Action: runMigrateDown,
 }
 
 var migrateStatusCmd = &cli.Command{
 	Name:     "migrate:status",
 	Category: "Database operation",
 	Usage:    "Check database migration status",
-	Action: func(ctx context.Context, cmd *cli.Command) error {
-		fmt.Println("not yet implemented")
-		return nil
-	},
+	Description: `Lists every migration embedded in the binary with its applied state,
+and prints the version the database currently sits on.`,
+	Action: runMigrateStatus,
 }
 
 var migrateVersionCmd = &cli.Command{
 	Name:     "migrate:version",
 	Category: "Database operation",
 	Usage:    "Print the current migration version",
-	Action: func(ctx context.Context, cmd *cli.Command) error {
-		fmt.Println("not yet implemented")
-		return nil
-	},
+	Description: `Prints the highest applied migration version. A database that has
+never been migrated prints 0.`,
+	Action: runMigrateVersion,
 }

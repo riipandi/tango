@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -105,8 +106,33 @@ func (m *Migrator) UpTo(ctx context.Context, version int64) ([]Migration, error)
 	return convert(results), nil
 }
 
-// Status lists every embedded migration with its applied state, in version
-// order.
+// Down rolls back up to count migrations, newest first. It stops early when the
+// database runs out of applied migrations, which is not an error.
+//
+// Each migration is rolled back on its own, so goose picks the next one in the
+// order it recorded. That is exact even for out-of-order migrations, which a
+// version comparison cannot express. A failure returns the migrations that did
+// roll back alongside the error.
+func (m *Migrator) Down(ctx context.Context, count int) ([]Migration, error) {
+	if count <= 0 {
+		return nil, fmt.Errorf("database: rollback count must be greater than zero, got %d", count)
+	}
+
+	results := make([]Migration, 0, count)
+	for range count {
+		result, err := m.provider.Down(ctx)
+		if errors.Is(err, goose.ErrNoNextVersion) {
+			return results, nil
+		}
+		if err != nil {
+			return results, fmt.Errorf("database: migrate down: %w", err)
+		}
+		results = append(results, convert([]*goose.MigrationResult{result})...)
+	}
+	return results, nil
+}
+
+// Status lists every embedded migration with its applied state, in version order.
 func (m *Migrator) Status(ctx context.Context) ([]MigrationStatus, error) {
 	statuses, err := m.provider.Status(ctx)
 	if err != nil {
@@ -135,8 +161,7 @@ func (m *Migrator) Version(ctx context.Context) (int64, error) {
 	return version, nil
 }
 
-// Pending lists the migrations the database has not applied yet, in version
-// order.
+// Pending lists the migrations the database has not applied yet, in version order.
 func (m *Migrator) Pending(ctx context.Context) ([]MigrationStatus, error) {
 	statuses, err := m.Status(ctx)
 	if err != nil {
@@ -150,6 +175,26 @@ func (m *Migrator) Pending(ctx context.Context) ([]MigrationStatus, error) {
 		}
 	}
 	return pending, nil
+}
+
+// Applied lists the migrations the database has applied, newest first, which is
+// the order a rollback consumes them. Migrations applied out of order are
+// rolled back in the order goose recorded them, so this list is an
+// approximation of that order when --allow-out-of-order is in use.
+func (m *Migrator) Applied(ctx context.Context) ([]MigrationStatus, error) {
+	statuses, err := m.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	applied := make([]MigrationStatus, 0, len(statuses))
+	for _, status := range statuses {
+		if status.Applied {
+			applied = append(applied, status)
+		}
+	}
+	slices.Reverse(applied)
+	return applied, nil
 }
 
 // HighestVersion returns the version of the last embedded migration, which is
