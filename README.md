@@ -33,45 +33,79 @@ You will need [`Go >= 1.27`][golang], [`Node.js >= 24.21`][nodejs], [`PNPM >= 12
 Vite serves the frontend on `:3000` and proxies `/api`, `/rpc`, `/.well-known`, and `/static` to Go on `:3080`.
 Go files are watched and rebuilt automatically.
 
-The env file currently carries only `HOST` and `PORT`; the remaining configuration keys are being rebuilt alongside
-`internal/config`. The `db:migrate` and `secrets:generate` tasks still call the previous CLI shape and fail against
-the current `cmd/` subcommands — use `go run -tags debug ./cmd migrate:up` and `go run -tags debug ./cmd key:generate`
-until they are updated.
+### Secret keys
+
+`key:generate` always writes all four variables: `APP_SECRET_KEY` (AES-256, 64 hex characters),
+`AUTH_PRIVATE_KEY` and `AUTH_PUBLIC_KEY` (base64-encoded JWK JSON), and `AUTH_SECRET_KEY` (HMAC).
+
+Without `--algorithm` the key pair uses `ES256` and `AUTH_SECRET_KEY` uses `HS256`. Passing an
+asymmetric algorithm (`ES384`, `ES512`, `EdDSA`, `RS*`, `PS*`) replaces the key pair; passing an `HS*`
+algorithm replaces the HMAC secret. The other role keeps its default.
+
+```bash
+# Print the keys to the terminal. Nothing is written.
+go run -tags debug ./cmd key:generate
+
+# Create the env file when it is missing.
+go run -tags debug ./cmd key:generate --env-file=.env.local
+
+# Update an existing env file: prompts first, or skips the prompt with --overwrite.
+go run -tags debug ./cmd key:generate --env-file=.env.local --overwrite
+
+# Pick the algorithms explicitly.
+go run -tags debug ./cmd key:generate --algorithm=ES384 --env-file=.env.local
+
+# Same, through the Taskfile.
+task key:generate
+```
+
+An existing env file is never rewritten without consent: the command asks `replace its key values? [y/N]`
+and leaves the file untouched on anything other than `y`/`yes`. Updating keeps the comments, blank lines,
+and order, replaces the existing key values, and appends the ones that are missing.
+
+Changing `APP_SECRET_KEY` makes data encrypted with the previous key unreadable, and replacing a signing
+key invalidates the tokens signed with it. `key:rotate` (not implemented yet) is intended to re-encrypt
+stored data during rotation.
 
 ## Available Tasks
 
 Run `task` to list every target.
 
-| Command             | Description                                       |
-| ------------------- | ------------------------------------------------- |
-| `task dev`          | Vite dev server (:3000) + Go API server (:3080)   |
-| `task run`          | Run the Go server directly (debug build)          |
-| `task build`        | Build the frontend and the Go binary (single file)|
-| `task start`        | Run the production binary                         |
-| `task test`         | Run the frontend and backend tests                |
-| `task typecheck`    | Run TypeScript type checking                      |
-| `task lint`         | Run all linters (Go and JS)                       |
-| `task check`        | Run `go vet` and the formatting check             |
-| `task format`       | Format all files (Go and JS)                      |
-| `task rpc:generate` | Generate Go and TypeScript from the proto contracts|
-| `task rpc:stale`    | Fail when generated code is out of date           |
-| `task compose:up`   | Start the docker compose services                 |
-| `task compose:down` | Stop the docker compose services                  |
+| Command             | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| `task dev`          | Vite dev server (:3000) + Go API server (:3080)     |
+| `task run`          | Run the Go server directly (debug build)            |
+| `task build`        | Build the frontend and the Go binary (single file)  |
+| `task start`        | Run the production binary                           |
+| `task test`         | Run the frontend and backend tests                  |
+| `task typecheck`    | Run TypeScript type checking                        |
+| `task lint`         | Run all linters (Go and JS)                         |
+| `task check`        | Run `go vet` and the formatting check               |
+| `task format`       | Format all files (Go and JS)                        |
+| `task key:generate` | Generate the application secret keys                |
+| `task cert:generate`| Generate local HTTPS certificates into `storage/certs`|
+| `task cert:trust`   | Trust the local CA in the system trust store        |
+| `task rpc:generate` | Generate Go and TypeScript from the proto contracts |
+| `task rpc:stale`    | Fail when generated code is out of date             |
+| `task compose:up`   | Start the docker compose services                   |
+| `task compose:down` | Stop the docker compose services                    |
 
-## Local Certificates
+## Local HTTPS
 
-The nginx service in `compose.yaml` expects certificates in `storage/certs`:
+The nginx service in `compose.yaml` reads certificates from `storage/certs`. Generate them with
+[`mkcert`](https://github.com/FiloSottile/mkcert), falling back to a self-signed `openssl` certificate when
+`mkcert` is unavailable:
 
 ```sh
-mkdir -p storage/certs && mkcert \
-  -key-file storage/certs/localhost_key.pem \
-  -cert-file storage/certs/localhost_crt.pem \
-  localhost 127.0.0.1 ::1 host.docker.internal \
-  "*.localhost.test"
+# Writes storage/certs/localhost_key.pem and storage/certs/localhost_crt.pem.
+task cert:generate
 
-# Install the local CA in the system trust store.
-mkcert -install
+# Install the mkcert local CA in the system trust store.
+task cert:trust
 ```
+
+`task cert:generate` covers `localhost`, `127.0.0.1`, `::1`, `host.docker.internal`, and
+`*.localhost.test`. `storage/` is gitignored, so the certificates stay local.
 
 ## Deployment
 

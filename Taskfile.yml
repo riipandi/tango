@@ -27,7 +27,7 @@ tasks:
 
   run:
     desc: Run the Go backend directly (debug build)
-    cmd: go run -tags debug ./cmd --env-file=.env.local {{.CLI_ARGS}}
+    cmd: go run -tags debug ./cmd {{.CLI_ARGS}}
 
   email:dev:
     desc: Run React Email dev UI (:3030)
@@ -66,11 +66,44 @@ tasks:
   # ----------------------------------------------------------------------------
   db:migrate:
     desc: Run database migrations
-    cmd: go run -tags debug ./cmd --env-file=.env.local db migrate:up {{.CLI_ARGS}}
+    cmd: go run -tags debug ./cmd migrate:up --env-file=.env.local {{.CLI_ARGS}}
 
-  secrets:generate:
-    desc: Generate application secrets (dev only)
-    cmd: go run -tags debug ./cmd secrets {{.CLI_ARGS}}
+  key:generate:
+    desc: Generate application secret keys
+    cmd: go run -tags debug ./cmd key:generate {{.CLI_ARGS}}
+
+  # ----------------------------------------------------------------------------
+  # Local HTTPS
+  # ----------------------------------------------------------------------------
+  cert:generate:
+    desc: Generate local HTTPS certificates into storage/certs
+    vars:
+      CERT_DIR: storage/certs
+    cmds:
+      - mkdir -p {{.CERT_DIR}}
+      - |
+        if command -v mkcert >/dev/null 2>&1; then
+          mkcert -key-file {{.CERT_DIR}}/localhost_key.pem \
+            -cert-file {{.CERT_DIR}}/localhost_crt.pem \
+            localhost 127.0.0.1 ::1 host.docker.internal "*.localhost.test"
+        else
+          openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
+            -keyout {{.CERT_DIR}}/localhost_key.pem \
+            -out {{.CERT_DIR}}/localhost_crt.pem \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,DNS:host.docker.internal,DNS:*.localhost.test,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1"
+        fi
+      - openssl x509 -in {{.CERT_DIR}}/localhost_crt.pem -noout -subject -ext subjectAltName
+
+  cert:trust:
+    desc: Trust the local CA so browsers accept the generated certificates
+    cmds:
+      - |
+        if ! command -v mkcert >/dev/null 2>&1; then
+          echo "mkcert is not installed — add storage/certs/localhost_crt.pem to your trust store manually"
+          exit 0
+        fi
+        mkcert -install
 
   # ----------------------------------------------------------------------------
   # Test

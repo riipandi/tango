@@ -27,12 +27,14 @@ var rootCmd = &cli.Command{
 	},
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:  "env-file",
-			Usage: "Load environment variables from a file",
+			Name:     "env-file",
+			Usage:    "Load environment variables from a file",
+			Required: false,
 		},
 		&cli.StringFlag{
-			Name:  "data-dir",
-			Usage: "Set the Application data directory",
+			Name:     "data-dir",
+			Usage:    "Set the Application data directory",
+			Required: false,
 		},
 		&cli.BoolFlag{
 			Name:    "version",
