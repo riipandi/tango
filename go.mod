@@ -6,6 +6,7 @@ toolchain go1.27.1
 
 require (
 	connectrpc.com/connect v1.21.0
+	github.com/dustin/go-humanize v1.1.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-ozzo/ozzo-validation/v4 v4.4.1
 	github.com/jackc/pgx/v5 v5.11.0

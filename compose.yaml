@@ -27,7 +27,7 @@ services:
   #     STORAGE_S3_ENDPOINT_URL: http://silo:9100
   #     MAILER_SMTP_HOST: mailpit
   #   healthcheck:
-  #     test: ["CMD", "/srv/tango", "health"]
+  #     test: ["CMD", "/srv/tango", "health", "--short"]
   #     interval: 3s
   #     timeout: 5s
   #     retries: 3

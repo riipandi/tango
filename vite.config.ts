@@ -22,9 +22,10 @@ const BUILD_HASH = process.env.BUILD_HASH || 'dev'
 // cross-site fetches, and this keeps them first-party.
 const viteProxy: Record<string, string | ProxyOptions> = {
   '/.well-known': { target: 'http://127.0.0.1:3080', changeOrigin: true },
-  '/static': { target: 'http://127.0.0.1:3080', changeOrigin: true },
   '/api': { target: 'http://127.0.0.1:3080', changeOrigin: true },
-  '/rpc': { target: 'http://127.0.0.1:3080', changeOrigin: true }
+  '/rpc': { target: 'http://127.0.0.1:3080', changeOrigin: true },
+  '/metrics': { target: 'http://127.0.0.1:3080', changeOrigin: true },
+  '/static': { target: 'http://127.0.0.1:3080', changeOrigin: true }
 }
 
 export default defineConfig({

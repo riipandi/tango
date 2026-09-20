@@ -2,17 +2,141 @@ package main
 
 import (
 	"context"
+	"encoding/json/v2"
 	"fmt"
+	"io"
+	"strings"
+	"time"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/health"
 )
+
+// exitUnhealthy is the exit code of a failed health check. It is distinct from
+// the generic failure code so a script can tell "the service is down" from
+// "the command could not run".
+const exitUnhealthy = 3
 
 var healthCheckCmd = &cli.Command{
 	Name:    "health",
 	Usage:   "Check application health status",
 	Aliases: []string{"hc"},
-	Action: func(ctx context.Context, cmd *cli.Command) error {
-		fmt.Println("not yet implemented")
-		return nil
+	Description: `Checks the application dependencies and reports the aggregated
+availability status. The same result is published by the REST handler,
+so the CLI and the API always agree.
+
+Output is text by default; pass --json for a machine-readable result or
+--short for the aggregated status alone.
+
+Exit codes: 0 when healthy, 3 when a required component is down, 1 on
+a usage error such as a missing DATABASE_URL. A component that cannot
+be reached is reported as unhealthy, not as a command failure.
+
+The check needs DATABASE_URL; pass --env-file or export it.`,
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "short",
+			Usage: "Print only the aggregated status: healthy or unhealthy",
+		},
+		&cli.BoolFlag{
+			Name:  "json",
+			Usage: "Print the result as JSON instead of text",
+		},
+		&cli.DurationFlag{
+			Name:  "timeout",
+			Usage: "Deadline for the whole check",
+			Value: health.DefaultTimeout,
+		},
+		&cli.BoolFlag{
+			Name:  "no-cache",
+			Usage: "Run every check now instead of reusing a cached result",
+		},
 	},
+	Action: runHealthCheck,
+}
+
+// runHealthCheck opens the database pool, runs the checks, and prints the
+// result. The pool is opened here and closed on return: the CLI owns it for the
+// duration of the command and nothing else uses it.
+//
+// A database that cannot be reached is a result, not a command error. This
+// command exists to report that state, so it prints the report and exits 3
+// instead of failing to start.
+func runHealthCheck(ctx context.Context, cmd *cli.Command) error {
+	dsn, err := databaseURL(cmd)
+	if err != nil {
+		return err
+	}
+
+	result := checkHealth(ctx, cmd, dsn)
+
+	out := cmd.Root().Writer
+	if err := printHealth(out, cmd.Bool("short"), cmd.Bool("json"), result); err != nil {
+		return err
+	}
+	if !result.Healthy() {
+		return cli.Exit("", exitUnhealthy)
+	}
+	return nil
+}
+
+// checkHealth opens the pool and runs the checks. A pool that cannot be opened
+// becomes an unhealthy result for the database, because the reason it failed is
+// exactly what the caller wants to read.
+func checkHealth(ctx context.Context, cmd *cli.Command, dsn string) health.Result {
+	info := map[string]string{
+		"name":    config.AppName,
+		"version": config.AppVersion,
+	}
+
+	started := time.Now()
+	pool, err := datastore.NewPostgres(ctx, datastore.PostgresOptions{DSN: dsn})
+	if err != nil {
+		result := health.Failure(health.CheckNamePostgres, err)
+		// The time the failed connection attempt took is part of the report:
+		// it tells the reader whether the database refused or timed out.
+		result.Duration = time.Since(started)
+		result.Info = info
+		return result
+	}
+	defer pool.Close()
+
+	options := []health.Option{
+		health.WithTimeout(cmd.Duration("timeout")),
+		health.WithCheck(health.PostgresCheck(pool)),
+		health.WithInfo(info),
+	}
+	if cmd.Bool("no-cache") {
+		options = append(options, health.WithCacheTTL(0))
+	}
+	return health.NewChecker(options...).Check(ctx)
+}
+
+// printHealth writes the result in the requested format. --short wins over
+// --json: a caller that asks for one word must get one word, not a document.
+// Every format comes from the health package, so the CLI does not define a
+// second rendering that could drift from the one the API publishes.
+func printHealth(w io.Writer, short, asJSON bool, result health.Result) error {
+	switch {
+	case short:
+		return health.WriteShort(w, result)
+	case asJSON:
+		return printHealthJSON(w, result)
+	default:
+		return health.WriteText(w, result)
+	}
+}
+
+// printHealthJSON writes the result as JSON for a machine consumer. The output
+// is one line, so it can be piped or logged without reformatting.
+func printHealthJSON(w io.Writer, result health.Result) error {
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(w, strings.TrimSpace(string(encoded)))
+	return err
 }

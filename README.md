@@ -85,6 +85,45 @@ a migration last ran, not when its file changed. Times are UTC.
 Concurrent runs are safe: the migrator holds a Postgres session advisory lock, so a second process
 waits instead of applying the same migration twice.
 
+### Health check
+
+`health` probes the application dependencies and reports one aggregated status. The same result is
+published by the REST handler, so the CLI and the API never disagree.
+
+```bash
+# Human-readable report (default).
+task health
+
+# One word, for a script or a container probe.
+task health -- --short
+
+# Machine-readable result, the same shape the REST handler sends.
+task health -- --json
+```
+
+Text output is `key: value` lines followed by an aligned per-check table. Durations and timestamps
+go through `go-humanize`, so a reader sees `235 µs` and `2 seconds ago` instead of nanoseconds and a
+raw timestamp:
+
+```text
+name: tango
+version: 0.0.0
+status: healthy
+duration: 343.916 µs
+checks: 1 up, 0 down
+
+CHECK     STATUS  DURATION    CHECKED  ERROR
+postgres  up      322.833 µs  now
+```
+
+The vocabulary is deliberate: a component is `up` or `down`, the system is `healthy` or `unhealthy`.
+A component marked optional is reported but does not affect the aggregate, so a missing optional
+backend is not an outage. Checks run concurrently under a global timeout (`--timeout`, default 5s)
+with a short result cache; `--no-cache` runs every check now.
+
+Exit codes: `0` healthy, `3` unhealthy, `1` on a usage error such as a missing `DATABASE_URL`. A
+database that cannot be reached is reported as `unhealthy`, not as a command failure.
+
 ### Secret keys
 
 `key:generate` always writes all four variables: `APP_SECRET_KEY` (AES-256, 64 hex characters),
