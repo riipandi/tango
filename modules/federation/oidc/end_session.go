@@ -7,7 +7,6 @@ package oidc
 import (
 	"context"
 	"errors"
-	"net/url"
 
 	"github.com/lestrrat-go/jwx/v3/jwa"
 
@@ -104,19 +103,4 @@ func (s *Service) EndSession(ctx context.Context, hint, clientID, postLogoutRedi
 		}
 	}
 	return callback, nil
-}
-
-// appendStateToURL re-encodes the callback with the state parameter.
-func appendStateToURL(callbackURL, state string) string {
-	if state == "" {
-		return callbackURL
-	}
-	parsed, err := url.Parse(callbackURL)
-	if err != nil {
-		return callbackURL
-	}
-	query := parsed.Query()
-	query.Set("state", state)
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
 }

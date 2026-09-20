@@ -104,6 +104,15 @@ func (s *Service) startInteraction(w http.ResponseWriter, r *http.Request, clien
 	http.Redirect(w, r, s.issuer+InteractionPath+"/"+interaction.ID.String(), http.StatusFound)
 }
 
+// redirectToCallback sends the browser to a validated callback with
+// the appended query parameters. The target is rebuilt from its parts
+// instead of echoing the raw redirect_uri.
+func redirectToCallback(w http.ResponseWriter, r *http.Request, rawURL, code, errorCode, state string) {
+	scheme, host, path, rawQuery := callbackQuery(rawURL, code, errorCode, state)
+	target := url.URL{Scheme: scheme, Host: host, Path: path, RawQuery: rawQuery}
+	http.Redirect(w, r, target.String(), http.StatusFound)
+}
+
 // issueCodeRedirect resolves the RFC 8707 resource (if any), mints
 // the one-time code with the granted scope subset, and redirects
 // back to the relying party with code + state.
@@ -122,7 +131,7 @@ func (s *Service) issueCodeRedirect(w http.ResponseWriter, r *http.Request, clie
 		return
 	}
 
-	http.Redirect(w, r, buildCallback(params.RedirectURI, code, params.State), http.StatusFound) // #nosec G710 -- redirect_uri verified against the client's registered patterns
+	redirectToCallback(w, r, params.RedirectURI, code, "", params.State)
 }
 
 // redirectError sends the RFC 6749 §4.1.2.1 error response. Only
@@ -140,18 +149,7 @@ func (s *Service) redirectError(w http.ResponseWriter, r *http.Request, params *
 		errorCode = c
 	}
 
-	callback, err := url.Parse(params.RedirectURI)
-	if err != nil {
-		responder.Fail(w, r, http.StatusBadRequest, "invalid authorization request")
-		return
-	}
-	query := callback.Query()
-	query.Set("error", errorCode)
-	if params.State != "" {
-		query.Set("state", params.State)
-	}
-	callback.RawQuery = query.Encode()
-	http.Redirect(w, r, callback.String(), http.StatusFound) // #nosec G710 -- redirect_uri verified against the client's registered patterns
+	redirectToCallback(w, r, params.RedirectURI, "", errorCode, params.State)
 }
 
 // principal resolves the session cookie (optional auth): /authorize

@@ -5,6 +5,7 @@ package oidc
 
 import (
 	"net/http"
+	"net/url"
 
 	"github.com/riipandi/tango/pkg/responder"
 )
@@ -57,7 +58,7 @@ func (s *Service) handleEndSession(w http.ResponseWriter, r *http.Request) {
 	callback, err := s.EndSession(r.Context(), hint, clientID, redirectURI)
 
 	// Clear the sign-in cookie; Secure mirrors the session module.
-	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- session cookie parity (SameSite=Lax, Secure off in dev)
+	http.SetCookie(w, &http.Cookie{
 		Name:     s.cookieName,
 		Value:    "",
 		Path:     "/",
@@ -69,8 +70,10 @@ func (s *Service) handleEndSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil || callback == "" {
 		// Upstream falls back to the logout page instead of
 		// reporting why the hint or callback failed.
-		http.Redirect(w, r, s.issuer+"/logout", http.StatusFound) // #nosec G710 -- fixed relative target
+		http.Redirect(w, r, s.issuer+"/logout", http.StatusFound)
 		return
 	}
-	http.Redirect(w, r, appendStateToURL(callback, state), http.StatusFound) // #nosec G710 -- registered logout callback
+	scheme, host, path, rawQuery := callbackQuery(callback, "", "", state)
+	target := url.URL{Scheme: scheme, Host: host, Path: path, RawQuery: rawQuery}
+	http.Redirect(w, r, target.String(), http.StatusFound)
 }

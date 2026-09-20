@@ -255,18 +255,32 @@ func authorizeParamsFromMap(values map[string]any) (*authorizeParams, error) {
 	return params, nil
 }
 
-// buildCallback appends code + state to the redirect URI.
-func buildCallback(redirectURI, code, state string) string {
-	callback, err := url.Parse(redirectURI)
+// callbackQuery splits a validated callback URL into the parts a
+// redirect re-builds from, with the extra query parameters applied.
+// Re-encoding the query keeps a callback that already carries
+// parameters from smuggling a second `?` into the target.
+func callbackQuery(rawURL, code, errorCode, state string) (scheme, host, path, rawQuery string) {
+	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return redirectURI
+		return "", "", "", ""
 	}
-	query := callback.Query()
-	query.Set("code", code)
+	query := parsed.Query()
+	if code != "" {
+		query.Set("code", code)
+	}
+	if errorCode != "" {
+		query.Set("error", errorCode)
+	}
 	if state != "" {
 		query.Set("state", state)
 	}
-	callback.RawQuery = query.Encode()
+	return parsed.Scheme, parsed.Host, parsed.Path, query.Encode()
+}
+
+// buildCallback appends code + state to the redirect URI.
+func buildCallback(redirectURI, code, state string) string {
+	scheme, host, path, rawQuery := callbackQuery(redirectURI, code, "", state)
+	callback := url.URL{Scheme: scheme, Host: host, Path: path, RawQuery: rawQuery}
 	return callback.String()
 }
 
