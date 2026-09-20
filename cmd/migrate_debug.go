@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/urfave/cli/v3"
 
 	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/database/seeders"
+	"github.com/riipandi/tango/internal/datastore"
 )
 
 var migrateCreateCmd = &cli.Command{
@@ -83,20 +86,154 @@ var migrateSeedCmd = &cli.Command{
 	Name:     "migrate:seed",
 	Category: "Development commands",
 	Usage:    "Seed the database with initial data",
+	Description: `Creates the default records a fresh database needs. Every seeder is
+idempotent, so running this command twice changes nothing the second
+time: an existing record is reported as skipped.
+
+Seeding writes data, so it asks for confirmation. It runs in one
+transaction, so a seeder that fails leaves nothing behind. --dry-run
+reports what would be created without writing anything.
+
+The database must be migrated first; run migrate:up.`,
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
 			Name:  "dry-run",
-			Usage: "Print what would be seeded without changing anything",
+			Usage: "Report what would be seeded without changing anything",
 		},
 		&cli.BoolFlag{
 			Name:  "force",
 			Usage: "Skip the confirmation prompt",
 		},
 	},
-	Action: func(ctx context.Context, cmd *cli.Command) error {
-		fmt.Println("not yet implemented")
-		return nil
-	},
+	Action: runMigrateSeed,
+}
+
+// runMigrateSeed applies every seeder and reports what each one created.
+func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
+	dsn, err := databaseURL(cmd)
+	if err != nil {
+		return err
+	}
+
+	if err := requireMigrated(ctx, dsn); err != nil {
+		return err
+	}
+
+	pool, err := datastore.NewPostgres(ctx, datastore.PostgresOptions{DSN: dsn})
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	out := cmd.Root().Writer
+	dryRun := cmd.Bool("dry-run")
+
+	// A dry run writes nothing, so it needs no confirmation and no
+	// transaction: there is nothing to roll back.
+	if dryRun {
+		results, err := seeders.Run(ctx, pool, true, seeders.All()...)
+		if err != nil {
+			return err
+		}
+		return printSeedResults(out, results, true)
+	}
+
+	proceed, err := confirm(cmd, terminalCheck(cmd), "seed the database?")
+	if err != nil {
+		return err
+	}
+	if !proceed {
+		_, writeErr := fmt.Fprintln(out, "\nnothing seeded")
+		return writeErr
+	}
+
+	var results []seeders.Result
+	err = pool.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		var seedErr error
+		results, seedErr = seeders.Run(ctx, tx, false, seeders.All()...)
+		return seedErr
+	})
+	if err != nil {
+		return err
+	}
+	return printSeedResults(out, results, false)
+}
+
+// requireMigrated refuses to seed a database whose schema is not current.
+//
+// A seeder writes the columns it knows about, so a missing table or a table
+// from an older migration would fail halfway through with a database error that
+// does not say what to do. Checking the migration state first turns that into
+// one instruction, and it catches the case a table check misses: a database
+// rolled back below the version a seeder needs.
+//
+// The check opens the single-connection migration handle rather than reusing
+// the pool, because goose reads its version table through database/sql. Asking
+// goose is deliberate: "pending" is the engine's own answer, so the check
+// cannot drift from what migrate:up would do.
+func requireMigrated(ctx context.Context, dsn string) error {
+	db, err := datastore.OpenMigrationDB(ctx, datastore.PostgresOptions{DSN: dsn})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+
+	migrator, err := database.NewMigrator(ctx, db, database.MigratorOptions{})
+	if err != nil {
+		return err
+	}
+
+	pending, err := migrator.Pending(ctx)
+	if err != nil {
+		return err
+	}
+	if len(pending) > 0 {
+		return fmt.Errorf("database: %d migration(s) pending; run migrate:up first", len(pending))
+	}
+	return nil
+}
+
+// printSeedResults reports one line per record and a summary. A dry run uses
+// future tense, so its output cannot be mistaken for a report of work done.
+func printSeedResults(w io.Writer, results []seeders.Result, dryRun bool) error {
+	var created, skipped int
+	for _, result := range results {
+		for _, key := range result.Created {
+			created++
+			if err := printSeedLine(w, result.Name, key, "created", "would create", dryRun); err != nil {
+				return err
+			}
+		}
+		for _, key := range result.Skipped {
+			skipped++
+			if err := printSeedLine(w, result.Name, key, "skipped", "would skip", dryRun); err != nil {
+				return err
+			}
+		}
+	}
+
+	if created+skipped > 0 {
+		if _, err := fmt.Fprintln(w); err != nil {
+			return err
+		}
+	}
+	if dryRun {
+		_, err := fmt.Fprintf(w, "%d to create, %d to skip\n", created, skipped)
+		return err
+	}
+	_, err := fmt.Fprintf(w, "%d created, %d skipped\n", created, skipped)
+	return err
+}
+
+// printSeedLine writes one record. The seeder name comes first so the output
+// sorts and greps by what was seeded. Both wordings are passed in rather than
+// derived: "create" and "skip" do not share a past-tense rule.
+func printSeedLine(w io.Writer, seeder, key, verb, dryRunVerb string, dryRun bool) error {
+	if dryRun {
+		verb = dryRunVerb
+	}
+	_, err := fmt.Fprintf(w, "%s %s %s\n", seeder, key, verb)
+	return err
 }
 
 // runMigrateReset rolls back every applied migration and, with --up, applies

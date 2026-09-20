@@ -66,6 +66,10 @@ task db:validate
 # Start a new migration. The name is normalized and refused when another
 # migration already uses it.
 task db:create -- add_widgets
+
+# Seed the default records. Every seeder is idempotent, so a second run
+# changes nothing; --dry-run reports without writing.
+task db:seed
 ```
 
 `migrate:create` writes the next free version into `database/migrations` and refuses a name that
@@ -73,6 +77,17 @@ another migration already uses, whatever its version. The skeleton has empty Up 
 `migrate:up` reports it as `empty` until statements are added. Migrations are embedded in the binary,
 so a new file only reaches `migrate:up` after a rebuild — `go run` and `task db:migrate` rebuild on
 every call.
+
+`migrate:seed` creates the default records a fresh database needs. It refuses to run until every
+migration is applied — a seeder writes columns the schema must already have — and reports the
+pending count with the command to fix it. Seeding writes data, so it asks for confirmation unless
+`--force` is passed or stdin is not a terminal, and the whole run is one transaction: a seeder that
+fails leaves nothing behind. `--dry-run` reports what would be created without writing anything.
+
+The default user is `admin@example.com` / `@dmin123` (`admin`, display name `Admin Sistem`,
+administrator). Every seeder is idempotent, so running `migrate:seed` twice reports the existing
+record as skipped instead of creating a second one. The credentials live in
+`database/seeders/user_factory.go`; change the password at first login on any deployment.
 
 `migrate:validate` checks the embedded files without a database: unparsable names, duplicate or
 non-consecutive versions, malformed annotations, and missing Down blocks. It runs as part of
