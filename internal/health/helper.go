@@ -331,8 +331,11 @@ func checkCounts(details map[string]CheckResult) string {
 
 // duration renders a duration for a human. go-humanize scales the unit, so a
 // fast check reads as "235 µs" rather than "0s".
+// duration renders a duration for a human. Three decimals is the precision a
+// reader can act on; the raw nanoseconds humanize would otherwise print are
+// noise.
 func duration(d time.Duration) string {
-	return humanize.SI(d.Seconds(), "s")
+	return humanize.SIWithDigits(d.Seconds(), 3, "s")
 }
 
 // WriteShort writes only the aggregated status, one word on one line, so a

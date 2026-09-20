@@ -23,14 +23,14 @@ func TestMigrateValidateNeedsNoDatabase(t *testing.T) {
 
 	out, err := runMigrateValidateCmd(t)
 	require.NoError(t, err)
-	assert.Contains(t, out, "9 migration file(s) valid")
+	assert.Contains(t, out, "9 migration files valid")
 }
 
 func TestMigrateValidateReportsNoIssues(t *testing.T) {
 	out, err := runMigrateValidateCmd(t)
 	require.NoError(t, err)
 	assert.NotContains(t, out, "goose will skip")
-	assert.Contains(t, out, "9 migration file(s) valid")
+	assert.Contains(t, out, "9 migration files valid")
 }
 
 // A broken file must fail the command, so `task check` fails with it.
@@ -48,7 +48,7 @@ func TestMigrateValidateReportsIssuesAndFails(t *testing.T) {
 	out, err := runMigrateValidateCmd(t)
 	require.Error(t, err)
 	assert.Contains(t, out, "00001_x.sql:3: boom")
-	assert.Contains(t, err.Error(), "1 problem(s) in 1 migration file(s)")
+	assert.Contains(t, err.Error(), "1 problem in 1 migration file")
 }
 
 func TestMigrateResetRollsBackEverything(t *testing.T) {
@@ -61,7 +61,7 @@ func TestMigrateResetRollsBackEverything(t *testing.T) {
 
 	out, err := runMigrateResetCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
-	assert.Contains(t, out, "9 migration(s) rolled back")
+	assert.Contains(t, out, "9 migrations rolled back")
 	assert.Zero(t, currentVersion(t, dsn))
 }
 
@@ -76,8 +76,8 @@ func TestMigrateResetWithUpReappliesEverything(t *testing.T) {
 
 	out, err := runMigrateResetCmd(t, "", "--env-file="+envFile, "--force", "--up")
 	require.NoError(t, err)
-	assert.Contains(t, out, "9 migration(s) rolled back")
-	assert.Contains(t, out, "9 migration(s) applied")
+	assert.Contains(t, out, "9 migrations rolled back")
+	assert.Contains(t, out, "9 migrations applied")
 	assert.Equal(t, int64(9), currentVersion(t, dsn))
 }
 
@@ -92,13 +92,13 @@ func TestMigrateResetDryRunChangesNothing(t *testing.T) {
 	out, err := runMigrateResetCmd(t, "", "--env-file="+envFile, "--dry-run")
 	require.NoError(t, err)
 	assert.Contains(t, out, "00003_create_multifactor_tables.sql")
-	assert.Contains(t, out, "3 migration(s) to roll back")
+	assert.Contains(t, out, "3 migrations to roll back")
 	assert.Equal(t, int64(3), currentVersion(t, dsn))
 
 	// With --up the pending half is listed too, still without touching anything.
 	out, err = runMigrateResetCmd(t, "", "--env-file="+envFile, "--dry-run", "--up")
 	require.NoError(t, err)
-	assert.Contains(t, out, "6 pending migration(s)")
+	assert.Contains(t, out, "6 migrations pending")
 	assert.Equal(t, int64(3), currentVersion(t, dsn))
 }
 
@@ -121,7 +121,7 @@ func TestMigrateResetWithUpOnFreshDatabaseApplies(t *testing.T) {
 	out, err := runMigrateResetCmd(t, "", "--env-file="+envFile, "--force", "--up")
 	require.NoError(t, err)
 	assert.NotContains(t, out, "no applied migrations")
-	assert.Contains(t, out, "9 migration(s) applied")
+	assert.Contains(t, out, "9 migrations applied")
 	assert.Equal(t, int64(9), currentVersion(t, dsn))
 }
 
@@ -137,9 +137,9 @@ func TestMigrateResetWithUpOnFreshDatabasePromptsToApply(t *testing.T) {
 
 	out, err := runMigrateResetCmd(t, "n\n", "--env-file="+envFile, "--up")
 	require.NoError(t, err)
-	assert.Contains(t, out, "apply all 9 pending migration(s)? [y/N]")
+	assert.Contains(t, out, "apply all 9 pending migrations? [y/N]")
 	assert.NotContains(t, out, "roll back")
-	assert.Contains(t, out, "9 pending migration(s) left unapplied")
+	assert.Contains(t, out, "9 pending migrations left unapplied")
 	assert.Zero(t, currentVersion(t, dsn))
 }
 
@@ -152,7 +152,7 @@ func TestMigrateResetDryRunOnFreshDatabase(t *testing.T) {
 	out, err := runMigrateResetCmd(t, "", "--env-file="+envFile, "--dry-run", "--up")
 	require.NoError(t, err)
 	assert.NotContains(t, out, "to roll back")
-	assert.Contains(t, out, "9 pending migration(s)")
+	assert.Contains(t, out, "9 migrations pending")
 	assert.Zero(t, currentVersion(t, dsn))
 
 	// Without --up there is nothing to report at all.
@@ -175,8 +175,8 @@ func TestMigrateResetDeclinedLeavesDatabase(t *testing.T) {
 
 	out, err := runMigrateResetCmd(t, "n\n", "--env-file="+envFile)
 	require.NoError(t, err)
-	assert.Contains(t, out, "roll back all 9 migration(s)? [y/N]")
-	assert.Contains(t, out, "9 migration(s) left applied")
+	assert.Contains(t, out, "roll back all 9 migrations? [y/N]")
+	assert.Contains(t, out, "9 migrations left applied")
 	assert.Equal(t, int64(9), currentVersion(t, dsn))
 }
 

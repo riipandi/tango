@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/urfave/cli/v3"
@@ -126,16 +127,21 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 	defer pool.Close()
 
 	out := cmd.Root().Writer
+	if err := reportTarget(out, dsn); err != nil {
+		return err
+	}
+
 	dryRun := cmd.Bool("dry-run")
 
 	// A dry run writes nothing, so it needs no confirmation and no
 	// transaction: there is nothing to roll back.
 	if dryRun {
+		started := time.Now()
 		results, err := seeders.Run(ctx, pool, true, seeders.All()...)
 		if err != nil {
 			return err
 		}
-		return printSeedResults(out, results, true)
+		return printSeedResults(out, results, true, time.Since(started))
 	}
 
 	proceed, err := confirm(cmd, terminalCheck(cmd), "seed the database?")
@@ -147,6 +153,7 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 		return writeErr
 	}
 
+	started := time.Now()
 	var results []seeders.Result
 	err = pool.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var seedErr error
@@ -156,7 +163,7 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	return printSeedResults(out, results, false)
+	return printSeedResults(out, results, false, time.Since(started))
 }
 
 // requireMigrated refuses to seed a database whose schema is not current.
@@ -188,14 +195,15 @@ func requireMigrated(ctx context.Context, dsn string) error {
 		return err
 	}
 	if len(pending) > 0 {
-		return fmt.Errorf("database: %d migration(s) pending; run migrate:up first", len(pending))
+		return fmt.Errorf("database: %d %s pending; run migrate:up first",
+			len(pending), plural(len(pending), "migration"))
 	}
 	return nil
 }
 
 // printSeedResults reports one line per record and a summary. A dry run uses
 // future tense, so its output cannot be mistaken for a report of work done.
-func printSeedResults(w io.Writer, results []seeders.Result, dryRun bool) error {
+func printSeedResults(w io.Writer, results []seeders.Result, dryRun bool, elapsed time.Duration) error {
 	var created, skipped int
 	for _, result := range results {
 		for _, key := range result.Created {
@@ -218,10 +226,12 @@ func printSeedResults(w io.Writer, results []seeders.Result, dryRun bool) error 
 		}
 	}
 	if dryRun {
-		_, err := fmt.Fprintf(w, "%d to create, %d to skip\n", created, skipped)
+		_, err := fmt.Fprintf(w, "%d to create, %d to skip in %s\n",
+			created, skipped, humanDuration(elapsed))
 		return err
 	}
-	_, err := fmt.Fprintf(w, "%d created, %d skipped\n", created, skipped)
+	_, err := fmt.Fprintf(w, "%d created, %d skipped in %s\n",
+		created, skipped, humanDuration(elapsed))
 	return err
 }
 
@@ -232,7 +242,7 @@ func printSeedLine(w io.Writer, seeder, key, verb, dryRunVerb string, dryRun boo
 	if dryRun {
 		verb = dryRunVerb
 	}
-	_, err := fmt.Fprintf(w, "%s %s %s\n", seeder, key, verb)
+	_, err := fmt.Fprintf(w, "%s%s %s %s\n", progressIndent, seeder, key, verb)
 	return err
 }
 
@@ -241,13 +251,16 @@ func printSeedLine(w io.Writer, seeder, key, verb, dryRunVerb string, dryRun boo
 // migrations, so resetting a fresh database still builds the schema.
 // --dry-run lists both halves without touching the database.
 func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
-	migrator, closeDB, err := openMigrator(ctx, cmd, database.MigratorOptions{})
+	out := cmd.Root().Writer
+	report := newReporter(out)
+
+	migrator, dsn, closeDB, err := openMigrator(ctx, cmd,
+		database.MigratorOptions{Progress: report.progress})
 	if err != nil {
 		return err
 	}
 	defer closeDB()
 
-	out := cmd.Root().Writer
 	reapply := cmd.Bool("up")
 
 	applied, err := migrator.Applied(ctx)
@@ -263,51 +276,77 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("dry-run") {
+		if err = reportTarget(out, dsn); err != nil {
+			return err
+		}
 		return planReset(ctx, migrator, out, applied, reapply)
 	}
 
 	// A fresh database has no rollback to do, so --up is a plain apply.
 	if len(applied) == 0 {
-		return applyResetUp(ctx, cmd, migrator, out)
+		if err = reportTarget(out, dsn); err != nil {
+			return err
+		}
+		return applyResetUp(ctx, cmd, migrator, out, report)
 	}
 
-	question := fmt.Sprintf("roll back all %d migration(s)?", len(applied))
+	question := fmt.Sprintf("roll back all %d %s?", len(applied), plural(len(applied), "migration"))
 	if reapply {
-		question = fmt.Sprintf("roll back all %d migration(s) and re-apply them?", len(applied))
+		question = fmt.Sprintf("roll back all %d %s and re-apply them?",
+			len(applied), plural(len(applied), "migration"))
 	}
 	proceed, err := confirm(cmd, terminalCheck(cmd), question)
 	if err != nil {
 		return err
 	}
 	if !proceed {
-		_, writeErr := fmt.Fprintf(out, "\n%d migration(s) left applied\n", len(applied))
+		_, writeErr := fmt.Fprintf(out, "\n%d %s left applied\n",
+			len(applied), plural(len(applied), "migration"))
 		return writeErr
+	}
+
+	if err = reportTarget(out, dsn); err != nil {
+		return err
 	}
 
 	rolled, err := migrator.Down(ctx, len(applied))
 	if err != nil {
-		if len(rolled) > 0 {
-			if writeErr := printResults(out, rolled, "rolled back"); writeErr != nil {
-				return writeErr
-			}
+		if writeErr := report.failed(); writeErr != nil {
+			return writeErr
 		}
 		return err
 	}
-	if err := printResults(out, rolled, "rolled back"); err != nil {
+	if err := report.failed(); err != nil {
+		return err
+	}
+	if err := printSummary(out, len(rolled), "rolled back", "migration", report.elapsed()); err != nil {
 		return err
 	}
 
 	if !reapply {
 		return nil
 	}
+
+	// A blank line separates the two halves, so the rollback report and the
+	// re-apply report do not read as one run.
 	if _, err := fmt.Fprintln(out); err != nil {
 		return err
 	}
+
+	// The re-apply is timed on its own, so its summary reports the up half
+	// rather than the whole reset.
+	report = newReporter(out)
 	reapplied, err := migrator.Up(ctx)
 	if err != nil {
+		if writeErr := report.failed(); writeErr != nil {
+			return writeErr
+		}
 		return err
 	}
-	return printResults(out, reapplied, "applied")
+	if err := report.failed(); err != nil {
+		return err
+	}
+	return printSummary(out, len(reapplied), "applied", "migration", report.elapsed())
 }
 
 // applyResetUp runs the --up half on a database with nothing applied. It asks
@@ -317,6 +356,7 @@ func applyResetUp(
 	cmd *cli.Command,
 	migrator *database.Migrator,
 	out io.Writer,
+	report *reporter,
 ) error {
 	pending, err := migrator.Pending(ctx)
 	if err != nil {
@@ -328,20 +368,27 @@ func applyResetUp(
 	}
 
 	proceed, err := confirm(cmd, terminalCheck(cmd),
-		fmt.Sprintf("apply all %d pending migration(s)?", len(pending)))
+		fmt.Sprintf("apply all %d pending %s?", len(pending), plural(len(pending), "migration")))
 	if err != nil {
 		return err
 	}
 	if !proceed {
-		_, writeErr := fmt.Fprintf(out, "\n%d pending migration(s) left unapplied\n", len(pending))
+		_, writeErr := fmt.Fprintf(out, "\n%d pending %s left unapplied\n",
+			len(pending), plural(len(pending), "migration"))
 		return writeErr
 	}
 
 	results, err := migrator.Up(ctx)
 	if err != nil {
+		if writeErr := report.failed(); writeErr != nil {
+			return writeErr
+		}
 		return err
 	}
-	return printResults(out, results, "applied")
+	if err := report.failed(); err != nil {
+		return err
+	}
+	return printSummary(out, len(results), "applied", "migration", report.elapsed())
 }
 
 // planReset prints both halves of a reset without touching the database. The
@@ -377,7 +424,8 @@ func planReset(
 // runMigrateValidate checks the embedded migrations and reports every problem.
 // It never connects to a database, so it works on a machine without Postgres.
 func runMigrateValidate(_ context.Context, cmd *cli.Command) error {
-	return printValidation(cmd.Root().Writer, migrationCheck())
+	started := time.Now()
+	return printValidation(cmd.Root().Writer, migrationCheck(), time.Since(started))
 }
 
 // migrationCheck is the seam the tests replace to exercise the failing path,
@@ -386,18 +434,20 @@ var migrationCheck = database.Validate
 
 // printValidation reports the outcome and returns an error when the migrations
 // are not valid, so the process exits non-zero in CI.
-func printValidation(w io.Writer, report database.ValidationReport) error {
+func printValidation(w io.Writer, report database.ValidationReport, elapsed time.Duration) error {
 	for _, issue := range report.Issues {
 		if _, err := fmt.Fprintf(w, "%s\n", issue); err != nil {
 			return err
 		}
 	}
 	if !report.OK() {
-		return fmt.Errorf("database: %d problem(s) in %d migration file(s)",
-			len(report.Issues), report.Checked)
+		return fmt.Errorf("database: %d %s in %d %s",
+			len(report.Issues), plural(len(report.Issues), "problem"),
+			report.Checked, plural(report.Checked, "migration file"))
 	}
 
-	_, err := fmt.Fprintf(w, "%d migration file(s) valid\n", report.Checked)
+	_, err := fmt.Fprintf(w, "%d %s valid in %s\n",
+		report.Checked, plural(report.Checked, "migration file"), humanDuration(elapsed))
 	return err
 }
 

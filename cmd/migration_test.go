@@ -107,7 +107,7 @@ func TestMigrateUpDryRunListsPendingWithoutApplying(t *testing.T) {
 	out, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--dry-run")
 	require.NoError(t, err)
 	assert.Contains(t, out, "00001_initialize_schema.sql")
-	assert.Contains(t, out, "9 pending migration(s)")
+	assert.Contains(t, out, "9 migrations pending")
 	assert.NotContains(t, out, "applied")
 
 	// Nothing may have been written.
@@ -130,7 +130,7 @@ func TestMigrateUpAppliesAndIsIdempotent(t *testing.T) {
 	out, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
 	assert.Contains(t, out, "00001_initialize_schema.sql applied")
-	assert.Contains(t, out, "9 migration(s) applied")
+	assert.Contains(t, out, "9 migrations applied")
 
 	out, err = runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
@@ -143,12 +143,12 @@ func TestMigrateUpStopsAtToVersion(t *testing.T) {
 
 	out, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--force", "--to=2")
 	require.NoError(t, err)
-	assert.Contains(t, out, "2 migration(s) applied")
+	assert.Contains(t, out, "2 migrations applied")
 	assert.NotContains(t, out, "00003_")
 
 	out, err = runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
-	assert.Contains(t, out, "7 migration(s) applied")
+	assert.Contains(t, out, "7 migrations applied")
 }
 
 // A non-interactive run (stdin is not a terminal) must not block on the
@@ -160,7 +160,7 @@ func TestMigrateUpDoesNotPromptWithoutTerminal(t *testing.T) {
 	out, err := runMigrateUpCmd(t, "", "--env-file="+envFile)
 	require.NoError(t, err)
 	assert.NotContains(t, out, "[y/N]")
-	assert.Contains(t, out, "9 migration(s) applied")
+	assert.Contains(t, out, "9 migrations applied")
 }
 
 func TestConfirm(t *testing.T) {
@@ -193,7 +193,7 @@ func TestConfirm(t *testing.T) {
 			var got bool
 			var promptErr error
 			cmd.Action = func(_ context.Context, cmd *cli.Command) error {
-				got, promptErr = confirm(cmd, tt.interactive, "apply 3 pending migration(s)?")
+				got, promptErr = confirm(cmd, tt.interactive, "apply 3 pending migrations?")
 				return nil
 			}
 			require.NoError(t, cmd.Run(t.Context(), append([]string{"tango"}, tt.args...)))
@@ -214,7 +214,7 @@ func TestMigrateDownRollsBackNewestFirst(t *testing.T) {
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
 	assert.Contains(t, out, "00009_add_session_remember.sql rolled back")
-	assert.Contains(t, out, "1 migration(s) rolled back")
+	assert.Contains(t, out, "1 migration rolled back")
 
 	// The queue tables arrive in 00008, which is now the highest applied
 	// migration, so they must still exist.
@@ -243,7 +243,7 @@ func TestMigrateDownCountAndDryRun(t *testing.T) {
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--dry-run")
 	require.NoError(t, err)
 	assert.Contains(t, out, "00009_add_session_remember.sql")
-	assert.Contains(t, out, "1 migration(s) to roll back")
+	assert.Contains(t, out, "1 migration to roll back")
 
 	// --dry-run must not have rolled anything back.
 	version := currentVersion(t, dsn)
@@ -252,7 +252,7 @@ func TestMigrateDownCountAndDryRun(t *testing.T) {
 	out, err = runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=3")
 	require.NoError(t, err)
 	assert.Contains(t, out, "00007_create_rate_limits_table.sql rolled back")
-	assert.Contains(t, out, "3 migration(s) rolled back")
+	assert.Contains(t, out, "3 migrations rolled back")
 	assert.Equal(t, int64(6), currentVersion(t, dsn))
 }
 
@@ -267,7 +267,7 @@ func TestMigrateDownCountAboveApplied(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=50")
 	require.NoError(t, err)
-	assert.Contains(t, out, "9 migration(s) rolled back")
+	assert.Contains(t, out, "9 migrations rolled back")
 	assert.Zero(t, currentVersion(t, dsn))
 }
 
@@ -305,8 +305,8 @@ func TestMigrateDownDeclinedLeavesDatabase(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "n\n", "--env-file="+envFile)
 	require.NoError(t, err)
-	assert.Contains(t, out, "roll back 1 migration(s)? [y/N]")
-	assert.Contains(t, out, "1 migration(s) left applied")
+	assert.Contains(t, out, "roll back 1 migration? [y/N]")
+	assert.Contains(t, out, "1 migration left applied")
 	assert.Equal(t, int64(9), currentVersion(t, dsn))
 }
 
@@ -382,10 +382,12 @@ func TestMigrateStatusShowsAppliedTime(t *testing.T) {
 	require.NoError(t, err)
 
 	// 00001 applied 2026-09-21 04:31:07 00001_initialize_schema.sql
+	// The list is indented under the database line, so the marker is not at the
+	// start of the line.
 	line := ""
 	for _, candidate := range strings.Split(out, "\n") {
-		if strings.HasPrefix(candidate, "00001 applied ") {
-			line = candidate
+		if strings.HasPrefix(strings.TrimSpace(candidate), "00001 applied ") {
+			line = strings.TrimSpace(candidate)
 			break
 		}
 	}

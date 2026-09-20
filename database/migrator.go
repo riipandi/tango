@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"path/filepath"
 	"slices"
 	"time"
@@ -33,6 +34,10 @@ type MigratorOptions struct {
 	// database version instead of failing. Without it goose refuses to run,
 	// because an older migration may depend on a schema the newer ones changed.
 	AllowOutOfOrder bool
+	// Progress receives one event per step of a run as it happens. It is called
+	// from the goroutine running the migration, so it must not block. A nil
+	// Progress disables reporting.
+	Progress func(ProgressEvent)
 }
 
 // Migrator applies the embedded migrations over a single-connection handle.
@@ -61,6 +66,10 @@ type MigrationStatus struct {
 // be the single-connection handle from datastore.OpenMigrationDB: goose takes a
 // session advisory lock on it, so a pool could hand the lock and the migration
 // statements to different backends.
+//
+// When opts.Progress is set, goose runs in verbose mode and its log records are
+// translated into progress events. goose has no progress hook of its own, so a
+// custom slog handler is the only way to see a run while it happens.
 func NewMigrator(ctx context.Context, db *sql.DB, opts MigratorOptions) (*Migrator, error) {
 	if db == nil {
 		return nil, errors.New("database: migrator requires a database handle")
@@ -76,14 +85,23 @@ func NewMigrator(ctx context.Context, db *sql.DB, opts MigratorOptions) (*Migrat
 		return nil, fmt.Errorf("database: create migration locker: %w", err)
 	}
 
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, fsys,
+	providerOptions := []goose.ProviderOption{
 		goose.WithSessionLocker(locker),
 		goose.WithTableName(VersionTable),
 		goose.WithAllowOutofOrder(opts.AllowOutOfOrder),
+	}
+	if opts.Progress != nil {
+		providerOptions = append(providerOptions,
+			goose.WithVerbose(true),
+			goose.WithSlog(slog.New(&progressHandler{emit: opts.Progress})),
+		)
+	} else {
 		// The command prints the results itself, in the same shape as the rest
 		// of the CLI, so goose must not log them a second time.
-		goose.WithLogger(goose.NopLogger()),
-	)
+		providerOptions = append(providerOptions, goose.WithLogger(goose.NopLogger()))
+	}
+
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, fsys, providerOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("database: load migrations: %w", err)
 	}

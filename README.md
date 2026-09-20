@@ -78,6 +78,25 @@ another migration already uses, whatever its version. The skeleton has empty Up 
 so a new file only reaches `migrate:up` after a rebuild — `go run` and `task db:migrate` rebuild on
 every call.
 
+Every command that touches the database opens with the database it resolved, so a run against the
+wrong server is visible before anything changes. Credentials are never printed:
+
+```text
+$ task db:migrate
+database: localhost:5432/tango
+
+  00001_initialize_schema.sql applied (25.832 ms)
+  00002_create_identity_tables.sql applied (37.919 ms)
+  ...
+
+9 migrations applied in 202.525 ms
+```
+
+A run reports each migration as it finishes, not in one block at the end, so a slow migration leaves
+the ones before it visible. Counts are pluralized (`1 migration`, `9 migrations`) and durations are
+humanized. `migrate:version` is the exception: it prints the bare number, because scripts read it
+directly.
+
 `migrate:seed` creates the default records a fresh database needs. It refuses to run until every
 migration is applied — a seeder writes columns the schema must already have — and reports the
 pending count with the command to fix it. Seeding writes data, so it asks for confirmation unless
