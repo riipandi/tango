@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -70,7 +71,7 @@ func main() {
 	}
 	// The paths are operator-supplied command arguments, not request
 	// input; this is a local one-shot generator.
-	raw, err := os.ReadFile(os.Args[1]) //nolint:gosec // CLI argument, not tainted input
+	raw, err := os.ReadFile(filepath.Clean(os.Args[1]))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -156,7 +157,7 @@ func main() {
 		fmt.Fprintf(&b, "| `%s` | %s |\n", n, strings.Join(fields, ", "))
 	}
 
-	if err := os.WriteFile(os.Args[2], []byte(b.String()), 0o600); err != nil { //nolint:gosec // CLI argument, not tainted input
+	if err := os.WriteFile(filepath.Clean(os.Args[2]), []byte(b.String()), 0o600); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

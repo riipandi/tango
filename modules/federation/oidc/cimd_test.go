@@ -23,7 +23,7 @@ import (
 )
 
 // testTLSInsecure accepts the stub server's self-signed cert.
-var testTLSInsecure = &tls.Config{InsecureSkipVerify: true} //nolint:gosec — test stub only
+var testTLSInsecure = &tls.Config{InsecureSkipVerify: true}
 
 func connectError(t *testing.T, err error) *connect.Error {
 	t.Helper()

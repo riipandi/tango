@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -132,7 +133,11 @@ func (h *PasswordHasher) Verify(password, encoded string) (bool, error) {
 		return false, err
 	}
 
-	got, err := cost.derive([]byte(password), salt, uint32(len(want))) //nolint:gosec // key length comes from the decoded hash segment, bounded well below 2^32
+	keyLength, err := keyLengthFor(len(want))
+	if err != nil {
+		return false, err
+	}
+	got, err := cost.derive([]byte(password), salt, keyLength)
 	if err != nil {
 		return false, err
 	}
@@ -142,6 +147,14 @@ func (h *PasswordHasher) Verify(password, encoded string) (bool, error) {
 		match = subtle.ConstantTimeCompare(got, want) == 1
 	})
 	return match, nil
+}
+
+// keyLengthFor narrows a decoded key length to the derive() parameter.
+func keyLengthFor(n int) (uint32, error) {
+	if n < 0 || n > math.MaxUint32 {
+		return 0, fmt.Errorf("%w: key length %d", ErrInvalidHash, n)
+	}
+	return uint32(n), nil
 }
 
 type cost interface {
@@ -285,18 +298,17 @@ func decodeScryptCost(s string) (scryptCost, error) {
 
 // costValue parses a uint32 cost value.
 func costValue(s string) (uint32, error) {
-	value, err := parseCost(s, 32)
-	return uint32(value), err //nolint:gosec // ParseUint with bitSize 32 bounds the value
+	return parseCost[uint32](s, 32)
 }
 
 // costUint8 parses a uint8 cost value.
 func costUint8(s string) (uint8, error) {
-	value, err := parseCost(s, 8)
-	return uint8(value), err //nolint:gosec // ParseUint with bitSize 8 bounds the value
+	return parseCost[uint8](s, 8)
 }
 
-// parseCost parses an unsigned cost value with the given bit size.
-func parseCost(s string, bitSize int) (uint64, error) {
+// parseCost parses an unsigned cost value into T. The bit size must
+// bound T, so the conversion cannot truncate.
+func parseCost[T ~uint32 | ~uint8](s string, bitSize int) (T, error) {
 	_, raw, found := strings.Cut(s, "=")
 	if !found {
 		return 0, fmt.Errorf("%w: cost %q", ErrInvalidHash, s)
@@ -305,5 +317,5 @@ func parseCost(s string, bitSize int) (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("%w: cost %q", ErrInvalidHash, s)
 	}
-	return value, nil
+	return T(value), nil
 }

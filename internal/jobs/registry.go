@@ -2,8 +2,9 @@ package jobs
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand/v2"
+	"math/big"
 	"sync"
 	"time"
 
@@ -203,7 +204,7 @@ func jobInterval(job Job, task RecurringTask) time.Duration {
 // firstDelay spreads initial runs across each job's interval.
 func firstDelay(interval time.Duration) time.Duration {
 	jitter := jitterFor(interval)
-	return jitter + time.Duration(rand.Int64N(int64(interval/2)+1)) //nolint:gosec // scheduling jitter, not a secret
+	return jitter + time.Duration(randomBelow(int64(interval/2)+1))
 }
 
 // jitterFor adds a small delay to spread runs across instances.
@@ -212,6 +213,19 @@ func jitterFor(interval time.Duration) time.Duration {
 	if jitter <= 0 {
 		return 0
 	}
-	//nolint:gosec // scheduling jitter, not a secret
-	return time.Duration(rand.Int64N(int64(jitter) + 1))
+	return time.Duration(randomBelow(int64(jitter) + 1))
+}
+
+// randomBelow returns a uniform value in [0, n). The spread only
+// needs to be unpredictable across instances, but crypto/rand keeps
+// the jitter off the weak-source path entirely.
+func randomBelow(n int64) int64 {
+	if n <= 0 {
+		return 0
+	}
+	value, err := rand.Int(rand.Reader, big.NewInt(n))
+	if err != nil {
+		return 0
+	}
+	return value.Int64()
 }
