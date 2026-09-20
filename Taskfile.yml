@@ -80,6 +80,14 @@ tasks:
     desc: Print the current migration version
     cmd: go run -tags debug ./cmd migrate:version --env-file=.env.local {{.CLI_ARGS}}
 
+  db:validate:
+    desc: Check the embedded migration files
+    cmd: go run -tags debug ./cmd migrate:validate
+
+  db:reset:
+    desc: Roll back every migration (add -- --up to re-apply)
+    cmd: go run -tags debug ./cmd migrate:reset --env-file=.env.local {{.CLI_ARGS}}
+
   key:generate:
     desc: Generate application secret keys
     cmd: go run -tags debug ./cmd key:generate {{.CLI_ARGS}}
@@ -159,9 +167,10 @@ tasks:
       - pnpm exec oxfmt --write .
 
   check:
-    desc: Run all checks (go vet + JS formatting)
+    desc: Run all checks (go vet + migration files + JS formatting)
     cmds:
       - go vet ./...
+      - go run -tags debug ./cmd migrate:validate
       - pnpm exec oxfmt --check
       - pnpm exec oxlint
 

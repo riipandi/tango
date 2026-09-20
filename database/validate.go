@@ -49,16 +49,28 @@ func (r ValidationReport) OK() bool { return len(r.Issues) == 0 }
 // StatementBegin block, or a typo in a table name is only caught when goose
 // executes the migration.
 func Validate() ValidationReport {
-	files, issues := listEmbeddedMigrations()
+	fsys, err := fs.Sub(migrationFiles, migrationsDir)
+	if err != nil {
+		return ValidationReport{Issues: []ValidationIssue{
+			{Message: fmt.Sprintf("open embedded migrations: %v", err)},
+		}}
+	}
+	return ValidateFS(fsys)
+}
+
+// ValidateFS is Validate over any filesystem, so the checks can be exercised
+// with fixtures instead of only the files this build embedded.
+func ValidateFS(fsys fs.FS) ValidationReport {
+	files, issues := listMigrations(fsys)
 	issues = append(issues, validateVersions(files)...)
 
 	for _, file := range files {
-		issues = append(issues, validateMigrationFile(file.name)...)
+		issues = append(issues, validateMigrationFile(fsys, file.name)...)
 	}
 	return ValidationReport{Checked: len(files), Issues: issues}
 }
 
-// embeddedMigration is one file in the embedded migrations directory.
+// embeddedMigration is one file in the migrations directory.
 type embeddedMigration struct {
 	name    string
 	version int64
@@ -68,13 +80,13 @@ type embeddedMigration struct {
 // listing and the numeric order agree.
 const migrationPrefixWidth = 5
 
-// listEmbeddedMigrations reads the embedded directory and parses each file
-// name. A name that goose cannot parse is reported and skipped, because goose
-// would skip it too — silently, which is the trap this check exists for.
-func listEmbeddedMigrations() ([]embeddedMigration, []ValidationIssue) {
-	entries, err := fs.ReadDir(migrationFiles, migrationsDir)
+// listMigrations reads the directory and parses each file name. A name that
+// goose cannot parse is reported and skipped, because goose would skip it too —
+// silently, which is the trap this check exists for.
+func listMigrations(fsys fs.FS) ([]embeddedMigration, []ValidationIssue) {
+	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
-		return nil, []ValidationIssue{{Message: fmt.Sprintf("read embedded migrations: %v", err)}}
+		return nil, []ValidationIssue{{Message: fmt.Sprintf("read migrations: %v", err)}}
 	}
 
 	var (
@@ -147,8 +159,8 @@ var knownAnnotations = []string{
 // validateMigrationFile walks one file and reports the annotation mistakes
 // goose would reject, plus the two shapes it accepts but this project forbids:
 // a file without a Down block, and a statement outside Up or Down.
-func validateMigrationFile(name string) []ValidationIssue {
-	content, err := fs.ReadFile(migrationFiles, migrationsDir+"/"+name)
+func validateMigrationFile(fsys fs.FS, name string) []ValidationIssue {
+	content, err := fs.ReadFile(fsys, name)
 	if err != nil {
 		return []ValidationIssue{{File: name, Message: fmt.Sprintf("read file: %v", err)}}
 	}
@@ -165,7 +177,8 @@ func validateMigrationFile(name string) []ValidationIssue {
 		issues = append(issues, ValidationIssue{File: name, Line: line, Message: message})
 	}
 
-	for i, raw := range strings.Split(string(content), "\n") {
+	lines := strings.Split(string(content), "\n")
+	for i, raw := range lines {
 		line := i + 1
 		trimmed := strings.TrimSpace(raw)
 
@@ -228,7 +241,7 @@ func validateMigrationFile(name string) []ValidationIssue {
 
 	switch {
 	case inStatement:
-		report(len(strings.Split(string(content), "\n")), "missing '-- +goose StatementEnd'")
+		report(len(lines), "missing '-- +goose StatementEnd'")
 	case !upSeen:
 		report(0, "missing '-- +goose Up' annotation")
 	case !downSeen:

@@ -54,10 +54,18 @@ go run -tags debug ./cmd migrate:up --env-file=.env.local --to=3
 task db:rollback
 task db:rollback -- --count=3
 
+# Rebuild the schema from scratch.
+task db:reset -- --up
+
 # Inspect the current state.
 task db:status
 task db:version
+task db:validate
 ```
+
+`migrate:validate` checks the embedded files without a database: unparsable names, duplicate or
+non-consecutive versions, malformed annotations, and missing Down blocks. It runs as part of
+`task check`.
 
 Concurrent runs are safe: the migrator holds a Postgres session advisory lock, so a second process
 waits instead of applying the same migration twice.
