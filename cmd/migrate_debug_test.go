@@ -3,6 +3,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -181,6 +183,89 @@ func TestMigrateResetDeclinedLeavesDatabase(t *testing.T) {
 func runMigrateResetCmd(t *testing.T, stdin string, args ...string) (string, error) {
 	t.Helper()
 	return runMigrateCmd(t, migrateResetCmd, stdin, args...)
+}
+
+// migrate:create must need no database, so a schema can be started before
+// Postgres exists.
+func TestMigrateCreateNeedsNoDatabase(t *testing.T) {
+	t.Setenv(envfile.DatabaseURL, "")
+	t.Setenv("HOME", t.TempDir())
+
+	out, err := runMigrateCreateCmd(t, t.TempDir(), "add widgets")
+	require.NoError(t, err)
+	assert.Contains(t, out, "00001_add_widgets.sql created (version 00001)")
+}
+
+func TestMigrateCreateReportsPathAndVersion(t *testing.T) {
+	dir := t.TempDir()
+
+	out, err := runMigrateCreateCmd(t, dir, "add widgets")
+	require.NoError(t, err)
+
+	path := filepath.Join(dir, "00001_add_widgets.sql")
+	assert.Contains(t, out, path+" created (version 00001)")
+	assert.FileExists(t, path)
+}
+
+// A second create must take the next version, not reuse the first.
+func TestMigrateCreateContinuesSequence(t *testing.T) {
+	dir := t.TempDir()
+
+	_, err := runMigrateCreateCmd(t, dir, "add widgets")
+	require.NoError(t, err)
+	out, err := runMigrateCreateCmd(t, dir, "drop widgets")
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "00002_drop_widgets.sql created (version 00002)")
+}
+
+// A name conflict must fail the command, so a scripted create cannot silently
+// leave a second file describing the same change.
+func TestMigrateCreateFailsOnNameConflict(t *testing.T) {
+	dir := t.TempDir()
+
+	_, err := runMigrateCreateCmd(t, dir, "add widgets")
+	require.NoError(t, err)
+
+	out, err := runMigrateCreateCmd(t, dir, "Add Widgets")
+	require.ErrorIs(t, err, database.ErrMigrationNameTaken)
+	assert.Empty(t, out, "a failed create prints nothing to stdout")
+
+	entries, readErr := os.ReadDir(dir)
+	require.NoError(t, readErr)
+	assert.Len(t, entries, 1)
+}
+
+func TestMigrateCreateRejectsUnusableName(t *testing.T) {
+	dir := t.TempDir()
+
+	out, err := runMigrateCreateCmd(t, dir, "...")
+	require.ErrorIs(t, err, database.ErrInvalidMigrationName)
+	assert.Empty(t, out)
+
+	entries, readErr := os.ReadDir(dir)
+	require.NoError(t, readErr)
+	assert.Empty(t, entries)
+}
+
+func TestMigrateCreateFailsWhenDirectoryMissing(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope")
+
+	out, err := runMigrateCreateCmd(t, missing, "add widgets")
+	require.ErrorIs(t, err, database.ErrMigrationsDirMissing)
+	assert.Empty(t, out)
+	assert.NoDirExists(t, missing)
+}
+
+// The command writes into database/migrations unless --dir says otherwise,
+// which is the directory the binary embeds.
+func TestMigrateCreateDefaultsToEmbeddedDirectory(t *testing.T) {
+	assert.Equal(t, database.MigrationsPath, migrateCreateCmd.Flags[0].(*cli.StringFlag).Value)
+}
+
+func runMigrateCreateCmd(t *testing.T, dir, name string) (string, error) {
+	t.Helper()
+	return runMigrateCmd(t, migrateCreateCmd, "", "--dir="+dir, name)
 }
 
 func runMigrateValidateCmd(t *testing.T, args ...string) (string, error) {

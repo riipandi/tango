@@ -12,24 +12,48 @@ import (
 	"github.com/riipandi/tango/database"
 )
 
-var migrationName string
-
 var migrateCreateCmd = &cli.Command{
 	Name:     "migrate:create",
 	Category: "Development commands",
 	Usage:    "Create a new migration file",
+	Description: `Writes a new migration skeleton with the next free version and a
+normalized name. The name is refused when another migration already
+uses it, whatever its version, so no two files can share a name.
+
+The file starts with empty Up and Down blocks; migrate:up reports such
+a migration as "empty" until statements are added. A new file only
+reaches the migrator after a rebuild, because migrations are embedded
+in the binary.`,
 	Arguments: []cli.Argument{
 		&cli.StringArg{
-			Name:        "name",
-			UsageText:   "<MIGRATION_NAME>",
-			Destination: &migrationName,
-			Required:    true,
+			Name:      "name",
+			UsageText: "<MIGRATION_NAME>",
+			Required:  true,
 		},
 	},
-	Action: func(ctx context.Context, cmd *cli.Command) error {
-		fmt.Printf("Creating migration file: %s\n", migrationName)
-		return nil
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "dir",
+			Usage: "Directory to write into",
+			Value: database.MigrationsPath,
+		},
 	},
+	Action: runMigrateCreate,
+}
+
+// runMigrateCreate writes one migration file and reports where it landed.
+func runMigrateCreate(_ context.Context, cmd *cli.Command) error {
+	created, err := database.CreateMigration(database.CreateOptions{
+		Dir:  cmd.String("dir"),
+		Name: cmd.StringArg("name"),
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(cmd.Root().Writer, "%s created (version %0*d)\n",
+		created.Path, database.MigrationPrefixWidth, created.Version)
+	return err
 }
 
 var migrateResetCmd = &cli.Command{

@@ -393,7 +393,9 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
 
         fs.mkdirSync(path.resolve(viteRoot, buildOpts.outputDir), { recursive: true })
 
-        log('building binary...')
+        const buildMode = buildOpts.buildTags.includes('debug') ? 'debug' : 'release'
+        log(`building binary (${buildMode})...`)
+
         const infoLines = formatBuildInfo(buildOpts)
         const gutter = Math.max(...infoLines.map((line) => line.label.length)) + 1
         for (const line of infoLines) {

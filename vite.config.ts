@@ -14,6 +14,7 @@ const goModule = 'github.com/riipandi/tango'
 const isStorybook = process.env.STORYBOOK === 'true'
 const APP_VERSION = process.env.BUILD_VERSION || pkg.version
 const BUILD_DATE = process.env.BUILD_DATE || new Date().toISOString()
+const BUILD_MODE = process.env.BUILD_MODE || 'release'
 const BUILD_HASH = process.env.BUILD_HASH || 'dev'
 
 // Same-origin proxy to the demo auth backend. Required for the HttpOnly
@@ -40,8 +41,8 @@ export default defineConfig({
       binArgs: ['serve'],
       build: {
         embedDir: 'web/output',
-        outputDir: 'build/release',
-        buildTags: ['release'],
+        outputDir: BUILD_MODE === 'debug' ? 'build/debug' : 'build/release',
+        buildTags: [BUILD_MODE],
         buildFlags: ['-trimpath', '-buildmode=pie', '-buildvcs=false'],
         ldflags: [
           '-w -s -extldflags -static',

@@ -62,7 +62,17 @@ task db:reset -- --up
 task db:status
 task db:version
 task db:validate
+
+# Start a new migration. The name is normalized and refused when another
+# migration already uses it.
+task db:create -- add_widgets
 ```
+
+`migrate:create` writes the next free version into `database/migrations` and refuses a name that
+another migration already uses, whatever its version. The skeleton has empty Up and Down blocks, so
+`migrate:up` reports it as `empty` until statements are added. Migrations are embedded in the binary,
+so a new file only reaches `migrate:up` after a rebuild — `go run` and `task db:migrate` rebuild on
+every call.
 
 `migrate:validate` checks the embedded files without a database: unparsable names, duplicate or
 non-consecutive versions, malformed annotations, and missing Down blocks. It runs as part of

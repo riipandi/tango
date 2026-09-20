@@ -70,15 +70,16 @@ func ValidateFS(fsys fs.FS) ValidationReport {
 	return ValidationReport{Checked: len(files), Issues: issues}
 }
 
+// MigrationPrefixWidth is the number of digits a migration file name reserves
+// for its version, so a directory listing and the numeric order agree. It lives
+// here because validate, create, and the commands all report a version.
+const MigrationPrefixWidth = 5
+
 // embeddedMigration is one file in the migrations directory.
 type embeddedMigration struct {
 	name    string
 	version int64
 }
-
-// migrationPrefixWidth is the zero padding the file names use, so a directory
-// listing and the numeric order agree.
-const migrationPrefixWidth = 5
 
 // listMigrations reads the directory and parses each file name. A name that
 // goose cannot parse is reported and skipped, because goose would skip it too —
@@ -103,9 +104,9 @@ func listMigrations(fsys fs.FS) ([]embeddedMigration, []ValidationIssue) {
 			continue
 		}
 
-		if prefix, _, _ := strings.Cut(name, "_"); len(prefix) != migrationPrefixWidth {
+		if prefix, _, _ := strings.Cut(name, "_"); len(prefix) != MigrationPrefixWidth {
 			issues = append(issues, ValidationIssue{File: name, Message: fmt.Sprintf(
-				"version prefix must be %d digits, found %q", migrationPrefixWidth, prefix)})
+				"version prefix must be %d digits, found %q", MigrationPrefixWidth, prefix)})
 		}
 		files = append(files, embeddedMigration{name: name, version: version})
 	}
@@ -134,7 +135,7 @@ func validateVersions(files []embeddedMigration) []ValidationIssue {
 		if want := int64(i + 1); version != want {
 			issues = append(issues, ValidationIssue{Message: fmt.Sprintf(
 				"versions must be consecutive from 1: expected %0*d, found %0*d (%s)",
-				migrationPrefixWidth, want, migrationPrefixWidth, version, byVersion[version])})
+				MigrationPrefixWidth, want, MigrationPrefixWidth, version, byVersion[version])})
 			// One gap explains every later version, so report it once.
 			break
 		}

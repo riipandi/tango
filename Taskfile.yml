@@ -43,7 +43,9 @@ tasks:
   build:
     desc: Build frontend + Go binary (single file)
     deps: [rpc:generate]
-    cmd: pnpm exec vite build {{.CLI_ARGS}}
+    cmds:
+      - BUILD_MODE=release pnpm exec vite build
+      - BUILD_MODE=debug pnpm exec vite build
 
   start:
     desc: Run the release binary on :3000
@@ -87,6 +89,10 @@ tasks:
   db:reset:
     desc: Roll back every migration (add -- --up to re-apply)
     cmd: go run -tags debug ./cmd migrate:reset --env-file=.env.local {{.CLI_ARGS}}
+
+  db:create:
+    desc: Create a new migration file (task db:create -- add_widgets)
+    cmd: go run -tags debug ./cmd migrate:create {{.CLI_ARGS}}
 
   key:generate:
     desc: Generate application secret keys
