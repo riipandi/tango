@@ -173,7 +173,7 @@ func TestAccessSignerRoundTrip(t *testing.T) {
 		IsAdmin:   true,
 	})
 	require.NoError(t, err)
-	assert.WithinDuration(t, time.Now().Add(AccessTokenTTL), expiresAt, time.Minute)
+	assert.WithinDuration(t, time.Now().Add(DefaultAccessTokenTTL), expiresAt, time.Minute)
 
 	verified, err := signer.Verify(ctx, signed)
 	require.NoError(t, err)

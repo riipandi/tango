@@ -19,6 +19,27 @@ func (c *Config) Validate() error {
 		validateURL("database.url", c.Database.URL, "postgres", "postgresql"),
 		validateURL("public.base_url", c.Public.BaseURL, "http", "https"),
 		validateURL("public.s3_assets_url", c.Public.S3AssetsURL, "http", "https"),
+
+		// Lifetimes are seconds; a non-positive value would issue an
+		// already-expired token or session.
+		validateRange("auth.access_token_expiry", c.Auth.AccessTokenExpiry, 1, maxLifetimeSeconds),
+		validateRange("auth.session_lifetime", c.Auth.SessionLifetime, 1, maxLifetimeSeconds),
+		validateRange("auth.session_short_lifetime", c.Auth.SessionShortLifetime, 1, maxLifetimeSeconds),
+		validateRange("oidc.access_token_expiry", c.OIDC.AccessTokenExpiry, 1, maxLifetimeSeconds),
+		validateRange("oidc.refresh_token_expiry", c.OIDC.RefreshTokenExpiry, 1, maxLifetimeSeconds),
+		validateRange("oidc.authorization_code_expiry", c.OIDC.AuthorizationCodeExpiry, 1, maxLifetimeSeconds),
+		validateRange("oidc.interaction_expiry", c.OIDC.InteractionExpiry, 1, maxLifetimeSeconds),
+		validateRange("oidc.device_code_expiry", c.OIDC.DeviceCodeExpiry, 1, maxLifetimeSeconds),
+		validateRange("oidc.par_expiry", c.OIDC.PARExpiry, 1, maxLifetimeSeconds),
+	}
+
+	// A short session longer than the remembered one would make the
+	// "remember me" checkbox shorten the session instead of extending
+	// it.
+	if c.Auth.SessionShortLifetime > c.Auth.SessionLifetime {
+		errs = append(errs, fmt.Errorf(
+			"auth.session_short_lifetime: %d exceeds auth.session_lifetime (%d)",
+			c.Auth.SessionShortLifetime, c.Auth.SessionLifetime))
 	}
 
 	if c.App.Mode == "production" {
@@ -36,6 +57,10 @@ func (c *Config) Validate() error {
 
 	return errors.Join(errs...)
 }
+
+// maxLifetimeSeconds bounds every configurable lifetime: one year.
+// Anything longer is a misconfiguration, not a preference.
+const maxLifetimeSeconds = 365 * 24 * 60 * 60
 
 func validateEnum(name, value string, allowed ...string) error {
 	if slices.Contains(allowed, value) {

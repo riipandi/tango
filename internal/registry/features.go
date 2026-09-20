@@ -163,6 +163,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		session.WithMFAPort(totpService),
 		session.WithAccessTokens(session.NewAccessTokenSigner(
 			jwtutils.NewCachedKeyProvider(keys, jwks.CacheTTL),
+			session.WithAccessTokenTTL(seconds(deps.Config.Auth.AccessTokenExpiry)),
 		)),
 	)
 	totpService.BindSessions(sessions)
@@ -274,9 +275,20 @@ func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *s
 		oidc.WithScimBinding(scimBinding),
 		oidc.WithAccessAuthenticator(sessions),
 		oidc.WithCookieSecure(deps.Config.App.Mode != "development"),
+		oidc.WithLifetimes(oidc.Lifetimes{
+			AccessToken:       seconds(deps.Config.OIDC.AccessTokenExpiry),
+			RefreshToken:      seconds(deps.Config.OIDC.RefreshTokenExpiry),
+			AuthorizationCode: seconds(deps.Config.OIDC.AuthorizationCodeExpiry),
+			Interaction:       seconds(deps.Config.OIDC.InteractionExpiry),
+			DeviceCode:        seconds(deps.Config.OIDC.DeviceCodeExpiry),
+			PAR:               seconds(deps.Config.OIDC.PARExpiry),
+		}),
 	)
 	return oidc.New(service)
 }
+
+// seconds converts a configured second count to a duration.
+func seconds(v int) time.Duration { return time.Duration(v) * time.Second }
 
 // cimdAllowlistGetter returns the configured CIMD URL allowlist.
 func cimdAllowlistGetter(module *appconfig.Module) func() []string {

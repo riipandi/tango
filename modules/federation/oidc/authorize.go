@@ -170,7 +170,7 @@ func (s *Service) getInteraction(ctx context.Context, raw string) (InteractionSe
 	if err != nil {
 		return InteractionSession{}, ErrNotFound
 	}
-	if time.Since(session.RequestedAt) > InteractionSessionTTL {
+	if time.Since(session.RequestedAt) > s.InteractionTTL() {
 		_ = s.store.DeleteInteraction(ctx, session.ID)
 		return InteractionSession{}, ErrInteractionExpired
 	}
@@ -195,7 +195,7 @@ func (s *Service) issueCode(ctx context.Context, client Client, principal middle
 		AuthMethod:    "password",
 		UserID:        datastore.UserUUID(principal.UserID),
 		ClientID:      client.ID.String(),
-		ExpiresAt:     time.Now().UTC().Add(AuthorizationCodeTTL),
+		ExpiresAt:     time.Now().UTC().Add(s.AuthorizationCodeTTL()),
 	}
 	if err := s.store.InsertCode(ctx, code); err != nil {
 		return "", err

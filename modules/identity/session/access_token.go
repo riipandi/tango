@@ -17,9 +17,10 @@ import (
 // an internal token can never be exchanged for a relying-party token
 // or vice versa.
 const (
-	// AccessTokenTTL bounds the bearer token's usefulness after
-	// exfiltration; refresh stays cookie-only.
-	AccessTokenTTL = 10 * time.Minute
+	// DefaultAccessTokenTTL bounds the bearer token's usefulness
+	// after exfiltration when no lifetime is configured; refresh
+	// stays cookie-only.
+	DefaultAccessTokenTTL = 10 * time.Minute
 	// AccessTokenIssuer and AccessTokenAudience pin the internal
 	// token space; OIDC tokens carry the public issuer URL and a
 	// client id instead.
@@ -46,12 +47,30 @@ type AccessClaims struct {
 // the shared signing key provider.
 type AccessTokenSigner struct {
 	provider jwtutils.KeyProvider
+	ttl      time.Duration
+}
+
+// AccessTokenSignerOption configures the signer.
+type AccessTokenSignerOption func(*AccessTokenSigner)
+
+// WithAccessTokenTTL sets the bearer token lifetime; a non-positive
+// value keeps the default.
+func WithAccessTokenTTL(ttl time.Duration) AccessTokenSignerOption {
+	return func(a *AccessTokenSigner) {
+		if ttl > 0 {
+			a.ttl = ttl
+		}
+	}
 }
 
 // NewAccessTokenSigner builds the access-token service on top of a
 // cached key provider.
-func NewAccessTokenSigner(provider jwtutils.KeyProvider) *AccessTokenSigner {
-	return &AccessTokenSigner{provider: provider}
+func NewAccessTokenSigner(provider jwtutils.KeyProvider, opts ...AccessTokenSignerOption) *AccessTokenSigner {
+	a := &AccessTokenSigner{provider: provider, ttl: DefaultAccessTokenTTL}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
 }
 
 // Issue signs a fresh access token for the principal and returns it
@@ -68,18 +87,18 @@ func (a *AccessTokenSigner) Issue(ctx context.Context, p kernel.Principal) (stri
 	signer := baseSigner.
 		WithIssuer(AccessTokenIssuer).
 		WithAudience(AccessTokenAudience).
-		WithTTL(AccessTokenTTL)
+		WithTTL(a.ttl)
 
 	now := time.Now()
 	signed, err := signer.Sign(AccessClaims{SessionID: p.SessionID, Admin: p.IsAdmin}, jwtutils.Standard{
 		Subject:   p.UserID,
 		IssuedAt:  now,
-		ExpiresAt: now.Add(AccessTokenTTL),
+		ExpiresAt: now.Add(a.ttl),
 	})
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("session: access sign: %w", err)
 	}
-	return signed, now.Add(AccessTokenTTL), nil
+	return signed, now.Add(a.ttl), nil
 }
 
 // Verify checks signature, issuer, audience, and expiry.

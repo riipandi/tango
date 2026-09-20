@@ -28,6 +28,15 @@ type Service struct {
 	metadataFetcher DocumentFetcher
 	cimdAllowlist   func() []string
 
+	// Protocol lifetimes; zero values fall back to the package
+	// defaults via each lifetime() accessor.
+	accessTokenTTL       time.Duration
+	refreshTokenTTL      time.Duration
+	authorizationCodeTTL time.Duration
+	interactionTTL       time.Duration
+	deviceCodeTTL        time.Duration
+	parTTL               time.Duration
+
 	// scimBinding resolves one client's SCIM provider projection for
 	// the GetScimProvider procedure; the scimsync feature owns the
 	// data, so the registry adapts its store onto this function.
@@ -53,6 +62,45 @@ func NewService(store Store, keys jwtutils.KeyProvider, issuer, cookieName strin
 
 // Option customizes the service.
 type Option func(*Service)
+
+// lifetime resolves a configured duration, falling back to the
+// package default when unset.
+func lifetime(configured, fallback time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+	return fallback
+}
+
+// AccessTokenTTL is the provider default access-token lifetime.
+func (s *Service) AccessTokenTTL() time.Duration {
+	return lifetime(s.accessTokenTTL, DefaultAccessTokenTTL)
+}
+
+// RefreshTokenTTL is the provider default refresh-token lifetime.
+func (s *Service) RefreshTokenTTL() time.Duration {
+	return lifetime(s.refreshTokenTTL, DefaultRefreshTokenTTL)
+}
+
+// AuthorizationCodeTTL bounds the one-time code lifetime.
+func (s *Service) AuthorizationCodeTTL() time.Duration {
+	return lifetime(s.authorizationCodeTTL, DefaultAuthorizationCodeTTL)
+}
+
+// InteractionTTL bounds the sign-in/consent bridge.
+func (s *Service) InteractionTTL() time.Duration {
+	return lifetime(s.interactionTTL, DefaultInteractionSessionTTL)
+}
+
+// DeviceCodeTTL bounds the device authorization window.
+func (s *Service) DeviceCodeTTL() time.Duration {
+	return lifetime(s.deviceCodeTTL, DefaultDeviceCodeTTL)
+}
+
+// PARTTL bounds a pushed authorization request_uri lifetime.
+func (s *Service) PARTTL() time.Duration {
+	return lifetime(s.parTTL, DefaultPARTTL)
+}
 
 // WithAudit attaches the audit adapter.
 func WithAudit(l AuditLogger) Option { return func(s *Service) { s.audit = l } }
@@ -97,6 +145,30 @@ func WithCIMDAllowlist(get func() []string) Option {
 
 // WithCookieSecure marks the end-session cookie Secure (off in
 // development, mirroring the session module).
+// Lifetimes groups the relying-party protocol lifetimes. A zero
+// field keeps the package default, so a caller sets only what it
+// configures.
+type Lifetimes struct {
+	AccessToken       time.Duration
+	RefreshToken      time.Duration
+	AuthorizationCode time.Duration
+	Interaction       time.Duration
+	DeviceCode        time.Duration
+	PAR               time.Duration
+}
+
+// WithLifetimes overrides the protocol lifetimes.
+func WithLifetimes(l Lifetimes) Option {
+	return func(s *Service) {
+		s.accessTokenTTL = l.AccessToken
+		s.refreshTokenTTL = l.RefreshToken
+		s.authorizationCodeTTL = l.AuthorizationCode
+		s.interactionTTL = l.Interaction
+		s.deviceCodeTTL = l.DeviceCode
+		s.parTTL = l.PAR
+	}
+}
+
 func WithCookieSecure(secure bool) Option {
 	return func(s *Service) { s.cookieSecure = secure }
 }

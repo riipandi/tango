@@ -180,8 +180,8 @@ func (h *clientRPC) PreviewClient(ctx context.Context, req *connect.Request[fede
 		return nil, rpcerr.Internal("internal error")
 	}
 	return connect.NewResponse(&federationv1.OidcTokenPreview{
-		IdToken:     claimsToJSON(h.service.idTokenClaims(client, claims, now, AccessTokenTTL)),
-		AccessToken: claimsToJSON(h.service.accessTokenClaims(client, claims, "", now, AccessTokenTTL)),
+		IdToken:     claimsToJSON(h.service.idTokenClaims(client, claims, now, h.service.AccessTokenTTL())),
+		AccessToken: claimsToJSON(h.service.accessTokenClaims(client, claims, "", now, h.service.AccessTokenTTL())),
 		UserInfo:    userInfo,
 	}), nil
 }

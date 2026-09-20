@@ -71,7 +71,7 @@ func authorizeDeviceE2E(t *testing.T, router chi.Router, client Client) (deviceC
 	require.NotEmpty(t, body["device_code"])
 	require.NotEmpty(t, body["user_code"])
 	assert.Equal(t, float64(DevicePollInterval), body["interval"])
-	assert.Equal(t, float64(int(DeviceCodeTTL.Seconds())), body["expires_in"])
+	assert.Equal(t, float64(int(DefaultDeviceCodeTTL.Seconds())), body["expires_in"])
 	assert.True(t, strings.HasSuffix(body["verification_uri"].(string), "/device"),
 		"verification_uri points at the SPA page")
 	assert.True(t, strings.Contains(body["verification_uri_complete"].(string), "code="),
@@ -225,7 +225,7 @@ func TestPARPushAndOneTimeAuthorizeResume(t *testing.T) {
 	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &pushed))
 	require.NotEmpty(t, pushed.RequestURI)
 	assert.True(t, strings.HasPrefix(pushed.RequestURI, "urn:ietf:params:oauth:request_uri:"))
-	assert.Equal(t, int(PARTTL.Seconds()), pushed.ExpiresIn)
+	assert.Equal(t, int(DefaultPARTTL.Seconds()), pushed.ExpiresIn)
 
 	// The authorize resume redirects into the interaction flow with
 	// the pushed parameters; the pushed row is one-time use.
