@@ -113,10 +113,10 @@ message DeleteApiKeyRequest {
 // ApiService administers resource APIs and their client grants.
 service ApiService {
   rpc ListApis(common.v1.PageRequest) returns (ListApisResponse);
-  rpc CreateApi(CreateApiRequest) returns (API);
-  rpc GetApi(GetApiRequest) returns (API);
-  rpc UpdateApi(UpdateApiRequest) returns (API);
-  rpc DeleteApi(DeleteApiRequest) returns (google.protobuf.Empty);
+  rpc CreateAPI(CreateApiRequest) returns (API);
+  rpc GetAPI(GetApiRequest) returns (API);
+  rpc UpdateAPI(UpdateApiRequest) returns (API);
+  rpc DeleteAPI(DeleteApiRequest) returns (google.protobuf.Empty);
   rpc SetPermissions(SetPermissionsRequest) returns (google.protobuf.Empty);
   rpc SetCimdAccess(SetCimdAccessRequest) returns (google.protobuf.Empty);
   rpc ListAssignableClients(ListApiClientsRequest) returns (ListClientRefsResponse);

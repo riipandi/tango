@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_DmcT8BPPUg
 createdAt: 2026-09-19T12:33:32.183346
-updatedAt: 2026-09-19T14:55:47.058129
+updatedAt: 2026-09-20T12:18:27.619249
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sUMABSVJCr
 authentication: {}
@@ -27,7 +27,7 @@ headers:
 method: POST
 name: Update API
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/UpdateApi
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/UpdateAPI
 urlParameters: []
 settingSendCookies:
   enabled: false

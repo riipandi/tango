@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_xentiLt8bS
 createdAt: 2026-09-19T12:33:32.179656
-updatedAt: 2026-09-19T14:55:44.643423
+updatedAt: 2026-09-20T12:18:22.104247
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sUMABSVJCr
 authentication: {}
@@ -26,7 +26,7 @@ headers:
 method: POST
 name: Get API by ID
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/GetApi
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/GetAPI
 urlParameters: []
 settingSendCookies:
   enabled: false

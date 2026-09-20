@@ -269,10 +269,10 @@ Resource APIs, permissions, and client grants.
 | Method   | Procedure / Endpoint                                                       | Protocol     | Summary                                         |
 | -------- | -------------------------------------------------------------------------- | ------------ | ----------------------------------------------- |
 | POST     | `/rpc/tango.admin.v1.ApiService/ListApis`                                  | ConnectRPC   | List APIs                                       |
-| POST     | `/rpc/tango.admin.v1.ApiService/CreateApi`                                 | ConnectRPC   | Create API                                      |
-| POST     | `/rpc/tango.admin.v1.ApiService/GetApi`                                    | ConnectRPC   | Get API by ID                                   |
-| POST     | `/rpc/tango.admin.v1.ApiService/UpdateApi`                                 | ConnectRPC   | Update API                                      |
-| POST     | `/rpc/tango.admin.v1.ApiService/DeleteApi`                                 | ConnectRPC   | Delete API                                      |
+| POST     | `/rpc/tango.admin.v1.ApiService/CreateAPI`                                 | ConnectRPC   | Create API                                      |
+| POST     | `/rpc/tango.admin.v1.ApiService/GetAPI`                                    | ConnectRPC   | Get API by ID                                   |
+| POST     | `/rpc/tango.admin.v1.ApiService/UpdateAPI`                                 | ConnectRPC   | Update API                                      |
+| POST     | `/rpc/tango.admin.v1.ApiService/DeleteAPI`                                 | ConnectRPC   | Delete API                                      |
 | POST     | `/rpc/tango.admin.v1.ApiService/SetPermissions`                            | ConnectRPC   | Update API permissions                          |
 | POST     | `/rpc/tango.admin.v1.ApiService/SetCimdAccess`                             | ConnectRPC   | Update metadata document client access          |
 | POST     | `/rpc/tango.admin.v1.ApiService/ListAssignableClients`                     | ConnectRPC   | List clients that can still be granted access   |

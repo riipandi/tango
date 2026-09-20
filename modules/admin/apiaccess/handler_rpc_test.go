@@ -67,7 +67,7 @@ func TestRPCAPILifecycle(t *testing.T) {
 	assert.Empty(t, empty.Msg.GetApis())
 	assert.NotNil(t, empty.Msg.GetMetadata())
 
-	created, err := h.CreateApi(ctx, connect.NewRequest(&adminv1.CreateApiRequest{
+	created, err := h.CreateAPI(ctx, connect.NewRequest(&adminv1.CreateApiRequest{
 		Name: "Core API", Resource: "https://api.test",
 	}))
 	require.NoError(t, err)
@@ -79,11 +79,11 @@ func TestRPCAPILifecycle(t *testing.T) {
 	require.Len(t, listed.Msg.GetApis(), 1)
 	assert.Equal(t, int32(1), listed.Msg.GetMetadata().GetTotalItems())
 
-	got, err := h.GetApi(ctx, connect.NewRequest(&adminv1.GetApiRequest{Id: created.Msg.GetId()}))
+	got, err := h.GetAPI(ctx, connect.NewRequest(&adminv1.GetApiRequest{Id: created.Msg.GetId()}))
 	require.NoError(t, err)
 	assert.Equal(t, created.Msg.GetId(), got.Msg.GetId())
 
-	updated, err := h.UpdateApi(ctx, connect.NewRequest(&adminv1.UpdateApiRequest{
+	updated, err := h.UpdateAPI(ctx, connect.NewRequest(&adminv1.UpdateApiRequest{
 		Id: created.Msg.GetId(), Name: proto.String("Core API v2"),
 	}))
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestRPCAPILifecycle(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	perm, err := h.GetApi(ctx, connect.NewRequest(&adminv1.GetApiRequest{Id: created.Msg.GetId()}))
+	perm, err := h.GetAPI(ctx, connect.NewRequest(&adminv1.GetApiRequest{Id: created.Msg.GetId()}))
 	require.NoError(t, err)
 	assert.Len(t, perm.Msg.GetPermissions(), 2)
 
@@ -104,13 +104,13 @@ func TestRPCAPILifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	// Duplicate resource is a conflict.
-	_, err = h.CreateApi(ctx, connect.NewRequest(&adminv1.CreateApiRequest{
+	_, err = h.CreateAPI(ctx, connect.NewRequest(&adminv1.CreateApiRequest{
 		Name: "Other", Resource: "https://api.test",
 	}))
 	cerr := connectErr(t, err)
 	assert.Equal(t, connect.CodeAlreadyExists, cerr.Code())
 
-	_, err = h.DeleteApi(ctx, connect.NewRequest(&adminv1.DeleteApiRequest{Id: created.Msg.GetId()}))
+	_, err = h.DeleteAPI(ctx, connect.NewRequest(&adminv1.DeleteApiRequest{Id: created.Msg.GetId()}))
 	require.NoError(t, err)
 
 	listed, err = h.ListApis(ctx, connect.NewRequest(&commonv1.PageRequest{Page: 1, Limit: 20}))
@@ -124,7 +124,7 @@ func TestRPCGrantLifecycle(t *testing.T) {
 	h, ds := rpcTestStack(t)
 	ctx := t.Context()
 
-	created, err := h.CreateApi(ctx, connect.NewRequest(&adminv1.CreateApiRequest{
+	created, err := h.CreateAPI(ctx, connect.NewRequest(&adminv1.CreateApiRequest{
 		Name: "Grant API", Resource: "https://grant.test",
 	}))
 	require.NoError(t, err)
@@ -184,10 +184,10 @@ func TestRPCAPIErrors(t *testing.T) {
 	h, _ := rpcTestStack(t)
 	ctx := t.Context()
 
-	_, err := h.GetApi(ctx, connect.NewRequest(&adminv1.GetApiRequest{Id: "not-a-typeid"}))
+	_, err := h.GetAPI(ctx, connect.NewRequest(&adminv1.GetApiRequest{Id: "not-a-typeid"}))
 	assert.Equal(t, connect.CodeNotFound, connectErr(t, err).Code())
 
-	_, err = h.CreateApi(ctx, connect.NewRequest(&adminv1.CreateApiRequest{Name: "", Resource: "https://x.test"}))
+	_, err = h.CreateAPI(ctx, connect.NewRequest(&adminv1.CreateApiRequest{Name: "", Resource: "https://x.test"}))
 	assert.Equal(t, connect.CodeInvalidArgument, connectErr(t, err).Code())
 }
 

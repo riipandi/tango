@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_aRegqMjt8j
 createdAt: 2026-09-19T12:33:44.226586
-updatedAt: 2026-09-19T14:55:48.913486
+updatedAt: 2026-09-20T12:18:33.419716
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sUMABSVJCr
 authentication: {}
@@ -26,7 +26,7 @@ headers:
 method: POST
 name: Delete API
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/DeleteApi
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/DeleteAPI
 urlParameters: []
 settingSendCookies:
   enabled: false

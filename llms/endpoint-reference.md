@@ -129,10 +129,10 @@ ciphertext.
 | Method | Procedure | Summary / Yaak Title | Status | Evidence |
 | ------ | --------- | -------------------- | ------ | -------- |
 | POST | `/rpc/tango.admin.v1.ApiService/ListApis` | List APIs | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
-| POST | `/rpc/tango.admin.v1.ApiService/CreateApi` | Create API | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
-| POST | `/rpc/tango.admin.v1.ApiService/GetApi` | Get API by ID | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
-| POST | `/rpc/tango.admin.v1.ApiService/UpdateApi` | Update API | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
-| POST | `/rpc/tango.admin.v1.ApiService/DeleteApi` | Delete API | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
+| POST | `/rpc/tango.admin.v1.ApiService/CreateAPI` | Create API | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
+| POST | `/rpc/tango.admin.v1.ApiService/GetAPI` | Get API by ID | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
+| POST | `/rpc/tango.admin.v1.ApiService/UpdateAPI` | Update API | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
+| POST | `/rpc/tango.admin.v1.ApiService/DeleteAPI` | Delete API | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
 | POST | `/rpc/tango.admin.v1.ApiService/SetPermissions` | Update API permissions | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
 | POST | `/rpc/tango.admin.v1.ApiService/SetCimdAccess` | Update metadata document client access | done | `modules/admin/apiaccess.TestRPCAPILifecycle` |
 | POST | `/rpc/tango.admin.v1.ApiService/ListAssignableClients` | List clients that can still be granted access | done | `modules/admin/apiaccess.TestRPCGrantLifecycle` |

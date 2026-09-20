@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_kvEG8CFDGS
 createdAt: 2026-09-18T23:54:33.194723
-updatedAt: 2026-09-19T18:11:50.642485
+updatedAt: 2026-09-20T12:17:42.297431
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_sUMABSVJCr
 authentication: {}
@@ -27,7 +27,7 @@ headers:
 method: POST
 name: Create API
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/CreateApi
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/CreateAPI
 urlParameters: []
 settingSendCookies:
   enabled: false
