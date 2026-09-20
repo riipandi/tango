@@ -187,20 +187,20 @@ configs:
           proxy_pass http://silo:9100/devbucket/;
         }
       }
-      server {
-        http2 on;
-        listen 3443 ssl;
-        server_name localhost;
-        ssl_certificate /etc/nginx/certs/localhost_crt.pem;
-        ssl_certificate_key /etc/nginx/certs/localhost_key.pem;
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers HIGH:!aNULL:!MD5;
-        location / {
-          proxy_pass http://tango:3000;
-          proxy_set_header X-Forwarded-Proto https;
-          proxy_set_header X-Forwarded-Ssl on;
-        }
-      }
+      # server {
+      #   http2 on;
+      #   listen 3443 ssl;
+      #   server_name localhost;
+      #   ssl_certificate /etc/nginx/certs/localhost_crt.pem;
+      #   ssl_certificate_key /etc/nginx/certs/localhost_key.pem;
+      #   ssl_protocols TLSv1.2 TLSv1.3;
+      #   ssl_ciphers HIGH:!aNULL:!MD5;
+      #   location / {
+      #     proxy_pass http://tango:3000;
+      #     proxy_set_header X-Forwarded-Proto https;
+      #     proxy_set_header X-Forwarded-Ssl on;
+      #   }
+      # }
       server {
         http2 on;
         listen 8443 ssl;

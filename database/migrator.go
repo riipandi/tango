@@ -19,6 +19,9 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
+// migrationsDir is the directory inside the embedded filesystem.
+const migrationsDir = "migrations"
+
 // VersionTable records the applied migrations. goose defaults to
 // goose_db_version; the project owns the name so the schema reads as ours.
 // The table resolves through the connection's current_schema().
@@ -63,7 +66,7 @@ func NewMigrator(ctx context.Context, db *sql.DB, opts MigratorOptions) (*Migrat
 		return nil, errors.New("database: migrator requires a database handle")
 	}
 
-	fsys, err := fs.Sub(migrationFiles, "migrations")
+	fsys, err := fs.Sub(migrationFiles, migrationsDir)
 	if err != nil {
 		return nil, fmt.Errorf("database: open embedded migrations: %w", err)
 	}
