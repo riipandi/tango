@@ -6,21 +6,12 @@ import (
 	"io/fs"
 	"time"
 
-	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/logger"
 )
 
 // Mailer renders and delivers transactional email.
 type Mailer interface {
 	Send(ctx context.Context, msg Message) error
-}
-
-// SettingsSource resolves SMTP settings for one send.
-type SettingsSource func(ctx context.Context) (config.MailerConfig, error)
-
-// SettingsSourceSetter is implemented by mailers that accept a settings source.
-type SettingsSourceSetter interface {
-	SetSettingsSource(source SettingsSource)
 }
 
 // Message is a message to render and send.

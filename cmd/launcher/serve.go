@@ -144,19 +144,6 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		return fmt.Errorf("build runtime: %w", err)
 	}
 
-	// SMTP relay settings become admin-editable: the mailer resolves
-	// them per send from the appconfig surface (env values stay the
-	// default layer). Late-bound — the module exists after New.
-	if setter, ok := ml.(mailer.SettingsSourceSetter); ok {
-		fallback := cfg.Mailer
-		setter.SetSettingsSource(func(ctx context.Context) (config.MailerConfig, error) {
-			values, err := rt.AppConfig.MergedValues(ctx)
-			if err != nil {
-				return fallback, err
-			}
-			return mailer.SettingsFromValues(values, fallback), nil
-		})
-	}
 	if err := rt.Start(context.Background()); err != nil {
 		return fmt.Errorf("start modules: %w", err)
 	}

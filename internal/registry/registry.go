@@ -3,7 +3,6 @@ package registry
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"time"
@@ -29,7 +28,6 @@ import (
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/webhook"
-	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -126,17 +124,8 @@ func New(deps Deps) (*Runtime, error) {
 	rt.Webhook = newWebhookModule(deps, queueClient)
 	events.webhook = rt.Webhook
 
-	// Register application configuration. The settings cipher shares
-	// the Auth.SecretKey derivation with the other seal holders.
-	settingsCipherKey := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
-	settingsCipher, err := crypto.NewCipher(settingsCipherKey[:])
-	if err != nil {
-		return nil, err
-	}
 	rt.AppConfig = appconfig.New(rt.Jobs).
-		WithStore(appconfig.NewPostgresStore(deps.DB)).
-		WithEnvDefaults(appconfig.EnvDefaults(deps.Config)).
-		WithCipher(settingsCipher)
+		WithStore(appconfig.NewPostgresStore(deps.DB))
 
 	// Register the identity provider surface.
 	scimFeature, scimStore := withSCIMSync(deps)

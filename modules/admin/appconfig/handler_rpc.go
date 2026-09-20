@@ -53,7 +53,6 @@ func (h *configRPC) GetAll(ctx context.Context, _ *connect.Request[emptypb.Empty
 
 func (h *configRPC) Update(ctx context.Context, req *connect.Request[adminv1.UpdateConfigVariablesRequest]) (*connect.Response[adminv1.ListConfigVariablesResponse], error) {
 	values := map[string]string{}
-	var clear []string
 	for _, v := range req.Msg.GetVariables() {
 		key := v.GetKey()
 		entry, known := lookup(key)
@@ -63,16 +62,9 @@ func (h *configRPC) Update(ctx context.Context, req *connect.Request[adminv1.Upd
 		if err := validateValue(entry, v.GetValue()); err != nil {
 			return nil, rpcerr.InvalidArgument("validation failed: " + key + ": " + err.Error())
 		}
-		if entry.Sensitive && v.GetValue() == "" {
-			// An empty sensitive value clears the stored secret;
-			// the enc: check rejects empty rows, so clearing means
-			// deleting.
-			clear = append(clear, key)
-			continue
-		}
 		values[key] = v.GetValue()
 	}
-	if err := h.module.writeValues(ctx, values, clear); err != nil {
+	if err := h.module.store.Upsert(ctx, values); err != nil {
 		return nil, rpcerr.Internal("internal error")
 	}
 	variables, err := h.module.allVariables(ctx)
@@ -111,10 +103,7 @@ func (m *Module) publicVariables(ctx context.Context) ([]*adminv1.ConfigVariable
 	if err != nil {
 		return nil, err
 	}
-	merged, err := m.merged(ctx, overrides)
-	if err != nil {
-		return nil, err
-	}
+	merged := mergedValues(overrides)
 	out := make([]*adminv1.ConfigVariable, 0, len(configKeys))
 	for _, entry := range configKeys {
 		if !entry.Public {
@@ -125,38 +114,18 @@ func (m *Module) publicVariables(ctx context.Context) ([]*adminv1.ConfigVariable
 	return out, nil
 }
 
-// allVariables renders every key for the admin view; sensitive
-// values list as empty strings.
+// allVariables renders every key for the admin view.
 func (m *Module) allVariables(ctx context.Context) ([]*adminv1.ConfigVariable, error) {
 	overrides, err := m.store.List(ctx)
 	if err != nil {
 		return nil, err
 	}
-	merged, err := m.merged(ctx, overrides)
-	if err != nil {
-		return nil, err
-	}
+	merged := mergedValues(overrides)
 	out := make([]*adminv1.ConfigVariable, 0, len(configKeys))
 	for _, entry := range configKeys {
-		value := merged[entry.Key]
-		if entry.Sensitive {
-			value = ""
-		}
-		out = append(out, configVariable(entry, value))
+		out = append(out, configVariable(entry, merged[entry.Key]))
 	}
 	return out, nil
-}
-
-// writeValues persists the upserts and clears, sealing sensitive
-// values first — the same discipline the REST update applies.
-func (m *Module) writeValues(ctx context.Context, values map[string]string, clear []string) error {
-	if err := m.sealSensitive(values); err != nil {
-		return err
-	}
-	if err := m.store.Upsert(ctx, values); err != nil {
-		return err
-	}
-	return m.store.Delete(ctx, clear)
 }
 
 func configVariable(entry configKey, value string) *adminv1.ConfigVariable {

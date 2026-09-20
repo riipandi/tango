@@ -13,14 +13,12 @@ import (
 	adminv1 "github.com/riipandi/tango/codegen/proto/go/tango/admin/v1"
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
 // newStoreStack boots a throwaway Postgres, applies migrations, and
-// returns the real store (raw stored values) and data store wired
-// into the cipher-sealed module.
-func newStoreStack(t *testing.T) (Store, datastore.Store, *Module) {
+// returns the real store (raw stored values) wired into the module.
+func newStoreStack(t *testing.T) (Store, *Module) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -33,20 +31,15 @@ func newStoreStack(t *testing.T) (Store, datastore.Store, *Module) {
 	require.NoError(t, err)
 	t.Cleanup(func() { ds.Close() })
 
-	cipher, err := crypto.NewCipher(make([]byte, 32))
-	require.NoError(t, err)
-
 	store := NewPostgresStore(ds)
-	return store, ds, func() *Module {
-		return New(nil).WithStore(store).WithCipher(cipher)
-	}()
+	return store, New(nil).WithStore(store)
 }
 
 // TestConfigCRUD covers the settings surface through the generated
 // contract: defaults fold with overrides, validation rejects bad
 // values, unknown keys are ignored.
 func TestConfigCRUD(t *testing.T) {
-	_, _, module := newStoreStack(t)
+	_, module := newStoreStack(t)
 	h := &configRPC{module: module}
 	ctx := t.Context()
 
@@ -55,7 +48,7 @@ func TestConfigCRUD(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, pub.Msg.GetVariables())
 	for _, v := range pub.Msg.GetVariables() {
-		assert.False(t, strings.HasPrefix(v.GetKey(), "smtp"), "env-only keys never leak: %s", v.GetKey())
+		assert.True(t, v.GetIsPublic(), v.GetKey()+" must be public in the bootstrap view")
 	}
 
 	// Admin /all includes private keys with the is_public flag.
@@ -99,10 +92,9 @@ func TestConfigCRUD(t *testing.T) {
 	}
 	assert.True(t, found, "app_name in public view")
 
-	// Bad enum, bad int, bad JSON shape → invalid_argument.
+	// Bad enum and bad JSON shape → invalid_argument.
 	for _, tc := range []struct{ key, value string }{
 		{"allow_user_signups", "sometimes"},
-		{"session_duration", "soon"},
 		{"webauthn_user_verification", "optional"},
 		{"cimd_url_allowlist", "not-json"},
 		{"cimd_url_allowlist", "[\"ok\", 4]"},
@@ -117,97 +109,37 @@ func TestConfigCRUD(t *testing.T) {
 	}
 }
 
-// TestEnvDefaultsAndSensitiveRedaction folds env defaults over the
-// catalog and DB overrides on top; sensitive values never reach the
-// wire, while MergedValues still serves the real secret to wired
-// consumers.
-func TestEnvDefaultsAndSensitiveRedaction(t *testing.T) {
-	store, _, module := newStoreStack(t)
-	module = module.WithEnvDefaults(map[string]string{
-		"smtp_host":     "relay.example",
-		"smtp_password": "env-secret",
-	})
+// TestSMTPIsEnvOnly pins the single-source rule for the relay: no
+// SMTP key is admin-editable, so an update naming one is ignored like
+// any unknown key, and the merged values never carry one.
+func TestSMTPIsEnvOnly(t *testing.T) {
+	store, module := newStoreStack(t)
 	h := &configRPC{module: module}
 	ctx := t.Context()
 
-	fetch := func() map[string]string {
-		resp, err := h.GetAll(ctx, connect.NewRequest(&emptypb.Empty{}))
-		require.NoError(t, err)
-		values := map[string]string{}
-		for _, v := range resp.Msg.GetVariables() {
-			values[v.GetKey()] = v.GetValue()
-		}
-		return values
-	}
-
-	// Env layer sits above the catalog defaults; the env password is
-	// still redacted in the admin view.
-	values := fetch()
-	assert.Equal(t, "relay.example", values["smtp_host"])
-	assert.Equal(t, "", values["smtp_password"], "sensitive values redact even from env")
-
-	// Real values reach consumers through MergedValues.
-	merged, err := module.MergedValues(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, "relay.example", merged["smtp_host"])
-	assert.Equal(t, "env-secret", merged["smtp_password"])
-
-	// DB overrides top the env layer; the stored secret stays hidden.
-	_, err = h.Update(ctx, connect.NewRequest(&adminv1.UpdateConfigVariablesRequest{
-		Variables: []*adminv1.ConfigVariable{
-			{Key: "smtp_host", Type: adminv1.ConfigVariable_TYPE_STRING, Value: "db-relay.example"},
-			{Key: "smtp_password", Type: adminv1.ConfigVariable_TYPE_STRING, Value: "db-secret"},
-		},
-	}))
-	require.NoError(t, err)
-
-	values = fetch()
-	assert.Equal(t, "db-relay.example", values["smtp_host"])
-	assert.Equal(t, "", values["smtp_password"])
-
-	merged, err = module.MergedValues(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, "db-secret", merged["smtp_password"])
-	assert.Equal(t, "db-relay.example", merged["smtp_host"])
-
-	// The stored override is sealed: the raw row carries the enc:
-	// marker, never the plaintext.
-	stored, err := store.List(ctx)
-	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(stored["smtp_password"], "enc:"),
-		"stored sensitive value must carry the enc: marker, got %q", stored["smtp_password"])
-}
-
-func TestClearSensitiveValue(t *testing.T) {
-	store, _, module := newStoreStack(t)
-	h := &configRPC{module: module}
-	ctx := t.Context()
-
-	// Set a real secret first.
 	_, err := h.Update(ctx, connect.NewRequest(&adminv1.UpdateConfigVariablesRequest{
 		Variables: []*adminv1.ConfigVariable{
-			{Key: "smtp_password", Type: adminv1.ConfigVariable_TYPE_STRING, Value: "db-secret"},
+			{Key: "smtp_host", Value: "attacker.example"},
+			{Key: "smtp_password", Value: "attacker-secret"},
 		},
 	}))
 	require.NoError(t, err)
 
-	// Clearing it answers without error and removes the row.
-	_, err = h.Update(ctx, connect.NewRequest(&adminv1.UpdateConfigVariablesRequest{
-		Variables: []*adminv1.ConfigVariable{
-			{Key: "smtp_password", Type: adminv1.ConfigVariable_TYPE_STRING, Value: ""},
-		},
-	}))
+	all, err := h.GetAll(ctx, connect.NewRequest(&emptypb.Empty{}))
 	require.NoError(t, err)
+	for _, v := range all.Msg.GetVariables() {
+		assert.False(t, strings.HasPrefix(v.GetKey(), "smtp"), "SMTP key is not editable: %s", v.GetKey())
+	}
 
+	merged, err := module.MergedValues(ctx)
+	require.NoError(t, err)
+	for key := range merged {
+		assert.False(t, strings.HasPrefix(key, "smtp"), "SMTP key never enters merged values: %s", key)
+	}
+
+	// Nothing was written either: the unknown keys never reach the store.
 	stored, err := store.List(ctx)
 	require.NoError(t, err)
-	assert.NotContains(t, stored, "smtp_password", "cleared secret must not leave a row")
-
-	// Clearing again is a no-op, not an error.
-	_, err = h.Update(ctx, connect.NewRequest(&adminv1.UpdateConfigVariablesRequest{
-		Variables: []*adminv1.ConfigVariable{
-			{Key: "smtp_password", Type: adminv1.ConfigVariable_TYPE_STRING, Value: ""},
-		},
-	}))
-	require.NoError(t, err)
+	assert.NotContains(t, stored, "smtp_host")
+	assert.NotContains(t, stored, "smtp_password")
 }

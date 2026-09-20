@@ -148,7 +148,7 @@ Verification-only values are one-way hashes and must never be encrypted.
 | SCIM service-provider token | federation | `enc:` — the server must send it; DB CHECK enforces the prefix; reads decrypt strictly (an undecryptable token is an error, never a plaintext fallback) |
 | JWKS private key PEM | federation | `enc:` — rotation needs recovery; public key material stays plain |
 | TOTP seed | identity | `enc:` — verification requires recovery; DB CHECK enforces the prefix |
-| Sensitive app settings (`smtp_password`) | admin | `enc:` — sealed on write, decrypted on read through the module cipher; the DB CHECK rejects plaintext for sensitive keys |
+| Sensitive app settings | admin | none — the SMTP relay password is environment-only (`MAILER_SMTP_PASSWORD`); no app_config key is sensitive and nothing stored is sealed |
 | OIDC client secrets | federation | SHA-256 hashes in the credentials JSONB (multi-secret with per-entry expiry/active state); raw value shown once at creation |
 | Passwords | identity | scrypt/Argon2id PHC hash (`pkg/crypto.PasswordHasher`) |
 | Session tokens | identity | SHA-256 `token_hash` on sessions; the raw token lives only in the cookie |
@@ -189,6 +189,5 @@ features:
   the OIDC clients on its allowlist) is a tango addition; upstream only restricts from the
   client side (`oidc_clients_allowed_user_groups`).
 
-Cipher consumers (the only `crypto.Cipher` wirings): the webhook module, the SCIM store, the JWKS
-key service, and the appconfig module — each keyed from a SHA-256 digest of `AUTH_SECRET_KEY` at
-the composition root.
+Cipher consumers (the only `crypto.Cipher` wirings): the webhook module, the SCIM store, and the
+JWKS key service — each keyed from a SHA-256 digest of `AUTH_SECRET_KEY` at the composition root.

@@ -23,7 +23,6 @@ import (
 // smtpMailer implements Mailer with SMTP.
 type smtpMailer struct {
 	cfg         config.MailerConfig
-	source      SettingsSource
 	store       *templateStore
 	log         logger.Logger
 	sendTimeout time.Duration
@@ -51,26 +50,6 @@ func New(cfg config.MailerConfig, opts Options) Mailer {
 	}
 }
 
-// SetSettingsSource sets the per-send settings resolver.
-func (m *smtpMailer) SetSettingsSource(source SettingsSource) {
-	m.source = source
-}
-
-// settings resolves SMTP settings for one send.
-func (m *smtpMailer) settings(ctx context.Context) config.MailerConfig {
-	if m.source == nil {
-		return m.cfg
-	}
-	resolved, err := m.source(ctx)
-	if err != nil || (resolved.SMTPHost == "" && resolved.SMTPPort == 0) {
-		if err != nil {
-			m.log.Warn("mailer: settings source failed, falling back to env config", loglayer.M{"error": err.Error()})
-		}
-		return m.cfg
-	}
-	return resolved
-}
-
 // Send renders and delivers one message over SMTP.
 func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 	if msg.To == "" {
@@ -80,7 +59,7 @@ func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 		return errors.New("mailer: template is empty")
 	}
 
-	cfg := m.settings(ctx)
+	cfg := m.cfg
 
 	htmlBody, textBody, err := m.store.render(msg.Template, msg.To, msg.Data)
 	if err != nil {

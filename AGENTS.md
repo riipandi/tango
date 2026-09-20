@@ -29,7 +29,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
   No memory-store implementations. A feature that reads and writes only through another feature's
   stores has no `store.go`.
 - `modules/identity` — accounts core + auth features (session, password, webauthn, signup, apikey, apiaccess, ...). `modules/federation` — provider surface (oidc, jwks, discovery, scimsync). Authn/authz features never leave `modules/identity`.
-- Admin-editable settings live in `app_config` via `modules/appconfig`; defaults fold catalog < env < DB. Cross-module consumers read through the appconfig surface (`MergedValues`), not raw env. Sensitive values redact in the admin view but resolve for their owning consumers.
+- Admin-editable settings live in `app_config` via `modules/admin/appconfig`; defaults fold catalog < DB. Only non-secret behavior settings belong in the catalog. Cross-module consumers read through the appconfig surface (`MergedValues`), not raw env. Environment-backed settings (SMTP relay, credentials, lifetimes) have exactly one source: the environment, and are never admin-editable.
 - Schema is owned by `database/migrations/` (goose). Never embed or auto-create schema. Migration DDL is verbatim: editing an applied migration does not re-run it; reset via `tango db migrate:down --force --count N` then `migrate:up`.
 - Typed IDs per module via `go.jetify.com/typeid`; the prefix lives in the module's `schema.go`. Only URL-facing/cross-module IDs carry TypeID; token/code rows use SHA-256 keys plus DB `uuidv7()`.
 - Background work runs on the built-in queue `internal/queue` (tango-owned; based on backlite): Postgres-backed, in-process dispatcher, schema in migrations. Consumers register queue processors and enqueue typed tasks; the engine reads/writes only through `internal/datastore` (`Executor`/`WithTx`). Recurring maintenance lives in `internal/jobs` (`Job` registry, fixed-delay self-rescheduling).
@@ -102,7 +102,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
   suite. Relying-party OAuth surfaces (`token`, `introspect`, `par`, `device/authorize`, `userinfo`,
   `.well-known/*`) stay out of typed namespaces; `raw()` is the escape hatch — see
   `llms/api-client-plan/README.md` for the route-diff workflow.
-- Add a config key: catalog entry in `modules/appconfig/config.go` + env layer in `modules/appconfig/env.go` (`EnvDefaults`); `.env.example` documents the env name.
+- Add a config key: catalog entry in `modules/admin/appconfig/config.go`; `.env.example` documents env names. Secrets and relay credentials never enter the catalog — they stay env-only in `internal/config`.
 - Frontend asset images live in `public/images/` → copied to `web/output/images` by the Vite build; never embed them in Go.
 - LDAP is an excluded upstream feature: no LDAP configuration, services, clients, or schema
   columns. Do not reintroduce any of them.

@@ -51,8 +51,8 @@ message APIKeySecret {
   string token = 2;
 }
 
-// ConfigVariable is one editable setting. Sensitive keys list with an
-// empty value, never their stored content.
+// ConfigVariable is one editable setting. Environment-backed
+// settings (SMTP relay, secrets, lifetimes) never appear here.
 message ConfigVariable {
   enum Type {
     TYPE_UNSPECIFIED = 0;

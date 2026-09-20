@@ -20,7 +20,7 @@ import (
 // keys, the admin view lists everything with sensitive values
 // redacted, update persists a key, and unknown keys are ignored.
 func TestRPCConfigLifecycle(t *testing.T) {
-	_, _, module := newStoreStack(t)
+	_, module := newStoreStack(t)
 	h := &configRPC{module: module}
 
 	// The public view carries only public keys.
@@ -67,7 +67,7 @@ func TestRPCConfigLifecycle(t *testing.T) {
 // TestRPCRegistrationPrefix pins the registration contract the
 // composition root relies on.
 func TestRPCRegistrationPrefix(t *testing.T) {
-	_, _, module := newStoreStack(t)
+	_, module := newStoreStack(t)
 	prefix, handler := module.RPCService(nil)
 	assert.Equal(t, "/tango.admin.v1.ApplicationConfigurationService/", prefix)
 	assert.NotNil(t, handler)
@@ -78,7 +78,7 @@ func TestRPCRegistrationPrefix(t *testing.T) {
 // stays protected. The guard is the only thing that could demand a
 // principal here, so the request goes through the mounted handler.
 func TestRPCConfigBootstrapIsAnonymous(t *testing.T) {
-	_, _, module := newStoreStack(t)
+	_, module := newStoreStack(t)
 	prefix, handler := module.RPCService(nil)
 
 	call := func(procedure string) *httptest.ResponseRecorder {

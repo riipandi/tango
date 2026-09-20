@@ -13,14 +13,12 @@ import (
 // Table constant: the settings key/value rows.
 const appConfigTable = "public.app_config"
 
-// Store persists configuration overrides. Defaults live in env-backed
-// config; rows here win.
+// Store persists configuration overrides. Catalog defaults are the
+// bottom layer; rows here win. Environment-backed settings never
+// reach this store.
 type Store interface {
 	List(ctx context.Context) (map[string]string, error)
 	Upsert(ctx context.Context, values map[string]string) error
-	// Delete removes rows by key; clearing a sensitive setting must
-	// delete its row because the enc: check rejects empty values.
-	Delete(ctx context.Context, keys []string) error
 }
 
 // PostgresStore persists overrides in public.app_config.
@@ -81,30 +79,4 @@ func (s *PostgresStore) Upsert(ctx context.Context, values map[string]string) er
 		}
 		return nil
 	})
-}
-
-// Delete removes the rows for the given keys; missing keys are not
-// an error.
-func (s *PostgresStore) Delete(ctx context.Context, keys []string) error {
-	if len(keys) == 0 {
-		return nil
-	}
-	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
-	db.DeleteFrom(appConfigTable)
-	db.Where(db.In("key", toAnySlice(keys)...))
-
-	query, args := db.Build()
-	if _, err := s.store.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("appconfig store: delete: %w", err)
-	}
-	return nil
-}
-
-// toAnySlice lifts a string slice for sqlbuilder's variadic In.
-func toAnySlice(values []string) []any {
-	out := make([]any, len(values))
-	for i, v := range values {
-		out[i] = v
-	}
-	return out
 }
