@@ -46,9 +46,9 @@ func (s *Service) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleEndSession serves GET/POST /api/oidc/end-session: verifies
-// the ID-token hint, revokes the grant's token family, clears the
-// sign-in cookie, and redirects to the registered logout callback —
-// or the instance logout page when the contract fails.
+// the ID-token hint, revokes the grant's token family, and redirects
+// to the registered logout callback — or the instance logout page
+// when the contract fails.
 func (s *Service) handleEndSession(w http.ResponseWriter, r *http.Request) {
 	hint := r.FormValue("id_token_hint")
 	clientID := r.FormValue("client_id")
@@ -56,16 +56,6 @@ func (s *Service) handleEndSession(w http.ResponseWriter, r *http.Request) {
 	state := r.FormValue("state")
 
 	callback, err := s.EndSession(r.Context(), hint, clientID, redirectURI)
-
-	// Clear the sign-in cookie; Secure mirrors the session module.
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.cookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   s.cookieSecure,
-	})
 
 	if err != nil || callback == "" {
 		// Upstream falls back to the logout page instead of

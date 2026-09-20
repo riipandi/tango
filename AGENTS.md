@@ -43,7 +43,7 @@ Go + React monolith (tango): one binary serving an OIDC provider API (`:3080`), 
   (flat layout, module-owning packages `tango.<module>.v1`); handlers are generated from it.
 - **Protocol and infrastructure surfaces stay REST** below `/api`, `/authorize`, or a documented
   root path: OAuth/OIDC, WebAuthn ceremonies, device-login request/exchange, email links, the auth
-  worker's cookie bridge, health, and discovery.
+  worker's token refresh, health, and discovery.
 - Generated Go and TypeScript land in `codegen/proto/go/` and `codegen/proto/ts/`. Both are
   **gitignored build outputs** — never commit them, never edit them. `task rpc:generate` produces
   both; `test`, `dev`, `build`, `typecheck`, and `release` already depend on it, so a clean checkout

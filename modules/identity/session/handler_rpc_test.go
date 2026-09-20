@@ -109,10 +109,10 @@ func mustExpiry(t *testing.T, value string) time.Time {
 	return parsed
 }
 
-// TestRPCSignInIssuesCookies covers the public entry point: refresh +
-// access cookies ride the Connect response, and the body mirrors the
-// session.
-func TestRPCSignInIssuesCookies(t *testing.T) {
+// TestRPCSignInIssuesTokens covers the public entry point: the
+// session and access tokens ride the response body, and no cookie is
+// set.
+func TestRPCSignInIssuesTokens(t *testing.T) {
 	h, _, passwords, users := rpcStack(t)
 	u := mustRPCUser(t, passwords, users, "rpcsignin")
 
@@ -121,14 +121,10 @@ func TestRPCSignInIssuesCookies(t *testing.T) {
 	assert.False(t, resp.Msg.GetPending())
 	assert.Equal(t, u.Username, resp.Msg.GetUser().GetUsername())
 	assert.NotEmpty(t, resp.Msg.GetSessionId())
+	assert.NotEmpty(t, resp.Msg.GetSessionToken(), "the session token must ride the body")
+	assert.Empty(t, resp.Header().Values("Set-Cookie"), "cookies are gone")
 
-	refresh := setCookieValue(resp.Header(), CookieName)
-	assert.NotEmpty(t, refresh, "refresh cookie must ride the response")
-	// The access mirror is best-effort: the bridge mints it during
-	// the worker's first bootstrap when absent.
-	_ = setCookieValue(resp.Header(), AccessTokenCookieName)
-
-	// Bad credentials answer unauthenticated without cookies.
+	// Bad credentials answer unauthenticated without tokens.
 	_, err = signInViaRPC(t, h, u.Username, "wrong-secret")
 	cerr := connectCode(t, err)
 	assert.Equal(t, connect.CodeUnauthenticated, cerr.Code())

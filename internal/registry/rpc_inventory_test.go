@@ -46,7 +46,6 @@ var connectServices = []string{
 // contracts, email links, the worker bridge, and bare documents.
 var retainedREST = []string{
 	"POST /api/auth/token",
-	"POST /api/auth/sign-out",
 	"POST /api/auth/forgot-password",
 	"POST /api/auth/reset-password",
 	"POST /api/one-time-access-token/{token}",

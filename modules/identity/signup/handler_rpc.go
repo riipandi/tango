@@ -26,20 +26,19 @@ import (
 // signup and the initial-admin setup are anonymous; the signup-token
 // administration resolves the bearer and demands an admin, guarded
 // per procedure because one service mixes the two.
-func (s *Service) RPCService(secure bool, access kernel.AccessAuthenticator) (string, http.Handler) {
+func (s *Service) RPCService(access kernel.AccessAuthenticator) (string, http.Handler) {
 	admin := map[string]bool{
 		identityv1connect.SignupServiceListSignupTokensProcedure:  true,
 		identityv1connect.SignupServiceCreateSignupTokenProcedure: true,
 		identityv1connect.SignupServiceDeleteSignupTokenProcedure: true,
 	}
 	opts := append(rpcerr.Options(), connect.WithInterceptors(middleware.RPCPrincipalGuard(access, admin, nil)))
-	prefix, handler := identityv1connect.NewSignupServiceHandler(&signupRPC{service: s, secure: secure}, opts...)
+	prefix, handler := identityv1connect.NewSignupServiceHandler(&signupRPC{service: s}, opts...)
 	return prefix, handler
 }
 
 type signupRPC struct {
 	service *Service
-	secure  bool
 }
 
 func (h *signupRPC) Signup(ctx context.Context, req *connect.Request[identityv1.SignupRequest]) (*connect.Response[identityv1.SignedIn], error) {
@@ -144,52 +143,16 @@ func (h *signupRPC) DeleteSignupToken(ctx context.Context, req *connect.Request[
 	return connect.NewResponse(&emptypb.Empty{}), nil
 }
 
-// signedIn maps the signup result onto the shared response and rides
-// the session cookies on the Connect response headers.
+// signedIn maps the signup result onto the shared response; the
+// session and access tokens travel in the body.
 func (h *signupRPC) signedIn(ctx context.Context, result *Result) *connect.Response[identityv1.SignedIn] {
 	resp := connect.NewResponse(signedInProto(result))
-	secure := h.secure
-	if u, se, err := h.service.sessions.Resolve(ctx, result.Token); err == nil {
-		addCookie(resp, sessionCookie(result.Token, se.ExpiresAt, secure))
-		if access, expiresAt, err := h.service.sessions.IssueAccess(ctx, principalFromResolve(u, se)); err == nil {
-			addCookie(resp, accessCookie(access, expiresAt, secure))
-		}
+	resp.Msg.SessionToken = result.Token
+	resp.Msg.SessionId = result.Session.ID
+	if access, _, err := h.service.sessions.IssueAccess(ctx, principalFromResolve(result.User, result.Session)); err == nil {
+		resp.Msg.AccessToken = access
 	}
 	return resp
-}
-
-// sessionCookie builds the refresh-token cookie (HttpOnly, Lax,
-// Secure per run mode).
-func sessionCookie(token string, expires time.Time, secure bool) *http.Cookie {
-	// #nosec G124 -- Secure mirrors the run mode (SameSite=Lax)
-	return &http.Cookie{
-		Name:     session.CookieName,
-		Value:    token,
-		Path:     "/",
-		Expires:  expires,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	}
-}
-
-// accessCookie mirrors the access token in its bridge-scoped cookie.
-func accessCookie(token string, expires time.Time, secure bool) *http.Cookie {
-	// #nosec G124 -- Secure mirrors the run mode (SameSite=Lax)
-	return &http.Cookie{
-		Name:     session.AccessTokenCookieName,
-		Value:    token,
-		Path:     session.AccessTokenPath,
-		Expires:  expires,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	}
-}
-
-// addCookie attaches one cookie to the Connect response headers.
-func addCookie[M any](resp *connect.Response[M], c *http.Cookie) {
-	resp.Header().Add("Set-Cookie", c.String())
 }
 
 // signedInProto maps the domain result onto the shared message.

@@ -77,8 +77,9 @@ message CustomClaim {
 }
 
 // SignedIn is the session-issuing response shared by sign-in, signup,
-// setup, and pending-MFA completion. Cookie transport (session or
-// pending-auth token) stays on Set-Cookie headers, never in the body.
+// setup, and pending-MFA completion. Every credential travels in the
+// body: the client keeps the session token and presents it to refresh,
+// and uses the access token as the RPC bearer.
 message SignedIn {
   User user = 1;
   string session_id = 2;
@@ -86,6 +87,15 @@ message SignedIn {
   optional string expires_at = 4;
   bool pending = 5;
   bool remember = 6;
+  // session_token is the rotating session credential. Absent while a
+  // second factor is still pending.
+  string session_token = 7;
+  // access_token is the short-lived internal bearer JWT. Absent while
+  // a second factor is still pending.
+  string access_token = 8;
+  // pending_token is the bridge credential for the pending second
+  // factor. Present only when pending is true.
+  optional string pending_token = 9;
 }
 
 // AuthService covers authentication lifecycle RPCs. Protected methods
@@ -245,6 +255,9 @@ message GetTotpStatusResponse {
 
 message VerifyPendingRequest {
   string code = 1;
+  // pending_token is the bridge credential issued by the pending
+  // sign-in response.
+  string pending_token = 2;
 }
 
 message DisableTotpRequest {

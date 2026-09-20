@@ -1,33 +1,28 @@
 type: http_request
 model: http_request
-id: rq_kZXKi8fxmt
-createdAt: 2026-09-19T12:28:12.774617
-updatedAt: 2026-09-20T13:14:46.170212
+id: rq_QicD9PpXTg
+createdAt: 2026-09-20T13:14:15.338244
+updatedAt: 2026-09-20T13:14:15.338244
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_8fqSkwaD7C
+folderId: fl_vJemVfyfFL
 authentication: {}
 authenticationType: null
 body:
   text: |-
     {
-      "code": "123456",
-      "pending_token": "REPLACE_PENDING_TOKEN"
+      "session_token": "REPLACE_SESSION_TOKEN"
     }
 bodyType: application/json
-description: Completes a pending sign-in. The pending token comes from the sign-in response (it is present only while `pending` is true), and the answer carries the session and access tokens in the body.
+description: 'The stateless refresh channel: post the session token the sign-in response returned and receive a fresh access bearer plus the replacement session token (the presented one stops resolving). No cookies are involved.'
 headers:
 - enabled: true
   name: Content-Type
   value: application/json
   id: null
-- enabled: true
-  name: Connect-Protocol-Version
-  value: '1'
-  id: null
 method: POST
-name: Complete a pending sign-in
+name: Refresh access token
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.MfaService/VerifyPending
+url: ${[ apiBaseURL ]}/api/auth/token
 urlParameters: []
 settingSendCookies:
   enabled: false

@@ -20,19 +20,11 @@ import (
 // Feature is the wireable recovery HTTP unit (anonymous endpoints).
 type Feature struct {
 	recovery *Recovery
-	cookie   string
-	secure   bool
 }
 
 // NewFeature wires the recovery flow into the HTTP surface.
 func NewFeature(recovery *Recovery) Feature {
 	return Feature{recovery: recovery}
-}
-
-// WithCookie wires the session cookie settings for the fresh session.
-func (f Feature) WithCookie(name string, secure bool) Feature {
-	f.cookie, f.secure = name, secure
-	return f
 }
 
 // Name names the feature for logs.
@@ -84,8 +76,8 @@ func (r resetRequest) Validate() error {
 	)
 }
 
-// handleReset serves POST /auth/reset-password: consumes the token
-// and starts the fresh session.
+// handleReset serves POST /auth/reset-password: consumes the token,
+// starts the fresh session, and returns the session token in the body.
 func (f Feature) handleReset(w http.ResponseWriter, req *http.Request) {
 	var body resetRequest
 	if verr := validate.Request(req.Body, &body); verr != nil {
@@ -108,13 +100,8 @@ func (f Feature) handleReset(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- session cookie parity (SameSite=Lax, Secure off in dev)
-		Name:     f.cookie,
-		Value:    sessionToken,
-		Path:     "/",
-		MaxAge:   0,
-		HttpOnly: true,
-		Secure:   f.secure,
+	responder.Success(w, req, http.StatusOK, map[string]any{
+		"user":          u,
+		"session_token": sessionToken,
 	})
-	responder.Success(w, req, http.StatusOK, u)
 }

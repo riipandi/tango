@@ -59,7 +59,7 @@ func newRPCStack(t *testing.T) (http.Handler, *Service) {
 		session.WithAccessTokens(session.NewAccessTokenSigner(stubKeyProvider(t))))
 
 	svc := NewService(NewPostgresStore(ds), users, usergroup.NewPostgresStore(ds), sessions, nil)
-	prefix, handler := svc.RPCService(false, stubAccess{})
+	prefix, handler := svc.RPCService(stubAccess{})
 	mux := http.NewServeMux()
 	mux.Handle(prefix, handler)
 	return mux, svc
@@ -106,7 +106,7 @@ func rpcPost(t *testing.T, h http.Handler, procedure, bearer, body string) *http
 }
 
 // TestSetupAvailabilityAndInitialAdmin pins the setup lifecycle: the
-// fresh database accepts the first admin (with cookies), a second
+// fresh database accepts the first admin (with tokens), a second
 // setup conflicts, and availability flips false.
 func TestSetupAvailabilityAndInitialAdmin(t *testing.T) {
 	h, svc := newRPCStack(t)
@@ -119,11 +119,9 @@ func TestSetupAvailabilityAndInitialAdmin(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), `"is_admin":true`)
 
-	// The response rides the refresh and access cookies.
-	cookies := w.Result().Cookies()
-	require.Len(t, cookies, 2)
-	assert.Equal(t, session.CookieName, cookies[0].Name)
-	assert.Equal(t, session.AccessTokenCookieName, cookies[1].Name)
+	// The response carries the session and access tokens in the body.
+	assert.Empty(t, w.Result().Cookies(), "cookies are gone")
+	assert.Contains(t, w.Body.String(), `"session_token":"`)
 
 	w = rpcPost(t, h, "GetSetupAvailability", "", "{}")
 	require.Equal(t, http.StatusOK, w.Code)

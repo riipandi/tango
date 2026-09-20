@@ -48,14 +48,15 @@ func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Ser
 		crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmArgon2id), nil)
 	sessions := session.NewService(session.NewPostgresStore(ds), passwords, users, nil)
 
-	selfGuard := middleware.RequireAuth(sessions, session.CookieName)
+	selfGuard := middleware.RequireAuth(sessions)
 	adminGuard := func(next http.Handler) http.Handler {
-		return middleware.RequireAuth(sessions, session.CookieName)(middleware.RequireAdmin(next))
+		return middleware.RequireAuth(sessions)(middleware.RequireAdmin(next))
 	}
 
 	svc, err := NewService(NewPostgresStore(ds), users,
 		func(ctx context.Context, userID user.UserID) (string, error) {
-			return sessions.IssueForUser(ctx, userID, "webauthn", session.Meta{})
+			token, _, issueErr := sessions.IssueForUser(ctx, userID, "webauthn", session.Meta{})
+			return token, issueErr
 		}, "http://localhost:3000", nil)
 	require.NoError(t, err)
 	feature := New(svc)
@@ -103,7 +104,7 @@ func TestRegisterBeginReturnsOptions(t *testing.T) {
 	require.NoError(t, err)
 	_ = cookie
 	req := httptest.NewRequest(http.MethodPost, "/api/webauthn/register/begin", nil)
-	req.Header.Set("Cookie", session.CookieName+"="+cookie)
+	req.Header.Set("Authorization", "Bearer "+cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -157,7 +158,7 @@ func TestRegisterFinishRejectsMissingSession(t *testing.T) {
 	cookie, _ := signIn(t, r, users, passwords, sessions, false)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/webauthn/register/finish", strings.NewReader("{}"))
-	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
+	req.Header.Set("Authorization", "Bearer "+cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code, "finish without a session id must be rejected")

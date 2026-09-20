@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	jsonv2 "encoding/json/v2"
+
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
@@ -60,23 +62,29 @@ func newRPCStack(t *testing.T) (http.Handler, *Service, user.User, Store) {
 	svc := NewService(store, users, &sessionStub{issued: make([]string, 0, 1)},
 		&passwordStub{secret: "correct-horse"}, cipher, "Tango", nil)
 
-	prefix, handler := svc.RPCService(false, stubAccess{userID: created.ID.String()})
+	prefix, handler := svc.RPCService(stubAccess{userID: created.ID.String()})
 	guarded := middleware.RPCSessionAuth(stubAccess{userID: created.ID.String()})(handler)
 	mux := http.NewServeMux()
 	mux.Handle(prefix, guarded)
 	return mux, svc, created, store
 }
 
-// rpcPost posts an MFA procedure; the pending cookie rides when set.
-func rpcPost(t *testing.T, h http.Handler, procedure, body, pendingCookie string) *httptest.ResponseRecorder {
+// rpcPost posts an MFA procedure; the pending token joins the body
+// when set.
+func rpcPost(t *testing.T, h http.Handler, procedure, body, pendingToken string) *httptest.ResponseRecorder {
 	t.Helper()
+	if pendingToken != "" {
+		var fields map[string]any
+		require.NoError(t, jsonv2.Unmarshal([]byte(body), &fields))
+		fields["pending_token"] = pendingToken
+		merged, err := jsonv2.Marshal(fields)
+		require.NoError(t, err)
+		body = string(merged)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/tango.identity.v1.MfaService/"+procedure, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Connect-Protocol-Version", "1")
 	req.Header.Set("Authorization", "Bearer mfa-1")
-	if pendingCookie != "" {
-		req.AddCookie(&http.Cookie{Name: identity.PendingCookieName, Value: pendingCookie})
-	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	return w
@@ -165,11 +173,11 @@ func TestMfaRPCVerifyPending(t *testing.T) {
 	pendingRaw := "pending-bridge-token-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")
 	require.NoError(t, store.PutPending(ctx, created.ID, hashToken(pendingRaw), identity.PendingCookieTTL, false))
 
-	// No cookie → unauthenticated.
+	// No pending token → unauthenticated.
 	w := rpcPost(t, h, "VerifyPending", `{"code":"000000"}`, "")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-	// Wrong code with the cookie → unauthenticated, bridge survives.
+	// Wrong code with the token → unauthenticated, bridge survives.
 	w = rpcPost(t, h, "VerifyPending", `{"code":"000000"}`, pendingRaw)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
@@ -177,11 +185,8 @@ func TestMfaRPCVerifyPending(t *testing.T) {
 	w = rpcPost(t, h, "VerifyPending", `{"code":"`+codes[0]+`"}`, pendingRaw)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	cookies := w.Result().Cookies()
-	require.Len(t, cookies, 2)
-	assert.Equal(t, "tango_session", cookies[0].Name)
-	assert.Equal(t, identity.PendingCookieName, cookies[1].Name)
-	assert.Empty(t, cookies[1].Value)
+	assert.Empty(t, w.Result().Cookies(), "cookies are gone")
+	assert.Contains(t, w.Body.String(), `"session_token":"`, "the session token rides the body")
 }
 
 // TestMfaPendingCarriesRemember pins that the duration requested

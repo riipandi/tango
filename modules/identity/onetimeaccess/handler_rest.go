@@ -98,10 +98,8 @@ func (s *Service) Name() string { return "onetimeaccess" }
 
 // Feature is the wireable unit.
 type Feature struct {
-	service      *Service
-	cookieName   string
-	cookieSecure bool
-	access       kernel.AccessAuthenticator
+	service *Service
+	access  kernel.AccessAuthenticator
 }
 
 // New wires the feature to its service.
@@ -109,12 +107,6 @@ func New(service *Service) Feature { return Feature{service: service} }
 
 // Name names the feature for logs.
 func (Feature) Name() string { return "onetimeaccess" }
-
-// WithCookie wires the session cookie settings for the exchange.
-func (f Feature) WithCookie(name string, secure bool) Feature {
-	f.cookieName, f.cookieSecure = name, secure
-	return f
-}
 
 // WithAccessAuthenticator wires the bearer resolver the admin
 // procedures guard with.
@@ -133,14 +125,12 @@ func (f Feature) RPCService() (string, http.Handler) {
 // to the /api group: only the email-link token exchange. The email
 // request and the admin surface serve ConnectRPC below /rpc.
 func (f Feature) APIRoutes(r chi.Router, _ identity.RouteGroups) {
-	r.Post("/one-time-access-token/{token}", func(w http.ResponseWriter, req *http.Request) {
-		f.service.handleExchange(w, req, f.cookieName, f.cookieSecure)
-	})
+	r.Post("/one-time-access-token/{token}", f.service.handleExchange)
 }
 
 // handleExchange serves POST /one-time-access-token/{token}
 // (anonymous): consumes the token and starts the session.
-func (s *Service) handleExchange(w http.ResponseWriter, r *http.Request, cookieName string, cookieSecure bool) {
+func (s *Service) handleExchange(w http.ResponseWriter, r *http.Request) {
 	raw := chi.URLParam(r, "token")
 	if raw == "" {
 		responder.Fail(w, r, http.StatusBadRequest, "token is required")
@@ -153,8 +143,10 @@ func (s *Service) handleExchange(w http.ResponseWriter, r *http.Request, cookieN
 		return
 	}
 
-	setSessionCookie(w, cookieName, token, cookieSecure)
-	responder.Success(w, r, http.StatusOK, u)
+	responder.Success(w, r, http.StatusOK, map[string]any{
+		"user":          u,
+		"session_token": token,
+	})
 }
 
 // mint creates a fresh single-use token for the user and returns
@@ -195,24 +187,12 @@ func (s *Service) consumeAndIssue(ctx context.Context, raw string) (user.User, s
 		return user.User{}, "", ErrNotFound
 	}
 
-	token, issueErr := s.sessions.IssueForUser(ctx, userID, "one_time_access", session.Meta{})
+	token, _, issueErr := s.sessions.IssueForUser(ctx, userID, "one_time_access", session.Meta{})
 	if issueErr != nil {
 		return user.User{}, "", issueErr
 	}
 	s.record(ctx, "user.signed_in", userID.String())
 	return u, token, nil
-}
-
-// setSessionCookie mirrors the session module cookie flags.
-func setSessionCookie(w http.ResponseWriter, name, value string, secure bool) {
-	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- session cookie parity (SameSite=Lax)
-		Name:     name,
-		Value:    value,
-		Path:     "/",
-		MaxAge:   0,
-		HttpOnly: true,
-		Secure:   secure,
-	})
 }
 
 // parseUserIDParam resolves the {id} path segment.

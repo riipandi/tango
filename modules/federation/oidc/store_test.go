@@ -62,7 +62,7 @@ func testStack(t *testing.T) (*Service, Store, datastore.Store) {
 	t.Cleanup(func() { ds.Close() })
 
 	store := NewPostgresStore(ds)
-	return NewService(store, newStaticKeyProvider(t), "https://sso.test", "tango_session"), store, ds
+	return NewService(store, newStaticKeyProvider(t), "https://sso.test"), store, ds
 }
 
 // stamp uniquifies data on the shared container.

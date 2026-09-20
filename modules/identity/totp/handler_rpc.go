@@ -24,7 +24,7 @@ import (
 // is self-service and resolves the bearer, so the guard is per
 // procedure. The access authenticator comes from the composition
 // root.
-func (s *Service) RPCService(secure bool, access kernel.AccessAuthenticator) (string, http.Handler) {
+func (s *Service) RPCService(access kernel.AccessAuthenticator) (string, http.Handler) {
 	self := map[string]bool{
 		identityv1connect.MfaServiceEnrollTotpProcedure:          true,
 		identityv1connect.MfaServiceConfirmTotpProcedure:         true,
@@ -33,13 +33,12 @@ func (s *Service) RPCService(secure bool, access kernel.AccessAuthenticator) (st
 		identityv1connect.MfaServiceDisableTotpProcedure:         true,
 	}
 	opts := append(rpcerr.Options(), connect.WithInterceptors(middleware.RPCPrincipalGuard(access, nil, self)))
-	prefix, handler := identityv1connect.NewMfaServiceHandler(&mfaRPC{service: s, secure: secure}, opts...)
+	prefix, handler := identityv1connect.NewMfaServiceHandler(&mfaRPC{service: s}, opts...)
 	return prefix, handler
 }
 
 type mfaRPC struct {
 	service *Service
-	secure  bool
 }
 
 func (h *mfaRPC) EnrollTotp(ctx context.Context, _ *connect.Request[emptypb.Empty]) (*connect.Response[identityv1.EnrollTotpResponse], error) {
@@ -84,27 +83,29 @@ func (h *mfaRPC) GetTotpStatus(ctx context.Context, _ *connect.Request[emptypb.E
 	}), nil
 }
 
-// VerifyPending completes a pending sign-in: the pending-auth cookie
-// is the credential, so the response rotates the session cookie and
-// clears the bridge.
+// VerifyPending completes a pending sign-in: the pending token issued
+// by the sign-in response is the credential, and the answer carries
+// the session and access tokens.
 func (h *mfaRPC) VerifyPending(ctx context.Context, req *connect.Request[identityv1.VerifyPendingRequest]) (*connect.Response[identityv1.SignedIn], error) {
 	if err := validateCode(req.Msg.GetCode()); err != nil {
 		return nil, err
 	}
-	pending := pendingTokenFrom(req.Header())
+	pending := req.Msg.GetPendingToken()
 	if pending == "" {
 		return nil, rpcerr.Unauthenticated("verification required")
 	}
 
-	u, token, remember, err := h.service.VerifyPending(ctx, pending, req.Msg.GetCode())
+	u, token, se, remember, err := h.service.VerifyPending(ctx, pending, req.Msg.GetCode())
 	if err != nil {
 		return nil, rpcError(err)
 	}
 
 	resp := connect.NewResponse(signedInProto(u, remember))
-	secure := h.secure
-	addCookie(resp, sessionCookie(token, secure))
-	addCookie(resp, expiredCookie(identity.PendingCookieName, "/", secure))
+	resp.Msg.SessionToken = token
+	resp.Msg.SessionId = se.ID
+	if access, _, err := h.service.IssueAccess(ctx, principalForUser(u, se)); err == nil {
+		resp.Msg.AccessToken = access
+	}
 	return resp, nil
 }
 
@@ -177,55 +178,19 @@ func rpcError(err error) error {
 }
 
 // signedInProto maps the completed pending sign-in onto the shared
-// message; the session id rides the cookie, not the body.
+// message. The caller fills in the session and access tokens.
 func signedInProto(u user.User, remember bool) *identityv1.SignedIn {
 	return &identityv1.SignedIn{User: user.ProtoView(u), Pending: false, Remember: remember}
 }
 
-// pendingTokenFrom reads the pending-auth cookie from the Connect
-// request headers.
-func pendingTokenFrom(header http.Header) string {
-	for _, raw := range header.Values("Cookie") {
-		for _, part := range strings.Split(raw, ";") {
-			name, value, _ := strings.Cut(strings.TrimSpace(part), "=")
-			if name == identity.PendingCookieName {
-				return value
-			}
-		}
+// principalForUser rebuilds the principal for the access-token mint.
+func principalForUser(u user.User, se session.Session) kernel.Principal {
+	return kernel.Principal{
+		SessionID: se.ID,
+		UserID:    u.ID.String(),
+		Username:  u.Username,
+		Email:     u.Email,
+		Provider:  se.Provider,
+		IsAdmin:   u.IsAdmin,
 	}
-	return ""
-}
-
-// sessionCookie builds the refresh-token session cookie (HttpOnly,
-// Lax, Secure per run mode; the browser holds it for the session).
-func sessionCookie(token string, secure bool) *http.Cookie {
-	// #nosec G124 -- Secure mirrors the run mode (SameSite=Lax)
-	return &http.Cookie{
-		Name:     session.CookieName,
-		Value:    token,
-		Path:     "/",
-		MaxAge:   0,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	}
-}
-
-// expiredCookie builds the clearing form of a cookie.
-func expiredCookie(name string, path string, secure bool) *http.Cookie {
-	// #nosec G124 -- Secure mirrors the run mode (SameSite=Lax)
-	return &http.Cookie{
-		Name:     name,
-		Value:    "",
-		Path:     path,
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	}
-}
-
-// addCookie attaches one cookie to the Connect response headers.
-func addCookie[M any](resp *connect.Response[M], c *http.Cookie) {
-	resp.Header().Add("Set-Cookie", c.String())
 }

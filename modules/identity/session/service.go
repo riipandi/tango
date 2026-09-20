@@ -26,9 +26,6 @@ type Service struct {
 	// The sliding refresh and rotation reuse the session's own mode,
 	// so an active short session is never promoted to the long one.
 	shortLifetime time.Duration
-	// cookieSecure marks the session cookie Secure (HTTPS-only);
-	// development runs over plain HTTP.
-	cookieSecure bool
 	// now is overridable in tests; production uses time.Now.
 	now func() time.Time
 
@@ -78,11 +75,6 @@ func WithLifetime(d time.Duration) ServiceOption {
 // "remember me". It must not exceed the lifetime set by WithLifetime.
 func WithShortLifetime(d time.Duration) ServiceOption {
 	return func(s *Service) { s.shortLifetime = d }
-}
-
-// WithCookieSecure toggles the Secure cookie flag.
-func WithCookieSecure(secure bool) ServiceOption {
-	return func(s *Service) { s.cookieSecure = secure }
 }
 
 // WithClock overrides the service clock (tests).
@@ -182,26 +174,25 @@ func (s *Service) SignIn(ctx context.Context, identityText, secret string, meta 
 // ceremony. A confirmed second factor fails these flows closed: the
 // pending bridge belongs to the password sign-in path only, so no
 // provider can bypass MFA.
-func (s *Service) IssueForUser(ctx context.Context, userID user.UserID, provider string, meta Meta) (string, error) {
+func (s *Service) IssueForUser(ctx context.Context, userID user.UserID, provider string, meta Meta) (string, Session, error) {
 	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {
-		return "", fmt.Errorf("session: load user: %w", err)
+		return "", Session{}, fmt.Errorf("session: load user: %w", err)
 	}
 	if u.Disabled {
-		return "", fmt.Errorf("session: %w: user is disabled", ErrInvalidCredentials)
+		return "", Session{}, fmt.Errorf("session: %w: user is disabled", ErrInvalidCredentials)
 	}
 	if s.mfa != nil && provider != "totp" {
 		required, requiredErr := s.mfa.RequiresPending(ctx, u.ID.String())
 		if requiredErr != nil {
-			return "", requiredErr
+			return "", Session{}, requiredErr
 		}
 		if required {
-			return "", fmt.Errorf("session: %w: second factor required", ErrInvalidCredentials)
+			return "", Session{}, fmt.Errorf("session: %w: second factor required", ErrInvalidCredentials)
 		}
 	}
 
-	token, _, err := s.issueSession(ctx, u, provider, meta)
-	return token, err
+	return s.issueSession(ctx, u, provider, meta)
 }
 
 // issueSession creates the session row + audit trail; returns the

@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	jsonv2 "encoding/json/v2"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -97,7 +99,7 @@ func newTestRouter(t *testing.T, record func(context.Context, identity.AuditEven
 	r := chi.NewRouter()
 	r.Route("/api", func(r chi.Router) {
 		sessions.APIRoutes(r, identity.RouteGroups{})
-		NewFeature(recoverySvc).WithCookie(session.CookieName, false).APIRoutes(r, identity.RouteGroups{})
+		NewFeature(recoverySvc).APIRoutes(r, identity.RouteGroups{})
 	})
 	return r, passwords, users, tokens, mail, sessions
 }
@@ -177,12 +179,18 @@ func TestResetLifecycle(t *testing.T) {
 	w := postJSON(t, r, "/api/auth/reset-password", `{"token":"`+resetToken+`","new_password":"short"}`)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 
-	// The happy path: 200 + a fresh session cookie.
+	// The happy path: 200 + a fresh session token in the body.
 	w = postJSON(t, r, "/api/auth/reset-password", `{"token":"`+resetToken+`","new_password":"new-s3cret-p@ss"}`)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	cookies := w.Result().Cookies()
-	require.NotEmpty(t, cookies)
-	newSession := cookies[0].Value
+	assert.Empty(t, w.Result().Cookies(), "cookies are gone")
+	var reset struct {
+		Data struct {
+			SessionToken string `json:"session_token"`
+		} `json:"data"`
+	}
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &reset))
+	newSession := reset.Data.SessionToken
+	require.NotEmpty(t, newSession)
 
 	// The old session died with the old secret; the fresh one lives —
 	// probed through the session resolver (the REST session read is

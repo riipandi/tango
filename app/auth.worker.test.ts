@@ -1,20 +1,23 @@
 // Auth worker contract tests: the module runs as plain TypeScript
 // under vitest (the comlink plugin only adds worker wiring at build
-// time). Fetch is mocked so the cookie bridge is exercised without a
-// server.
+// time). Fetch is mocked so the refresh channel is exercised without
+// a server; jsdom supplies the Web Storage the worker persists to.
 import { afterEach, beforeEach, describe, expect, vi, it } from 'vitest'
 import * as worker from './auth.worker'
 
 const { AuthError } = worker
 
+const storageKey = 'tango.session_token'
+
 // bridgeBody renders the Go tokenBridgeResponse shape.
-function bridgeBody(accessToken: string, expiresInSeconds = 600): Response {
+function bridgeBody(accessToken: string, expiresInSeconds = 600, sessionToken?: string): Response {
   return new Response(
     JSON.stringify({
       access_token: accessToken,
       token_type: 'Bearer',
       expires_in: expiresInSeconds,
-      expires_at: new Date(Date.now() + expiresInSeconds * 1000).toISOString()
+      expires_at: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
+      ...(sessionToken ? { session_token: sessionToken } : {})
     }),
     { status: 200, headers: { 'content-type': 'application/json' } }
   )
@@ -36,48 +39,81 @@ function mockFetch(handler: (url: string, init?: RequestInit) => Response | Prom
 
 beforeEach(() => {
   fetchSpy = vi.spyOn(globalThis, 'fetch').mockName('fetch')
+  localStorage.clear()
+  sessionStorage.clear()
 })
 
 afterEach(() => {
   fetchSpy.mockRestore()
+  localStorage.clear()
+  sessionStorage.clear()
 })
 
 describe('auth worker', () => {
-  it('bootstraps from the cookie bridge and caches the token', async () => {
-    const fetchMock = mockFetch((url) => {
+  it('bootstraps from the persisted session token and caches the bearer', async () => {
+    worker.adoptTokens('sess-1', true)
+    const fetchMock = mockFetch((url, init) => {
       expect(url).toBe('/api/auth/token')
+      expect(JSON.parse(init?.body as string)).toEqual({ session_token: 'sess-1' })
       return bridgeBody('tok-1')
     })
 
     const snapshot = await worker.bootstrap()
     expect(snapshot).not.toBeNull()
     expect(snapshot?.accessToken).toBe('tok-1')
-    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', credentials: 'include' })
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
 
     // getAccessToken serves the cached token without a round-trip.
     await expect(worker.getAccessToken()).resolves.toBe('tok-1')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('resolves bootstrap to null when the session is gone', async () => {
+  it('keeps a remembered session in localStorage and a plain one in sessionStorage', () => {
+    worker.adoptTokens('sess-long', true)
+    expect(localStorage.getItem(storageKey)).toBe('sess-long')
+    expect(sessionStorage.getItem(storageKey)).toBeNull()
+
+    worker.adoptTokens('sess-short', false)
+    expect(sessionStorage.getItem(storageKey)).toBe('sess-short')
+    expect(localStorage.getItem(storageKey)).toBeNull()
+  })
+
+  it('resolves bootstrap to null without a persisted token or a dead session', async () => {
+    await expect(worker.bootstrap()).resolves.toBeNull()
+
+    worker.adoptTokens('sess-dead', false)
     mockFetch(() => new Response('{"code":"unauthenticated"}', { status: 401 }))
     await expect(worker.bootstrap()).resolves.toBeNull()
+    expect(sessionStorage.getItem(storageKey)).toBeNull()
     await expect(worker.getAccessToken()).resolves.toBeNull()
   })
 
+  it('stores the rotated session token the bridge returns', async () => {
+    worker.adoptTokens('sess-old', true)
+    mockFetch(() => bridgeBody('tok-1', 600, 'sess-new'))
+
+    await worker.bootstrap()
+    expect(localStorage.getItem(storageKey)).toBe('sess-new')
+  })
+
   it('refreshes through the bridge when the cached token passes its window', async () => {
+    worker.adoptTokens('sess-2', false)
     mockFetch(() => bridgeBody('tok-short', 1))
     await worker.bootstrap()
 
-    // The 1s token is inside the 5s safety window → immediate efresh on the next request.
+    // The 1s token is inside the 5s safety window → immediate refresh.
     mockFetch(() => bridgeBody('tok-2'))
     await expect(worker.getAccessToken()).resolves.toBe('tok-2')
   })
 
   it('throws typed AuthError when the bridge is broken and nothing is cached', async () => {
+    worker.adoptTokens('sess-3', false)
     mockFetch(() => new Response('{"code":"unauthenticated"}', { status: 401 }))
     await expect(worker.bootstrap()).resolves.toBeNull()
 
+    // A fresh credential, then a server-side failure: the error
+    // surfaces instead of being swallowed as an expired session.
+    worker.adoptTokens('sess-3b', false)
     mockFetch(() => new Response('boom', { status: 500 }))
     await expect(worker.refresh()).rejects.toMatchObject({
       name: 'AuthError',
@@ -86,7 +122,8 @@ describe('auth worker', () => {
     await expect(worker.getAccessToken()).rejects.toBeInstanceOf(AuthError)
   })
 
-  it('signs out over Connect with bearer injection and clears memory', async () => {
+  it('signs out over Connect with bearer injection and clears the credential', async () => {
+    worker.adoptTokens('sess-4', true)
     mockFetch(() => bridgeBody('tok-3'))
     await worker.bootstrap()
 
@@ -103,31 +140,14 @@ describe('auth worker', () => {
 
     await worker.signOut()
     expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem(storageKey)).toBeNull()
 
-    // Memory is cleared; the next token request re-bootstraps.
-    mockFetch(() => new Response('{"code":"unauthenticated"}', { status: 401 }))
+    // Memory is cleared; the next token request finds no credential.
     await expect(worker.getAccessToken()).resolves.toBeNull()
   })
 
-  it('falls back to the REST sign-out when the bearer died', async () => {
-    mockFetch(() => bridgeBody('tok-4'))
-    await worker.bootstrap()
-
-    mockFetch((url) => {
-      if (url.endsWith('/SignOut')) {
-        return new Response('{"code":"unauthenticated"}', { status: 401 })
-      }
-      expect(url).toBe('/api/auth/sign-out')
-      return new Response('{"signed_out":true}', {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      })
-    })
-
-    await worker.signOut()
-  })
-
-  it('never exposes a refresh token in any payload it returns', async () => {
+  it('never exposes the session token in the snapshots it returns', async () => {
+    worker.adoptTokens('sess-5', false)
     mockFetch(() => bridgeBody('tok-5'))
     const snapshot = await worker.bootstrap()
     expect(Object.keys(snapshot ?? {})).toEqual(['accessToken', 'expiresAtMs'])

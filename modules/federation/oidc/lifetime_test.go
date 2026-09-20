@@ -12,7 +12,7 @@ import (
 // lifetimes come from configuration, and that an unset field keeps the
 // package default rather than collapsing to zero.
 func TestConfiguredLifetimesOverrideDefaults(t *testing.T) {
-	configured := NewService(nil, nil, "https://sso.test", "tango_session",
+	configured := NewService(nil, nil, "https://sso.test",
 		WithLifetimes(Lifetimes{
 			AccessToken:       5 * time.Minute,
 			RefreshToken:      48 * time.Hour,
@@ -31,7 +31,7 @@ func TestConfiguredLifetimesOverrideDefaults(t *testing.T) {
 
 	// A partial configuration leaves the other lifetimes at their
 	// defaults, and a zero field never yields a zero lifetime.
-	partial := NewService(nil, nil, "https://sso.test", "tango_session",
+	partial := NewService(nil, nil, "https://sso.test",
 		WithLifetimes(Lifetimes{AccessToken: 5 * time.Minute}))
 	assert.Equal(t, 5*time.Minute, partial.AccessTokenTTL())
 	assert.Equal(t, DefaultRefreshTokenTTL, partial.RefreshTokenTTL())
@@ -41,7 +41,7 @@ func TestConfiguredLifetimesOverrideDefaults(t *testing.T) {
 	assert.Equal(t, DefaultPARTTL, partial.PARTTL())
 
 	// No option at all keeps every default.
-	plain := NewService(nil, nil, "https://sso.test", "tango_session")
+	plain := NewService(nil, nil, "https://sso.test")
 	for name, got := range map[string]time.Duration{
 		"access":   plain.AccessTokenTTL(),
 		"refresh":  plain.RefreshTokenTTL(),
@@ -58,7 +58,7 @@ func TestConfiguredLifetimesOverrideDefaults(t *testing.T) {
 // what the authorization-code and PAR responses advertise, not the
 // compiled default.
 func TestConfiguredLifetimesReachTheWire(t *testing.T) {
-	svc := NewService(nil, nil, "https://sso.test", "tango_session",
+	svc := NewService(nil, nil, "https://sso.test",
 		WithLifetimes(Lifetimes{PAR: 42 * time.Second, DeviceCode: 90 * time.Second}))
 
 	require.Equal(t, 42*time.Second, svc.PARTTL())

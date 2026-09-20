@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	jsonv2 "encoding/json/v2"
+
 	"connectrpc.com/connect"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
@@ -41,7 +43,7 @@ func newTestKeyProvider(t *testing.T) stubKeyProvider {
 }
 
 // rpcSignIn drives the Connect SignIn procedure and returns the
-// refresh and access cookie values from the response.
+// session and access tokens the body carries.
 func rpcSignIn(t *testing.T, sessions *Service, identityText, secret string) (string, string) {
 	t.Helper()
 	h := &authRPC{service: sessions}
@@ -49,104 +51,87 @@ func rpcSignIn(t *testing.T, sessions *Service, identityText, secret string) (st
 		Identity: identityText, Password: secret,
 	}))
 	require.NoError(t, err)
-	return setCookieValue(resp.Header(), CookieName), setCookieValue(resp.Header(), AccessTokenCookieName)
+	return resp.Msg.GetSessionToken(), resp.Msg.GetAccessToken()
 }
 
-// setCookieValue reads one Set-Cookie value; multiple cookies ride
-// separate header entries.
-func setCookieValue(header http.Header, name string) string {
-	for _, setCookie := range header["Set-Cookie"] {
-		for _, part := range strings.Split(setCookie, "; ") {
-			if strings.HasPrefix(part, name+"=") {
-				return strings.TrimPrefix(part, name+"=")
-			}
-		}
-	}
-	return ""
-}
-
-func tokenBridge(t *testing.T, r http.Handler, cookies ...string) *httptest.ResponseRecorder {
+// tokenBridge posts a session token to the refresh endpoint.
+func tokenBridge(t *testing.T, r http.Handler, sessionToken string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/token", nil)
-	for _, c := range cookies {
-		req.Header.Add("Cookie", c)
+	body := "{}"
+	if sessionToken != "" {
+		body = `{"session_token":"` + sessionToken + `"}`
 	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/token", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w
 }
 
-// namedCookie pulls one cookie out of a response by name.
-func namedCookie(t *testing.T, w *httptest.ResponseRecorder, name string) string {
+// bridgeField reads one string field from the refresh answer.
+func bridgeField(t *testing.T, w *httptest.ResponseRecorder, field string) string {
 	t.Helper()
-	for _, c := range w.Result().Cookies() {
-		if c.Name == name {
-			return c.Value
-		}
+	var payload struct {
+		Data map[string]any `json:"data"`
 	}
-	return ""
+	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &payload))
+	value, _ := payload.Data[field].(string)
+	return value
 }
 
-// TestTokenBridgeBootstrapAndRotation pins the worker cookie bridge:
-// sign-in mirrors the access token into an HttpOnly bridge-scoped
-// cookie, the bridge answers with a bearer token, and a refresh-only
-// bootstrap rotates the refresh token so the previous value stops
-// resolving.
+// TestTokenBridgeBootstrapAndRotation pins the stateless refresh
+// channel: a posted session token answers with a fresh bearer, the
+// rotation replaces the session token so the previous value stops
+// resolving, and revocation kills the family inside the token TTL.
 func TestTokenBridgeBootstrapAndRotation(t *testing.T) {
 	signer := newTestKeyProvider(t)
 	r, sessions, passwords, users := newTestRouter(t, WithAccessTokens(NewAccessTokenSigner(signer)))
 	u := newUser(t, users, passwords, "bridge")
 
-	// Sign-in: refresh cookie plus the bridge-scoped access mirror.
+	// Sign-in: session token plus the access bearer.
 	refresh, access := rpcSignIn(t, sessions, u.Username, "s3cret-p@ss")
 	require.NotEmpty(t, refresh)
-	require.NotEmpty(t, access, "sign-in mirrors the access token for bootstrap")
+	require.NotEmpty(t, access, "sign-in mints the access bearer")
 
-	// Fast path: valid access cookie → same token, no rotation.
-	w := tokenBridge(t, r, "tango_access="+access, CookieName+"="+refresh)
+	// Refresh path: rotate → new session token, old one dies.
+	w := tokenBridge(t, r, refresh)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), `"token_type":"Bearer"`)
-	assert.Equal(t, access, namedCookie(t, w, AccessTokenCookieName))
-
-	// Refresh path: rotate → new refresh token, old one dies.
-	w = tokenBridge(t, r, CookieName+"="+refresh)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	rotated := namedCookie(t, w, CookieName)
+	rotated := bridgeField(t, w, "session_token")
 	require.NotEmpty(t, rotated)
 	assert.NotEqual(t, refresh, rotated, "refresh rotation must replace the token")
 	_, _, err := sessions.Resolve(t.Context(), refresh)
 	assert.Error(t, err, "the rotated-out refresh token must stop resolving")
 
 	// The bridged access token resolves to the principal over RPC.
-	resolvedAccess := namedCookie(t, w, AccessTokenCookieName)
+	resolvedAccess := bridgeField(t, w, "access_token")
 	principal, err := sessions.ResolveAccess(t.Context(), resolvedAccess)
 	require.NoError(t, err)
 	assert.Equal(t, u.ID.String(), principal.UserID)
 
 	// Revocation kills the family even inside the token TTL.
 	require.NoError(t, sessions.RevokeCurrent(t.Context(), rotated))
-	w = tokenBridge(t, r, CookieName+"="+rotated)
+	w = tokenBridge(t, r, rotated)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 	_, err = sessions.ResolveAccess(t.Context(), resolvedAccess)
 	assert.Error(t, err, "revoked sessions must fail token verification")
 }
 
-// TestTokenBridgeRejectsAnonymous pins the 401 branch: no cookies and
-// garbage cookies answer the enumeration-safe message.
+// TestTokenBridgeRejectsAnonymous pins the 401 branch: a missing and a
+// garbage session token answer the enumeration-safe message.
 func TestTokenBridgeRejectsAnonymous(t *testing.T) {
 	signer := newTestKeyProvider(t)
 	r, sessionsForBridge, passwords, users := newTestRouter(t, WithAccessTokens(NewAccessTokenSigner(signer)))
 	u := newUser(t, users, passwords, "bridge_anon")
 
-	w := tokenBridge(t, r)
+	w := tokenBridge(t, r, "")
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+
+	w = tokenBridge(t, r, "garbage")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 	assert.Contains(t, w.Body.String(), "invalid or expired token")
 
-	w = tokenBridge(t, r, CookieName+"=garbage")
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-
-	// A live session exists, yet no cookie means no bridge answer:
-	// the rejection is the missing cookie, not a broken bridge.
+	// A live session exists, yet no token means no bridge answer: the
+	// rejection is the missing credential, not a broken bridge.
 	rpcSignIn(t, sessionsForBridge, u.Username, "s3cret-p@ss")
 }
 
@@ -157,7 +142,7 @@ func TestBridgeWithoutSignerSurfaces501(t *testing.T) {
 	u := newUser(t, users, passwords, "bridge_bare")
 	_ = u
 
-	w := tokenBridge(t, r)
+	w := tokenBridge(t, r, "any")
 	assert.Equal(t, http.StatusNotImplemented, w.Code)
 }
 

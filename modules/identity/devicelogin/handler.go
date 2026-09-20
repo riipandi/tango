@@ -2,8 +2,8 @@ package devicelogin
 
 // handler.go owns the device login HTTP surface: the anonymous
 // create/exchange pair (QR device side). Approval serves ConnectRPC
-// (handler_rpc.go); the exchange sets the session cookie via the
-// shared helper contract.
+// (handler_rpc.go); the exchange returns the session token in the
+// body, and the polling device holds its own token.
 
 import (
 	"net/http"
@@ -44,35 +44,17 @@ func (s *Service) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The polling device keeps the token secret; it rides a
-	// dedicated header on exchange.
-	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- short-lived pairing cookie (SameSite=Lax)
-		Name:     "tango_device_login",
-		Value:    deviceToken,
-		Path:     "/",
-		Expires:  created.ExpiresAt,
-		HttpOnly: true,
-		Secure:   s.cookieSecure,
-	})
-	responder.Success(w, r, http.StatusCreated, created)
-}
-
-// setSessionCookie mirrors the session module cookie flags; the
-// duplicate is intentional — this module must not import the
-// session package (the registry wires the cookie name).
-func setSessionCookie(w http.ResponseWriter, name, value string, secure bool) {
-	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- session cookie parity (SameSite=Lax, Secure off in dev)
-		Name:     name,
-		Value:    value,
-		Path:     "/",
-		MaxAge:   0,
-		HttpOnly: true,
-		Secure:   secure,
+	// The polling device keeps the token secret and presents it on
+	// exchange through the dedicated header.
+	responder.Success(w, r, http.StatusCreated, map[string]any{
+		"request":      created,
+		"device_token": deviceToken,
 	})
 }
 
 // handleExchange serves POST /device-login/requests/{id}/exchange:
-// long-poll until approved; sets the session cookie on success.
+// long-poll until approved; returns the session token in the body on
+// success.
 func (s *Service) handleExchange(w http.ResponseWriter, r *http.Request) {
 	deviceToken := deviceTokenFrom(r)
 	if deviceToken == "" {
@@ -80,7 +62,8 @@ func (s *Service) handleExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, token, err := s.Exchange(r.Context(), chi.URLParam(r, "id"), deviceToken)
+	requestID := chi.URLParam(r, "id")
+	u, token, err := s.Exchange(r.Context(), requestID, deviceToken)
 	switch {
 	case err == nil:
 	case isPending(err):
@@ -97,17 +80,10 @@ func (s *Service) handleExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionCookie(w, s.cookieName, token, s.cookieSecure)
-	responder.Success(w, r, http.StatusOK, u)
-}
-
-// deviceTokenFrom reads the pairing token: cookie first, then the
-// dedicated header.
-func deviceTokenFrom(r *http.Request) string {
-	if cookie, err := r.Cookie("tango_device_login"); err == nil && cookie.Value != "" {
-		return cookie.Value
-	}
-	return r.Header.Get("X-Device-Token")
+	responder.Success(w, r, http.StatusOK, map[string]any{
+		"user":          u,
+		"session_token": token,
+	})
 }
 
 // baseURLFrom derives the public base URL for verification URIs.
@@ -117,6 +93,12 @@ func baseURLFrom(r *http.Request) string {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host
+}
+
+// deviceTokenFrom reads the pairing token the polling device
+// presents on its dedicated header.
+func deviceTokenFrom(r *http.Request) string {
+	return r.Header.Get("X-Device-Token")
 }
 
 // requestIP prefers the proxy-injected address.

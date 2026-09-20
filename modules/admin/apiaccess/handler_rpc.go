@@ -24,7 +24,7 @@ import (
 // The whole surface is admin-only, so the composition root wraps the
 // mount with the admin guard and the handler carries no principal
 // logic of its own.
-type apiRPC struct { //nolint:staticcheck // generated interface names
+type apiRPC struct {
 	service *Service
 }
 
@@ -51,7 +51,6 @@ func (h *apiRPC) ListApis(ctx context.Context, req *connect.Request[commonv1.Pag
 	}), nil
 }
 
-//nolint:staticcheck // generated interface name
 func (h *apiRPC) CreateAPI(ctx context.Context, req *connect.Request[adminv1.CreateApiRequest]) (*connect.Response[adminv1.API], error) {
 	params := CreateParams{Name: req.Msg.GetName(), Resource: req.Msg.GetResource()}
 	if verr := params.Validate(); verr != nil {
@@ -64,7 +63,6 @@ func (h *apiRPC) CreateAPI(ctx context.Context, req *connect.Request[adminv1.Cre
 	return connect.NewResponse(apiProto(a)), nil
 }
 
-//nolint:staticcheck // generated interface name
 func (h *apiRPC) GetAPI(ctx context.Context, req *connect.Request[adminv1.GetApiRequest]) (*connect.Response[adminv1.API], error) {
 	id, err := parseAPIID(req.Msg.GetId())
 	if err != nil {
@@ -77,7 +75,6 @@ func (h *apiRPC) GetAPI(ctx context.Context, req *connect.Request[adminv1.GetApi
 	return connect.NewResponse(apiProto(a)), nil
 }
 
-//nolint:staticcheck // generated interface name
 func (h *apiRPC) UpdateAPI(ctx context.Context, req *connect.Request[adminv1.UpdateApiRequest]) (*connect.Response[adminv1.API], error) {
 	id, err := parseAPIID(req.Msg.GetId())
 	if err != nil {
@@ -94,7 +91,6 @@ func (h *apiRPC) UpdateAPI(ctx context.Context, req *connect.Request[adminv1.Upd
 	return connect.NewResponse(apiProto(a)), nil
 }
 
-//nolint:staticcheck // generated interface name
 func (h *apiRPC) DeleteAPI(ctx context.Context, req *connect.Request[adminv1.DeleteApiRequest]) (*connect.Response[emptypb.Empty], error) {
 	id, err := parseAPIID(req.Msg.GetId())
 	if err != nil {

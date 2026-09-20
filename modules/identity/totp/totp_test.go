@@ -15,6 +15,7 @@ import (
 
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -195,8 +196,12 @@ func (p *passwordStub) VerifyForUser(ctx context.Context, userID user.UserID, se
 // sessionStub records issued session tokens.
 type sessionStub struct{ issued []string }
 
-func (s *sessionStub) IssueForUser(ctx context.Context, userID user.UserID, provider string, meta session.Meta) (string, error) {
+func (s *sessionStub) IssueForUser(ctx context.Context, userID user.UserID, provider string, meta session.Meta) (string, session.Session, error) {
 	token := "issued-" + userID.String()
 	s.issued = append(s.issued, token)
-	return token, nil
+	return token, session.Session{ID: "sess_" + userID.String()}, nil
+}
+
+func (s *sessionStub) IssueAccess(_ context.Context, _ kernel.Principal) (string, time.Time, error) {
+	return "access-stub", time.Now().Add(time.Minute), nil
 }

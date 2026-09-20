@@ -1,16 +1,19 @@
 // AuthWorkerApi — token lifecycle worker. The comlink plugin wraps
-// these exports; the UI thread never sees a refresh token and holds
-// an access token only for the duration of one RPC header injection.
+// these exports; the UI thread holds the access token only for the
+// duration of one RPC header injection.
 //
-// The cookie channel is the only bridge into this worker: bootstrap
-// and refresh POST to the same-origin /api/auth/token endpoint with
-// credentials: include, so the browser attaches the HttpOnly cookies
-// and the worker keeps just the short-lived access token in memory.
+// There is no cookie channel: the session token is returned by
+// sign-in and kept client-side, then posted to the same-origin
+// /api/auth/token endpoint to mint a fresh access bearer. A "remember
+// me" session lands in localStorage so it survives a reload; a plain
+// session lives in sessionStorage and dies with the tab.
 import { ofetch } from 'ofetch'
 
 const tokenEndpoint = '/api/auth/token'
 const signOutEndpoint = '/rpc/tango.identity.v1.AuthService/SignOut'
-const signOutFallbackEndpoint = '/api/auth/sign-out'
+
+// storageKey is where the rotating session token lives.
+const storageKey = 'tango.session_token'
 
 export interface AuthSnapshot {
   accessToken: string
@@ -22,6 +25,7 @@ interface BridgeResponse {
   token_type: string
   expires_in: number
   expires_at: string
+  session_token?: string
 }
 
 export class AuthError extends Error {
@@ -34,13 +38,29 @@ export class AuthError extends Error {
   }
 }
 
-// Same-origin instance: ofetch attaches cookies via credentials;
-// ignoreResponseError surfaces status through `.raw` without
-// throwing, so every branch maps onto AuthError explicitly.
-const http = ofetch.create({ credentials: 'include', ignoreResponseError: true })
+const http = ofetch.create({ ignoreResponseError: true })
 
 let accessToken: string | null = null
 let expiresAtMs = 0
+
+// readSessionToken returns the persisted session credential.
+function readSessionToken(): string {
+  return localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey) ?? ''
+}
+
+// writeSessionToken persists the session credential for the lifetime
+// the caller asked for.
+function writeSessionToken(token: string, remember: boolean): void {
+  clearSessionToken()
+  if (remember) localStorage.setItem(storageKey, token)
+  else sessionStorage.setItem(storageKey, token)
+}
+
+// clearSessionToken drops the persisted credential.
+function clearSessionToken(): void {
+  localStorage.removeItem(storageKey)
+  sessionStorage.removeItem(storageKey)
+}
 
 // reset forgets the in-memory token; sign-out and fatal refresh
 // errors land here.
@@ -49,16 +69,43 @@ function reset(): void {
   expiresAtMs = 0
 }
 
-// callBridge posts to the token endpoint; the browser attaches the
-// HttpOnly cookies, the answer carries the access token only.
+// adoptTokens stores the session credential a sign-in response
+// returned. The worker owns it from here on; the caller never keeps a
+// copy. The access bearer is not cached — the first RPC mints one
+// through the bridge, which also proves the credential works.
+export function adoptTokens(sessionToken: string, remember: boolean): void {
+  writeSessionToken(sessionToken, remember)
+  reset()
+}
+
+// callBridge posts the persisted session token to the refresh
+// endpoint; the answer carries a fresh access bearer and, when the
+// session token rotated, its replacement.
 async function callBridge(): Promise<AuthSnapshot> {
-  const response = await http.raw<BridgeResponse>(tokenEndpoint, { method: 'POST' })
+  const sessionToken = readSessionToken()
+  if (!sessionToken) {
+    reset()
+    throw new AuthError('session expired', 401)
+  }
+
+  const response = await http.raw<BridgeResponse>(tokenEndpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ session_token: sessionToken })
+  })
   if (response.status === 401) {
     reset()
+    clearSessionToken()
     throw new AuthError('session expired', 401)
   }
   if (!response.ok || !response._data || response._data.token_type !== 'Bearer') {
     throw new AuthError('token bridge returned an unexpected payload', response.status)
+  }
+
+  // The presented session token is dead after the call; keep the
+  // replacement in the same store the old one lived in.
+  if (response._data.session_token) {
+    writeSessionToken(response._data.session_token, localStorage.getItem(storageKey) !== null)
   }
   accessToken = response._data.access_token
   expiresAtMs = Date.parse(response._data.expires_at)
@@ -80,6 +127,7 @@ async function loadFromBridge(): Promise<string | null> {
 // dead session (401) resolves null instead of throwing.
 export async function bootstrap(): Promise<AuthSnapshot | null> {
   reset()
+  if (!readSessionToken()) return null
   try {
     return await callBridge()
   } catch (error) {
@@ -104,32 +152,25 @@ export async function refresh(): Promise<AuthSnapshot> {
   return callBridge()
 }
 
-// signOut revokes the token family over Connect and clears worker
-// memory; the response clears the HttpOnly cookies. An expired
-// bearer falls back to the cookie channel so the family never
-// survives a sign-out.
+// signOut revokes the token family over Connect and clears both the
+// cached bearer and the persisted session token. The family dies
+// server-side, so a leaked copy of the session token stops resolving.
 export async function signOut(): Promise<void> {
   try {
     const token = await getAccessToken()
+    if (!token) return
     const response = await http.raw(signOutEndpoint, {
       method: 'POST',
-      headers: token
-        ? {
-            'connect-protocol-version': '1',
-            authorization: `Bearer ${token}`
-          }
-        : { 'connect-protocol-version': '1' }
+      headers: {
+        'connect-protocol-version': '1',
+        authorization: `Bearer ${token}`
+      }
     })
-    if (response.ok) return
-    if (response.status !== 401) {
+    if (!response.ok) {
       throw new AuthError(`sign out failed with ${response.status}`, response.status)
     }
-    // Cookie fallback: the refresh cookie still identifies the family even though the bearer died.
-    const fallback = await http.raw(signOutFallbackEndpoint, { method: 'POST' })
-    if (!fallback.ok) {
-      throw new AuthError(`sign out failed with ${fallback.status}`, fallback.status)
-    }
   } finally {
+    clearSessionToken()
     reset()
   }
 }

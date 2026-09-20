@@ -69,12 +69,11 @@ func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service) 
 		webauthn.NewPostgresStore(deps.DB),
 		user.NewPostgresStore(deps.DB),
 		func(ctx context.Context, userID user.UserID) (string, error) {
-			return sessions.IssueForUser(ctx, userID, "passkey", session.Meta{})
+			token, _, err := sessions.IssueForUser(ctx, userID, "passkey", session.Meta{})
+			return token, err
 		},
 		appURL,
 		auditAdapter(audit),
-		webauthn.WithCookieSecure(deps.Config.App.Mode != "development"),
-		webauthn.WithCookieName(session.CookieName),
 	)
 	if err != nil {
 		panic("registry: webauthn init: " + err.Error())
@@ -159,7 +158,6 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		recorder,
 		session.WithLifetime(time.Duration(deps.Config.Auth.SessionLifetime)*time.Second),
 		session.WithShortLifetime(time.Duration(deps.Config.Auth.SessionShortLifetime)*time.Second),
-		session.WithCookieSecure(deps.Config.App.Mode != "development"),
 		session.WithMFAPort(totpService),
 		session.WithAccessTokens(session.NewAccessTokenSigner(
 			jwtutils.NewCachedKeyProvider(keys, jwks.CacheTTL),
@@ -168,7 +166,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 	)
 	totpService.BindSessions(sessions)
 
-	auth := middleware.RequireAuth(sessions, session.CookieName)
+	auth := middleware.RequireAuth(sessions)
 	adminAuth := func(next http.Handler) http.Handler {
 		return auth(middleware.RequireAdmin(next))
 	}
@@ -176,7 +174,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 	audit := auditlog.New(
 		auditlog.NewPostgresStore(deps.DB),
 		auditlog.WithAdminGuard(adminAuth),
-		auditlog.WithSelfAuth(sessions, session.CookieName),
+		auditlog.WithSelfAuth(sessions),
 	)
 
 	apiKeys := withAPIKeys(deps, sessions, audit)
@@ -219,7 +217,6 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 			sessions,
 			user.NewPostgresStore(deps.DB),
 			recorder,
-			devicelogin.WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		)),
 		onetimeaccess.New(onetimeaccess.NewService(
 			token.NewStore(deps.DB, token.PurposeOneTimeAccess),
@@ -227,7 +224,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 			sessions,
 			recorder,
 			onetimeaccess.WithMail(jobsReg, deps.Config.Public.BaseURL),
-		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development").WithAccessAuthenticator(sessions),
+		)).WithAccessAuthenticator(sessions),
 		emailverification.New(emailverification.NewService(
 			token.NewStore(deps.DB, token.PurposeEmailVerification),
 			emailVerificationAdapter(user.NewPostgresStore(deps.DB)),
@@ -240,7 +237,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 			usergroup.NewPostgresStore(deps.DB),
 			sessions,
 			recorder,
-		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development").WithAccessAuthenticator(sessions),
+		)).WithAccessAuthenticator(sessions),
 		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), recorder),
 		apiKeys,
 		recovery.NewFeature(recovery.New(
@@ -251,8 +248,8 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 			hasher,
 			recorder,
 			recovery.WithMail(jobsReg, deps.Config.Public.BaseURL),
-		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
-		totp.NewFeature(totpService).WithCookie(deps.Config.App.Mode != "development").WithAccessAuthenticator(sessions),
+		)),
+		totp.NewFeature(totpService).WithAccessAuthenticator(sessions),
 	)
 
 	return module, groups, sessions, audit, apiaccess.NewPostgresStore(deps.DB), apiKeys, blobStore, nil
@@ -265,16 +262,13 @@ func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *s
 		oidc.NewPostgresStore(deps.DB),
 		jwtutils.NewCachedKeyProvider(keys, jwks.CacheTTL),
 		issuer,
-		session.CookieName,
 		oidc.WithAudit(federationAuditAdapter(audit)),
-		oidc.WithAuthenticator(sessions),
 		oidc.WithAPIAccess(apiAccess),
 		oidc.WithImages(images),
 		oidc.WithMetadataFetcher(deps.Fetcher),
 		oidc.WithCIMDAllowlist(cimdAllowlistGetter(appconfigModule)),
 		oidc.WithScimBinding(scimBinding),
 		oidc.WithAccessAuthenticator(sessions),
-		oidc.WithCookieSecure(deps.Config.App.Mode != "development"),
 		oidc.WithLifetimes(oidc.Lifetimes{
 			AccessToken:       seconds(deps.Config.OIDC.AccessTokenExpiry),
 			RefreshToken:      seconds(deps.Config.OIDC.RefreshTokenExpiry),

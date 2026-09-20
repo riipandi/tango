@@ -49,7 +49,7 @@ func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Ser
 		crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmArgon2id), nil)
 	sessions := session.NewService(session.NewPostgresStore(ds), passwords, users, nil)
 
-	selfGuard := middleware.RequireAuth(sessions, session.CookieName)
+	selfGuard := middleware.RequireAuth(sessions)
 
 	tokens := token.NewStore(ds, token.PurposeEmailVerification)
 	// Same adapter the registry wires: the user store satisfies the
@@ -105,7 +105,7 @@ func TestVerifyConsumesScopedToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/users/me/verify-email",
 		strings.NewReader(`{"token":"totally-unknown"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Cookie", session.CookieName+"="+cookie)
+	req.Header.Set("Authorization", "Bearer "+cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -114,7 +114,7 @@ func TestVerifyConsumesScopedToken(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/api/users/me/verify-email",
 		strings.NewReader(`{"token":"`+raw+`"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Cookie", session.CookieName+"="+cookie)
+	req.Header.Set("Authorization", "Bearer "+cookie)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
@@ -127,7 +127,7 @@ func TestVerifyConsumesScopedToken(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/api/users/me/verify-email",
 		strings.NewReader(`{"token":"`+raw+`"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Cookie", session.CookieName+"="+cookie)
+	req.Header.Set("Authorization", "Bearer "+cookie)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)

@@ -142,8 +142,10 @@ func (s *Service) handleFinishLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionCookie(w, s.cookieName, token, s.cookieSecure)
-	responder.Success(w, r, http.StatusOK, u)
+	responder.Success(w, r, http.StatusOK, map[string]any{
+		"user":          u,
+		"session_token": token,
+	})
 }
 
 // writeCeremonyError maps ceremony failures to statuses.
@@ -178,18 +180,4 @@ func credentialView(c StoredCredential) map[string]any {
 		"created_at":       c.CreatedAt,
 		"last_used_at":     c.LastUsedAt,
 	}
-}
-
-// setSessionCookie mirrors the session module cookie (name + flags);
-// the duplicate is intentional — webauthn must not import the
-// session package (the registry wires the cookie name).
-func setSessionCookie(w http.ResponseWriter, name, value string, secure bool) {
-	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- session cookie parity (SameSite=Lax, Secure off in dev)
-		Name:     name,
-		Value:    value,
-		Path:     "/",
-		MaxAge:   0,
-		HttpOnly: true,
-		Secure:   secure,
-	})
 }

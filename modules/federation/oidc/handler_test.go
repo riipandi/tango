@@ -42,9 +42,9 @@ func newRouter(t *testing.T, service *Service, auth *fakeAuthenticator) chi.Rout
 	t.Helper()
 	feature := New(service)
 	adminGuard := func(next http.Handler) http.Handler {
-		return middleware.RequireAuth(auth, "tango_session")(middleware.RequireAdmin(next))
+		return middleware.RequireAuth(auth)(middleware.RequireAdmin(next))
 	}
-	selfGuard := middleware.RequireAuth(auth, "tango_session")
+	selfGuard := middleware.RequireAuth(auth)
 
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {

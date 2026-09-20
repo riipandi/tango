@@ -15,15 +15,12 @@ import (
 // Service implements the provider flows using injected identity and
 // session providers.
 type Service struct {
-	store         Store
-	keys          jwtutils.KeyProvider
-	authenticator kernel.Authenticator
-	apiAccess     APIAccessProvider
-	issuer        string
-	cookieName    string
-	cookieSecure  bool
-	audit         AuditLogger
-	images        ClientImageStore
+	store     Store
+	keys      jwtutils.KeyProvider
+	apiAccess APIAccessProvider
+	issuer    string
+	audit     AuditLogger
+	images    ClientImageStore
 
 	metadataFetcher DocumentFetcher
 	cimdAllowlist   func() []string
@@ -52,8 +49,8 @@ type Service struct {
 type AuditLogger func(ctx context.Context, event string, params map[string]any)
 
 // NewService builds the provider service.
-func NewService(store Store, keys jwtutils.KeyProvider, issuer, cookieName string, opts ...Option) *Service {
-	s := &Service{store: store, keys: keys, issuer: issuer, cookieName: cookieName}
+func NewService(store Store, keys jwtutils.KeyProvider, issuer string, opts ...Option) *Service {
+	s := &Service{store: store, keys: keys, issuer: issuer}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -121,12 +118,6 @@ func WithAccessAuthenticator(auth kernel.AccessAuthenticator) Option {
 	return func(s *Service) { s.access = auth }
 }
 
-// WithAuthenticator injects the session cookie resolver used by the
-// optional-auth /authorize flow.
-func WithAuthenticator(auth kernel.Authenticator) Option {
-	return func(s *Service) { s.authenticator = auth }
-}
-
 // WithImages wires the blob backend for the client-logo surface.
 func WithImages(images ClientImageStore) Option {
 	return func(s *Service) { s.images = images }
@@ -143,8 +134,6 @@ func WithCIMDAllowlist(get func() []string) Option {
 	return func(s *Service) { s.cimdAllowlist = get }
 }
 
-// WithCookieSecure marks the end-session cookie Secure (off in
-// development, mirroring the session module).
 // Lifetimes groups the relying-party protocol lifetimes. A zero
 // field keeps the package default, so a caller sets only what it
 // configures.
@@ -167,10 +156,6 @@ func WithLifetimes(l Lifetimes) Option {
 		s.deviceCodeTTL = l.DeviceCode
 		s.parTTL = l.PAR
 	}
-}
-
-func WithCookieSecure(secure bool) Option {
-	return func(s *Service) { s.cookieSecure = secure }
 }
 
 // record emits an audit event when an adapter is attached.

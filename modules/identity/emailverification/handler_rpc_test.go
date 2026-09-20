@@ -82,7 +82,7 @@ func newRPCStack(t *testing.T) (http.Handler, chi.Router, *Service, user.User) {
 	rest.Route("/api", func(r chi.Router) {
 		sessions.APIRoutes(r, identity.RouteGroups{})
 		New(svc).APIRoutes(r, identity.RouteGroups{
-			Self: middleware.RequireAuth(sessions, session.CookieName),
+			Self: middleware.RequireAuth(sessions),
 		})
 	})
 	return mux, rest, svc, created

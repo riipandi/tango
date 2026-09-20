@@ -18,9 +18,8 @@ type Module struct {
 	store Store
 	// adminGuard (auth → RequireAdmin) protects /all + filters.
 	adminGuard func(http.Handler) http.Handler
-	// selfAuth resolves the session cookie for the self listing.
+	// selfAuth resolves the session credential for the self listing.
 	selfAuth kernel.Authenticator
-	cookie   string
 }
 
 // Option configures the audit log module at construction.
@@ -34,8 +33,8 @@ func WithAdminGuard(guard func(http.Handler) http.Handler) Option {
 
 // WithSelfAuth wires the session resolver for the per-user listing;
 // without one that route stays unmounted.
-func WithSelfAuth(auth kernel.Authenticator, cookieName string) Option {
-	return func(m *Module) { m.selfAuth, m.cookie = auth, cookieName }
+func WithSelfAuth(auth kernel.Authenticator) Option {
+	return func(m *Module) { m.selfAuth = auth }
 }
 
 // New builds the module on top of store; nil store panics.

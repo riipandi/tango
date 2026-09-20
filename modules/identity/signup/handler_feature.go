@@ -13,7 +13,6 @@ import (
 // Feature marks the signup feature inside the identity module.
 type Feature struct {
 	service *Service
-	secure  bool
 	access  kernel.AccessAuthenticator
 }
 
@@ -22,13 +21,6 @@ func New(service *Service) Feature { return Feature{service: service} }
 
 // Name names the feature for logs.
 func (Feature) Name() string { return "signup" }
-
-// WithCookie mirrors the session cookie Secure flag for the cookies
-// the Connect sign-up responses ride.
-func (f Feature) WithCookie(_ string, secure bool) Feature {
-	f.secure = secure
-	return f
-}
 
 // WithAccessAuthenticator wires the bearer resolver the admin token
 // procedures guard with.
@@ -39,5 +31,5 @@ func (f Feature) WithAccessAuthenticator(access kernel.AccessAuthenticator) Feat
 
 // RPCService returns the Connect registration for the signup surface.
 func (f Feature) RPCService() (string, http.Handler) {
-	return f.service.RPCService(f.secure, f.access)
+	return f.service.RPCService(f.access)
 }

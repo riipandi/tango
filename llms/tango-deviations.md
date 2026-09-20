@@ -39,9 +39,16 @@ match the upstream endpoint contract.
   `AUTH_SESSION_SHORT_LIFETIME` (with / without "remember me"), and the `OIDC_*` group
   (`ACCESS_TOKEN_EXPIRY`, `REFRESH_TOKEN_EXPIRY`, `AUTHORIZATION_CODE_EXPIRY`,
   `INTERACTION_EXPIRY`, `DEVICE_CODE_EXPIRY`, `PAR_EXPIRY`). A non-positive value or a short
-  session longer than the remembered one fails startup instead of degrading at runtime. Upstream's
-  `sessionDuration` app-config key stays in the catalog for contract parity but is not the source
-  of the session lifetime.
+  session longer than the remembered one fails startup instead of degrading at runtime.
+- **Stateless authentication: no cookies.** Upstream keeps the session in an `HttpOnly` cookie.
+  Tango issues every credential in the response body instead: sign-in and the other
+  session-issuing procedures return `session_token` (the rotating session credential) and
+  `access_token` (the short-lived internal bearer JWT), and a pending second factor returns
+  `pending_token` for `MfaService.VerifyPending`. Clients present the session token to
+  `POST /api/auth/token` (body `{"session_token": "..."}`) to mint a fresh bearer, and send that
+  bearer on every protected call. Sign-out runs through `AuthService.SignOut`; there is no
+  cookie-channel fallback. `session_token` is absent from the response while a second factor is
+  pending, and `pending_token` is present only then.
 - **`AccountService`** — tango-only, and deliberately narrow: `ChangePassword`, `ListSessions`,
   and `RevokeSession`. Upstream has no password or session API because it authenticates with
   passkeys. Self-profile read and write are **not** here — they stay on `UserService`, matching
@@ -110,7 +117,7 @@ match the upstream endpoint contract.
   stateless across begin/finish.
 - Ceremony finishes use `POST` bodies and, for registration, a `session_id` query parameter
   (upstream: `GET /webauthn/*/start` with the ceremony id in a cookie). Responses for a completed
-  registration use 201 with the credential view; login sets the session cookie.
+  registration use 201 with the credential view; login returns the session token in the body.
 - Passkey management is admin-side per user (`/api/users/{id}/webauthn-credentials`,
   `GET`/`PUT`/`DELETE`) instead of upstream's self-service `/api/webauthn/credentials`;
   rename uses `PUT` with `{name}` rather than `PATCH`. Upstream's `/webauthn/logout` is not
@@ -151,7 +158,7 @@ Verification-only values are one-way hashes and must never be encrypted.
 | Sensitive app settings | admin | none — the SMTP relay password is environment-only (`MAILER_SMTP_PASSWORD`); no app_config key is sensitive and nothing stored is sealed |
 | OIDC client secrets | federation | SHA-256 hashes in the credentials JSONB (multi-secret with per-entry expiry/active state); raw value shown once at creation |
 | Passwords | identity | scrypt/Argon2id PHC hash (`pkg/crypto.PasswordHasher`) |
-| Session tokens | identity | SHA-256 `token_hash` on sessions; the raw token lives only in the cookie |
+| Session tokens | identity | SHA-256 `token_hash` on sessions; the raw token is returned in the sign-in body and held by the client |
 | Auth tokens (email verification, one-time access, reauthentication) | identity | SHA-256 hash keyed by purpose |
 | Signup tokens | identity | SHA-256 hash |
 | API keys | admin | SHA-256 hash; raw value shown once at creation/renewal |

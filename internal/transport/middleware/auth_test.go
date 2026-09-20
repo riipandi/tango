@@ -41,10 +41,10 @@ var probe = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 })
 
-func doReq(handler http.Handler, cookie *http.Cookie) *httptest.ResponseRecorder {
+func doReq(handler http.Handler, token string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	if cookie != nil {
-		req.AddCookie(cookie)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -53,22 +53,22 @@ func doReq(handler http.Handler, cookie *http.Cookie) *httptest.ResponseRecorder
 
 func TestRequireAuthResolvesPrincipal(t *testing.T) {
 	auth := fakeAuthenticator{token: "tok", principal: Principal{UserID: "u1", IsAdmin: true}}
-	handler := RequireAuth(auth, "sid")(probe)
+	handler := RequireAuth(auth)(probe)
 
-	w := doReq(handler, &http.Cookie{Name: "sid", Value: "tok"})
+	w := doReq(handler, "tok")
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "admin:u1", w.Header().Get("X-Principal"))
 }
 
 func TestRequireAuthRejectsAnonymous(t *testing.T) {
 	auth := fakeAuthenticator{token: "tok"}
-	handler := RequireAuth(auth, "sid")(probe)
+	handler := RequireAuth(auth)(probe)
 
-	w := doReq(handler, nil)
+	w := doReq(handler, "")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 	// Unknown tokens use the same status.
-	w = doReq(handler, &http.Cookie{Name: "sid", Value: "wrong"})
+	w = doReq(handler, "wrong")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
@@ -79,24 +79,24 @@ func TestRequireAdmin(t *testing.T) {
 	guarded := RequireAdmin(probe)
 
 	// Admins pass; members are forbidden.
-	adminRoute := RequireAuth(admin, "sid")(guarded)
-	w := doReq(adminRoute, &http.Cookie{Name: "sid", Value: "adm"})
+	adminRoute := RequireAuth(admin)(guarded)
+	w := doReq(adminRoute, "adm")
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	memberRoute := RequireAuth(member, "sid")(guarded)
-	w = doReq(memberRoute, &http.Cookie{Name: "sid", Value: "usr"})
+	memberRoute := RequireAuth(member)(guarded)
+	w = doReq(memberRoute, "usr")
 	assert.Equal(t, http.StatusForbidden, w.Code)
 
 	// Missing principals return 401, not 403.
-	w = doReq(guarded, nil)
+	w = doReq(guarded, "")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 // The 401 body uses the standard envelope.
 func TestRequireAuthEnvelopeShape(t *testing.T) {
-	handler := RequireAuth(fakeAuthenticator{token: "x"}, "sid")(probe)
+	handler := RequireAuth(fakeAuthenticator{token: "x"})(probe)
 
-	w := doReq(handler, nil)
+	w := doReq(handler, "")
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 	assert.Contains(t, w.Body.String(), responder.StatusError)
 }

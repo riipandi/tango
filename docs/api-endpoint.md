@@ -24,7 +24,7 @@ Two conventions apply throughout:
   the Connect code/message document.
 - **HTTP/REST** below `/api`, `/authorize`, or a documented root path — protocol and infrastructure
   surfaces only: OAuth/OIDC, WebAuthn ceremonies, device-login request and exchange, email links,
-  the auth worker's cookie bridge, health, and discovery.
+  the auth worker's token refresh, health, and discovery.
 - **Credentials** — `Authorization: Bearer <access-token>` for protected RPCs. Machine clients may
   also send `X-API-KEY` on the admin application API only; every self-service and
   credential-lifecycle surface refuses a machine credential, and API key create and renew stay
@@ -40,7 +40,7 @@ longer than the remembered one, fails startup instead of degrading at runtime.
 
 | Variable | Bounds |
 | --- | --- |
-| `AUTH_ACCESS_TOKEN_EXPIRY` | internal RPC bearer JWT; refresh stays cookie-only |
+| `AUTH_ACCESS_TOKEN_EXPIRY` | internal RPC bearer JWT; refresh uses the session token |
 | `AUTH_SESSION_LIFETIME` | session issued with `remember: true` |
 | `AUTH_SESSION_SHORT_LIFETIME` | session issued with `remember: false` or absent |
 | `OIDC_ACCESS_TOKEN_EXPIRY` | provider default; a client's own duration overrides it |
@@ -66,6 +66,20 @@ short lifetime does not exceed the long one. The choice is stored on the session
 refresh or token rotation never promotes a short session to the long lifetime. The
 response echoes the mode as `remember`.
 
+There are no cookies. The session-issuing procedures (`SignIn`, `Signup`,
+`SetupInitialAdmin`, and `VerifyPending`) return the credentials in the `SignedIn` body:
+
+| Field           | Meaning                                                                 |
+| --------------- | ----------------------------------------------------------------------- |
+| `session_token` | The rotating session credential. Absent while a second factor is pending. |
+| `access_token`  | The short-lived internal bearer JWT. Absent while a second factor is pending. |
+| `pending_token` | The bridge credential for the pending second factor. Present only when `pending` is true. |
+
+Present `session_token` to `POST /api/auth/token` (body `{"session_token": "..."}`) to mint a
+fresh bearer; the answer carries `access_token` and the replacement `session_token`, because the
+presented one stops resolving. Send the bearer on every protected call. `VerifyPending` takes
+`{"code": "...", "pending_token": "..."}`.
+
 | Method   | Procedure / Endpoint                                         | Protocol     | Summary                             |
 | -------- | ------------------------------------------------------------ | ------------ | ----------------------------------- |
 | POST     | `/rpc/tango.identity.v1.AuthService/SignIn`                  | ConnectRPC   | Sign in with password               |
@@ -76,8 +90,7 @@ response echoes the mode as `remember`.
 | POST     | `/rpc/tango.identity.v1.AccountService/ChangePassword`       | ConnectRPC   | Change own password                 |
 | POST     | `/rpc/tango.identity.v1.AccountService/ListSessions`         | ConnectRPC   | List own sessions                   |
 | POST     | `/rpc/tango.identity.v1.AccountService/RevokeSession`        | ConnectRPC   | Revoke one own session              |
-| POST     | `/api/auth/token`                                            | HTTP/REST    | Cookie bridge for the auth worker   |
-| POST     | `/api/auth/sign-out`                                         | HTTP/REST    | Sign out (cookie channel)           |
+| POST     | `/api/auth/token`                                            | HTTP/REST    | Refresh: session token to access bearer |
 | POST     | `/api/auth/forgot-password`                                  | HTTP/REST    | Request a password reset            |
 | POST     | `/api/auth/reset-password`                                   | HTTP/REST    | Reset with a reset token            |
 

@@ -51,17 +51,16 @@ func (h *authRPC) SignIn(ctx context.Context, req *connect.Request[identityv1.Si
 	}
 
 	resp := connect.NewResponse(signedInProto(result.User, result.Session, result.Pending))
-	secure := h.service.cookieSecure
 	if result.Pending {
-		addCookie(resp, pendingCookie(result.Token, secure))
+		resp.Msg.PendingToken = &result.Token
 		return resp, nil
 	}
-	addCookie(resp, sessionCookie(result.Token, result.Session.ExpiresAt, secure))
-	// Best-effort mirror: the bridge mints it on the worker's first
-	// bootstrap when absent.
+	resp.Msg.SessionToken = result.Token
+	// Best-effort mirror: the client refreshes through the bridge when
+	// the bearer expires.
 	if u, se, err := h.service.Resolve(ctx, result.Token); err == nil {
-		if access, expiresAt, err := h.service.IssueAccess(ctx, principalFromResolve(u, se)); err == nil {
-			addCookie(resp, accessCookie(access, expiresAt, secure))
+		if access, _, err := h.service.IssueAccess(ctx, principalFromResolve(u, se)); err == nil {
+			resp.Msg.AccessToken = access
 		}
 	}
 	return resp, nil
@@ -79,13 +78,7 @@ func (h *authRPC) SignOut(ctx context.Context, _ *connect.Request[emptypb.Empty]
 	if h.service.mfa != nil {
 		_ = h.service.mfa.ClearPending(ctx, principal.UserID)
 	}
-
-	resp := connect.NewResponse(&emptypb.Empty{})
-	secure := h.service.cookieSecure
-	addCookie(resp, expiredCookie(CookieName, "/", secure))
-	addCookie(resp, expiredCookie(AccessTokenCookieName, AccessTokenPath, secure))
-	addCookie(resp, expiredCookie(identity.PendingCookieName, "/", secure))
-	return resp, nil
+	return connect.NewResponse(&emptypb.Empty{}), nil
 }
 
 func (h *authRPC) GetSession(ctx context.Context, _ *connect.Request[emptypb.Empty]) (*connect.Response[identityv1.SignedIn], error) {
@@ -151,9 +144,4 @@ func principalFromResolve(u user.User, se Session) kernel.Principal {
 		Provider:  se.Provider,
 		IsAdmin:   u.IsAdmin,
 	}
-}
-
-// addCookie attaches one cookie to the Connect response headers.
-func addCookie[M any](resp *connect.Response[M], c *http.Cookie) {
-	resp.Header().Add("Set-Cookie", c.String())
 }

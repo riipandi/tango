@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/token"
@@ -43,7 +44,8 @@ var (
 // Sessions are the session operations verification needs; a
 // confirmed TOTP upgrades a pending auth into the only fresh session.
 type Sessions interface {
-	IssueForUser(ctx context.Context, userID user.UserID, provider string, meta session.Meta) (string, error)
+	IssueForUser(ctx context.Context, userID user.UserID, provider string, meta session.Meta) (string, session.Session, error)
+	IssueAccess(ctx context.Context, p kernel.Principal) (string, time.Time, error)
 }
 
 // PasswordVerifier checks the current password for disablement.
@@ -175,35 +177,35 @@ func (s *Service) Status(ctx context.Context, u user.User) (confirmed bool, rema
 // VerifyPending checks the pending bridge, verifies the TOTP code
 // (or burns a recovery code), and issues the only full session. A
 // failed attempt leaves the bridge alive: only success consumes it.
-func (s *Service) VerifyPending(ctx context.Context, pendingToken, code string) (user.User, string, bool, error) {
+func (s *Service) VerifyPending(ctx context.Context, pendingToken, code string) (user.User, string, session.Session, bool, error) {
 	userID, remember, err := s.store.PeekPending(ctx, hashToken(pendingToken))
 	if err != nil {
-		return user.User{}, "", false, ErrNoEnrollment
+		return user.User{}, "", session.Session{}, false, ErrNoEnrollment
 	}
 
 	enrollment, err := s.store.State(ctx, userID)
 	if err != nil || !enrollment.Confirmed() {
-		return user.User{}, "", false, ErrNotConfirmed
+		return user.User{}, "", session.Session{}, false, ErrNotConfirmed
 	}
 
 	// A numeric code verifies against the seed; a recovery code
 	// burns a stored hash. Wrong answers are indistinguishable.
 	if _, verifyErr := s.verifySeed(ctx, enrollment, code, true); verifyErr == nil {
 		if delErr := s.store.DeletePending(ctx, hashToken(pendingToken)); delErr != nil {
-			return user.User{}, "", false, delErr
+			return user.User{}, "", session.Session{}, false, delErr
 		}
-		u, token, completeErr := s.complete(ctx, userID, remember)
-		return u, token, remember, completeErr
+		u, token, se, completeErr := s.complete(ctx, userID, remember)
+		return u, token, se, remember, completeErr
 	}
 	spent, consumeErr := s.store.ConsumeRecoveryCode(ctx, userID, recoveryHash(code))
 	if consumeErr != nil || !spent {
-		return user.User{}, "", false, ErrInvalidCode
+		return user.User{}, "", session.Session{}, false, ErrInvalidCode
 	}
 	if delErr := s.store.DeletePending(ctx, hashToken(pendingToken)); delErr != nil {
-		return user.User{}, "", false, delErr
+		return user.User{}, "", session.Session{}, false, delErr
 	}
-	u, token, completeErr := s.complete(ctx, userID, remember)
-	return u, token, remember, completeErr
+	u, token, se, completeErr := s.complete(ctx, userID, remember)
+	return u, token, se, remember, completeErr
 }
 
 // RotateRecoveryCodes verifies one live code and returns a fresh set
@@ -285,16 +287,21 @@ func (s *Service) ClearPending(ctx context.Context, userID string) error {
 // complete issues the only full session for the verified user,
 // carrying forward the duration the caller requested before the
 // second factor interrupted the sign-in.
-func (s *Service) complete(ctx context.Context, userID user.UserID, remember bool) (user.User, string, error) {
-	token, err := s.sessions.IssueForUser(ctx, userID, "totp", session.Meta{Remember: remember})
+func (s *Service) complete(ctx context.Context, userID user.UserID, remember bool) (user.User, string, session.Session, error) {
+	token, se, err := s.sessions.IssueForUser(ctx, userID, "totp", session.Meta{Remember: remember})
 	if err != nil {
-		return user.User{}, "", err
+		return user.User{}, "", session.Session{}, err
 	}
 	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {
-		return user.User{}, "", err
+		return user.User{}, "", session.Session{}, err
 	}
-	return u, token, nil
+	return u, token, se, nil
+}
+
+// IssueAccess mints the internal bearer token for the verified user.
+func (s *Service) IssueAccess(ctx context.Context, p kernel.Principal) (string, time.Time, error) {
+	return s.sessions.IssueAccess(ctx, p)
 }
 
 // verifySeed checks one TOTP code against the sealed seed. When

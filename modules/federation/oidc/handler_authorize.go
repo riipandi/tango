@@ -152,22 +152,23 @@ func (s *Service) redirectError(w http.ResponseWriter, r *http.Request, params *
 	redirectToCallback(w, r, params.RedirectURI, "", errorCode, params.State)
 }
 
-// principal resolves the session cookie (optional auth): /authorize
-// is callable both signed-in and anonymous. The context principal
-// (middleware chain) wins; the cookie is the fallback.
+// principal resolves the caller (optional auth): /authorize is
+// callable both signed-in and anonymous. The context principal
+// (middleware chain) wins; otherwise the bearer access token is the
+// fallback, matching every other protected surface.
 func (s *Service) principal(r *http.Request) (middleware.Principal, bool) {
 	if principal, ok := middleware.PrincipalFromContext(r.Context()); ok {
 		return principal, true
 	}
-	if s.authenticator == nil {
+	if s.access == nil {
 		return middleware.Principal{}, false
 	}
 
-	cookie, err := r.Cookie(s.cookieName)
-	if err != nil || cookie.Value == "" {
+	token, ok := middleware.BearerFromHeader(r.Header)
+	if !ok {
 		return middleware.Principal{}, false
 	}
-	principal, err := s.authenticator.ResolveSession(r.Context(), cookie.Value)
+	principal, err := s.access.ResolveAccess(r.Context(), token)
 	if err != nil {
 		return middleware.Principal{}, false
 	}
