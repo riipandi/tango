@@ -1,14 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
-
-	"github.com/riipandi/tango/cmd/launcher"
 )
 
 func main() {
-	if err := launcher.RunCLI(os.Args[1:]); err != nil {
+	ctx := context.Background()
+	if err := rootCmd.Run(ctx, os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

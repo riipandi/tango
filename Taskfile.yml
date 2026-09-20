@@ -2,6 +2,8 @@
 
 version: "3"
 
+silent: true
+
 vars:
   APP_NAME:
     sh: jq -r .name package.json 2>/dev/null || echo tango
@@ -14,7 +16,6 @@ tasks:
   default:
     desc: List all available tasks
     cmd: task --list --sort none
-    silent: true
 
   # ----------------------------------------------------------------------------
   # Development
@@ -44,21 +45,21 @@ tasks:
     deps: [rpc:generate]
     cmd: pnpm exec vite build {{.CLI_ARGS}}
 
-  build:release:
-    desc: Build release binaries via goreleaser
-    deps: [rpc:generate]
-    cmd: goreleaser build --clean --auto-snapshot
-
-  release:
-    desc: Publish a release via goreleaser
-    deps: [rpc:generate]
-    cmd: goreleaser release --clean --auto-snapshot
-
   start:
     desc: Run the release binary on :3000
     cmds:
       - pnpm exec kill-port 3000
       - ./build/release/{{.APP_NAME}} serve --port 3000 {{.CLI_ARGS}}
+
+  release:
+    desc: Build release binaries via goreleaser
+    deps: [rpc:generate]
+    cmd: goreleaser build --clean --auto-snapshot
+
+  publish:
+    desc: Publish a release via goreleaser
+    deps: [rpc:generate]
+    cmd: goreleaser release --clean --auto-snapshot
 
   # ----------------------------------------------------------------------------
   # Database & keys
@@ -100,8 +101,8 @@ tasks:
   coverage:
     desc: Run Go tests with coverage report
     cmds:
-      - gotestsum --format testname -- -coverprofile=coverage.out ./...
-      - go tool cover -func=coverage.out | tail -1
+      - gotestsum --format testname -- -coverprofile=.output/coverage.out ./...
+      - go tool cover -func=.output/coverage.out | tail -1
 
   # ----------------------------------------------------------------------------
   # Format, check, lint
@@ -185,11 +186,11 @@ tasks:
 
   cleanup:dist:
     desc: Remove build artifacts
-    cmd: pnpm dlx del-cli .{output,tanstack} build web/output codegen
+    cmd: pnpm dlx del-cli .{output,tanstack} build web/output codegen storage
 
   cleanup:deps:
     desc: Remove dependencies
-    cmd: pnpm dlx del-cli pnpm-lock.yaml node_modules vendor
+    cmd: pnpm dlx del-cli pnpm-lock.yaml pnpm-workspace.yaml node_modules vendor
 
   update-deps:
     desc: Update dependencies

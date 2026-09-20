@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	jsonv2 "encoding/json/v2"
+	"encoding/json/v2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,7 +16,7 @@ import (
 func decodeEnvelope(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var body map[string]any
-	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	return body
 }
 
@@ -28,7 +28,7 @@ func TestWriteJSON(t *testing.T) {
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 	var body map[string]string
-	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	assert.Equal(t, "yes", body["ok"])
 }
 

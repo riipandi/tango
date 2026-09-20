@@ -5,8 +5,8 @@
 .DS_Store
 .DS_Store?
 .sentryclirc
+coverage.out
 /coverage
-/coverage.out
 /[Tt]emp/
 /[Tt]mp/
 /vendor/

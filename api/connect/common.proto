@@ -29,8 +29,7 @@ message ResponseMetadata {
   optional string request_id = 2;
   RateLimit rate_limit = 3;
 
-  // Pagination, flat like the REST block. The item indices are
-  // zero-based.
+  // Pagination, flat like the REST block. The item indices are zero-based.
   optional int32 page = 4;
   optional int32 limit = 5;
   optional int32 total_pages = 6;

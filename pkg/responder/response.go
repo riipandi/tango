@@ -3,11 +3,10 @@ package responder
 
 import (
 	"context"
+	"encoding/json/v2"
 	"net/http"
 	"strconv"
 	"strings"
-
-	jsonv2 "encoding/json/v2"
 
 	"go.jetify.com/typeid"
 )
@@ -118,7 +117,7 @@ func Fail(w http.ResponseWriter, r *http.Request, status int, message string, op
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := jsonv2.MarshalWrite(w, v); err != nil {
+	if err := json.MarshalWrite(w, v); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }

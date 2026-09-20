@@ -47,7 +47,7 @@
         "oxlint": "^1.83.0",
         "oxlint-tsgolint": "^7.0.2002",
         "react-email": "^6.9.5",
-        "tsx": "^4.23.13",
+        "tsx": "^4.23.15",
         "typescript": "^7.0.2",
         "vite": "^8.3.0",
         "vite-plugin-comlink": "^5.3.0",
@@ -56,5 +56,5 @@
     "engines": {
         "node": ">=24.21.0"
     },
-    "packageManager": "pnpm@12.4.2"
+    "packageManager": "pnpm@12.5.1"
 }

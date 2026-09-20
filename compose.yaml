@@ -8,32 +8,32 @@ x-common: &common
   restart: unless-stopped
 
 services:
-  tango:
-    <<: *common
-    build:
-      context: .
-      dockerfile: ./deploy/Dockerfile
-      args:
-        DISTROLESS_TAG: ${DISTROLESS_TAG:-nonroot}
-        NODE_VERSION: ${NODE_VERSION:-24.21}
-        GO_VERSION: ${GO_VERSION:-1.27.1}
-    # platform: linux/amd64
-    hostname: tango
-    expose: ["3000"]
-    volumes: ["./storage:/srv/storage:rw"]
-    env_file: "./.env.local"
-    environment:
-      DATABASE_URL: postgresql://postgres:securedb@pgsql:5432/postgres?sslmode=disable
-      STORAGE_S3_ENDPOINT_URL: http://silo:9100
-      MAILER_SMTP_HOST: mailpit
-    healthcheck:
-      test: ["CMD", "/srv/tango", "health"]
-      interval: 3s
-      timeout: 5s
-      retries: 3
-    depends_on:
-      pgsql: { condition: service_healthy }
-      silo: { condition: service_healthy }
+  # tango:
+  #   <<: *common
+  #   build:
+  #     context: .
+  #     dockerfile: ./deploy/Dockerfile
+  #     args:
+  #       DISTROLESS_TAG: ${DISTROLESS_TAG:-nonroot}
+  #       NODE_VERSION: ${NODE_VERSION:-24.21}
+  #       GO_VERSION: ${GO_VERSION:-1.27.1}
+  #   # platform: linux/amd64
+  #   hostname: tango
+  #   expose: ["3000"]
+  #   volumes: ["./storage:/srv/storage:rw"]
+  #   env_file: "./.env.local"
+  #   environment:
+  #     DATABASE_URL: postgresql://postgres:securedb@pgsql:5432/postgres?sslmode=disable
+  #     STORAGE_S3_ENDPOINT_URL: http://silo:9100
+  #     MAILER_SMTP_HOST: mailpit
+  #   healthcheck:
+  #     test: ["CMD", "/srv/tango", "health"]
+  #     interval: 3s
+  #     timeout: 5s
+  #     retries: 3
+  #   depends_on:
+  #     pgsql: { condition: service_healthy }
+  #     silo: { condition: service_healthy }
 
   pgsql:
     <<: *common
@@ -142,48 +142,6 @@ services:
       timeout: 10s
       retries: 3
 
-  pocketid:
-    <<: *common
-    image: ghcr.io/pocket-id/pocket-id:${POCKETID_VERSION:-v2.14-distroless}
-    hostname: pocketid
-    ports: ["1411:1411"]
-    environment:
-      APP_URL: http://localhost:1411
-      DB_CONNECTION_STRING: postgresql://postgres:securedb@pgsql:5432/pocketid?sslmode=disable
-      ENCRYPTION_KEY_FILE: /app/encryption_key
-      TRUST_PROXY: true
-    volumes:
-      # openssl rand -base64 32 > .storage/encryption_key
-      - ".storage/encryption_key:/app/encryption_key:ro"
-      - ".storage/pocketid_data:/app/data:rw"
-    security_opt: ["no-new-privileges:true"]
-    healthcheck:
-      test: ["CMD", "/app/pocket-id", "healthcheck"]
-      interval: 3s
-      timeout: 5s
-      retries: 3
-    depends_on:
-      pgsql: { condition: service_healthy }
-
-  # oidc-tester:
-  #   <<: *common
-  #   image: ghcr.io/beryju/oidc-test-client:latest
-  #   hostname: oidc-tester
-  #   ports: ["9009:9009"]
-  #   environment:
-  #     OIDC_BIND: 0.0.0.0:9009
-  #     OIDC_CLIENT_ID: test-id
-  #     OIDC_CLIENT_SECRET: test-secret
-  #     OIDC_DO_INTROSPECTION: true
-  #     OIDC_DO_REFRESH: true
-  #     OIDC_DO_USER_INFO: true
-  #     OIDC_PROVIDER: http://localhost:3000
-  #     OIDC_ROOT_URL: http://localhost:9009
-  #     OIDC_SCOPES: "openid,offline_access,profile,email"
-  #     OIDC_TLS_VERIFY: false
-  #   depends_on:
-  #     nginx: { condition: service_healthy }
-
   nginx:
     <<: *common
     image: docker.io/nginx:${NGINX_VERSION:-mainline-alpine-slim}
@@ -201,7 +159,6 @@ services:
       retries: 3
     depends_on:
       silo: { condition: service_started }
-      tango: { condition: service_healthy }
 
 configs:
   nginx_config:

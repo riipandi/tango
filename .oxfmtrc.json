@@ -32,8 +32,8 @@
     },
     "ignorePatterns": [
         ".output",
+        ".storage",
         ".tanstack",
-        ".wrangler",
         "**/*.md",
         "**/*.mdx",
         "**/*.yml",
@@ -42,6 +42,7 @@
         "**/*.tmpl",
         "/codegen/**",
         "/public/**",
+        "/storage/**",
         "/temp/**",
         "/index.html"
     ]

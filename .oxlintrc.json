@@ -10,8 +10,8 @@
     },
     "ignorePatterns": [
         ".output",
+        ".storage",
         ".tanstack",
-        ".wrangler",
         "**/*.md",
         "**/*.mdx",
         "**/*.yml",
@@ -20,6 +20,8 @@
         "**/*.tmpl",
         "/codegen/**",
         "/public/**",
-        "/temp/**"
+        "/storage/**",
+        "/temp/**",
+        "/index.html"
     ]
 }

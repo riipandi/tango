@@ -2,12 +2,11 @@
 package validate
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"io"
 
 	"encoding/json/jsontext"
-	jsonv2 "encoding/json/v2"
-
 	"github.com/go-ozzo/ozzo-validation/v4"
 )
 
@@ -24,7 +23,7 @@ type validatable interface {
 
 // Request decodes the JSON body and runs validation when supported.
 func Request(r io.Reader, dst any) error {
-	if err := jsonv2.UnmarshalRead(r, dst); err != nil {
+	if err := json.UnmarshalRead(r, dst); err != nil {
 		return err
 	}
 	if v, ok := dst.(validatable); ok {
@@ -71,6 +70,6 @@ func isDecodeError(err error) bool {
 	if errors.As(err, &syntaxErr) {
 		return true
 	}
-	var typeErr *jsonv2.SemanticError
+	var typeErr *json.SemanticError
 	return errors.As(err, &typeErr)
 }

@@ -1,10 +1,9 @@
 package jwtutils
 
 import (
+	"encoding/json/v2"
 	"fmt"
 	"time"
-
-	jsonv2 "encoding/json/v2"
 
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
@@ -137,12 +136,12 @@ func (s *Signer[T]) Sign(claims T, std Standard) (string, error) {
 		}
 	}
 
-	flat, err := jsonv2.Marshal(claims)
+	flat, err := json.Marshal(claims)
 	if err != nil {
 		return "", err
 	}
 	var private map[string]any
-	if unmarshalErr := jsonv2.Unmarshal(flat, &private); unmarshalErr != nil {
+	if unmarshalErr := json.Unmarshal(flat, &private); unmarshalErr != nil {
 		return "", unmarshalErr
 	}
 	for name, value := range private {

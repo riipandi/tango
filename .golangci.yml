@@ -32,24 +32,23 @@ linters:
         - ^net/url.URL$
         - ^os/exec.Cmd$
         - ^reflect.StructField$
-        - ^github.com/riipandi/tango/pkg/.*$
         - ^github.com/riipandi/tango/modules/.*$
-        # - ^github.com/prometheus/client_golang/.+Opts$
-        # - ^github.com/testcontainers/testcontainers-go.+Request$
-        # - ^github.com/testcontainers/testcontainers-go.FromDockerfile$
-        # - ^github.com/ory/dockertest/v3.*$
+        - ^github.com/riipandi/tango/pkg/.*$
+        - ^github.com/aws/aws-sdk-go-v2/.*$
+        - ^github.com/testcontainers/testcontainers-go.+Request$
+        - ^github.com/testcontainers/testcontainers-go.FromDockerfile$
+        - ^github.com/urfave/cli/v3.*$
+        - ^gopkg.in/yaml.v3.Node$
         # - ^golang.org/x/tools/go/analysis.Analyzer$
-        # - ^gopkg.in/yaml.v3.Node$
-        # - ^github.com/urfave/cli/v3.*$
+        # - ^github.com/prometheus/client_golang/.+Opts$
         # - ^github.com/ClickHouse/clickhouse-go/v2.*$
-        # - ^github.com/aws/aws-sdk-go-v2/.*$
     gosec:
       excludes:
         - G101
         - G102
         - G107
     funlen:
-      lines: 100
+      lines: 120
       statements: 50
       ignore-comments: true
     gocognit:
@@ -67,7 +66,9 @@ linters:
               reason: gofrs' package was not go module before v5
     govet:
       disable:
-        - fieldalignment # Disable struct field alignment warnings to allow easier refactoring and avoid unnecessary churn in PRs.
+        # Disable struct field alignment warnings to allow easier refactoring
+        # and avoid unnecessary churn in PRs.
+        - fieldalignment
       enable-all: true
     inamedparam:
       skip-single-param: true
@@ -80,11 +81,6 @@ linters:
         - funlen
         - gocognit
         - lll
-    # sloglint:
-    #   no-global: all
-    #   context: scope
-    # perfsprint:
-    #   strconcat: false
   exclusions:
     generated: lax
     presets:
