@@ -40,7 +40,7 @@ only. Contracts below define the full password lifecycle.
 
 | Method | Procedure / Endpoint | Summary / Yaak Title | Status | Evidence |
 | ------ | -------------------- | -------------------- | ------ | -------- |
-| POST | `/rpc/tango.identity.v1.AuthService/SignIn` | Sign in with password | done — indistinguishable failures for unknown identity vs wrong secret; disabled accounts fail closed; sets the token cookies | `modules/identity/session.TestRPCSignInIssuesCookies`, `modules/identity/session.TestRPCSignInPendingFlow` |
+| POST | `/rpc/tango.identity.v1.AuthService/SignIn` | Sign in with password | done — body `{identity, password, remember}`; indistinguishable failures for unknown identity vs wrong password; disabled accounts fail closed; `remember` selects the long or short session lifetime; sets the token cookies | `modules/identity/session.TestRPCSignInIssuesCookies`, `modules/identity/session.TestRPCSignInPendingFlow`, `modules/identity/session.TestRPCSignInRememberSelectsLifetime` |
 | POST | `/rpc/tango.identity.v1.AuthService/SignOut` | Sign out | done — revokes the token family and clears cookies; the REST twin below is the worker's cookie-channel fallback | `modules/identity/session.TestRPCSignOutAndSession` |
 | POST | `/rpc/tango.identity.v1.AuthService/GetSession` | Inspect current session | done | `modules/identity/session.TestRPCSignOutAndSession` |
 | POST | `/rpc/tango.identity.v1.AuthService/ForgotPassword` | Request a password reset (RPC, unimplemented) | done — declared for contract completeness; answers `unimplemented`; recovery is served by the retained REST routes | `modules/identity/recovery.TestForgotIsAlwaysGeneric` |

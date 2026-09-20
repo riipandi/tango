@@ -40,6 +40,13 @@ Reading and updating the caller's own profile live on `UserService` (`GetSession
 matching upstream's `GET`/`PUT /api/users/me`; the account surface carries only the tango-only
 password and session procedures.
 
+`SignIn` takes `{"identity": "<username or email>", "password": "<plaintext>", "remember": <bool>}`.
+`remember` selects the session duration: `true` issues the long lifetime
+(`AUTH_SESSION_LIFETIME`), `false` or absent the short one
+(`AUTH_SESSION_SHORT_LIFETIME`). The choice is stored on the session, so a sliding
+refresh or token rotation never promotes a short session to the long lifetime. The
+response echoes the mode as `remember`.
+
 | Method   | Procedure / Endpoint                                         | Protocol     | Summary                             |
 | -------- | ------------------------------------------------------------ | ------------ | ----------------------------------- |
 | POST     | `/rpc/tango.identity.v1.AuthService/SignIn`                  | ConnectRPC   | Sign in with password               |

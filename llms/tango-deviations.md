@@ -25,6 +25,13 @@ match the upstream endpoint contract.
   self-service account endpoints. The full contract lives in the endpoint reference
   ("Authentication (tango-only)"): generic enumeration-safe failures, SHA-256 hashed single-use
   reset tokens (15-minute TTL), session invalidation on reset, and per-endpoint rate limits.
+- **`SignIn` request contract** — the body is
+  `{"identity": "<username or email>", "password": "<plaintext>", "remember": <bool>}`. Upstream
+  has no password sign-in at all, so the shape is tango's: `password` names the credential
+  (upstream's own DTOs use `password` for the same value), and `remember` selects the session
+  duration. `true` issues `AUTH_SESSION_LIFETIME`, `false` or absent issues
+  `AUTH_SESSION_SHORT_LIFETIME`. The choice is stored on the session row and carried across the
+  MFA bridge, so a sliding refresh or rotation never promotes a short session to the long one.
 - **`AccountService`** — tango-only, and deliberately narrow: `ChangePassword`, `ListSessions`,
   and `RevokeSession`. Upstream has no password or session API because it authenticates with
   passkeys. Self-profile read and write are **not** here — they stay on `UserService`, matching
