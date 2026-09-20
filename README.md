@@ -106,28 +106,33 @@ strip. Durations go through `go-humanize`, so a reader sees `235 µs` instead of
 
 ```text
 name: tango
+uptime: <1 minute
 version: 0.0.0
 status: healthy
-duration: 339.792 µs
+duration: 521.083 µs
 checks: 2 up, 0 down
-
 postgres: up (localhost:5432/postgres)
-storage: up (storage)
+storage: up (/srv/tango/storage)
 ```
 
 Every check line is `name: status[ optional][ (target)][: error]`, so `grep ': down'` finds every
-problem. Per-check durations and timestamps are absent from the text output — they are per-run
-numbers a reader does not act on — and stay in `--json` for a machine that measures them.
+problem. The target is a full path for storage and a password-free `host:port/database` for Postgres.
+Per-check durations and timestamps are absent from the text output — they are per-run numbers a
+reader does not act on — and stay in `--json` for a machine that measures them. The JSON body is
+byte-identical for the same state, so it diffs cleanly.
 
 Two checks run by default: **postgres** (the pool answers) and **storage** (the application data
 directory exists, is writable, and is not world-writable). The data directory is `storage` relative
-to the working directory, or whatever `--data-dir` sets; the report shows the password-free
-`host:port/database` target, never the DSN.
+to the working directory, or whatever `--data-dir` sets; the report shows it resolved to an absolute
+path.
 
 The vocabulary is deliberate: a component is `up` or `down`, the system is `healthy` or `unhealthy`.
 A component marked optional is reported but does not affect the aggregate, so a missing optional
 backend is not an outage. Checks run concurrently under a global timeout (`--timeout`, default 5s)
 with a short result cache; `--no-cache` runs every check now.
+
+`duration` is how long this one check run took, not process uptime — `uptime` reports that
+separately.
 
 Exit codes: `0` healthy, `3` unhealthy, `1` on a usage error such as a missing `DATABASE_URL`. A
 database or directory that cannot be used is reported as `unhealthy`, not as a command failure.

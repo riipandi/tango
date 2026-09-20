@@ -136,12 +136,13 @@ type Option func(*config)
 
 // config is the resolved Checker configuration.
 type config struct {
-	timeout  time.Duration
-	cacheTTL time.Duration
-	checks   []Check
-	info     map[string]string
-	onStatus func(ctx context.Context, result Result)
-	now      func() time.Time
+	timeout   time.Duration
+	cacheTTL  time.Duration
+	checks    []Check
+	info      map[string]string
+	infoFuncs []func(ctx context.Context) map[string]string
+	onStatus  func(ctx context.Context, result Result)
+	now       func() time.Time
 }
 
 // WithTimeout sets the deadline for one Check call. Default is DefaultTimeout.
@@ -178,11 +179,22 @@ func WithStatusListener(listener func(ctx context.Context, result Result)) Optio
 // WithInfo adds static metadata to every result, such as the application
 // version. Both surfaces publish it, so a probe response identifies the build
 // that answered.
+//
+// A key that changes per call belongs in WithInfoFunc instead: this map is
+// copied once and reported as is.
 func WithInfo(values map[string]string) Option {
 	return func(c *config) {
 		c.info = make(map[string]string, len(values))
 		maps.Copy(c.info, values)
 	}
+}
+
+// WithInfoFunc adds metadata computed at the time of each Check call, such as
+// the process uptime. Functions run in order and their values merge into the
+// result's Info; a key also set by WithInfo keeps the WithInfo value, because
+// static facts about the build outrank derived ones.
+func WithInfoFunc(functions ...func(ctx context.Context) map[string]string) Option {
+	return func(c *config) { c.infoFuncs = functions }
 }
 
 // Checker runs a fixed set of checks and aggregates their results.
@@ -246,7 +258,7 @@ func (c *Checker) Check(ctx context.Context) Result {
 
 	c.runDue(ctx)
 
-	result := c.result(c.cfg.now().Sub(started))
+	result := c.result(ctx, c.cfg.now().Sub(started))
 	c.notifyStatusChange(ctx, result)
 	return result
 }
@@ -359,7 +371,7 @@ func panicError(recovered any) error {
 
 // result assembles the aggregate from the cached check results. A component is
 // up or down; the aggregate it produces is healthy or unhealthy.
-func (c *Checker) result(duration time.Duration) Result {
+func (c *Checker) result(ctx context.Context, duration time.Duration) Result {
 	details := c.state.snapshot()
 
 	status := GlobalHealthy
@@ -373,13 +385,31 @@ func (c *Checker) result(duration time.Duration) Result {
 		}
 	}
 
-	var info map[string]string
-	if len(c.cfg.info) > 0 {
-		info = make(map[string]string, len(c.cfg.info))
-		maps.Copy(info, c.cfg.info)
+	return Result{
+		Status:   status,
+		Details:  details,
+		Duration: duration,
+		Info:     c.buildInfo(ctx),
+	}
+}
+
+// buildInfo merges the static metadata with the values the info functions
+// compute now. A function cannot override a static key, so a build fact stays
+// fixed.
+func (c *Checker) buildInfo(ctx context.Context) map[string]string {
+	if len(c.cfg.info) == 0 && len(c.cfg.infoFuncs) == 0 {
+		return nil
 	}
 
-	return Result{Status: status, Details: details, Duration: duration, Info: info}
+	info := make(map[string]string, len(c.cfg.info))
+	for _, function := range c.cfg.infoFuncs {
+		for key, value := range function(ctx) {
+			info[key] = value
+		}
+	}
+	// Applied last, so a static value wins over a computed one.
+	maps.Copy(info, c.cfg.info)
+	return info
 }
 
 // Checks returns the names of the configured checks, in the order they were

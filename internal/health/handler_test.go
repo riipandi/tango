@@ -1,16 +1,19 @@
 package health_test
 
 import (
+	"context"
 	"encoding/json/v2"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/riipandi/tango/internal/health"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/riipandi/tango/internal/health"
 )
 
 // nonEmptyLines splits output into lines, dropping blank ones.
@@ -248,18 +251,18 @@ func TestWriteTextHealthyReport(t *testing.T) {
 			},
 			"storage": {Name: "storage", Target: "/srv/storage", Status: health.StatusUp},
 		},
-		Info: map[string]string{"name": "tango", "version": "1.2.3"},
+		Info: map[string]string{"name": "tango", "version": "1.2.3", "uptime": "3 hours"},
 	}
 
 	var out strings.Builder
 	require.NoError(t, health.WriteText(&out, result))
 
 	assert.Equal(t, `name: tango
+uptime: 3 hours
 version: 1.2.3
 status: healthy
 duration: 1.5 s
 checks: 2 up, 0 down
-
 postgres: up (localhost:5432/postgres)
 storage: up (/srv/storage)
 `, out.String())
@@ -360,6 +363,23 @@ func TestWriteTextWithoutChecks(t *testing.T) {
 	assert.Equal(t, "status: healthy\nduration: 0 s\nchecks: 0 up, 0 down\n", out.String())
 }
 
+// Check lines follow the summary directly: no blank line between them, so the
+// report is a flat list a script can read line by line.
+func TestWriteTextHasNoBlankLineBeforeChecks(t *testing.T) {
+	result := health.Result{
+		Status: health.GlobalHealthy,
+		Details: map[string]health.CheckResult{
+			"postgres": {Name: "postgres", Status: health.StatusUp},
+		},
+	}
+
+	var out strings.Builder
+	require.NoError(t, health.WriteText(&out, result))
+
+	assert.Equal(t, "status: healthy\nduration: 0 s\nchecks: 1 up, 0 down\npostgres: up\n", out.String())
+	assert.NotContains(t, out.String(), "\n\n")
+}
+
 // The whole-call duration must be humanized, not raw nanoseconds: "1.5 s" is
 // readable where "1500000000" is not.
 func TestWriteTextHumanizesDurations(t *testing.T) {
@@ -421,4 +441,90 @@ func TestWriteShortPrintsOnlyTheStatus(t *testing.T) {
 			assert.Equal(t, tt.want, out.String())
 		})
 	}
+}
+
+// WithInfoFunc values are computed on every call, which is what uptime needs:
+// the same checker reports a growing value.
+func TestInfoFuncIsEvaluatedPerCall(t *testing.T) {
+	var calls int
+	checker := health.NewChecker(
+		health.WithCheck(health.Check{Name: "a", Check: passing}),
+		health.WithInfo(map[string]string{"version": "1.2.3"}),
+		health.WithInfoFunc(func(context.Context) map[string]string {
+			calls++
+			return map[string]string{"uptime": fmt.Sprintf("call %d", calls)}
+		}),
+	)
+
+	first := checker.Check(t.Context())
+	assert.Equal(t, "call 1", first.Info["uptime"])
+	assert.Equal(t, "1.2.3", first.Info["version"])
+
+	second := checker.Check(t.Context())
+	assert.Equal(t, "call 2", second.Info["uptime"], "the info function must run again")
+}
+
+// A static key outranks a computed one, so a build fact cannot be shadowed by a
+// derived value that happens to share its name.
+func TestInfoStaticValueWinsOverFunc(t *testing.T) {
+	checker := health.NewChecker(
+		health.WithCheck(health.Check{Name: "a", Check: passing}),
+		health.WithInfo(map[string]string{"version": "static"}),
+		health.WithInfoFunc(func(context.Context) map[string]string {
+			return map[string]string{"version": "computed"}
+		}),
+	)
+
+	assert.Equal(t, "static", checker.Check(t.Context()).Info["version"])
+}
+
+// Uptime must grow with the elapsed time and stay readable.
+func TestUptimeReportsElapsedTime(t *testing.T) {
+	tests := []struct {
+		name    string
+		elapsed time.Duration
+		want    string
+	}{
+		// go-humanize has no sub-minute granularity, so "now" would look like a
+		// missing value rather than a short uptime.
+		{name: "just started", elapsed: 250 * time.Millisecond, want: "<1 minute"},
+		{name: "seconds", elapsed: 5 * time.Second, want: "<1 minute"},
+		{name: "minutes", elapsed: 90 * time.Second, want: "1 minute"},
+		{name: "hours", elapsed: 3 * time.Hour, want: "3 hours"},
+		{name: "days", elapsed: 26 * time.Hour, want: "1 day"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := health.Uptime(time.Now().Add(-tt.elapsed))(t.Context())
+			assert.Equal(t, tt.want, info[health.InfoUptime])
+		})
+	}
+}
+
+// The JSON body must be byte-identical for the same state: encoding/json/v2
+// does not sort map keys, so a map field would churn between runs.
+func TestMarshalIsDeterministic(t *testing.T) {
+	result := health.Result{
+		Status:   health.GlobalHealthy,
+		Duration: time.Millisecond,
+		Details: map[string]health.CheckResult{
+			"storage":  {Name: "storage", Status: health.StatusUp},
+			"postgres": {Name: "postgres", Status: health.StatusUp},
+		},
+		Info: map[string]string{"version": "1", "name": "tango", "uptime": "<1 minute"},
+	}
+
+	encoded, err := json.Marshal(result)
+	require.NoError(t, err)
+
+	// Twenty runs is enough to trip over Go's randomized map order.
+	for range 20 {
+		again, err := json.Marshal(result)
+		require.NoError(t, err)
+		assert.Equal(t, string(encoded), string(again))
+	}
+
+	assert.Contains(t, string(encoded), `"info":{"name":"tango","uptime":"<1 minute","version":"1"}`)
+	assert.Less(t, strings.Index(string(encoded), `"postgres"`), strings.Index(string(encoded), `"storage"`))
 }

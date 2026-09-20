@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"io"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -106,6 +107,7 @@ func checkHealth(ctx context.Context, cmd *cli.Command, dsn string) health.Resul
 		"name":    config.AppName,
 		"version": config.AppVersion,
 	}
+	uptime := health.Uptime(processStarted)
 
 	started := time.Now()
 	pool, err := datastore.NewPostgres(ctx, datastore.PostgresOptions{DSN: dsn})
@@ -114,7 +116,7 @@ func checkHealth(ctx context.Context, cmd *cli.Command, dsn string) health.Resul
 		// The time the failed connection attempt took is part of the report:
 		// it tells the reader whether the database refused or timed out.
 		result.Duration = time.Since(started)
-		result.Info = info
+		result.Info = mergeInfo(info, uptime(ctx))
 		return result
 	}
 	defer pool.Close()
@@ -126,12 +128,27 @@ func checkHealth(ctx context.Context, cmd *cli.Command, dsn string) health.Resul
 			health.StorageCheck(dataDir(cmd)),
 		),
 		health.WithInfo(info),
+		health.WithInfoFunc(uptime),
 	}
 	if cmd.Bool("no-cache") {
 		options = append(options, health.WithCacheTTL(0))
 	}
 	return health.NewChecker(options...).Check(ctx)
 }
+
+// mergeInfo combines the static metadata with computed values. The computed
+// values go first so a static key wins, matching what the checker does.
+func mergeInfo(static, computed map[string]string) map[string]string {
+	merged := make(map[string]string, len(static)+len(computed))
+	maps.Copy(merged, computed)
+	maps.Copy(merged, static)
+	return merged
+}
+
+// processStarted is when this process began. The health command is one-shot, so
+// uptime measures the process it runs in and reads as a fraction of a second;
+// the value becomes useful when the same checker is wired into the server.
+var processStarted = time.Now()
 
 // postgresTarget names the database the check reached, without its credentials.
 // The DSN holds a password, which must not appear in a report an operator

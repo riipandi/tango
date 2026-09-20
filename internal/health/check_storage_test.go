@@ -110,6 +110,44 @@ func TestStorageCheckIsRequired(t *testing.T) {
 	assert.LessOrEqual(t, check.Timeout, health.DefaultTimeout)
 }
 
+// The reported target must be absolute, so the report says which directory was
+// inspected rather than leaving it relative to an unknown working directory.
+func TestStorageCheckReportsAbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	relative := relativeToWorkingDir(t, dir)
+
+	check := health.StorageCheck(relative)
+	assert.True(t, filepath.IsAbs(check.Target), "target must be absolute: %s", check.Target)
+	assert.Equal(t, dir, check.Target)
+}
+
+// A relative path in the error message must also be absolute, or the message
+// does not say where to look.
+func TestStorageCheckErrorNamesAbsolutePath(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope")
+	relative := relativeToWorkingDir(t, missing)
+
+	detail := storageResult(t, relative)
+
+	assert.Equal(t, health.StatusDown, detail.Status)
+	assert.True(t, filepath.IsAbs(detail.Target), "target must be absolute: %s", detail.Target)
+	assert.Contains(t, detail.Error, detail.Target)
+}
+
+// relativeToWorkingDir returns path relative to the test working directory, so
+// the check receives a relative input without the test leaving its directory.
+func relativeToWorkingDir(t *testing.T, path string) string {
+	t.Helper()
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	relative, err := filepath.Rel(workingDir, path)
+	require.NoError(t, err)
+	require.False(t, filepath.IsAbs(relative), "the fixture must be relative")
+	return relative
+}
+
 // The default must match the --data-dir default the CLI and Taskfile use.
 func TestStorageDefaultDataDir(t *testing.T) {
 	assert.Equal(t, "storage", config.DefaultDataDir)
