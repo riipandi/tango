@@ -188,7 +188,7 @@ func (s *Service) exchangeRefresh(ctx context.Context, client Client, raw string
 	if deactivateErr := s.store.DeactivateSession(ctx, KindRefresh, sum); deactivateErr != nil {
 		return nil, serverError()
 	}
-	if recordErr := s.store.RecordJTI(ctx, sum, time.Now().UTC().Add(RefreshTokenTTL)); recordErr != nil {
+	if recordErr := s.store.RecordJTI(ctx, sum, time.Now().UTC().Add(s.RefreshTokenTTL())); recordErr != nil {
 		return nil, serverError()
 	}
 
@@ -236,10 +236,10 @@ func (s *Service) mintTokens(ctx context.Context, client Client, userID, scope, 
 	accessTTL := time.Duration(client.AccessTokenDurationMinutes) * time.Minute
 	refreshTTL := time.Duration(client.RefreshTokenDurationMinutes) * time.Minute
 	if accessTTL <= 0 {
-		accessTTL = AccessTokenTTL
+		accessTTL = s.AccessTokenTTL()
 	}
 	if refreshTTL <= 0 {
-		refreshTTL = RefreshTokenTTL
+		refreshTTL = s.RefreshTokenTTL()
 	}
 	// Default audience: the requesting client (plain login token).
 	if audience == "" {

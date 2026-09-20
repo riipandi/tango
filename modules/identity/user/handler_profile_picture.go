@@ -6,7 +6,6 @@ package user
 // default.
 
 import (
-	"errors"
 	"io"
 	"net/http"
 	"path"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/pkg/responder"
 )
@@ -36,15 +34,6 @@ var pictureMime = map[string]string{
 // not at all (see APIRoutes).
 func WithImages(images ImageStore, defaults DefaultPictureFunc) ServiceOption {
 	return func(s *Service) { s.images, s.defaultPicture = images, defaults }
-}
-
-// pictureExt returns the allowlisted extension for a filename.
-func pictureExt(filename string) string {
-	ext := path.Ext(filename)
-	if pictureMime[ext] == "" {
-		return ""
-	}
-	return ext
 }
 
 // setPictureCache mirrors the bundled-image cache policy (15 min
@@ -107,87 +96,4 @@ func (s *Service) openPicture(r *http.Request, picturePath string) (io.ReadClose
 		return nil, 0, "", false
 	}
 	return reader, size, mime, true
-}
-
-// updateProfilePicture handles PUT /users/me and /users/{id}:
-// multipart 'file' → blob store → path column.
-func (s *Service) updateProfilePicture(w http.ResponseWriter, r *http.Request) {
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		responder.Fail(w, r, http.StatusBadRequest, "validation failed",
-			responder.WithError("multipart field 'file' is required"))
-		return
-	}
-	defer file.Close()
-	if header.Size > maxPictureUpload {
-		responder.Fail(w, r, http.StatusRequestEntityTooLarge, "file too large")
-		return
-	}
-
-	ext := pictureExt(header.Filename)
-	if ext == "" {
-		responder.Fail(w, r, http.StatusUnprocessableEntity, "unsupported_file_type")
-		return
-	}
-
-	target, err := s.resolvePictureTarget(w, r)
-	if err != nil {
-		return
-	}
-
-	picturePath := "profile-pictures/" + target.String() + ext
-	if err := s.images.Save(r.Context(), picturePath, file); err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if err := s.store.SetProfilePicturePath(r.Context(), target, &picturePath); err != nil {
-		_ = s.images.Delete(r.Context(), picturePath)
-		writeError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// resetProfilePicture handles DELETE: clear the column, remove the
-// blob (missing blob stays a success).
-func (s *Service) resetProfilePicture(w http.ResponseWriter, r *http.Request) {
-	target, err := s.resolvePictureTarget(w, r)
-	if err != nil {
-		return
-	}
-
-	u, err := s.store.GetByID(r.Context(), target)
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
-
-	if err := s.store.SetProfilePicturePath(r.Context(), target, nil); err != nil {
-		writeError(w, r, err)
-		return
-	}
-	if u.ProfilePicturePath != nil {
-		_ = s.images.Delete(r.Context(), *u.ProfilePicturePath)
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// resolvePictureTarget resolves the target user: the URL param for
-// the admin surface, the principal for /users/me.
-func (s *Service) resolvePictureTarget(w http.ResponseWriter, r *http.Request) (UserID, error) {
-	if raw := chi.URLParam(r, "id"); raw != "" {
-		id, err := identity.ParseID[UserID](raw)
-		if err != nil {
-			responder.NotFoundJSON(w, r)
-			return UserID{}, err
-		}
-		return id, nil
-	}
-
-	principal, ok := middleware.PrincipalFromContext(r.Context())
-	if !ok {
-		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
-		return UserID{}, errors.New("no principal")
-	}
-	return identity.ParseID[UserID](principal.UserID)
 }

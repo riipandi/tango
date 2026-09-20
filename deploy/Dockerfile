@@ -59,8 +59,11 @@ ARG BUILD_HASH=dev
 ARG BUILD_DATE
 
 # Copy dependency manifests first so the dependency layers below stay cached
-# across source-only changes (buildkit layer cache).
-COPY --link package.json pnpm-lock.yaml go.mod go.sum ./
+# across source-only changes (buildkit layer cache). pnpm-workspace.yaml
+# carries the install policy (minimumReleaseAge) and must travel with the
+# lockfile: without it pnpm falls back to the default release-age policy and
+# rejects the frozen lockfile.
+COPY --link package.json pnpm-lock.yaml pnpm-workspace.yaml go.mod go.sum ./
 
 # Bash will load fnm function via .bashrc. Since we're starting non-interactive
 # shell, we wil need to tell bash to load .bashrc manually.
@@ -75,6 +78,11 @@ RUN --mount=type=cache,id=go-mod,target=/go/pkg/mod go mod download
 # Copy the remaining source files and build the application (typecheck,
 # email templates, SPA bundle, and the Go binary are all driven by Vite).
 COPY --link . .
+
+# Generate the ConnectRPC code before anything compiles.
+# Buf resolves from the module cache prepared above through `go tool`.
+RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build \
+    go tool buf generate && gofmt -w codegen/proto/go
 
 RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build \
     NODE_ENV=production pnpm exec tsc -b --noEmit \

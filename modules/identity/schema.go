@@ -46,8 +46,10 @@ type MFAPendingIssuer interface {
 	// second factor before a full session.
 	RequiresPending(ctx context.Context, userID string) (bool, error)
 	// CreatePending mints the short-lived pending bridge and returns
-	// its raw token (for the pending cookie only).
-	CreatePending(ctx context.Context, userID string) (string, error)
+	// its raw token (for the pending cookie only). remember carries
+	// the sign-in duration request across the second factor, so the
+	// session issued after verification keeps the requested lifetime.
+	CreatePending(ctx context.Context, userID string, remember bool) (string, error)
 	// ClearPending drops the bridge (sign-out).
 	ClearPending(ctx context.Context, userID string) error
 }

@@ -8,6 +8,7 @@ package oidc
 import (
 	"context"
 	"errors"
+	"github.com/go-ozzo/ozzo-validation/v4"
 	"strings"
 	"time"
 
@@ -232,7 +233,20 @@ func hasUsableSecret(c Client) bool {
 
 // addSecret creates a new client secret (generated or caller
 // supplied) and returns the view plus the raw value — the only time
-// the value is visible.
+// the value is visible.// createSecretRequest is the create-secret payload; the wire
+// request maps onto it.
+type createSecretRequest struct {
+	Secret    string
+	ExpiresAt *time.Time
+}
+
+func (r createSecretRequest) Validate() error {
+	if r.Secret != "" && len(r.Secret) < 16 {
+		return validation.Errors{"secret": validation.NewError("validation", "must be at least 16 characters")}
+	}
+	return nil
+}
+
 func (s *Service) addSecret(ctx context.Context, id OIDCClientID, req createSecretRequest) (map[string]any, error) {
 	raw := req.Secret
 	if raw == "" {

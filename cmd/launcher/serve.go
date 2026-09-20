@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
@@ -55,12 +57,24 @@ func rateLimiter(db *datastore.Postgres) func(http.Handler) http.Handler {
 }
 
 // latestVersion exposes the cached release feed from the jobs module
-// for /api/version/latest; a nil source keeps the deployed version.
+// for VersionService.Latest over /rpc; a nil source keeps the deployed
+// version.
 func latestVersion(feed *jobs.Registry) transport.LatestVersionSource {
 	if feed == nil {
 		return nil
 	}
 	return feed
+}
+
+// mountRPC composes the module-owned Connect services: the version
+// surface (mixed public/protected methods) plus every module RPC
+// registration.
+func mountRPC(rt *registry.Runtime) func(chi.Router) {
+	return func(r chi.Router) {
+		prefix, handler := transport.VersionRPCService(latestVersion(rt.Jobs), rt.SessionAuthenticator())
+		r.Handle(prefix+"*", handler)
+		rt.MountRPC(r)
+	}
 }
 
 // Run starts the server and shuts it down on signal.
@@ -130,19 +144,6 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		return fmt.Errorf("build runtime: %w", err)
 	}
 
-	// SMTP relay settings become admin-editable: the mailer resolves
-	// them per send from the appconfig surface (env values stay the
-	// default layer). Late-bound — the module exists after New.
-	if setter, ok := ml.(mailer.SettingsSourceSetter); ok {
-		fallback := cfg.Mailer
-		setter.SetSettingsSource(func(ctx context.Context) (config.MailerConfig, error) {
-			values, err := rt.AppConfig.MergedValues(ctx)
-			if err != nil {
-				return fallback, err
-			}
-			return mailer.SettingsFromValues(values, fallback), nil
-		})
-	}
 	if err := rt.Start(context.Background()); err != nil {
 		return fmt.Errorf("start modules: %w", err)
 	}
@@ -153,7 +154,11 @@ func (s *ServeCmd) Run(cli *CLI) error {
 		{Name: "database", Check: db.HealthCheck},
 	}
 
-	srv := transport.NewHTTPServer(transport.RouteSet{MountRoot: rt.MountRoot, MountAPI: rt.MountAPI, RequireSession: rt.SessionGuard()}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs), healthChecks)
+	srv := transport.NewHTTPServer(transport.RouteSet{
+		MountRoot: rt.MountRoot,
+		MountAPI:  rt.MountAPI,
+		MountRPC:  mountRPC(rt),
+	}, cfg, lg, rateLimiter(db), latestVersion(rt.Jobs), healthChecks)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	serveErr := make(chan error, 1)
 	go func() {

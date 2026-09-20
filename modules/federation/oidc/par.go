@@ -58,7 +58,7 @@ func (s *Service) pushPAR(ctx context.Context, params *authorizeParams) (*pushed
 			"prompt":             params.Prompt,
 		},
 		ClientID:  client.ID.String(),
-		ExpiresAt: timeOfPtr(time.Now().UTC().Add(PARTTL)),
+		ExpiresAt: timeOfPtr(time.Now().UTC().Add(s.PARTTL())),
 	}); err != nil {
 		return nil, serverError()
 	}
@@ -68,7 +68,7 @@ func (s *Service) pushPAR(ctx context.Context, params *authorizeParams) (*pushed
 	})
 	return &pushedAuthorizationResponse{
 		RequestURI: "urn:ietf:params:oauth:request_uri:" + requestURI,
-		ExpiresIn:  int(PARTTL.Seconds()),
+		ExpiresIn:  int(s.PARTTL().Seconds()),
 	}, nil
 }
 

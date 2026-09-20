@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-09-18
+updated: 2026-09-20
 ---
 
 # Tango Deviations from Upstream Pocket ID
@@ -25,6 +25,36 @@ match the upstream endpoint contract.
   self-service account endpoints. The full contract lives in the endpoint reference
   ("Authentication (tango-only)"): generic enumeration-safe failures, SHA-256 hashed single-use
   reset tokens (15-minute TTL), session invalidation on reset, and per-endpoint rate limits.
+- **`SignIn` request contract** — the body is
+  `{"identity": "<username or email>", "password": "<plaintext>", "remember": <bool>}`. Upstream
+  has no password sign-in at all, so the shape is tango's: `password` names the credential
+  (upstream's own DTOs use `password` for the same value), and `remember` selects the session
+  duration. `true` issues `AUTH_SESSION_LIFETIME`, `false` or absent issues
+  `AUTH_SESSION_SHORT_LIFETIME`. The choice is stored on the session row and carried across the
+  MFA bridge, so a sliding refresh or rotation never promotes a short session to the long one.
+- **Authentication lifetimes are environment-configured, in seconds.** Upstream stores
+  `sessionDuration` (minutes) in its database and derives the rest from compiled constants; tango
+  resolves every lifetime from the environment layer at startup and validates it. The keys are
+  `AUTH_ACCESS_TOKEN_EXPIRY` (internal RPC bearer JWT), `AUTH_SESSION_LIFETIME` /
+  `AUTH_SESSION_SHORT_LIFETIME` (with / without "remember me"), and the `OIDC_*` group
+  (`ACCESS_TOKEN_EXPIRY`, `REFRESH_TOKEN_EXPIRY`, `AUTHORIZATION_CODE_EXPIRY`,
+  `INTERACTION_EXPIRY`, `DEVICE_CODE_EXPIRY`, `PAR_EXPIRY`). A non-positive value or a short
+  session longer than the remembered one fails startup instead of degrading at runtime.
+- **Stateless authentication: no cookies.** Upstream keeps the session in an `HttpOnly` cookie.
+  Tango issues every credential in the response body instead: sign-in and the other
+  session-issuing procedures return `session_token` (the rotating session credential) and
+  `access_token` (the short-lived internal bearer JWT), and a pending second factor returns
+  `pending_token` for `MfaService.VerifyPending`. Clients present the session token to
+  `POST /api/auth/token` (body `{"session_token": "..."}`) to mint a fresh bearer, and send that
+  bearer on every protected call. Sign-out runs through `AuthService.SignOut`; there is no
+  cookie-channel fallback. `session_token` is absent from the response while a second factor is
+  pending, and `pending_token` is present only then.
+- **`AccountService`** — tango-only, and deliberately narrow: `ChangePassword`, `ListSessions`,
+  and `RevokeSession`. Upstream has no password or session API because it authenticates with
+  passkeys. Self-profile read and write are **not** here — they stay on `UserService`, matching
+  upstream's `GET`/`PUT /api/users/me` (read via `AuthService.GetSession`, which already returns
+  the full user; write via `UserService.UpdateMe`). Upstream has no `/api/account` route at all,
+  so nothing may be added to this service without a deviation entry.
 - **Rate limiting** — upstream throttles every `/api` route with a shared token-bucket budget
   plus per-route limiters. Tango instead limits only sensitive endpoints, each with its own
   fixed-window per-IP budget (`internal/transport/middleware/ratelimit.go`): sign-in,
@@ -45,6 +75,17 @@ match the upstream endpoint contract.
   mounted at the root as the liveness probe and never touches dependencies.
 - **`/.well-known/version`** — a bare version document under `.well-known` for instance
   fingerprinting; the upstream-parity version endpoints stay under `/api/version/*`.
+
+## Response contract
+
+- **JSON field names are snake_case on both transports.** Upstream serves camelCase from its Go
+  struct tags; tango normalizes REST and ConnectRPC onto snake_case so one client reads one
+  spelling. REST gets it from struct tags, and each RPC service registers a codec that serializes
+  protobuf under its declared field names (protobuf's JSON default is lowerCamelCase). Requests
+  stay tolerant — protojson accepts either spelling on input.
+- **SCIM and WebAuthn keep camelCase.** Both specifications mandate it (`userName`,
+  `displayName`, `Resources`; `publicKey`, `challenge`), and neither is part of the envelope
+  contract.
 
 ## Signup and setup contract
 
@@ -76,7 +117,7 @@ match the upstream endpoint contract.
   stateless across begin/finish.
 - Ceremony finishes use `POST` bodies and, for registration, a `session_id` query parameter
   (upstream: `GET /webauthn/*/start` with the ceremony id in a cookie). Responses for a completed
-  registration use 201 with the credential view; login sets the session cookie.
+  registration use 201 with the credential view; login returns the session token in the body.
 - Passkey management is admin-side per user (`/api/users/{id}/webauthn-credentials`,
   `GET`/`PUT`/`DELETE`) instead of upstream's self-service `/api/webauthn/credentials`;
   rename uses `PUT` with `{name}` rather than `PATCH`. Upstream's `/webauthn/logout` is not
@@ -114,10 +155,10 @@ Verification-only values are one-way hashes and must never be encrypted.
 | SCIM service-provider token | federation | `enc:` — the server must send it; DB CHECK enforces the prefix; reads decrypt strictly (an undecryptable token is an error, never a plaintext fallback) |
 | JWKS private key PEM | federation | `enc:` — rotation needs recovery; public key material stays plain |
 | TOTP seed | identity | `enc:` — verification requires recovery; DB CHECK enforces the prefix |
-| Sensitive app settings (`smtp_password`) | admin | `enc:` — sealed on write, decrypted on read through the module cipher; the DB CHECK rejects plaintext for sensitive keys |
+| Sensitive app settings | admin | none — the SMTP relay password is environment-only (`MAILER_SMTP_PASSWORD`); no app_config key is sensitive and nothing stored is sealed |
 | OIDC client secrets | federation | SHA-256 hashes in the credentials JSONB (multi-secret with per-entry expiry/active state); raw value shown once at creation |
 | Passwords | identity | scrypt/Argon2id PHC hash (`pkg/crypto.PasswordHasher`) |
-| Session tokens | identity | SHA-256 `token_hash` on sessions; the raw token lives only in the cookie |
+| Session tokens | identity | SHA-256 `token_hash` on sessions; the raw token is returned in the sign-in body and held by the client |
 | Auth tokens (email verification, one-time access, reauthentication) | identity | SHA-256 hash keyed by purpose |
 | Signup tokens | identity | SHA-256 hash |
 | API keys | admin | SHA-256 hash; raw value shown once at creation/renewal |
@@ -155,6 +196,5 @@ features:
   the OIDC clients on its allowlist) is a tango addition; upstream only restricts from the
   client side (`oidc_clients_allowed_user_groups`).
 
-Cipher consumers (the only `crypto.Cipher` wirings): the webhook module, the SCIM store, the JWKS
-key service, and the appconfig module — each keyed from a SHA-256 digest of `AUTH_SECRET_KEY` at
-the composition root.
+Cipher consumers (the only `crypto.Cipher` wirings): the webhook module, the SCIM store, and the
+JWKS key service — each keyed from a SHA-256 digest of `AUTH_SECRET_KEY` at the composition root.

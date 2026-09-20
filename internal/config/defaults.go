@@ -14,9 +14,9 @@ var defaultConfig = Config{
 	},
 
 	Auth: AuthConfig{
-		AccessTokenExpiry:  900,
-		RefreshTokenExpiry: 7200,
-		SessionLifetime:    2592000,
+		AccessTokenExpiry:    600,
+		SessionLifetime:      2592000,
+		SessionShortLifetime: 43200,
 	},
 
 	Database: DatabaseConfig{
@@ -30,12 +30,19 @@ var defaultConfig = Config{
 		SMTPPort:  1025,
 	},
 
+	OIDC: OIDCConfig{
+		AccessTokenExpiry:       3600,
+		RefreshTokenExpiry:      2592000,
+		AuthorizationCodeExpiry: 120,
+		InteractionExpiry:       900,
+		DeviceCodeExpiry:        900,
+		PARExpiry:               60,
+	},
+
 	Public: PublicConfig{
-		BaseURL:               "http://localhost:3000",
-		S3AssetsURL:           "http://localhost:9180",
-		VersionCheckURL:       "https://api.github.com/repos/riipandi/tango/releases/latest",
-		JwtAccessTokenExpiry:  900,
-		JwtRefreshTokenExpiry: 7200,
+		BaseURL:         "http://localhost:3000",
+		S3AssetsURL:     "http://localhost:9180",
+		VersionCheckURL: "https://api.github.com/repos/riipandi/tango/releases/latest",
 	},
 
 	Queue: QueueConfig{

@@ -37,7 +37,7 @@ sbom-*
 /api/docs.go
 /api/swagger.json
 /api/swagger.yaml
-/app/generated/
+/codegen/
 /web/output/
 /specs/
 *.gen.ts

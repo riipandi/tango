@@ -31,9 +31,9 @@ type sessionsSpy struct {
 	issued  int
 }
 
-func (s *sessionsSpy) IssueForUser(ctx context.Context, userID user.UserID, _ string, _ session.Meta) (string, error) {
+func (s *sessionsSpy) IssueForUser(ctx context.Context, userID user.UserID, _ string, _ session.Meta) (string, session.Session, error) {
 	s.issued++
-	return "fresh-session-" + strconv.Itoa(s.issued), nil
+	return "fresh-session-" + strconv.Itoa(s.issued), session.Session{ID: "sess_" + strconv.Itoa(s.issued)}, nil
 }
 
 func (s *sessionsSpy) RevokeAllForUser(_ context.Context, userID user.UserID, _ string) error {

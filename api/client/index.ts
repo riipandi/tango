@@ -34,8 +34,7 @@ export type {
   ResetPasswordParams,
   SessionView,
   SignInParams,
-  SignInResult,
-  SignUpParams
+  SignInResult
 } from './schemas/session.schema'
 export type {
   AdminUpdateUserParams,
@@ -44,62 +43,15 @@ export type {
   UpdateProfileParams,
   User
 } from './schemas/user.schema'
-export type {
-  CreateUserGroupParams,
-  UpdateUserGroupParams,
-  UserGroup
-} from './schemas/usergroup.schema'
 export type { WebAuthnBeginResult, WebAuthnCredential } from './schemas/webauthn.schema'
 export type { DeviceCodeInfo, DeviceVerifyAction } from './schemas/device.schema'
 export type {
-  CreateSignupTokenParams,
-  SignupToken,
-  SignupTokenSecret
-} from './schemas/signuptoken.schema'
-export type {
   DeviceLoginExchangeResult,
   DeviceLoginPending,
-  DeviceLoginRequest,
-  VerificationInfo
+  DeviceLoginRequest
 } from './schemas/devicelogin.schema'
 
 // Admin surface types.
-export type { ConfigVariable } from './schemas/appconfig.schema'
-export type {
-  AuthorizedClient,
-  OidcClient,
-  OidcClientMeta,
-  OidcClientParams,
-  OidcSecretEntry,
-  OidcTokenPreview
-} from './schemas/oidcclient.schema'
-export type {
-  API,
-  ClientAPIGrant,
-  ClientRef,
-  Grant,
-  GrantParams,
-  Permission
-} from './schemas/apiaccess.schema'
-export type {
-  APIKey,
-  APIKeySecret,
-  CreateAPIKeyParams,
-  RenewAPIKeyParams
-} from './schemas/apikey.schema'
-export type { AuditLog, AuditLogListParams } from './schemas/auditlog.schema'
-export type {
-  CreateCustomClaimParams,
-  CustomClaim,
-  UpdateCustomClaimParams
-} from './schemas/customclaim.schema'
-export type { CreateScimProviderParams, ScimProvider } from './schemas/scim.schema'
-export type {
-  CreateWebhookParams,
-  UpdateWebhookParams,
-  Webhook,
-  WebhookDelivery
-} from './schemas/webhook.schema'
 
 /**
  * Default client for the embedded SPA: same origin, cookie-backed session.

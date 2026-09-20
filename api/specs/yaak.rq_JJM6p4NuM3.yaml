@@ -1,0 +1,48 @@
+type: http_request
+model: http_request
+id: rq_JJM6p4NuM3
+createdAt: 2026-09-19T12:31:58.362266
+updatedAt: 2026-09-19T14:58:12.291329
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_WNyJqCXLvz
+authentication: {}
+authenticationType: null
+body:
+  text: |-
+    {
+      "id": "REPLACE_CLIENT_ID"
+    }
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: Delete OIDC client
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/DeleteClient
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

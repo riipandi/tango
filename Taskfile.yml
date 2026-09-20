@@ -21,6 +21,7 @@ tasks:
   # ----------------------------------------------------------------------------
   dev:
     desc: Run Vite dev server (frontend :3000 + Go API :3080)
+    deps: [rpc:generate]
     cmd: pnpm exec vite dev {{.CLI_ARGS}}
 
   run:
@@ -40,14 +41,17 @@ tasks:
   # ----------------------------------------------------------------------------
   build:
     desc: Build frontend + Go binary (single file)
+    deps: [rpc:generate]
     cmd: pnpm exec vite build {{.CLI_ARGS}}
 
   build:release:
     desc: Build release binaries via goreleaser
+    deps: [rpc:generate]
     cmd: goreleaser build --clean --auto-snapshot
 
   release:
     desc: Publish a release via goreleaser
+    deps: [rpc:generate]
     cmd: goreleaser release --clean --auto-snapshot
 
   start:
@@ -72,6 +76,7 @@ tasks:
   # ----------------------------------------------------------------------------
   test:
     desc: Run all tests (Go + frontend)
+    deps: [rpc:generate]
     cmds:
       - task: test:go
       - task: test:ui
@@ -122,7 +127,37 @@ tasks:
 
   typecheck:
     desc: Run TypeScript type checking
+    deps: [rpc:generate]
     cmd: pnpm exec tsc -b --noEmit
+
+  # ----------------------------------------------------------------------------
+  # ConnectRPC contracts
+  # ----------------------------------------------------------------------------
+  rpc:generate:
+    desc: Generate Go + TypeScript from api/connect/*.proto
+    cmds:
+      - go tool buf generate
+      - gofmt -w codegen/proto/go
+      - task: rpc:stamp
+
+  rpc:lint:
+    desc: Lint protobuf contracts
+    cmd: go tool buf lint
+
+  rpc:breaking:
+    desc: Check protobuf contracts for breaking changes
+    cmd: go tool buf breaking --against '.git#ref=HEAD~1,subdir=api/connect'
+
+  rpc:stamp:
+    desc: Refresh the contract stamp used by stale detection
+    cmd: sh -c 'find api/connect buf.yaml buf.gen.yaml -type f | LC_ALL=C sort | xargs shasum -a 256 > .rpc-gen.stamp'
+
+  rpc:stale:
+    desc: Fail when generated code is out of date with the contracts
+    cmds:
+      - sh -c 'find api/connect buf.yaml buf.gen.yaml -type f | LC_ALL=C sort | xargs shasum -a 256 > /tmp/rpc-stamp.now'
+      - sh -c 'test -f .rpc-gen.stamp || (echo "no contract stamp yet — run task rpc:generate" && exit 1)'
+      - sh -c 'diff .rpc-gen.stamp /tmp/rpc-stamp.now || (echo "contracts changed — run task rpc:generate" && exit 1)'
 
   # ----------------------------------------------------------------------------
   # Dependencies
@@ -135,7 +170,7 @@ tasks:
       - go install github.com/goreleaser/goreleaser/v2@latest
       - go install github.com/anchore/grype/cmd/grype@latest
       - go install github.com/swaggo/swag/cmd/swag@latest
-      - go install github.com/bufbuild/buf/cmd/buf@latest
+      - go get -tool github.com/bufbuild/buf/cmd/buf@latest
       - go get -tool google.golang.org/protobuf/cmd/protoc-gen-go@latest
       - go get -tool connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
 
@@ -150,7 +185,7 @@ tasks:
 
   cleanup:dist:
     desc: Remove build artifacts
-    cmd: pnpm dlx del-cli .{tanstack,wrangler} build web/output storybook-static
+    cmd: pnpm dlx del-cli .{output,tanstack} build web/output codegen
 
   cleanup:deps:
     desc: Remove dependencies
@@ -158,6 +193,7 @@ tasks:
 
   update-deps:
     desc: Update dependencies
+    deps: [rpc:generate]
     cmds:
       - pnpm exec npm-check-updates --configFileName .ncurc.json
       - go mod download && go mod tidy

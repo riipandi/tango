@@ -12,10 +12,18 @@ import (
 type Service struct {
 	store    Store
 	recorder identity.Recorder
+	// users backs the member projection on the Connect surface; the
+	// composition root wires it.
+	users user.Store
 }
 
 // ServiceOption configures the group feature.
 type ServiceOption func(*Service)
+
+// WithUserStore wires the member projection for the Connect surface.
+func WithUserStore(users user.Store) ServiceOption {
+	return func(s *Service) { s.users = users }
+}
 
 // NewService builds the group feature on the given store.
 func NewService(store Store, recorder identity.Recorder, opts ...ServiceOption) *Service {

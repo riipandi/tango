@@ -18,13 +18,11 @@ import (
 // Service implements the passkey ceremonies. Login is discoverable
 // (userless): the handle selects the user.
 type Service struct {
-	store        Store
-	users        user.Store
-	issuer       SessionIssuer
-	webAuthn     *gowebauthn.WebAuthn
-	recorder     identity.Recorder
-	cookieName   string
-	cookieSecure bool
+	store    Store
+	users    user.Store
+	issuer   SessionIssuer
+	webAuthn *gowebauthn.WebAuthn
+	recorder identity.Recorder
 }
 
 // SessionIssuer issues a sign-in session after a successful
@@ -59,17 +57,6 @@ func NewService(store Store, users user.Store, sessions SessionIssuer, appURL st
 
 // ServiceOption configures the passkey feature.
 type ServiceOption func(*Service)
-
-// WithCookieSecure mirrors the session cookie Secure flag.
-func WithCookieSecure(secure bool) ServiceOption {
-	return func(s *Service) { s.cookieSecure = secure }
-}
-
-// WithCookieName sets the session cookie name for the sign-in
-// response.
-func WithCookieName(name string) ServiceOption {
-	return func(s *Service) { s.cookieName = name }
-}
 
 // Name names the feature for logs.
 func (s *Service) Name() string { return "webauthn" }

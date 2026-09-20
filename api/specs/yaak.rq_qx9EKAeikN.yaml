@@ -1,0 +1,49 @@
+type: http_request
+model: http_request
+id: rq_qx9EKAeikN
+createdAt: 2026-09-18T18:41:18.754165
+updatedAt: 2026-09-19T19:09:05.358741
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_5ohk34DQsY
+authentication: {}
+authenticationType: null
+body:
+  text: |-
+    {
+      "name": "yaak-${[ faker.string.alphanumeric(options='{"length": 10}') ]}",
+      "expires_at": "2027-01-01T00:00:00Z"
+    }
+bodyType: application/json
+description: The key name is generated per run; API key names are unique per user, so a fixed name makes the second send answer already_exists.
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: Create API key
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiKeyService/Create
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

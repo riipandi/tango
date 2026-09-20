@@ -1,7 +1,6 @@
 package mailer
 
 import (
-	"context"
 	"errors"
 	"io"
 	"io/fs"
@@ -209,40 +208,6 @@ func TestSendRejectsInvalidInput(t *testing.T) {
 	}), "invalid recipient")
 
 	assert.Empty(t, backend.messages)
-}
-
-// TestSettingsSourceOverridesPerSend checks per-send settings and fallback.
-func TestSettingsSourceOverridesPerSend(t *testing.T) {
-	mailer, backend, relayPort := newTestMailer(t)
-	setter, ok := mailer.(SettingsSourceSetter)
-	require.True(t, ok, "smtp mailer accepts a settings source")
-
-	msg := Message{
-		To: "alice@example.test", Subject: "relay switch", Template: "welcome",
-		Data: map[string]any{"UserFullName": "Alice", "Link": "https://app.test/x"},
-	}
-
-	calls := 0
-	setter.SetSettingsSource(func(ctx context.Context) (config.MailerConfig, error) {
-		calls++
-		return config.MailerConfig{
-			FromEmail: "switched@tango.test", FromName: "Switched",
-			SMTPHost: "127.0.0.1", SMTPPort: relayPort,
-		}, nil
-	})
-
-	require.NoError(t, mailer.Send(t.Context(), msg))
-	require.Len(t, backend.messages, 1)
-	assert.Contains(t, string(backend.messages[0].content), `From: "Switched" <switched@tango.test>`)
-	assert.Equal(t, 1, calls, "source resolves per send")
-
-	// A failing source falls back to the static config.
-	setter.SetSettingsSource(func(ctx context.Context) (config.MailerConfig, error) {
-		return config.MailerConfig{}, errors.New("appconfig down")
-	})
-	require.NoError(t, mailer.Send(t.Context(), msg))
-	require.Len(t, backend.messages, 2)
-	assert.Contains(t, string(backend.messages[1].content), `From: "Tango Test" <noreply@tango.test>`)
 }
 
 func TestSendUnknownTemplateFails(t *testing.T) {

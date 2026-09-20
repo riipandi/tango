@@ -1,13 +1,10 @@
 package webhook
 
 import (
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 func TestWebhookDeliveryTaskConfigRetainsFailures(t *testing.T) {
@@ -137,39 +134,4 @@ func TestValidateEndpointRejectsUnusableURLs(t *testing.T) {
 			assert.ErrorContains(t, validateEndpoint(tc.raw), tc.wantErr)
 		})
 	}
-}
-
-// TestWriteErrorMapsDomainErrors covers every branch of the error
-// mapper: each module error must reach its documented status.
-func TestWriteErrorMapsDomainErrors(t *testing.T) {
-	cases := []struct {
-		name   string
-		err    error
-		status int
-	}{
-		{"not found", ErrNotFound, http.StatusNotFound},
-		{"duplicate", ErrDuplicateName, http.StatusConflict},
-		{"disabled", ErrDisabled, http.StatusConflict},
-		{"too large", ErrTooLarge, http.StatusRequestEntityTooLarge},
-		{"unknown", assert.AnError, http.StatusInternalServerError},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			w := newRecorder()
-			req := newRequest()
-
-			writeError(w, req, tc.err)
-			assert.Equal(t, tc.status, w.Code)
-		})
-	}
-}
-
-func TestWriteErrorMapsValidationErrors(t *testing.T) {
-	params := CreateParams{Name: "ab", Endpoint: "https://example.test"}
-	err := params.Validate()
-	require.Error(t, err)
-
-	w := newRecorder()
-	responder.WriteError(w, newRequest(), err)
-	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 }

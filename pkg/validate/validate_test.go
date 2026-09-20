@@ -70,3 +70,22 @@ func TestFieldErrorsNil(t *testing.T) {
 	assert.Nil(t, validate.FieldErrors(nil))
 	var _ io.Reader // keep io import if assertions change
 }
+
+// TestFieldErrorsReportsDomainSentinels pins that a non-ozzo validation
+// error keeps its own message: a body-rule failure such as an invalid
+// username must not be misreported as a malformed JSON body, which
+// sends the caller looking for a syntax problem that does not exist.
+func TestFieldErrorsReportsDomainSentinels(t *testing.T) {
+	err := errInvalidUsername{}
+	got := validate.FieldErrors(err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "body", got[0].Field)
+	assert.Contains(t, got[0].Message, "username")
+	assert.NotContains(t, got[0].Message, "malformed JSON")
+}
+
+type errInvalidUsername struct{}
+
+func (errInvalidUsername) Error() string {
+	return "username must be 3-32 characters: letters, digits, underscores"
+}

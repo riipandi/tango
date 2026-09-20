@@ -71,7 +71,7 @@ var uaParser = sync.OnceValue(func() *uaparser.Parser {
 	return uaparser.NewFromSaved()
 })
 
-// deviceFromUserAgent renders the upstream device summary ("<agent
+// deviceFromUserAgent renders the compact device summary ("<agent
 // family> on <os family> <version>"); unknown agents degrade to
 // their family names, empty agents to an empty summary.
 func deviceFromUserAgent(userAgent *string) string {

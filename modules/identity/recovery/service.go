@@ -36,7 +36,7 @@ var ErrNotFound = errors.New("recovery: reset request is invalid or expired")
 // password package's own tests' perspective — session depends on
 // password, so recovery touches it through this narrow contract.
 type Sessions interface {
-	IssueForUser(ctx context.Context, userID user.UserID, provider string, meta session.Meta) (string, error)
+	IssueForUser(ctx context.Context, userID user.UserID, provider string, meta session.Meta) (string, session.Session, error)
 	RevokeAllForUser(ctx context.Context, userID user.UserID, keepID string) error
 }
 
@@ -155,7 +155,7 @@ func (r *Recovery) ResetPassword(ctx context.Context, raw, newPassword string) (
 	if r.recorder != nil {
 		r.recorder.Record(ctx, identity.AuditEvent{Action: "password.reset_completed", Actor: userID.String()}, nil)
 	}
-	sessionToken, err := r.sessions.IssueForUser(ctx, userID, "password_reset", session.Meta{})
+	sessionToken, _, err := r.sessions.IssueForUser(ctx, userID, "password_reset", session.Meta{})
 	if err != nil {
 		return user.User{}, "", err
 	}

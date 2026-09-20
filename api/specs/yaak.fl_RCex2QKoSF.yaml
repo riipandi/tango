@@ -2,15 +2,16 @@ type: folder
 model: folder
 id: fl_RCex2QKoSF
 createdAt: 2026-09-14T09:40:48.096725
-updatedAt: 2026-09-18T10:05:28.914358
+updatedAt: 2026-09-19T15:35:41.787981
 workspaceId: wk_kBiMYTkhPP
 folderId: null
-authentication: {}
-authenticationType: null
+authentication:
+  token: ${[ accessToken ]}
+authenticationType: bearer
 description: 'Healthcheck endpoints: root text healthz (upstream) and JSON variant (tango extension)'
 headers: []
 name: Health Check
-sortPriority: 17000.0
+sortPriority: 20000.0
 settingSendCookies:
   enabled: false
   value: true

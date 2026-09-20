@@ -42,9 +42,9 @@ func newRouter(t *testing.T, service *Service, auth *fakeAuthenticator) chi.Rout
 	t.Helper()
 	feature := New(service)
 	adminGuard := func(next http.Handler) http.Handler {
-		return middleware.RequireAuth(auth, "tango_session")(middleware.RequireAdmin(next))
+		return middleware.RequireAuth(auth)(middleware.RequireAdmin(next))
 	}
-	selfGuard := middleware.RequireAuth(auth, "tango_session")
+	selfGuard := middleware.RequireAuth(auth)
 
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
@@ -318,57 +318,4 @@ func TestRefreshRotationAndReuseRevocation(t *testing.T) {
 	status, body = rotate(secondRefresh)
 	assert.Equal(t, http.StatusUnauthorized, status)
 	assert.Equal(t, "invalid_grant", body["error"])
-}
-
-func TestClientCRUDRequiresAdmin(t *testing.T) {
-	service, _, _ := testStack(t)
-	// Anonymous principal: admin guard rejects before handlers run.
-	router := newRouter(t, service, &fakeAuthenticator{validToken: "nope", principal: principalFixture("")})
-
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, clientsAPIPrefix+"/", nil))
-	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-}
-
-func TestClientCRUDLifecycle(t *testing.T) {
-	service, _, ds := testStack(t)
-	ctx := t.Context()
-
-	userStore := user.NewPostgresStore(ds)
-	createdUser := userFixture(ctx, t, userStore, stamp())
-	router := newRouter(t, service, &fakeAuthenticator{validToken: "session-token-1", principal: principalFixture(createdUser.String())})
-	payload := `{"name":"RP","callback_urls":["https://rp.example/callback"],"is_public":false}`
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, signInRequest(http.MethodPost, clientsAPIPrefix+"/", payload))
-	require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body.String())
-
-	var envelope struct {
-		Data map[string]any `json:"data"`
-	}
-	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &envelope))
-	clientID, _ := envelope.Data["id"].(string)
-	secret, _ := envelope.Data["client_secret"].(string)
-	require.NotEmpty(t, clientID)
-	require.NotEmpty(t, secret, "raw secret is returned exactly once")
-
-	// GET never returns the raw secret.
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, signInRequest(http.MethodGet, clientsAPIPrefix+"/"+clientID, ""))
-	require.Equal(t, http.StatusOK, rec.Code)
-	var fetched struct {
-		Data map[string]any `json:"data"`
-	}
-	require.NoError(t, jsonv2.Unmarshal(rec.Body.Bytes(), &fetched))
-	assert.NotContains(t, fetched.Data, "client_secret")
-	assert.Equal(t, true, fetched.Data["has_secret"])
-
-	// The presented secret authenticates token requests.
-	req := httptest.NewRequest(http.MethodPost, tokenAPIPath, strings.NewReader(url.Values{
-		"grant_type": {"refresh_token"},
-	}.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth(clientID, secret)
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	assert.Equal(t, http.StatusBadRequest, rec.Code, "invalid_grant, not invalid_client — auth passed")
 }

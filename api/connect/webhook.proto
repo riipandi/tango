@@ -1,0 +1,112 @@
+// Webhook RPCs: endpoint registration, secret lifecycle, and delivery
+// inspection. Outbound webhook delivery (HMAC signature, retries,
+// canonical body) remains a plain HTTP contract at the receiver.
+syntax = "proto3";
+
+package tango.webhook.v1;
+
+import "common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/webhook/v1;webhookv1";
+
+// Webhook is one registered endpoint. The plaintext signing secret is
+// present only in create and rotate responses, exactly once.
+message Webhook {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  string endpoint = 4;
+  string method = 5;
+  map<string, string> headers = 6;
+  bool enabled = 7;
+  repeated string event_types = 8;
+  optional string secret = 9;
+  string created_at = 10;
+  optional string updated_at = 11;
+}
+
+// Delivery is one outbound delivery attempt record.
+message Delivery {
+  string id = 1;
+  optional string webhook_id = 2;
+  optional string event = 3;
+  optional int32 http_status = 4;
+  optional google.protobuf.Struct response = 5;
+  int32 attempts = 6;
+  bool succeeded = 7;
+  optional string error = 8;
+  string created_at = 9;
+  optional string delivered_at = 10;
+}
+
+// WebhookService administers endpoints and reads deliveries.
+service WebhookService {
+  rpc List(common.v1.PageRequest) returns (ListWebhooksResponse);
+  rpc Create(CreateWebhookRequest) returns (Webhook);
+  rpc Get(GetWebhookRequest) returns (Webhook);
+  rpc Update(UpdateWebhookRequest) returns (Webhook);
+  rpc Delete(DeleteWebhookRequest) returns (google.protobuf.Empty);
+  rpc RotateSecret(GetWebhookRequest) returns (RotateSecretResponse);
+  rpc Test(TestWebhookRequest) returns (TestWebhookResponse);
+  rpc ListDeliveries(ListDeliveriesRequest) returns (ListDeliveriesResponse);
+  rpc ListAllDeliveries(common.v1.PageRequest) returns (ListDeliveriesResponse);
+}
+
+message ListWebhooksResponse {
+  repeated Webhook webhooks = 1;
+  common.v1.ResponseMetadata metadata = 2;
+}
+
+message CreateWebhookRequest {
+  string name = 1;
+  optional string description = 2;
+  string endpoint = 3;
+  optional string method = 4;
+  map<string, string> headers = 5;
+  optional bool enabled = 6;
+  repeated string event_types = 7;
+}
+
+message GetWebhookRequest {
+  string id = 1;
+}
+
+message UpdateWebhookRequest {
+  string id = 1;
+  optional string name = 2;
+  optional string description = 3;
+  optional string endpoint = 4;
+  optional string method = 5;
+  map<string, string> headers = 6;
+  optional bool enabled = 7;
+  repeated string event_types = 8;
+}
+
+message DeleteWebhookRequest {
+  string id = 1;
+}
+
+// RotateSecretResponse carries the new signing secret exactly once.
+message RotateSecretResponse {
+  string secret = 1;
+}
+
+message TestWebhookRequest {
+  string id = 1;
+}
+
+message TestWebhookResponse {
+  string delivery_id = 1;
+}
+
+message ListDeliveriesRequest {
+  string webhook_id = 1;
+  common.v1.PageRequest page = 2;
+}
+
+message ListDeliveriesResponse {
+  repeated Delivery deliveries = 1;
+  common.v1.ResponseMetadata metadata = 2;
+}

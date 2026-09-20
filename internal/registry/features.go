@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/admin/apiaccess"
@@ -61,27 +63,26 @@ func withAPIKeys(deps Deps, sessions *session.Service, audit *auditlog.Module) *
 }
 
 // withWebAuthn builds the passkey feature.
-func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service) identity.APIFeature {
+func withWebAuthn(deps Deps, audit *auditlog.Module, sessions *session.Service) (identity.APIFeature, *webauthn.Service) {
 	appURL := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service, err := webauthn.NewService(
 		webauthn.NewPostgresStore(deps.DB),
 		user.NewPostgresStore(deps.DB),
 		func(ctx context.Context, userID user.UserID) (string, error) {
-			return sessions.IssueForUser(ctx, userID, "passkey", session.Meta{})
+			token, _, err := sessions.IssueForUser(ctx, userID, "passkey", session.Meta{})
+			return token, err
 		},
 		appURL,
 		auditAdapter(audit),
-		webauthn.WithCookieSecure(deps.Config.App.Mode != "development"),
-		webauthn.WithCookieName(session.CookieName),
 	)
 	if err != nil {
 		panic("registry: webauthn init: " + err.Error())
 	}
-	return webauthn.New(service)
+	return webauthn.New(service), service
 }
 
 // newWebhookModule builds the webhook service and queue processor.
-func newWebhookModule(deps Deps, queueClient *queue.Client, guard func(http.Handler) http.Handler) *webhook.Module {
+func newWebhookModule(deps Deps, queueClient *queue.Client) *webhook.Module {
 	service := webhook.NewService(
 		webhook.NewPostgresStore(deps.DB),
 		deps.DB,
@@ -91,7 +92,7 @@ func newWebhookModule(deps Deps, queueClient *queue.Client, guard func(http.Hand
 		webhook.WithSender(webhook.NewFetcherSender(deps.Fetcher)),
 	)
 	service.RegisterQueue(queueClient)
-	return webhook.New(service, webhook.WithGuard(guard))
+	return webhook.New(service)
 }
 
 // secretCipher derives the AES-256 key used to seal module secrets.
@@ -121,17 +122,17 @@ func registerRecurringJobs(deps Deps, reg *jobs.Registry, feed *jobs.VersionFeed
 // audit module second (its guards need sessions), then the guarded
 // features. It also returns the session service, route groups, and
 // API-access store shared with the federation surface.
-func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Recorder) (*identity.Module, identity.RouteGroups, *session.Service, *auditlog.Module, *apiaccess.PostgresStore, storage.Store, error) {
+func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Recorder, keys *jwks.Service) (*identity.Module, identity.RouteGroups, *session.Service, *auditlog.Module, *apiaccess.PostgresStore, *apikey.Service, storage.Store, error) {
 	hasher := crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmScrypt)
 
 	// Share one blob backend across images and client logos.
 	blobStore, err := storage.New(deps.Config.Storage)
 	if err != nil {
-		return nil, identity.RouteGroups{}, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
+		return nil, identity.RouteGroups{}, nil, nil, nil, nil, nil, fmt.Errorf("registry: storage init: %w", err)
 	}
 	bundled, err := storage.SeedBundledImages(context.Background(), blobStore, web.ImagesDir)
 	if err != nil {
-		return nil, identity.RouteGroups{}, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
+		return nil, identity.RouteGroups{}, nil, nil, nil, nil, nil, fmt.Errorf("registry: bundled images init: %w", err)
 	}
 
 	passwords := password.NewService(password.NewPostgresStore(deps.DB), hasher, recorder)
@@ -156,12 +157,16 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		user.NewPostgresStore(deps.DB),
 		recorder,
 		session.WithLifetime(time.Duration(deps.Config.Auth.SessionLifetime)*time.Second),
-		session.WithCookieSecure(deps.Config.App.Mode != "development"),
+		session.WithShortLifetime(time.Duration(deps.Config.Auth.SessionShortLifetime)*time.Second),
 		session.WithMFAPort(totpService),
+		session.WithAccessTokens(session.NewAccessTokenSigner(
+			jwtutils.NewCachedKeyProvider(keys, jwks.CacheTTL),
+			session.WithAccessTokenTTL(seconds(deps.Config.Auth.AccessTokenExpiry)),
+		)),
 	)
 	totpService.BindSessions(sessions)
 
-	auth := middleware.RequireAuth(sessions, session.CookieName)
+	auth := middleware.RequireAuth(sessions)
 	adminAuth := func(next http.Handler) http.Handler {
 		return auth(middleware.RequireAdmin(next))
 	}
@@ -169,14 +174,14 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 	audit := auditlog.New(
 		auditlog.NewPostgresStore(deps.DB),
 		auditlog.WithAdminGuard(adminAuth),
-		auditlog.WithSelfAuth(sessions, session.CookieName),
+		auditlog.WithSelfAuth(sessions),
 	)
 
 	apiKeys := withAPIKeys(deps, sessions, audit)
 	groups := identity.RouteGroups{
 		Admin:  adminAuth,
 		Self:   auth,
-		APIKey: middleware.RequireAPIKey(apiKeys.Verify),
+		APIKey: middleware.RPCAPIKeyAuth(apiKeys.Verify),
 	}
 
 	core := user.NewService(
@@ -185,19 +190,33 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		user.WithImages(blobStore, defaultPictureProvider(bundled)),
 	)
 
+	groupService := usergroup.NewService(
+		usergroup.NewPostgresStore(deps.DB),
+		recorder,
+		usergroup.WithUserStore(user.NewPostgresStore(deps.DB)),
+	)
+
+	passkeys, webauthnService := withWebAuthn(deps, audit, sessions)
+
+	// The user-core Connect surface binds group memberships and
+	// passkey management through the neutral ports.
+	core.BindRPCPorts(
+		usergroup.NewUserRPCPort(groupService),
+		webauthn.NewUserRPCPort(webauthnService),
+	)
+
 	module := identity.New(
 		core,
 		account.NewService(user.NewPostgresStore(deps.DB), passwords, sessions, recorder),
 		sessions,
-		usergroup.NewService(usergroup.NewPostgresStore(deps.DB), recorder),
+		groupService,
 		customclaim.NewService(customclaim.NewPostgresStore(deps.DB), recorder),
-		withWebAuthn(deps, audit, sessions),
+		passkeys,
 		devicelogin.New(devicelogin.NewService(
 			devicelogin.NewPostgresStore(deps.DB),
 			sessions,
 			user.NewPostgresStore(deps.DB),
 			recorder,
-			devicelogin.WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
 		)),
 		onetimeaccess.New(onetimeaccess.NewService(
 			token.NewStore(deps.DB, token.PurposeOneTimeAccess),
@@ -205,20 +224,20 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 			sessions,
 			recorder,
 			onetimeaccess.WithMail(jobsReg, deps.Config.Public.BaseURL),
-		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
+		)).WithAccessAuthenticator(sessions),
 		emailverification.New(emailverification.NewService(
 			token.NewStore(deps.DB, token.PurposeEmailVerification),
 			emailVerificationAdapter(user.NewPostgresStore(deps.DB)),
 			recorder,
 			emailverification.WithMail(jobsReg, user.NewPostgresStore(deps.DB), deps.Config.Public.BaseURL),
-		)),
+		)).WithAccessAuthenticator(sessions),
 		signup.New(signup.NewService(
 			signup.NewPostgresStore(deps.DB),
 			user.NewPostgresStore(deps.DB),
 			usergroup.NewPostgresStore(deps.DB),
 			sessions,
 			recorder,
-		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
+		)).WithAccessAuthenticator(sessions),
 		apiaccess.NewService(apiaccess.NewPostgresStore(deps.DB), recorder),
 		apiKeys,
 		recovery.NewFeature(recovery.New(
@@ -229,31 +248,41 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 			hasher,
 			recorder,
 			recovery.WithMail(jobsReg, deps.Config.Public.BaseURL),
-		)).WithCookie(session.CookieName, deps.Config.App.Mode != "development"),
-		totp.NewFeature(totpService).WithCookie(deps.Config.App.Mode != "development"),
+		)),
+		totp.NewFeature(totpService).WithAccessAuthenticator(sessions),
 	)
 
-	return module, groups, sessions, audit, apiaccess.NewPostgresStore(deps.DB), blobStore, nil
+	return module, groups, sessions, audit, apiaccess.NewPostgresStore(deps.DB), apiKeys, blobStore, nil
 }
 
 // withOIDC builds the OIDC provider feature.
-func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore, appconfigModule *appconfig.Module) federation.ProviderFeature {
+func withOIDC(deps Deps, audit *auditlog.Module, keys *jwks.Service, sessions *session.Service, apiAccess *apiaccess.PostgresStore, images oidc.ClientImageStore, appconfigModule *appconfig.Module, scimBinding func(context.Context, string) (*oidc.ScimBinding, error)) federation.ProviderFeature {
 	issuer := strings.TrimRight(deps.Config.Public.BaseURL, "/")
 	service := oidc.NewService(
 		oidc.NewPostgresStore(deps.DB),
 		jwtutils.NewCachedKeyProvider(keys, jwks.CacheTTL),
 		issuer,
-		session.CookieName,
 		oidc.WithAudit(federationAuditAdapter(audit)),
-		oidc.WithAuthenticator(sessions),
 		oidc.WithAPIAccess(apiAccess),
 		oidc.WithImages(images),
 		oidc.WithMetadataFetcher(deps.Fetcher),
 		oidc.WithCIMDAllowlist(cimdAllowlistGetter(appconfigModule)),
-		oidc.WithCookieSecure(deps.Config.App.Mode != "development"),
+		oidc.WithScimBinding(scimBinding),
+		oidc.WithAccessAuthenticator(sessions),
+		oidc.WithLifetimes(oidc.Lifetimes{
+			AccessToken:       seconds(deps.Config.OIDC.AccessTokenExpiry),
+			RefreshToken:      seconds(deps.Config.OIDC.RefreshTokenExpiry),
+			AuthorizationCode: seconds(deps.Config.OIDC.AuthorizationCodeExpiry),
+			Interaction:       seconds(deps.Config.OIDC.InteractionExpiry),
+			DeviceCode:        seconds(deps.Config.OIDC.DeviceCodeExpiry),
+			PAR:               seconds(deps.Config.OIDC.PARExpiry),
+		}),
 	)
 	return oidc.New(service)
 }
+
+// seconds converts a configured second count to a duration.
+func seconds(v int) time.Duration { return time.Duration(v) * time.Second }
 
 // cimdAllowlistGetter returns the configured CIMD URL allowlist.
 func cimdAllowlistGetter(module *appconfig.Module) func() []string {
@@ -297,8 +326,9 @@ func emailVerificationAdapter(users user.Store) emailverification.Verifier {
 	return emailVerificationVerifier{users: users}
 }
 
-// withSCIMSync builds the SCIM provisioning feature.
-func withSCIMSync(deps Deps) federation.APIFeature {
+// withSCIMSync builds the SCIM provisioning feature; the store rides
+// along for the OIDC client surface's per-client binding lookup.
+func withSCIMSync(deps Deps) (federation.RPCServiceProvider, *scimsync.PostgresStore) {
 	cipherKey := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
 	cipher, err := crypto.NewCipher(cipherKey[:])
 	if err != nil {
@@ -307,7 +337,32 @@ func withSCIMSync(deps Deps) federation.APIFeature {
 	store := scimsync.NewPostgresStore(deps.DB, cipher)
 	source := scimsync.NewIdentitySnapshotSource(deps.DB)
 	service := scimsync.NewService(store, source, newSCIMPoster(), logger.Slog(deps.Logger))
-	return scimsync.New(service)
+	return scimsync.New(service), store
+}
+
+// scimBindingLookup adapts the scimsync store onto the oidc
+// GetScimProvider port; store sentinels map onto Connect codes.
+func scimBindingLookup(store *scimsync.PostgresStore) func(context.Context, string) (*oidc.ScimBinding, error) {
+	return func(ctx context.Context, clientID string) (*oidc.ScimBinding, error) {
+		p, err := store.GetByClient(ctx, clientID)
+		if err != nil {
+			switch {
+			case errors.Is(err, scimsync.ErrNotFound):
+				return nil, rpcerr.NotFound("scim service provider not found")
+			case errors.Is(err, scimsync.ErrUnknownClient):
+				return nil, rpcerr.InvalidArgument("unknown oidc client")
+			default:
+				return nil, rpcerr.Internal("internal error")
+			}
+		}
+		return &oidc.ScimBinding{
+			ID:           p.ID.String(),
+			Endpoint:     p.Endpoint,
+			OIDCClientID: p.OIDCClientID,
+			LastSyncedAt: p.LastSyncedAt,
+			CreatedAt:    p.CreatedAt,
+		}, nil
+	}
 }
 
 // scimPoster executes outbound SCIM requests over net/http; the

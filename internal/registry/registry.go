@@ -3,7 +3,6 @@ package registry
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"time"
@@ -20,13 +19,15 @@ import (
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/admin/apikey"
 	"github.com/riipandi/tango/modules/admin/appconfig"
 	"github.com/riipandi/tango/modules/admin/auditlog"
 	"github.com/riipandi/tango/modules/federation"
 	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/webhook"
-	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -63,6 +64,13 @@ type Runtime struct {
 	// Route groups shared by the identity and federation surfaces.
 	identityGroups   identity.RouteGroups
 	federationGroups federation.RouteGroups
+
+	// sessions backs the RPC bearer authentication contract.
+	sessions *session.Service
+
+	// apiKeys resolves X-API-KEY machine credentials for the admin
+	// RPC surface.
+	apiKeys *apikey.Service
 }
 
 // New builds the runtime in registration order.
@@ -87,7 +95,7 @@ func New(deps Deps) (*Runtime, error) {
 	rt.Queue = queue.New(queueClient)
 
 	// Register email and maintenance consumers; the version feed
-	// supplies /api/version/latest.
+	// supplies VersionService.Latest over /rpc.
 	feed := newVersionFeed(deps)
 	rt.Jobs = jobs.NewRegistry(queueClient, deps.Mailer, deps.Logger, feed)
 
@@ -96,37 +104,34 @@ func New(deps Deps) (*Runtime, error) {
 	events := NewEventFanout(deps.Logger)
 	recorder := events.Recorder()
 
+	// The JWKS key service backs both the federation surface and the
+	// internal access-token signer.
+	keyService := newKeyService(deps)
+
 	// Register identity features: sessions first, then the audit
 	// module (its guards need sessions), then the guarded features.
-	idModule, groups, sessions, auditLog, apiAccess, blobStore, err := newIdentityFeatures(deps, rt.Jobs, recorder)
+	idModule, groups, sessions, auditLog, apiAccess, apiKeys, blobStore, err := newIdentityFeatures(deps, rt.Jobs, recorder, keyService)
 	if err != nil {
 		return nil, err
 	}
 	rt.Identity = idModule
+	rt.sessions = sessions
+	rt.apiKeys = apiKeys
 	rt.AuditLog = auditLog
 	events.audit = rt.AuditLog
 
 	// Register outbound webhooks.
-	rt.Webhook = newWebhookModule(deps, queueClient, groups.Admin)
+	rt.Webhook = newWebhookModule(deps, queueClient)
 	events.webhook = rt.Webhook
 
-	// Register application configuration. The settings cipher shares
-	// the Auth.SecretKey derivation with the other seal holders.
-	settingsCipherKey := sha256.Sum256([]byte(deps.Config.Auth.SecretKey))
-	settingsCipher, err := crypto.NewCipher(settingsCipherKey[:])
-	if err != nil {
-		return nil, err
-	}
-	rt.AppConfig = appconfig.New(rt.Jobs, appconfig.WithGuard(groups.Admin)).
-		WithStore(appconfig.NewPostgresStore(deps.DB)).
-		WithEnvDefaults(appconfig.EnvDefaults(deps.Config)).
-		WithCipher(settingsCipher)
+	rt.AppConfig = appconfig.New(rt.Jobs).
+		WithStore(appconfig.NewPostgresStore(deps.DB))
 
 	// Register the identity provider surface.
-	keyService := newKeyService(deps)
+	scimFeature, scimStore := withSCIMSync(deps)
 	rt.Federation = federation.New(
-		withOIDC(deps, rt.AuditLog, keyService, sessions, apiAccess, blobStore, rt.AppConfig),
-		withSCIMSync(deps),
+		withOIDC(deps, rt.AuditLog, keyService, sessions, apiAccess, blobStore, rt.AppConfig, scimBindingLookup(scimStore)),
+		scimFeature,
 		keyService,
 		withDiscovery(deps, keyService),
 	)
@@ -147,20 +152,121 @@ func (rt *Runtime) MountRoot(r chi.Router) {
 	rt.Federation.Routes(r)
 }
 
-// SessionGuard returns the identity session guard for transport
-// routes upstream serves to any signed-in user.
-func (rt *Runtime) SessionGuard() kernel.Guard {
-	return rt.identityGroups.Self
+// SessionAuthenticator exposes the session resolver for the RPC
+// bearer contract: `Authorization: Bearer <access-token>` resolves
+// through the same store the cookie session uses.
+func (rt *Runtime) SessionAuthenticator() kernel.AccessAuthenticator {
+	return rt.sessions
 }
 
-// MountAPI mounts API routes in registration order.
+// MountRPC registers module-owned Connect services into the shared
+// /rpc handler tree. Registration order mirrors MountAPI.
+func (rt *Runtime) MountRPC(r chi.Router) {
+	auth := rt.SessionAuthenticator()
+	// Machine clients (X-API-KEY) reach the admin application API
+	// only: the chain resolves the credential into a principal before
+	// the guard runs and passes keyless requests through to the bearer
+	// path. Self-service and credential-lifecycle surfaces stay
+	// session-only, so a leaked key cannot rotate its owner's password
+	// or edit its owner's profile.
+	machine := middleware.RPCAPIKeyAuth(rt.apiKeys.Verify)
+
+	// Users: the surface mixes admin CRUD with self-service profile
+	// procedures, so the guard is per procedure inside the handler —
+	// and a machine credential is refused on the self procedures.
+	userPrefix, userHandler := rt.Identity.UserRPCService(auth)
+	r.Handle(userPrefix+"*", machine(userHandler))
+
+	// Groups: the whole surface is admin-only.
+	groupPrefix, groupHandler := rt.Identity.GroupRPCService()
+	r.Handle(groupPrefix+"*", machine(middleware.RPCAdminGuard(auth)(groupHandler)))
+
+	// Account: every procedure is self-service and session-only.
+	accountPrefix, accountHandler := rt.Identity.AccountRPCService()
+	r.Handle(accountPrefix+"*", middleware.RPCPrincipalAuth(auth)(accountHandler))
+
+	// API keys: session-authenticated and scoped to the caller. A
+	// machine credential may list and revoke its own keys, but minting
+	// or renewing demands a session so a leaked key cannot extend
+	// itself.
+	keyPrefix, keyHandler := rt.Identity.APIKeyRPCService()
+	r.Handle(keyPrefix+"*", machine(middleware.RPCPrincipalAuth(auth)(keyHandler)))
+
+	// Authentication lifecycle: the service mixes a public method
+	// (SignIn) with protected ones and guards its own procedures.
+	authPrefix, authHandler := rt.sessions.RPCService()
+	r.Handle(authPrefix+"*", authHandler)
+
+	// Signup: anonymous procedures plus admin token administration —
+	// the service resolves the principal per protected procedure.
+	signupPrefix, signupHandler := rt.Identity.SignupRPCService()
+	r.Handle(signupPrefix+"*", machine(signupHandler))
+
+	// MFA: the pending verification is anonymous (cookie credential);
+	// the lifecycle procedures resolve the bearer per procedure.
+	mfaPrefix, mfaHandler := rt.Identity.MfaRPCService()
+	r.Handle(mfaPrefix+"*", mfaHandler)
+
+	// One-time access: the anonymous email request plus admin minting
+	// and delivery, guarded per procedure. Minting and delivery stay
+	// session-only: they act on another account.
+	otaPrefix, otaHandler := rt.Identity.OneTimeAccessRPCService()
+	r.Handle(otaPrefix+"*", otaHandler)
+
+	// Email verification: every procedure is self-service and
+	// session-only.
+	emailvPrefix, emailvHandler := rt.Identity.EmailVerificationRPCService()
+	r.Handle(emailvPrefix+"*", middleware.RPCPrincipalAuth(auth)(emailvHandler))
+
+	// API registry: admin-only CRUD plus client grants.
+	apiPrefix, apiHandler := rt.Identity.APIAccessRPCService()
+	r.Handle(apiPrefix+"*", machine(middleware.RPCAdminGuard(auth)(apiHandler)))
+
+	// Custom claims: admin-only surface.
+	claimsPrefix, claimsHandler := rt.Identity.CustomClaimRPCService()
+	r.Handle(claimsPrefix+"*", machine(middleware.RPCAdminGuard(auth)(claimsHandler)))
+
+	// Audit logs: the self listing is any principal; the admin
+	// listing and filter facets guard per procedure.
+	auditPrefix, auditHandler := rt.AuditLog.RPCService(auth)
+	r.Handle(auditPrefix+"*", machine(auditHandler))
+
+	// Application configuration: reads, updates, and the test email
+	// are admin-only; the public bootstrap view is anonymous.
+	cfgPrefix, cfgHandler := rt.AppConfig.RPCService(auth)
+	r.Handle(cfgPrefix+"*", machine(cfgHandler))
+
+	// OIDC client administration: admin-only.
+	ocPrefix, ocHandler := rt.Federation.ClientRPCService()
+	r.Handle(ocPrefix+"*", machine(middleware.RPCAdminGuard(auth)(ocHandler)))
+
+	// Consents: self-service listing/revocation plus the admin-wide
+	// views — the per-procedure guard rides the handler.
+	consentPrefix, consentHandler := rt.Federation.ConsentRPCService()
+	r.Handle(consentPrefix+"*", machine(consentHandler))
+
+	// SCIM provider configuration: admin-only.
+	scimPrefix, scimHandler := rt.Federation.ScimRPCService()
+	r.Handle(scimPrefix+"*", machine(middleware.RPCAdminGuard(auth)(scimHandler)))
+
+	// Webhooks: admin-only registration and delivery inspection.
+	hookPrefix, hookHandler := rt.Webhook.RPCService()
+	r.Handle(hookPrefix+"*", machine(middleware.RPCAdminGuard(auth)(hookHandler)))
+
+	// Device approval: both procedures demand a signed-in principal.
+	// The browser ceremony never accepts a machine credential.
+	approvalPrefix, approvalHandler := rt.Identity.DeviceApprovalRPCService()
+	r.Handle(approvalPrefix+"*", middleware.RPCSessionAuth(auth)(approvalHandler))
+}
+
+// MountAPI mounts API routes in registration order. The webhook and
+// appconfig admin surfaces serve ConnectRPC exclusively; the appconfig
+// public bootstrap view is the retained REST read.
 func (rt *Runtime) MountAPI(api chi.Router) {
 	api.NotFound(responder.NotFoundJSON)
 	api.MethodNotAllowed(responder.MethodNotAllowedJSON)
 
-	rt.AuditLog.APIRoutes(api)
 	rt.Identity.APIRoutes(api, rt.identityGroups)
-	rt.Webhook.APIRoutes(api)
 	rt.AppConfig.APIRoutes(api)
 	rt.Federation.APIRoutes(api, rt.federationGroups)
 }

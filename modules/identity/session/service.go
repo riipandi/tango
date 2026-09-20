@@ -22,9 +22,10 @@ type Service struct {
 	users    user.Store
 
 	lifetime time.Duration
-	// cookieSecure marks the session cookie Secure (HTTPS-only);
-	// development runs over plain HTTP.
-	cookieSecure bool
+	// shortLifetime bounds a session issued without "remember me".
+	// The sliding refresh and rotation reuse the session's own mode,
+	// so an active short session is never promoted to the long one.
+	shortLifetime time.Duration
 	// now is overridable in tests; production uses time.Now.
 	now func() time.Time
 
@@ -32,6 +33,9 @@ type Service struct {
 	// mfa is the optional second-factor port: a confirmed enrollment
 	// turns a password sign-in into a pending authentication.
 	mfa identity.MFAPendingIssuer
+	// tokens mints the internal access JWTs for the RPC bearer
+	// bridge; nil in stores-only constructions (tests).
+	tokens *AccessTokenSigner
 }
 
 // Verifier checks an identity + secret pair. Implemented by the
@@ -42,6 +46,9 @@ type Verifier interface {
 
 // Default session lifetime when none is configured.
 const defaultLifetime = 30 * 24 * time.Hour
+
+// Default lifetime for a session issued without "remember me".
+const defaultShortLifetime = 12 * time.Hour
 
 // ServiceOption configures the session service.
 type ServiceOption func(*Service)
@@ -64,9 +71,10 @@ func WithLifetime(d time.Duration) ServiceOption {
 	return func(s *Service) { s.lifetime = d }
 }
 
-// WithCookieSecure toggles the Secure cookie flag.
-func WithCookieSecure(secure bool) ServiceOption {
-	return func(s *Service) { s.cookieSecure = secure }
+// WithShortLifetime sets the lifetime of a session issued without
+// "remember me". It must not exceed the lifetime set by WithLifetime.
+func WithShortLifetime(d time.Duration) ServiceOption {
+	return func(s *Service) { s.shortLifetime = d }
 }
 
 // WithClock overrides the service clock (tests).
@@ -74,15 +82,22 @@ func WithClock(now func() time.Time) ServiceOption {
 	return func(s *Service) { s.now = now }
 }
 
+// WithAccessTokens wires the internal access-token signer; required
+// for the RPC bearer bridge and the Connect handlers.
+func WithAccessTokens(signer *AccessTokenSigner) ServiceOption {
+	return func(s *Service) { s.tokens = signer }
+}
+
 // NewService builds the session feature.
 func NewService(store Store, verifier Verifier, users user.Store, recorder identity.Recorder, opts ...ServiceOption) *Service {
 	s := &Service{
-		store:    store,
-		verifier: verifier,
-		users:    users,
-		lifetime: defaultLifetime,
-		now:      time.Now,
-		recorder: recorder,
+		store:         store,
+		verifier:      verifier,
+		users:         users,
+		lifetime:      defaultLifetime,
+		shortLifetime: defaultShortLifetime,
+		now:           time.Now,
+		recorder:      recorder,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -125,7 +140,7 @@ func (s *Service) SignInWithPending(ctx context.Context, identityText, secret st
 			return SignInWithPendingResult{}, requiredErr
 		}
 		if required {
-			pendingToken, pendingErr := s.mfa.CreatePending(ctx, u.ID.String())
+			pendingToken, pendingErr := s.mfa.CreatePending(ctx, u.ID.String(), meta.Remember)
 			if pendingErr != nil {
 				return SignInWithPendingResult{}, pendingErr
 			}
@@ -159,26 +174,25 @@ func (s *Service) SignIn(ctx context.Context, identityText, secret string, meta 
 // ceremony. A confirmed second factor fails these flows closed: the
 // pending bridge belongs to the password sign-in path only, so no
 // provider can bypass MFA.
-func (s *Service) IssueForUser(ctx context.Context, userID user.UserID, provider string, meta Meta) (string, error) {
+func (s *Service) IssueForUser(ctx context.Context, userID user.UserID, provider string, meta Meta) (string, Session, error) {
 	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {
-		return "", fmt.Errorf("session: load user: %w", err)
+		return "", Session{}, fmt.Errorf("session: load user: %w", err)
 	}
 	if u.Disabled {
-		return "", fmt.Errorf("session: %w: user is disabled", ErrInvalidCredentials)
+		return "", Session{}, fmt.Errorf("session: %w: user is disabled", ErrInvalidCredentials)
 	}
 	if s.mfa != nil && provider != "totp" {
 		required, requiredErr := s.mfa.RequiresPending(ctx, u.ID.String())
 		if requiredErr != nil {
-			return "", requiredErr
+			return "", Session{}, requiredErr
 		}
 		if required {
-			return "", fmt.Errorf("session: %w: second factor required", ErrInvalidCredentials)
+			return "", Session{}, fmt.Errorf("session: %w: second factor required", ErrInvalidCredentials)
 		}
 	}
 
-	token, _, err := s.issueSession(ctx, u, provider, meta)
-	return token, err
+	return s.issueSession(ctx, u, provider, meta)
 }
 
 // issueSession creates the session row + audit trail; returns the
@@ -195,7 +209,8 @@ func (s *Service) issueSession(ctx context.Context, u user.User, provider string
 		UserID:    u.ID,
 		Provider:  provider,
 		TokenHash: hashToken(token),
-		ExpiresAt: now.Add(s.lifetime),
+		ExpiresAt: now.Add(s.lifetimeFor(meta.Remember)),
+		Remember:  meta.Remember,
 	}
 	applyMeta(&se, meta)
 
@@ -222,9 +237,11 @@ func (s *Service) Resolve(ctx context.Context, token string) (user.User, Session
 	}
 
 	// Sliding expiry: refresh once past half-life so active sessions
-	// never expire mid-use.
-	if remaining := time.Until(se.ExpiresAt); remaining < s.lifetime/2 {
-		expiresAt := s.now().Add(s.lifetime)
+	// never expire mid-use. The window follows the session's own
+	// remember mode, so refreshing never lengthens a short session.
+	lifetime := s.lifetimeFor(se.Remember)
+	if remaining := time.Until(se.ExpiresAt); remaining < lifetime/2 {
+		expiresAt := s.now().Add(lifetime)
 		if err := s.store.Touch(ctx, se.ID, expiresAt); err != nil {
 			return user.User{}, Session{}, err
 		}
@@ -261,6 +278,61 @@ func (s *Service) RevokeAllForUser(ctx context.Context, userID user.UserID, keep
 	return s.store.RevokeAllForUser(ctx, userID, keepID)
 }
 
+// Rotate issues the next refresh token for a live session: the new
+// token replaces the hash and restarts the sliding expiry, so the
+// previous token stops resolving immediately.
+func (s *Service) Rotate(ctx context.Context, se Session) (string, Session, error) {
+	token, err := newToken()
+	if err != nil {
+		return "", Session{}, fmt.Errorf("session: token: %w", err)
+	}
+	expiresAt := s.now().Add(s.lifetimeFor(se.Remember))
+	if err := s.store.Rotate(ctx, se.ID, hashToken(token), expiresAt); err != nil {
+		return "", Session{}, err
+	}
+	se.TokenHash = hashToken(token)
+	se.ExpiresAt = expiresAt
+	return token, se, nil
+}
+
+// IssueAccess mints the RPC bearer JWT for a live session.
+func (s *Service) IssueAccess(ctx context.Context, p kernel.Principal) (string, time.Time, error) {
+	if s.tokens == nil {
+		return "", time.Time{}, errors.New("session: access tokens not configured")
+	}
+	return s.tokens.Issue(ctx, p)
+}
+
+// ResolveAccess verifies an RPC bearer access token: signature,
+// issuer, audience, and expiry first, then the owning session — so
+// a revoked or expired session cannot ride out the token TTL.
+func (s *Service) ResolveAccess(ctx context.Context, token string) (kernel.Principal, error) {
+	if s.tokens == nil {
+		return kernel.Principal{}, errors.New("session: access tokens not configured")
+	}
+	verified, err := s.tokens.Verify(ctx, token)
+	if err != nil {
+		return kernel.Principal{}, err
+	}
+
+	se, u, err := s.store.ValidByID(ctx, verified.Private.SessionID)
+	if err != nil {
+		return kernel.Principal{}, err
+	}
+	if u.Disabled {
+		return kernel.Principal{}, ErrInvalidCredentials
+	}
+
+	return kernel.Principal{
+		SessionID: se.ID,
+		UserID:    u.ID.String(),
+		Username:  u.Username,
+		Email:     u.Email,
+		Provider:  se.Provider,
+		IsAdmin:   u.IsAdmin,
+	}, nil
+}
+
 // ResolveSession implements kernel.Authenticator: cookie token
 // in, transport principal out.
 func (s *Service) ResolveSession(ctx context.Context, token string) (kernel.Principal, error) {
@@ -294,6 +366,17 @@ func hashToken(token string) string {
 }
 
 // applyMeta copies optional sign-in context, empty → NULL.
+// lifetimeFor returns the session duration for the requested mode.
+func (s *Service) lifetimeFor(remember bool) time.Duration {
+	if remember {
+		return s.lifetime
+	}
+	if s.shortLifetime > 0 {
+		return s.shortLifetime
+	}
+	return defaultShortLifetime
+}
+
 func applyMeta(se *Session, meta Meta) {
 	if meta.UserAgent != "" {
 		se.UserAgent = &meta.UserAgent

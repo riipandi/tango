@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-09-18
+status: done
+updated: 2026-09-19
 ---
 
 # ConnectRPC Architecture Refactor Plan
@@ -43,6 +43,9 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
   encoding, redirects, Basic authentication, or bare protocol errors.
 - First-party application RPCs authenticate with `Authorization: Bearer <access-token>`. Cookies
   are storage for the access and refresh tokens, not the primary RPC authentication transport.
+- Machine clients authenticate the admin application API with `X-API-KEY`; the credential is
+  resolved into the same principal shape as a browser bearer, and API key self-management
+  (create/renew) stays session-only so a leaked key cannot extend itself.
 - The browser token lifecycle is handled by a dedicated web worker. The implementation must resolve
   the browser security boundary before coding: web workers cannot read `HttpOnly` cookies, so the
   plan must not assume that a worker can extract tokens from secure cookies.
@@ -52,11 +55,14 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
 - Internal application access/refresh tokens are distinct from OAuth/OIDC tokens issued to external
   relying parties. The OIDC protocol contract and its bearer/form/Basic authentication rules remain
   unchanged.
-- The gRPC transport path is a separate decision from the Connect protocol path. A successful
-  HTTP/1.1 Connect request does not prove that Yaak gRPC requests work.
+- The Connect Protocol is the canonical `/rpc` wire protocol. It uses ordinary HTTP semantics and
+  does not require gRPC framing or HTTP/2 for unary RPCs.
+- Native gRPC compatibility is optional and must not drive the primary browser, Vite, Nginx, or Yaak
+  design. If streaming or external gRPC clients are later required, verify that transport separately.
 - HTTPS proxy validation must cover the Nginx paths in `compose.yaml`: `3443` through Vite and
-  `8443` directly to the Go server. gRPC requires an explicitly verified HTTP/2 forwarding path.
-- The Vite and Nginx paths must forward `Authorization` and relevant Connect/gRPC metadata without
+  `8443` directly to the Go server. Unary Connect Protocol requests must work through HTTP/1.1;
+  HTTP/2 is required only for Connect streaming modes or separately supported gRPC compatibility.
+- The Vite and Nginx paths must forward `Authorization` and relevant Connect metadata without
   falling back to cookie authentication for RPCs.
 - Development/test reflection is allowed only under an explicit policy; production reflection must
   be disabled or access-controlled.
@@ -84,11 +90,11 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
 - Preserve the existing module boundaries: `identity`, `federation`, `admin`, and `webhook`.
 - Define every Connect service and RPC method before implementation. The old REST path is a
   migration reference, not the canonical ConnectRPC contract.
-- Treat Yaak requests as executable contract evidence. Create, update, and send REST and gRPC
+- Treat Yaak requests as executable contract evidence. Create, update, and send REST and Connect Protocol
   requests through the Yaak MCP integration; never edit exported Yaak request files manually.
-- ConnectRPC endpoints may be tested through Yaak's gRPC request support when the server exposes
-  the gRPC protocol. If the correct Connect, gRPC, or gRPC-Web transport is unclear, consult the
-  official ConnectRPC documentation before choosing the Yaak request type or content type.
+- ConnectRPC endpoints must be tested through Yaak as Connect Protocol HTTP requests. If a request
+  involves streaming or optional gRPC compatibility and the transport is unclear, consult the
+  official Connect Protocol documentation before choosing the request type or content type.
 - Each completed phase must be delivered as one atomic conventional commit. The commit includes
   the implementation, generated code, tests, Yaak evidence updates, and documentation for that
   phase; it must not contain unrelated work or a partial phase. Do not push commits unless the
@@ -96,8 +102,26 @@ The authoritative route-by-route decision is in [endpoint-reference.md](./endpoi
 
 ## Completion criteria
 
-The refactor is complete when every endpoint in the reference has an explicit protocol decision,
-all ConnectRPC services have an explicit service/method matrix, generated Go and TypeScript clients, all first-party callers use the
-Connect client, internal REST routes are removed, protocol REST tests remain green, Yaak request
-evidence is current, every phase has its atomic commit, and the full Go, frontend, typecheck, lint,
-format, and verification gates pass.
+The transport refactor is complete. Every criterion below holds at `HEAD`:
+
+- every endpoint in the reference has an explicit protocol decision;
+- every ConnectRPC service has an explicit service/method matrix, pinned by
+  `internal/registry.TestConnectServiceInventory` and `TestRPCMatrixDocumentsEveryProcedure`;
+- generated Go and TypeScript are reproducible from a clean checkout by `task rpc:generate`
+  (gitignored build outputs, never committed);
+- internal REST routes are removed, pinned by `internal/registry.TestRetainedRESTInventory`;
+- protocol REST tests remain green;
+- Yaak request evidence is current;
+- every phase has its atomic commit;
+- the full Go, frontend, typecheck, lint, format, and verification gates pass.
+
+Two criteria are deliberately **not** in scope for this plan:
+
+- **first-party callers use the Connect client** — the SPA does not exist yet (`index.html:97` still
+  comments out the app entry), so there is no caller to migrate. This is carried by the caller
+  migration in the SPA work, not by the transport refactor.
+- **`api/client` wraps the RPC surface** — `api/client` is the REST-only SDK for retained HTTP and
+  protocol endpoints, by decision.
+
+The post-implementation audit of this plan lives in
+[`../remediation-connectrpc/`](../remediation-connectrpc/README.md); its findings are the open work.

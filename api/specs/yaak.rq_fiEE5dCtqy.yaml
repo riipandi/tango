@@ -1,0 +1,50 @@
+type: http_request
+model: http_request
+id: rq_fiEE5dCtqy
+createdAt: 2026-09-19T00:36:25.423311
+updatedAt: 2026-09-19T14:54:55.991983
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_Uf3pbN2b4K
+authentication: {}
+authenticationType: null
+body:
+  text: |-
+    {
+      "endpoint": "https://scim-bench.example/v2",
+      "token": "REPLACE_SCIM_TOKEN",
+      "oidc_client_id": "REPLACE_CLIENT_ID"
+    }
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: Create SCIM service provider
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.ScimProviderService/Upsert
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

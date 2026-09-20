@@ -1,0 +1,49 @@
+type: http_request
+model: http_request
+id: rq_LdVEQTxE6V
+createdAt: 2026-09-19T12:31:46.271298
+updatedAt: 2026-09-19T18:12:13.565479
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_WNyJqCXLvz
+authentication: {}
+authenticationType: null
+body:
+  text: |-
+    {
+      "name": "${[ faker.company.name() ]}",
+      "callback_urls": ["${[ faker.internet.url() ]}/callback"]
+    }
+bodyType: application/json
+description: Name and callback URL are generated per run with Faker, so repeated sends do not collide on the client name.
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: Create OIDC client
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/CreateClient
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

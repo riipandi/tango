@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { ConfigVariableSchema } from '../schemas/appconfig.schema'
 import {
   ForgotPasswordSchema,
   ResetPasswordSchema,
   SessionViewSchema,
   SignInResultSchema,
-  SignInSchema,
-  SignUpSchema
+  SignInSchema
 } from '../schemas/session.schema'
 import {
   AdminUpdateUserSchema,
@@ -15,7 +13,6 @@ import {
   UpdateProfileSchema,
   UserSchema
 } from '../schemas/user.schema'
-import { CreateUserGroupSchema, UserGroupSchema } from '../schemas/usergroup.schema'
 import { WebAuthnBeginSchema, WebAuthnCredentialSchema } from '../schemas/webauthn.schema'
 
 const user = {
@@ -30,7 +27,10 @@ const user = {
 
 describe('schema contracts', () => {
   it('accepts a valid sign-in and rejects missing credentials', () => {
-    expect(SignInSchema.safeParse({ identity: 'abbey', secret: 's3cret' }).success).toBe(true)
+    expect(SignInSchema.safeParse({ identity: 'abbey', password: 's3cret' }).success).toBe(true)
+    expect(
+      SignInSchema.safeParse({ identity: 'abbey', password: 's3cret', remember: true }).success
+    ).toBe(true)
     expect(SignInSchema.safeParse({ identity: 'abbey' }).success).toBe(false)
   })
 
@@ -68,11 +68,7 @@ describe('schema contracts', () => {
     expect(ForgotPasswordSchema.safeParse({ identity: 'abbey' }).success).toBe(true)
   })
 
-  it('validates signup, profile, and password change payloads', () => {
-    expect(SignUpSchema.safeParse({ username: 'abbey', email: 'abbey@tango.local' }).success).toBe(
-      true
-    )
-    expect(SignUpSchema.safeParse({ username: 'abbey', email: 'nope' }).success).toBe(false)
+  it('validates profile and password change payloads', () => {
     expect(UpdateProfileSchema.safeParse({ display_name: 'Abbey R.' }).success).toBe(true)
     expect(
       ChangePasswordSchema.safeParse({ current_password: 'x', new_password: 'short' }).success
@@ -81,16 +77,7 @@ describe('schema contracts', () => {
     expect(AdminUpdateUserSchema.safeParse({ disabled: true }).success).toBe(true)
   })
 
-  it('validates groups, config variables, and webauthn begin payloads', () => {
-    expect(
-      UserGroupSchema.safeParse({ id: 'ug_1', name: 'a', display_name: 'A', created_at: 'x' })
-        .success
-    ).toBe(true)
-    expect(CreateUserGroupSchema.safeParse({ name: 'a' }).success).toBe(false)
-    expect(ConfigVariableSchema.safeParse({ key: 'k', type: 'int', value: '1' }).success).toBe(true)
-    expect(ConfigVariableSchema.safeParse({ key: 'k', type: 'float', value: '1' }).success).toBe(
-      false
-    )
+  it('validates webauthn begin payloads', () => {
     expect(
       WebAuthnBeginSchema.safeParse({ publicKey: { challenge: 'c' }, session_id: 'ws_1' }).success
     ).toBe(true)

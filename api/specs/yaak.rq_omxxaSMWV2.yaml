@@ -1,0 +1,46 @@
+type: http_request
+model: http_request
+id: rq_omxxaSMWV2
+createdAt: 2026-09-18T18:41:27.267187
+updatedAt: 2026-09-19T19:44:16.452602
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_5ohk34DQsY
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '{}'
+bodyType: application/json
+description: List the caller's API keys over /rpc with a valid bearer — 200 with {apiKeys, metadata}.
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: rRTDbEndus
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: jIUKHFdtaQ
+method: POST
+name: List API keys
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiKeyService/List
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

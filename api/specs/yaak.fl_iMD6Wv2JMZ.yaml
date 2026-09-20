@@ -1,0 +1,35 @@
+type: folder
+model: folder
+id: fl_iMD6Wv2JMZ
+createdAt: 2026-09-19T12:04:18.781456
+updatedAt: 2026-09-19T19:50:28.006881
+workspaceId: wk_kBiMYTkhPP
+folderId: null
+authentication:
+  token: ${[ accessToken ]}
+authenticationType: bearer
+description: User group CRUD, members, per-user group assignment
+headers: []
+name: User Groups
+sortPriority: 14000.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

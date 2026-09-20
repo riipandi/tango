@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createApiClient } from '../index'
-import { envelope, errorEnvelope, expectCall, mockFetch } from './helpers'
+import { envelope, expectCall, mockFetch } from './helpers'
 
 const BASE_URL = 'http://localhost:3080'
 
@@ -15,34 +15,6 @@ const user = {
 }
 
 describe('auth module', () => {
-  it('signs in with password and returns the session result', async () => {
-    const { fetchMock, calls } = mockFetch([
-      envelope({ user, session_id: 'st_a', provider: 'password' })
-    ])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    const result = await client.auth.signInWithPassword({ identity: 'abbey', secret: 's3cret' })
-
-    expect(result.provider).toBe('password')
-    const call = expectCall(calls)
-    expect(call.method).toBe('POST')
-    expect(call.path).toBe('/api/auth/sign-in')
-    expect(call.body).toBe(JSON.stringify({ identity: 'abbey', secret: 's3cret' }))
-  })
-
-  it('reads the current session', async () => {
-    const { fetchMock, calls } = mockFetch([
-      envelope({ user, session_id: 'st_a', provider: 'password' })
-    ])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    const result = await client.auth.getSession()
-
-    expect(result.user.id).toBe('user_01j')
-    expect(expectCall(calls).method).toBe('GET')
-    expect(expectCall(calls).path).toBe('/api/auth/session')
-  })
-
   it('signs out with POST', async () => {
     const { fetchMock, calls } = mockFetch([envelope(null)])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
@@ -64,80 +36,6 @@ describe('auth module', () => {
     const reset = expectCall(calls, 1)
     expect(reset.path).toBe('/api/auth/reset-password')
     expect(reset.body).toBe(JSON.stringify({ token: 'rt_1', new_password: 'n3wS3cret' }))
-  })
-
-  it('signs up and bootstraps the first admin', async () => {
-    const { fetchMock, calls } = mockFetch([envelope(user, {}, 201), envelope(user, {}, 201)])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-    const params = { username: 'abbey', email: 'abbey@tango.local' }
-
-    await expect(client.auth.signUp(params)).resolves.toMatchObject({ username: 'abbey' })
-    await expect(client.auth.setupAccount(params)).resolves.toMatchObject({ username: 'abbey' })
-
-    expect(expectCall(calls, 0).path).toBe('/api/signup')
-    expect(expectCall(calls, 1).path).toBe('/api/signup/setup')
-  })
-
-  it('maps setup availability from 204 and 404', async () => {
-    const { fetchMock, calls } = mockFetch([
-      { status: 204 },
-      errorEnvelope(404, 'setup not available')
-    ])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    await expect(client.auth.setupAvailable()).resolves.toBe(true)
-    await expect(client.auth.setupAvailable()).resolves.toBe(false)
-    expect(expectCall(calls, 0).path).toBe('/api/signup/setup')
-    expect(expectCall(calls, 1).path).toBe('/api/signup/setup')
-  })
-})
-
-describe('auth.mfa.totp module', () => {
-  it('verifies the pending code', async () => {
-    const { fetchMock, calls } = mockFetch([envelope(user)])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    await expect(client.auth.mfa.totp.verify({ code: '123456' })).resolves.toMatchObject({
-      username: 'abbey'
-    })
-    expect(expectCall(calls).path).toBe('/api/mfa/totp/verify')
-    expect(expectCall(calls).body).toBe(JSON.stringify({ code: '123456' }))
-  })
-
-  it('enrolls, confirms, and rotates recovery codes', async () => {
-    const { fetchMock, calls } = mockFetch([
-      envelope({ secret: 'JBSW', provisioning_uri: 'otpauth://x' }, {}, 201),
-      envelope({ recovery_codes: ['rc1', 'rc2'] }),
-      envelope({ recovery_codes: ['rc3'] })
-    ])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    const enroll = await client.auth.mfa.totp.enroll()
-    expect(enroll.secret).toBe('JBSW')
-
-    const confirm = await client.auth.mfa.totp.confirm({ code: '123456' })
-    expect(confirm.recovery_codes).toEqual(['rc1', 'rc2'])
-
-    const rotated = await client.auth.mfa.totp.rotateRecoveryCodes()
-    expect(rotated.recovery_codes).toEqual(['rc3'])
-
-    expect(expectCall(calls, 0).path).toBe('/api/mfa/totp/enroll')
-    expect(expectCall(calls, 1).path).toBe('/api/mfa/totp/confirm')
-    expect(expectCall(calls, 2).path).toBe('/api/mfa/totp/recovery-codes')
-  })
-
-  it('reads status and disables', async () => {
-    const { fetchMock, calls } = mockFetch([
-      envelope({ confirmed: true, recovery_codes_remaining: 8 }),
-      envelope(null, {}, 204)
-    ])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    await expect(client.auth.mfa.totp.status()).resolves.toMatchObject({ confirmed: true })
-    await expect(client.auth.mfa.totp.disable()).resolves.toBeUndefined()
-    expect(expectCall(calls, 0).method).toBe('GET')
-    expect(expectCall(calls, 1).method).toBe('DELETE')
-    expect(expectCall(calls, 1).path).toBe('/api/mfa/totp')
   })
 })
 

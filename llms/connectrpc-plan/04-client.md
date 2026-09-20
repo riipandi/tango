@@ -1,9 +1,42 @@
 ---
-status: planned
-updated: 2026-09-18
+status: done
+updated: 2026-09-19
 ---
 
 # Phase 04: Authentication Transport, Frontend, REST SDK, and Connect Client
+
+> Completed 2026-09-19 with the SPA skeleton still unmounted (no app entry yet — `index.html`
+> keeps the loader only), so the deliverable is the auth transport plus the worker/client library
+> the SPA will consume:
+>
+> - **Token model** (documented in endpoint-reference): session row = token family; opaque
+>   rotating refresh token in `tango_session` (HttpOnly); 10-minute RS256 access JWT
+>   (`tango:internal`/`tango:rpc`) mirrored in the `tango_access` cookie scoped to `/api/auth`;
+>   bridge `POST /api/auth/token` (REST, retained) returns the bearer and rotates the refresh
+>   token; revocation is exact because RPC verification re-checks the session by `sid`.
+> - **Connect handlers**: `AuthService.SignIn/SignOut/GetSession` live in
+>   `modules/identity/session/handler_rpc.go` with a per-procedure bearer guard (SignIn stays
+>   public); cookies ride `Set-Cookie` on the Connect response; ForgotPassword/ResetPassword stay
+>   `Unimplemented` until the password-flow cutover phase. `rpcerr.RecoverOption` now attaches to
+>   every registered service so panics answer Connect internal errors, not plain text.
+> - **Worker**: `comlink` + `vite-plugin-comlink` + `@connectrpc/connect-web` are pinned; the
+>   comlink plugin registers first with `worker.plugins`; `app/auth.worker.ts` exposes
+>   bootstrap/getAccessToken/refresh/signOut/dispose — bootstrap and refresh use same-origin
+>   `fetch(..., { credentials: 'include' })`, only the access token is held (in memory), refresh
+>   tokens never cross to the UI thread, and sign-out falls back to the cookie channel when the
+>   bearer is already dead. `app/rpc/client.ts` builds the `/rpc` transport with per-request
+>   bearer injection from the worker.
+> - **Codegen**: connect-es v2 removed the separate TS plugin — `protoc-gen-es` emits the service
+>   descriptors; `buf.gen.yaml` drops the connect-es plugin and `*_connect.ts` outputs are gone.
+> - **Tests**: Go bridge/rotation/revocation integration tests (testcontainers) plus 9 vitest
+>   cases (new `app` vitest project) covering bootstrap, silent refresh, typed `AuthError`,
+>   sign-out fallback, header injection, and anonymous calls. Yaak evidence (the workspace was
+>   reorganised after this phase; the smoke folder is gone): SignIn 200 + cookies, bridge 200 +
+>   access token, GetSession (bearer) 200, SignOut 200 + cookie clears, and the revoked bearer
+>   answers 401 afterwards.
+> - **Deferred by design**: tasks 11–12 (REST SDK method removal) and 14–16 (TanStack call-site
+>   migration) belong to the domain cutover phases — no SPA exists yet; `api/client` is documented
+>   as REST-only (README) and stays untouched until cutover deletes each route.
 
 ## Outcome
 
@@ -53,11 +86,11 @@ Make the SPA, admin console, and internal tools use typed ConnectRPC clients whi
    REST method URLs/bodies/headers separately.
 17. Update `api/client/README.md` to state clearly that the SDK is REST-only and document the
    generated Connect client as a separate integration.
-18. Update Yaak requests through Yaak MCP whenever a REST request, gRPC request, auth header,
+18. Update Yaak requests through Yaak MCP whenever a REST request, Connect Protocol request, auth header,
     metadata field, message, expected status, or response shape changes. Do not edit Yaak export
     files manually.
-19. Decide and test the browser transport explicitly: same-origin Connect, Connect-Web, or another
-    supported mode. Do not assume a browser can use native gRPC merely because Yaak can send gRPC.
+19. Use same-origin Connect Protocol as the browser transport. Connect-Web or native gRPC are
+    optional compatibility transports and require a separate explicit decision.
 20. Test session cookies, API-key metadata, `Authorization`, CSRF behavior, and request IDs through
    both Vite's `/rpc` proxy and the Nginx HTTPS proxy.
 21. Test the plugin-generated worker API and lifecycle: login, access-token injection, refresh rotation,
@@ -70,7 +103,8 @@ Make the SPA, admin console, and internal tools use typed ConnectRPC clients whi
 
 The SPA and admin console have no calls to internal `/api` routes, `api/client` contains only
 retained REST methods, generated Connect clients cover all internal RPC namespaces, and the
-protocol client still passes OAuth/OIDC and WebAuthn tests. Yaak MCP REST and gRPC requests match
+protocol client still passes OAuth/OIDC and WebAuthn tests. Yaak MCP REST and Connect Protocol
+requests match
 the active contracts.
 
 ## Commit

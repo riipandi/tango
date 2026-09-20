@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -128,7 +129,13 @@ func applySecrets(outFile string, keys secretsBundle) error {
 // upsertEnvFile replaces the key or appends it. Kept at 0600:
 // the file holds secrets.
 func upsertEnvFile(envFile, key, value string) error {
-	data, err := os.ReadFile(envFile)
+	file, err := os.Open(filepath.Clean(envFile))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return err
 	}
@@ -145,11 +152,7 @@ func upsertEnvFile(envFile, key, value string) error {
 	if !seen {
 		lines = append(lines, key+"="+value)
 	}
-
-	// #nosec G703 -- envFile is the operator-supplied --out target,
-	// sanitized by sanitizeOutputPath (clean + traversal rejection)
-	// and verified to exist as a regular file before this call.
-	return os.WriteFile(envFile, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
+	return os.WriteFile(filepath.Clean(envFile), []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 }
 
 func loadSecretsConfig(cli *CLI) (*config.Config, error) {

@@ -1,11 +1,12 @@
 package user
 
-// profile_picture_test.go covers the profile picture HTTP surface.
+// profile_picture_test.go covers the picture surface after the
+// ConnectRPC cutover: mutations run through the service (the RPC
+// handlers call it directly), the bare .png read stays REST.
 
 import (
 	"context"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,6 +25,12 @@ import (
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
+// identityRouteGroups keeps the route mount signature; no groups are
+// needed for the retained bare-bytes read.
+func identityRouteGroups() identity.RouteGroups {
+	return identity.RouteGroups{}
+}
+
 // tinyPNG is a valid 1x1 PNG.
 var tinyPNG = []byte{
 	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
@@ -34,35 +41,13 @@ var tinyPNG = []byte{
 	0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
 }
 
-// fakeSelf resolves one fixed session token to a principal.
-type fakeSelf struct{ principal middleware.Principal }
-
-func (f *fakeSelf) ResolveSession(_ context.Context, token string) (middleware.Principal, error) {
-	if token == "self-token" {
-		return f.principal, nil
-	}
-	return middleware.Principal{}, ErrNotFound
-}
-
-// upload builds a multipart body with one file part.
-func upload(t *testing.T, field, filename string, data []byte) (contentType string, body io.Reader) {
-	t.Helper()
-	var buf strings.Builder
-	w := multipart.NewWriter(&buf)
-	part, err := w.CreateFormFile(field, filename)
-	require.NoError(t, err)
-	_, err = part.Write(data)
-	require.NoError(t, err)
-	require.NoError(t, w.Close())
-	return w.FormDataContentType(), strings.NewReader(buf.String())
-}
-
 // nopReadCloser adapts a reader (test-only shim for the provider).
 func nopReadCloser(r io.Reader) io.ReadCloser { return io.NopCloser(r) }
 
-// newPictureRouter mounts the user service with a real FS blob store
-// (routes open — no guards — matching the other handler tests).
-func newPictureRouter(t *testing.T, withDefault bool) (chi.Router, *PostgresStore, UserID) {
+// newPictureStack builds the user service over a real FS blob store
+// and a throwaway database; the router mounts only the retained
+// bare-bytes read.
+func newPictureStack(t *testing.T, withDefault bool) (chi.Router, *Service, *PostgresStore, UserID) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -94,62 +79,62 @@ func newPictureRouter(t *testing.T, withDefault bool) (chi.Router, *PostgresStor
 	}
 
 	svc := NewService(store, nil, WithImages(blobs, defaults))
-	self := middleware.RequireAuth(&fakeSelf{principal: middleware.Principal{UserID: created.ID.String()}}, "tango_session")
-
 	r := chi.NewRouter()
 	r.Route("/api", func(r chi.Router) {
-		svc.APIRoutes(r, identity.RouteGroups{Self: self})
+		svc.APIRoutes(r, identityRouteGroups())
 	})
-	return r, store, created.ID
+	return r, svc, store, created.ID
+}
+
+// rpcCaller injects the principal the way the RPC guard would; the
+// user id may point at another account for the admin paths.
+func rpcCaller(ctx context.Context, userID string) context.Context {
+	return middleware.WithPrincipal(ctx, middleware.Principal{UserID: userID, IsAdmin: true})
 }
 
 func TestProfilePictureSurface(t *testing.T) {
-	r, store, userID := newPictureRouter(t, false)
+	r, svc, store, userID := newPictureStack(t, false)
 
 	// No custom picture and no default → 404.
-	w := do(r, http.MethodGet, "/api/users/"+userID.String()+"/profile-picture.png", "")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/users/"+userID.String()+"/profile-picture.png", nil))
 	require.Equal(t, http.StatusNotFound, w.Code)
 
-	// Self upload via the session cookie → 204 (the /users/me mount).
-	contentType, body := upload(t, "file", "avatar.png", tinyPNG)
-	req := httptest.NewRequest(http.MethodPut, "/api/users/me/profile-picture", body)
-	req.Header.Set("Content-Type", contentType)
-	req.AddCookie(&http.Cookie{Name: "tango_session", Value: "self-token"})
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	// The Connect surface stores the caller's own picture from raw
+	// bytes.
+	pictureUser, err := svc.savePicture(rpcCaller(t.Context(), userID.String()), userID, tinyPNG)
+	require.NoError(t, err)
+	require.NotNil(t, pictureUser.ProfilePicturePath)
 
-	// The route serves the stored bytes.
+	// The retained route serves the stored bytes.
 	stored, err := store.GetByID(t.Context(), userID)
 	require.NoError(t, err)
 	require.NotNil(t, stored.ProfilePicturePath)
 
-	w = do(r, http.MethodGet, "/api/users/"+userID.String()+"/profile-picture.png", "")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/users/"+userID.String()+"/profile-picture.png", nil))
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, "image/png", w.Header().Get("Content-Type"))
 	assert.NotEqual(t, "default-picture", w.Body.String())
 
-	// Non-image upload → 422.
-	contentType, body = upload(t, "file", "notes.txt", []byte("nope"))
-	req = httptest.NewRequest(http.MethodPut, "/api/users/"+userID.String()+"/profile-picture", body)
-	req.Header.Set("Content-Type", contentType)
+	// Non-image bytes → invalid argument.
+	_, err = svc.savePicture(rpcCaller(t.Context(), userID.String()), userID, []byte("nope"))
+	assert.Error(t, err)
+
+	// Clearing drops the picture; the read is a 404 again.
+	_, err = svc.clearPicture(rpcCaller(t.Context(), userID.String()), userID)
+	require.NoError(t, err)
+
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
-
-	// Reset → 204, then the read is a 404 again.
-	w = do(r, http.MethodDelete, "/api/users/"+userID.String()+"/profile-picture", "")
-	require.Equal(t, http.StatusNoContent, w.Code)
-
-	w = do(r, http.MethodGet, "/api/users/"+userID.String()+"/profile-picture.png", "")
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/users/"+userID.String()+"/profile-picture.png", nil))
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestProfilePictureDefaultFallback(t *testing.T) {
-	r, _, userID := newPictureRouter(t, true)
+	r, _, _, userID := newPictureStack(t, true)
 
-	// No custom picture → the bundled default answers.
-	w := do(r, http.MethodGet, "/api/users/"+userID.String()+"/profile-picture.png", "")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/users/"+userID.String()+"/profile-picture.png", nil))
+	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "default-picture", w.Body.String())
 }

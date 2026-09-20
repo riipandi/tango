@@ -1,16 +1,10 @@
 package auditlog
 
 import (
-	"context"
-	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
 
-	jsonv2 "encoding/json/v2"
-
-	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/transport/middleware"
@@ -95,14 +89,6 @@ func TestRecordPersistsEnumsAndPayload(t *testing.T) {
 	assert.Equal(t, "user", found.ResourceType)
 }
 
-// fakeAuthenticator resolves any cookie token to the fixed
-// principal — tests only exercise route protection, not tokens.
-type fakeAuthenticator struct{ principal middleware.Principal }
-
-func (f *fakeAuthenticator) ResolveSession(_ context.Context, _ string) (middleware.Principal, error) {
-	return f.principal, nil
-}
-
 // adminTestUser mirrors the principal in the users table for the
 // FK-bound audit rows.
 var fixedPrincipal = middleware.Principal{
@@ -111,207 +97,17 @@ var fixedPrincipal = middleware.Principal{
 	IsAdmin:   true,
 }
 
-// mountWithGuards builds the router with both guards wired (self
-// auth + admin header guard).
-func mountWithGuards(t *testing.T, mod *Module) chi.Router {
-	t.Helper()
-	mod.selfAuth = &fakeAuthenticator{principal: fixedPrincipal}
-	mod.cookie = "tango_session"
-	mod.adminGuard = func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get("X-Admin") == "" {
-				w.WriteHeader(http.StatusForbidden)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-
-	r := chi.NewRouter()
-	r.Route("/api", func(api chi.Router) {
-		api.Use(func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-				next.ServeHTTP(w, req.WithContext(middleware.WithPrincipal(req.Context(), fixedPrincipal)))
-			})
-		})
-		mod.APIRoutes(api)
-	})
-	return r
-}
-
-func TestListEndpointEnvelopeAndPagination(t *testing.T) {
-	mod := New(newTestStore(t))
-	for range 3 {
-		require.NoError(t, mod.Record(t.Context(), &Entry{Event: "user.created"}))
-	}
-	// One row with a recognizable user agent; the device summary is
-	// derived at read time.
-	agent := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-	require.NoError(t, mod.Record(t.Context(), &Entry{Event: "user.signed_in", UserAgent: &agent}))
-	router := mountWithGuards(t, mod)
-
-	// Admin listing with pagination.
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs/all?page=1&limit=3", nil)
-	req.Header.Set("X-Admin", "1")
-	router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-
-	var body struct {
-		Status   string `json:"status"`
-		Metadata struct {
-			Page       *int `json:"page"`
-			Limit      *int `json:"limit"`
-			TotalItems *int `json:"total_items"`
-		} `json:"metadata"`
-		Data []struct {
-			Event  string `json:"event"`
-			Device string `json:"device"`
-		} `json:"data"`
-	}
-	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
-	assert.Equal(t, "success", body.Status)
-	require.Len(t, body.Data, 3)
-	// Newest first: the signed-in entry leads with its device summary,
-	// the seeded rows without an agent carry no device.
-	assert.Equal(t, "user.signed_in", body.Data[0].Event)
-	assert.Equal(t, "Chrome on Mac OS X 10.15.7", body.Data[0].Device)
-	assert.Equal(t, "user.created", body.Data[1].Event)
-	assert.Empty(t, body.Data[1].Device)
-	assert.NotNil(t, body.Metadata.TotalItems)
-	assert.GreaterOrEqual(t, *body.Metadata.TotalItems, 3)
-	assert.Equal(t, 3, *body.Metadata.Limit)
-
-	// Paged: limit=2 yields exactly two entries.
-	w = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/api/audit-logs/all?page=1&limit=2", nil)
-	req.Header.Set("X-Admin", "1")
-	router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
-	require.Len(t, body.Data, 2)
-}
-
-func TestListInvalidPagination(t *testing.T) {
-	mod := New(newTestStore(t))
-	router := mountWithGuards(t, mod)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs/all?page=nope", nil)
-	req.Header.Set("X-Admin", "1")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestSelfListingScopesToCurrentUser(t *testing.T) {
-	ctx := t.Context()
-	pg := testutils.StartPostgres(ctx, t)
-	if _, err := database.MigrateUp(ctx, pg.DSN); err != nil {
-		t.Fatalf("apply migrations: %v", err)
-	}
-	ds, err := datastore.New(ctx, datastore.Options{DSN: pg.DSN})
-	require.NoError(t, err)
-	t.Cleanup(func() { ds.Close() })
-
-	mod := New(NewPostgresStore(ds))
-	users := user.NewPostgresStore(ds)
-	u, err := users.Create(ctx, user.CreateParams{
-		Username: "self_" + strconv.FormatInt(time.Now().UnixNano(), 10),
-		Email:    "self-" + strconv.FormatInt(time.Now().UnixNano(), 10) + "@example.com",
-	})
-	require.NoError(t, err)
-
-	principal := fixedPrincipal
-	principal.UserID = u.ID.String()
-	require.NoError(t, mod.Record(ctx, &Entry{Event: "user.signed_in", UserID: ptr(u.ID.UUID())}))
-	require.NoError(t, mod.Record(ctx, &Entry{Event: "user.signed_out"}))
-
-	mod.selfAuth = &fakeAuthenticator{principal: principal}
-	mod.cookie = "tango_session"
-	r := chi.NewRouter()
-	r.Route("/api", mod.APIRoutes)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs", nil)
-	req.AddCookie(&http.Cookie{Name: "tango_session", Value: "any"})
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-
-	var body struct {
-		Data []struct {
-			Event string `json:"event"`
-		} `json:"data"`
-	}
-	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &body))
-	require.NotEmpty(t, body.Data)
-	for _, item := range body.Data {
-		assert.Equal(t, "user.signed_in", item.Event, "self listing must scope to the current user")
-	}
-}
-
 func TestModuleContracts(t *testing.T) {
 	mod := New(newTestStore(t))
 	assert.Equal(t, ModuleName, mod.Name())
-
-	// Without guards nothing is mounted — fail closed.
-	r := chi.NewRouter()
-	r.Route("/api", mod.APIRoutes)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/audit-logs", nil))
-	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestNewRejectsNilStore(t *testing.T) {
 	require.Panics(t, func() { New(nil) })
 }
 
-func TestAdminGuardProtectsListing(t *testing.T) {
-	mod := New(newTestStore(t))
-	router := mountWithGuards(t, mod)
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/audit-logs/all", nil))
-	assert.Equal(t, http.StatusForbidden, w.Code)
-
-	// With the admin header the listing and filter values open up.
-	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs/all", nil)
-	req.Header.Set("X-Admin", "1")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	req = httptest.NewRequest(http.MethodGet, "/api/audit-logs/filters/users", nil)
-	req.Header.Set("X-Admin", "1")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	req = httptest.NewRequest(http.MethodGet, "/api/audit-logs/filters/client-names", nil)
-	req.Header.Set("X-Admin", "1")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-// TestListRejectsMalformedUserID pins the 400 boundary: a garbage
-// user_id never reaches the store as a Postgres type error.
-func TestListRejectsMalformedUserID(t *testing.T) {
-	mod := New(newTestStore(t))
-	router := mountWithGuards(t, mod)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/audit-logs/all?user_id=not-a-uuid", nil)
-	req.Header.Set("X-Admin", "1")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	// A typed user ID and a bare UUID are both accepted.
-	req = httptest.NewRequest(http.MethodGet, "/api/audit-logs/all?user_id="+fixedPrincipal.UserID, nil)
-	req.Header.Set("X-Admin", "1")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-}
+// TestListFiltersByUserAndEvent pins the store-level filter contract:
+// a garbage user_id never reaches the store as a Postgres type error.
 
 func TestListFiltersByUserAndEvent(t *testing.T) {
 	ctx := t.Context()

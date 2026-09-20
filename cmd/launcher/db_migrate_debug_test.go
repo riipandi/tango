@@ -60,9 +60,9 @@ func TestMigrateResetUp(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "rolled back")
 	assert.Contains(t, out, "applied")
-	assert.Contains(t, out, "00008")
+	assert.Contains(t, out, "00010")
 
 	out, err = runMigrate(t, false, nil, "db", "migrate:version")
 	require.NoError(t, err)
-	assert.Contains(t, out, "current: 8")
+	assert.Contains(t, out, "current: 10")
 }

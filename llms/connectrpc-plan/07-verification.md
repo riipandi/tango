@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-09-18
+status: done
+updated: 2026-09-19
 ---
 
 # Phase 07: Verification and Release Gate
@@ -16,13 +16,15 @@ updated: 2026-09-18
 5. Test WebAuthn ceremonies, binary images, health probes, webhook signatures, and SCIM behavior
    on HTTP.
 6. Through Yaak MCP, send representative requests for every endpoint group: REST requests for
-   retained HTTP contracts and gRPC requests for ConnectRPC services. Verify method/path or
-   service/method, metadata, credentials, body/message, status, headers, and response shape.
-7. Repeat representative Yaak REST and gRPC requests through the proxied HTTPS endpoint provided
-   by the `nginx` service in `compose.yaml` (including TLS, host forwarding, cookies, and gRPC
-   forwarding). Do not treat direct Go-port success as sufficient proxy validation.
-8. If the gRPC request behavior or protocol mapping is unclear, consult the official ConnectRPC
-   documentation and record the selected transport in the Yaak request description.
+   retained HTTP contracts and Connect Protocol HTTP requests for ConnectRPC services. Verify
+   method/path, `/rpc` procedure, Connect headers, metadata, credentials, body/message, status,
+   headers, and response shape.
+7. Repeat representative Yaak REST and Connect Protocol requests through the proxied HTTPS endpoint
+   provided by the `nginx` service in `compose.yaml` (including TLS, host forwarding, cookies, and
+   Connect metadata forwarding). Do not treat direct Go-port success as sufficient proxy validation.
+8. If Connect Protocol request behavior, content types, GET semantics, streaming, or optional gRPC
+   compatibility is unclear, consult the official Connect Protocol documentation and record the
+   selected transport in the Yaak request description.
 9. Verify the server reflection policy, generated descriptor availability, and Yaak behavior with
    and without reflection as applicable.
 10. Verify CORS, `Authorization`, and credentials explicitly. The current middleware's wildcard
@@ -43,7 +45,8 @@ updated: 2026-09-18
 - All first-party application calls use ConnectRPC.
 - All external protocol integrations use their required HTTP contracts.
 - No internal REST compatibility layer remains.
-- Generated code is reproducible and checked in according to repository convention.
+- Generated code is reproducible from a clean checkout by `task rpc:generate`; it is a gitignored
+  build output and is never committed.
 - Yaak requests are created, updated, and sent through Yaak MCP; no manual Yaak export edits are
   used as contract evidence.
 - Full test, lint, format, vet, and typecheck gates pass.

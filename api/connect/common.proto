@@ -1,0 +1,47 @@
+// Shared contract messages for every internal list RPC.
+syntax = "proto3";
+
+package tango.common.v1;
+
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/common/v1;commonv1";
+
+// PageRequest bounds one list call. The field contract mirrors the REST
+// pagination parameters (pkg/responder): `page` starts at 1, `limit`
+// defaults to 25 and caps at 100, and -1 in either field returns every
+// record. A zero or unset limit takes the default rather than returning
+// an unbounded result. `query` is the free-text filter (ILIKE over the
+// names the domain lists). List responses echo the effective values in
+// ResponseMetadata.
+message PageRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  string query = 3;
+}
+
+// ResponseMetadata mirrors the REST envelope metadata block
+// (pkg/responder.Metadata) field for field: the transport status, the
+// request correlation id, the rate-limit window, and the pagination
+// block. Every wrapper response carries one, so a client reads the
+// same metadata shape from either transport. Unknown values stay unset
+// and are omitted from the JSON.
+message ResponseMetadata {
+  optional int32 status_code = 1;
+  optional string request_id = 2;
+  RateLimit rate_limit = 3;
+
+  // Pagination, flat like the REST block. The item indices are
+  // zero-based.
+  optional int32 page = 4;
+  optional int32 limit = 5;
+  optional int32 total_pages = 6;
+  optional int32 total_items = 7;
+  optional int32 first_item_index = 8;
+  optional int32 last_item_index = 9;
+}
+
+// RateLimit reports the per-window allowance of the rate limiter.
+message RateLimit {
+  optional int32 limit = 1;
+  optional int32 remaining = 2;
+  optional int64 reset = 3;
+}

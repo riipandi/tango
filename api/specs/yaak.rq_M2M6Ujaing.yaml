@@ -1,0 +1,49 @@
+type: http_request
+model: http_request
+id: rq_M2M6Ujaing
+createdAt: 2026-09-19T01:09:16.494579
+updatedAt: 2026-09-19T14:55:05.292298
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_R5pypBKj8u
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: |-
+    {
+      "user_code": "P7JMQ95R"
+    }
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: Inspect device login request
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.DeviceApprovalService/GetPendingRequest
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

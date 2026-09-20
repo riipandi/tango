@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://json.schemastore.org/buf.json
+
+# This file defines the configuration for buf.
+# For detailed information, see https://buf.build/docs/configuration/v2/buf-yaml
+
+version: v2
+
+modules:
+  - path: api/connect
+
+# The plan pins contracts flat in api/connect/*.proto — one folder,
+# module-owning package names — and shared request messages
+# (PageRequest, Get*Request) are reused across RPCs. The directory
+# rules below contradict that flat layout by design.
+lint:
+  use:
+    - STANDARD
+  except:
+    - PACKAGE_DIRECTORY_MATCH
+    - PACKAGE_SAME_DIRECTORY
+    - DIRECTORY_SAME_PACKAGE
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+
+breaking:
+  use:
+    - FILE

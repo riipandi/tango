@@ -74,7 +74,7 @@ func (s *Service) createDeviceAuthorization(ctx context.Context, client Client, 
 		Nonce:          nonce,
 		ClientID:       client.ID.String(),
 		Status:         DeviceStatusPending,
-		ExpiresAt:      time.Now().UTC().Add(DeviceCodeTTL),
+		ExpiresAt:      time.Now().UTC().Add(s.DeviceCodeTTL()),
 	}
 	if err := s.store.InsertDeviceCode(ctx, code); err != nil {
 		return nil, serverError()
@@ -88,7 +88,7 @@ func (s *Service) createDeviceAuthorization(ctx context.Context, client Client, 
 		UserCode:                userCode,
 		VerificationURI:         s.issuer + DeviceVerificationPath,
 		VerificationURIComplete: s.issuer + DeviceVerificationPath + "?code=" + userCode,
-		ExpiresIn:               int(DeviceCodeTTL.Seconds()),
+		ExpiresIn:               int(s.DeviceCodeTTL().Seconds()),
 		Interval:                DevicePollInterval,
 	}, nil
 }

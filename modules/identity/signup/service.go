@@ -63,15 +63,17 @@ func (r SignUpRequest) Validate() error {
 
 // Result couples the created account with its issued session.
 type Result struct {
-	User  user.User
-	Token string
+	User    user.User
+	Token   string
+	Session session.Session
 }
 
 // ErrSetupCompleted rejects a second initial-admin setup.
 var ErrSetupCompleted = errors.New("initial setup has already been completed")
 
 // SetupAvailable reports whether the initial-admin setup can run:
-// upstream counts every existing user, not only admins.
+// any existing user — not only an admin — means the instance is
+// already initialized.
 func (s *Service) SetupAvailable(ctx context.Context) (bool, error) {
 	exists, err := s.users.HasAnyUser(ctx)
 	if err != nil {
@@ -122,7 +124,7 @@ func (s *Service) SignUp(ctx context.Context, req SignUpRequest, isSetup bool) (
 		}
 	}
 
-	token, issueErr := s.sessions.IssueForUser(ctx, u.ID, "signup", session.Meta{})
+	token, se, issueErr := s.sessions.IssueForUser(ctx, u.ID, "signup", session.Meta{})
 	if issueErr != nil {
 		return nil, issueErr
 	}
@@ -133,7 +135,7 @@ func (s *Service) SignUp(ctx context.Context, req SignUpRequest, isSetup bool) (
 		}
 		s.recorder.Record(ctx, identity.AuditEvent{Action: action, Actor: u.ID.String()}, nil)
 	}
-	return &Result{User: u, Token: token}, nil
+	return &Result{User: u, Token: token, Session: se}, nil
 }
 
 // consumeToken validates the raw token without spending a use —

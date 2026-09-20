@@ -61,10 +61,7 @@ func TestEndSessionRevokesFamilyAndRedirects(t *testing.T) {
 	require.Equal(t, http.StatusFound, w.Code, w.Body.String())
 	assert.Equal(t, "https://rp.example/logged-out?state=st-1", w.Header().Get("Location"))
 
-	cookies := w.Result().Cookies()
-	require.NotEmpty(t, cookies)
-	assert.Equal(t, "", cookies[0].Value, "the sign-in cookie must be cleared")
-	assert.Negative(t, cookies[0].MaxAge)
+	assert.Empty(t, w.Result().Cookies(), "end-session no longer clears a cookie")
 
 	// The whole token family is inactive afterwards.
 	assert.False(t, familyActive(t, store, jti))

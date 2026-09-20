@@ -1,0 +1,274 @@
+// Federation RPCs: OIDC client administration, user consent
+// management, and SCIM provider configuration. OIDC protocol surfaces
+// (token, authorize, userinfo, ...) stay REST. TypeIDs are strings at
+// the wire boundary; show-once secrets appear only in the response
+// that issues them.
+syntax = "proto3";
+
+package tango.federation.v1;
+
+import "common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/federation/v1;federationv1";
+
+// ClientRef is a compact client summary for grant listings.
+message ClientRef {
+  string id = 1;
+  string name = 2;
+  string client_type = 3;
+  bool is_public = 4;
+  bool has_logo = 5;
+}
+
+// OidcClient is the admin view of one relying-party client.
+message OidcClient {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  bool has_secret = 4;
+  repeated string callback_urls = 5;
+  repeated string logout_callback_urls = 6;
+  optional string launch_url = 7;
+  optional bool is_public = 8;
+  optional bool pkce_enabled = 9;
+  optional bool pkce_supported = 10;
+  optional bool skip_consent = 11;
+  optional bool is_group_restricted = 12;
+  optional int32 access_token_duration_minutes = 13;
+  optional int32 refresh_token_duration_minutes = 14;
+  repeated string allowed_user_group_ids = 15;
+  optional string client_type = 16;
+  optional string metadata_url = 17;
+}
+
+// OidcClientMeta is the consent-page projection of a client.
+message OidcClientMeta {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  bool has_logo = 4;
+  optional string launch_url = 5;
+  optional bool requires_reauthentication = 6;
+  optional string client_type = 7;
+}
+
+// OidcSecretEntry is one stored client secret without the plaintext.
+message OidcSecretEntry {
+  string id = 1;
+  string created_at = 2;
+  optional string expires_at = 3;
+  bool is_active = 4;
+}
+
+// OidcTokenPreview shows a synthetic token set for one user.
+message OidcTokenPreview {
+  string id_token = 1;
+  string access_token = 2;
+  google.protobuf.Struct user_info = 3;
+}
+
+// AuthorizedClient is one recorded user consent.
+message AuthorizedClient {
+  string user_id = 1;
+  string client_id = 2;
+  repeated string scopes = 3;
+  string last_used_at = 4;
+}
+
+// ScimProvider is one outbound SCIM binding. The token appears on
+// create only and is never returned by reads.
+message ScimProvider {
+  string id = 1;
+  string endpoint = 2;
+  optional string token = 3;
+  string oidc_client_id = 4;
+  optional string last_synced_at = 5;
+  string created_at = 6;
+}
+
+// OidcClientService administers relying-party clients, their secrets,
+// logos, metadata, and per-client SCIM binding lookup.
+service OidcClientService {
+  rpc ListClients(common.v1.PageRequest) returns (ListOidcClientsResponse);
+  rpc CreateClient(CreateOidcClientRequest) returns (CreateOidcClientResponse);
+  rpc GetClient(GetOidcClientRequest) returns (OidcClient);
+  rpc UpdateClient(UpdateOidcClientRequest) returns (OidcClient);
+  rpc DeleteClient(DeleteOidcClientRequest) returns (google.protobuf.Empty);
+  rpc UpdateAllowedUserGroups(UpdateAllowedUserGroupsRequest) returns (google.protobuf.Empty);
+  rpc GetClientMeta(GetOidcClientRequest) returns (OidcClientMeta);
+  rpc PreviewClient(PreviewClientRequest) returns (OidcTokenPreview);
+  rpc RefreshClient(GetOidcClientRequest) returns (OidcClient);
+  rpc UploadLogo(UploadLogoRequest) returns (google.protobuf.Empty);
+  rpc DeleteLogo(DeleteLogoRequest) returns (google.protobuf.Empty);
+  rpc ListSecrets(ListSecretsRequest) returns (ListSecretsResponse);
+  rpc CreateSecret(CreateSecretRequest) returns (CreateSecretResponse);
+  rpc DeleteSecret(DeleteSecretRequest) returns (google.protobuf.Empty);
+  rpc GetScimProvider(GetOidcClientRequest) returns (ScimProvider);
+}
+
+message ListOidcClientsResponse {
+  repeated OidcClient clients = 1;
+  common.v1.ResponseMetadata metadata = 2;
+}
+
+message CreateOidcClientRequest {
+  string name = 1;
+  optional string description = 2;
+  // BYO secret; empty generates one server-side.
+  optional string secret = 3;
+  repeated string callback_urls = 4;
+  repeated string logout_callback_urls = 5;
+  optional string launch_url = 6;
+  optional bool is_public = 7;
+  optional bool pkce_enabled = 8;
+  optional bool pkce_supported = 9;
+  optional bool skip_consent = 10;
+  optional bool is_group_restricted = 11;
+  optional int32 access_token_duration_minutes = 12;
+  optional int32 refresh_token_duration_minutes = 13;
+  repeated string allowed_user_group_ids = 14;
+  // CIMD metadata URL; presence switches the client to metadata mode.
+  optional string metadata_url = 15;
+}
+
+// CreateOidcClientResponse carries the plaintext client secret
+// exactly once.
+message CreateOidcClientResponse {
+  OidcClient client = 1;
+  string client_secret = 2;
+}
+
+message GetOidcClientRequest {
+  string client_id = 1;
+}
+
+message UpdateOidcClientRequest {
+  string client_id = 1;
+  string name = 2;
+  optional string description = 3;
+  repeated string callback_urls = 4;
+  repeated string logout_callback_urls = 5;
+  optional string launch_url = 6;
+  optional bool is_public = 7;
+  optional bool pkce_enabled = 8;
+  optional bool pkce_supported = 9;
+  optional bool skip_consent = 10;
+  optional bool is_group_restricted = 11;
+  optional int32 access_token_duration_minutes = 12;
+  optional int32 refresh_token_duration_minutes = 13;
+  repeated string allowed_user_group_ids = 14;
+}
+
+message DeleteOidcClientRequest {
+  string client_id = 1;
+}
+
+message UpdateAllowedUserGroupsRequest {
+  string client_id = 1;
+  // Atomic replacement: the allowlist becomes exactly this set.
+  repeated string group_ids = 2;
+}
+
+message PreviewClientRequest {
+  string client_id = 1;
+  string user_id = 2;
+}
+
+message UploadLogoRequest {
+  string client_id = 1;
+  // Raw image bytes; the server validates the content type.
+  bytes image = 2;
+}
+
+message DeleteLogoRequest {
+  string client_id = 1;
+}
+
+// ListSecretsRequest lists one client's secrets. Bounded: a client
+// carries a handful of secrets, so the list has no page window.
+message ListSecretsRequest {
+  string client_id = 1;
+}
+
+message ListSecretsResponse {
+  repeated OidcSecretEntry secrets = 1;
+}
+
+message CreateSecretRequest {
+  string client_id = 1;
+  optional string expires_at = 2;
+}
+
+// CreateSecretResponse carries the plaintext secret exactly once.
+message CreateSecretResponse {
+  OidcSecretEntry secret = 1;
+  string client_secret = 2;
+}
+
+message DeleteSecretRequest {
+  string client_id = 1;
+  string secret_id = 2;
+}
+
+// OidcConsentService manages recorded user consents: self-service
+// revocation and admin listings.
+service OidcConsentService {
+  rpc ListMyAuthorizedClients(common.v1.PageRequest) returns (ListAuthorizedClientsResponse);
+  rpc RevokeMyAuthorizedClient(RevokeMyAuthorizedClientRequest) returns (google.protobuf.Empty);
+  rpc ListMyClients(common.v1.PageRequest) returns (ListMyClientsResponse);
+  rpc ListUserAuthorizedClients(ListUserAuthorizedClientsRequest) returns (ListAuthorizedClientsResponse);
+  rpc ListAllAuthorizedClients(common.v1.PageRequest) returns (ListAuthorizedClientsResponse);
+}
+
+message ListAuthorizedClientsResponse {
+  repeated AuthorizedClient authorized_clients = 1;
+  common.v1.ResponseMetadata metadata = 2;
+}
+
+message RevokeMyAuthorizedClientRequest {
+  string client_id = 1;
+}
+
+// ListMyClientsResponse lists the clients the caller may access.
+message ListMyClientsResponse {
+  repeated OidcClient clients = 1;
+  common.v1.ResponseMetadata metadata = 2;
+}
+
+message ListUserAuthorizedClientsRequest {
+  string user_id = 1;
+  common.v1.PageRequest page = 2;
+}
+
+// ScimProviderService configures outbound SCIM providers and queues
+// sync pushes; the SCIM wire protocol itself stays REST.
+service ScimProviderService {
+  rpc Upsert(UpsertScimProviderRequest) returns (ScimProvider);
+  rpc Update(UpdateScimProviderRequest) returns (ScimProvider);
+  rpc Delete(DeleteScimProviderRequest) returns (google.protobuf.Empty);
+  rpc Sync(SyncScimProviderRequest) returns (google.protobuf.Empty);
+}
+
+message UpsertScimProviderRequest {
+  string endpoint = 1;
+  // Plaintext provider token; stored encrypted, echoed back only here.
+  string token = 2;
+  optional string oidc_client_id = 3;
+}
+
+message UpdateScimProviderRequest {
+  string id = 1;
+  optional string endpoint = 2;
+  // Rotate the stored token; empty keeps the current value.
+  optional string token = 3;
+}
+
+message DeleteScimProviderRequest {
+  string id = 1;
+}
+
+message SyncScimProviderRequest {
+  string id = 1;
+}

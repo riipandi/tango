@@ -11,8 +11,10 @@ import (
 
 	jsonv2 "encoding/json/v2"
 
+	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/riipandi/tango/internal/rpcerr"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -32,8 +34,8 @@ type Policy struct {
 
 // policies holds every enforced budget. Only sensitive endpoints appear
 // here; all other routes pass through unchecked. Budgets mirror the
-// intent of upstream Pocket ID's per-route limiters, adapted to the
-// tango-only surfaces.
+// per-route limiter set the port inherited, adapted to the tango-only
+// surfaces.
 var policies = map[string]Policy{
 	"sign-in":                   {Name: "sign-in", Max: 20, Window: 60},
 	"forgot-password":           {Name: "forgot-password", Max: 2, Window: 600},
@@ -52,43 +54,45 @@ var policies = map[string]Policy{
 	"device-login-verify":       {Name: "device-login-verify", Max: 10, Window: 60},
 	"device-login-decision":     {Name: "device-login-decision", Max: 10, Window: 60},
 	"webauthn-login":            {Name: "webauthn-login", Max: 10, Window: 60},
-	"webauthn-reauthenticate":   {Name: "webauthn-reauthenticate", Max: 6, Window: 60},
 	"email-verification-send":   {Name: "email-verification-send", Max: 2, Window: 600},
 	"email-verification-verify": {Name: "email-verification-verify", Max: 6, Window: 60},
+	"account-password":          {Name: "account-password", Max: 10, Window: 60},
 }
 
 // rule binds one endpoint shape to a policy. Matching requires the
 // path to continue the prefix at a segment boundary (or end there), so
-// /api/signup never shadows /api/signup-tokens. An optional suffix pins
-// the tail, and an empty method matches any. Rules are evaluated in
-// order and the first match wins.
+// /rpc/…Service/SignUp never shadows a longer procedure name. An
+// optional suffix pins the tail, and an empty method matches any.
+// Rules cover the retained REST paths plus the Connect procedures that
+// replaced rate-limited REST routes (the /rpc mount runs the same
+// limiter middleware).
 var rules = []struct {
 	Policy string
 	Method string
 	Prefix string
 	Suffix string
 }{
-	{"sign-in", http.MethodPost, "/api/auth/sign-in", ""},
+	{"sign-in", http.MethodPost, "/rpc/tango.identity.v1.AuthService/SignIn", ""},
 	{"forgot-password", http.MethodPost, "/api/auth/forgot-password", ""},
 	{"reset-password", http.MethodPost, "/api/auth/reset-password", ""},
-	{"totp-enroll", http.MethodPost, "/api/mfa/totp/enroll", ""},
-	{"totp-confirm", http.MethodPost, "/api/mfa/totp/confirm", ""},
-	{"totp-verify", http.MethodPost, "/api/mfa/totp/verify", ""},
-	{"totp-recovery-codes", http.MethodPost, "/api/mfa/totp/recovery-codes", ""},
-	{"totp-disable", http.MethodDelete, "/api/mfa/totp", ""},
-	{"signup-setup", http.MethodPost, "/api/signup/setup", ""},
-	{"signup", http.MethodPost, "/api/signup", ""},
-	{"one-time-access-email", http.MethodPost, "/api/one-time-access-email", ""},
+	{"totp-enroll", http.MethodPost, "/rpc/tango.identity.v1.MfaService/EnrollTotp", ""},
+	{"totp-confirm", http.MethodPost, "/rpc/tango.identity.v1.MfaService/ConfirmTotp", ""},
+	{"totp-verify", http.MethodPost, "/rpc/tango.identity.v1.MfaService/VerifyPending", ""},
+	{"totp-recovery-codes", http.MethodPost, "/rpc/tango.identity.v1.MfaService/RotateRecoveryCodes", ""},
+	{"totp-disable", http.MethodPost, "/rpc/tango.identity.v1.MfaService/DisableTotp", ""},
+	{"signup-setup", http.MethodPost, "/rpc/tango.identity.v1.SignupService/SetupInitialAdmin", ""},
+	{"signup", http.MethodPost, "/rpc/tango.identity.v1.SignupService/Signup", ""},
+	{"one-time-access-email", http.MethodPost, "/rpc/tango.identity.v1.OneTimeAccessService/RequestEmail", ""},
+	{"one-time-access-email", http.MethodPost, "/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail", ""},
 	{"one-time-access-token", http.MethodPost, "/api/one-time-access-token/", ""},
 	{"device-login-exchange", http.MethodPost, "/api/device-login/requests/", "/exchange"},
 	{"device-login-create", http.MethodPost, "/api/device-login/requests", ""},
-	{"device-login-decision", http.MethodPost, "/api/device-login/verification/decision", ""},
-	{"device-login-verify", http.MethodPost, "/api/device-login/verification", ""},
+	{"device-login-decision", http.MethodPost, "/rpc/tango.identity.v1.DeviceApprovalService/DecideRequest", ""},
+	{"device-login-verify", http.MethodPost, "/rpc/tango.identity.v1.DeviceApprovalService/GetPendingRequest", ""},
 	{"webauthn-login", http.MethodPost, "/api/webauthn/login/finish", ""},
-	{"webauthn-reauthenticate", http.MethodPost, "/api/webauthn/reauthenticate", ""},
-	{"email-verification-send", http.MethodPost, "/api/users/me/send-email-verification", ""},
+	{"email-verification-send", http.MethodPost, "/rpc/tango.identity.v1.EmailVerificationService/SendEmail", ""},
 	{"email-verification-verify", http.MethodPost, "/api/users/me/verify-email", ""},
-	{"one-time-access-email", http.MethodPost, "/api/users/", "/one-time-access-email"},
+	{"account-password", http.MethodPost, "/rpc/tango.identity.v1.AccountService/ChangePassword", ""},
 }
 
 // PolicyFor returns the enforced policy for a request, or false when the
@@ -176,15 +180,33 @@ func RateLimit(store RateLimitStore) func(http.Handler) http.Handler {
 	}
 }
 
-// rateKey builds the database key for a client IP and policy.
+// rateKey builds the database key for a client IP and policy. Policy
+// names and IPv6 addresses both contain characters the rate_limits
+// key check rejects, so every byte outside its alphabet is normalized:
+// a key that fails the check makes the insert fail, and the limiter
+// treats that as a store error and silently allows the request.
 func rateKey(r *http.Request, policy string) string {
 	ip := clientIP(r)
 	if ip == "" {
 		return ""
 	}
-	ip = strings.ReplaceAll(ip, ".", "_")
-	ip = strings.ReplaceAll(ip, ":", "_")
-	return fmt.Sprintf("rl_%s_%s", policy, ip)
+	return fmt.Sprintf("rl_%s_%s", sanitizeKeyPart(policy), sanitizeKeyPart(ip))
+}
+
+// sanitizeKeyPart maps a key fragment onto the [a-z0-9_:] alphabet the
+// rate_limits key constraint allows.
+func sanitizeKeyPart(part string) string {
+	var b strings.Builder
+	b.Grow(len(part))
+	for _, c := range strings.ToLower(part) {
+		switch {
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9', c == '_', c == ':':
+			b.WriteRune(c)
+		default:
+			b.WriteRune('_')
+		}
+	}
+	return b.String()
 }
 
 // clientIP resolves the peer and trusts forwarded IPs from loopback only.
@@ -210,10 +232,22 @@ func isLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// rpcErrorWriter renders throttled RPC requests as Connect error
+// documents; it is safe for concurrent use.
+var rpcErrorWriter = connect.NewErrorWriter()
+
 // writeRateLimited writes a 429 response with Retry-After when available.
+// The /rpc mount runs this same limiter, so an RPC client must receive a
+// Connect error document instead of the REST envelope; the error writer
+// negotiates the protocol from the request headers.
 func writeRateLimited(w http.ResponseWriter, r *http.Request, detail string) {
 	if seconds := retryAfter(detail); seconds > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	}
+	if strings.HasPrefix(r.URL.Path, "/rpc/") && rpcErrorWriter.IsSupported(r) {
+		if err := rpcErrorWriter.Write(w, r, rpcerr.ResourceExhausted("rate limit exceeded")); err == nil {
+			return
+		}
 	}
 	responder.Fail(w, r, http.StatusTooManyRequests, "rate limit exceeded")
 }

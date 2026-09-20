@@ -1,11 +1,10 @@
-/.docs
 /.idea
 /.pnp
 /.husky
 .pnp.js
 .DS_Store
 .DS_Store?
-.memelord/
+.sentryclirc
 /coverage
 /coverage.out
 /[Tt]emp/
@@ -32,8 +31,14 @@ npm-debug.log*
 *.sqlite3*
 *.db
 
+# Envars
+.env.*
+!.env.example
+compose.env*
+!compose.env.example
+.*.vars
+
 # Output directory
-_data/
 build/
 dist/
 dist-ssr/
@@ -44,14 +49,10 @@ output/
 .build/
 .data
 .cache
-.nitro
 .output
-.vinxi
 .wrangler
 .netlify
 .wireit
-.temp
-.tmp
 
 # Vite & Vitest config
 vite.config.*
@@ -61,12 +62,10 @@ vitest.config.*
 vitest.workspace.*
 !vitest.workspace.ts
 
-# Envars
-.env.*
-!.env.example
-compose.env*
-!compose.env.example
-.*.vars
+# TanStack Router
+.tanstack/
+routeTree.gen.ts
+routes.gen.ts
 
 # Disable this line in your real app
 /playwright/.cache/
@@ -75,9 +74,6 @@ compose.env*
 /blob-report/
 .playwright/
 
-# Sentry Config File
-.sentryclirc
-
 # Storybook
 *storybook.log
 storybook-static/
@@ -85,10 +81,9 @@ storybook-static/
 # Application data
 /.storage/
 /storage/
-web/output/*
-web/email/*
-!web/output/.gitkeep
-!web/email/.gitkeep
+/web/output/
+/web/email/
+/web/storybook/
 
 # Miscellaneous
 pnpm-exec-summary.json
@@ -101,22 +96,16 @@ sbom-*
 /api/docs.go
 /api/swagger.json
 /api/swagger.yaml
-/app/generated/
-/specs/
+/codegen/
+.rpc-gen.stamp
 *.gen.ts
+*.gen.go
 
-# TanStack Router
-.tanstack/
-routeTree.gen.ts
-routes.gen.ts
-
-# Terraform
+# Infrastructure
 .terraform/
 .terraform.lock.hcl
 terraform.tfstate*
 terraform.tfvars*
 !terraform.tfvars.example
-
-# fly.io
 fly*.toml*
 !fly*.toml.example

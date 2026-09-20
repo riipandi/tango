@@ -52,6 +52,11 @@ jobs:
           fi
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
+      - name: Generate ConnectRPC code
+        run: |
+          go tool buf generate
+          gofmt -w codegen/proto/go
+
       - name: Generate email template
         run: pnpm exec vite build
         env:
@@ -116,10 +121,11 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # TODO: use short git hash
           build-args: |
-            BUILD_VERSION=${{ github.ref_name }}
             BUILD_HASH=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            BUILD_VERSION=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false

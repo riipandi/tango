@@ -31,7 +31,7 @@ import (
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
-func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Service, *PostgresStore, *Service) {
+func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Service, *PostgresStore, *Service, *session.Service) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -48,14 +48,15 @@ func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Ser
 		crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmArgon2id), nil)
 	sessions := session.NewService(session.NewPostgresStore(ds), passwords, users, nil)
 
-	selfGuard := middleware.RequireAuth(sessions, session.CookieName)
+	selfGuard := middleware.RequireAuth(sessions)
 	adminGuard := func(next http.Handler) http.Handler {
-		return middleware.RequireAuth(sessions, session.CookieName)(middleware.RequireAdmin(next))
+		return middleware.RequireAuth(sessions)(middleware.RequireAdmin(next))
 	}
 
 	svc, err := NewService(NewPostgresStore(ds), users,
 		func(ctx context.Context, userID user.UserID) (string, error) {
-			return sessions.IssueForUser(ctx, userID, "webauthn", session.Meta{})
+			token, _, issueErr := sessions.IssueForUser(ctx, userID, "webauthn", session.Meta{})
+			return token, issueErr
 		}, "http://localhost:3000", nil)
 	require.NoError(t, err)
 	feature := New(svc)
@@ -65,10 +66,10 @@ func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Ser
 		sessions.APIRoutes(r, identity.RouteGroups{})
 		feature.APIRoutes(r, identity.RouteGroups{Self: selfGuard, Admin: adminGuard})
 	})
-	return r, users, passwords, NewPostgresStore(ds), svc
+	return r, users, passwords, NewPostgresStore(ds), svc, sessions
 }
 
-func signIn(t *testing.T, r chi.Router, users *user.PostgresStore, passwords *password.Service, admin bool) (string, user.User) {
+func signIn(t *testing.T, r chi.Router, users *user.PostgresStore, passwords *password.Service, sessions *session.Service, admin bool) (string, user.User) {
 	t.Helper()
 	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
 
@@ -80,20 +81,14 @@ func signIn(t *testing.T, r chi.Router, users *user.PostgresStore, passwords *pa
 	require.NoError(t, err)
 	require.NoError(t, passwords.SetPassword(t.Context(), u.ID, "s3cret-p@ss"))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/sign-in",
-		strings.NewReader(`{"identity":"key_`+stamp+`","secret":"s3cret-p@ss"}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	cookies := w.Result().Cookies()
-	require.NotEmpty(t, cookies)
-	return cookies[0].Value, u
+	result, err := sessions.SignInWithPending(t.Context(), u.Username, "s3cret-p@ss", session.Meta{})
+	require.NoError(t, err)
+	require.False(t, result.Pending)
+	return result.Token, u
 }
 
 func TestRegisterBeginRequiresSession(t *testing.T) {
-	r, _, _, _, _ := newTestRouter(t)
+	r, _, _, _, _, _ := newTestRouter(t)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/webauthn/register/begin", nil))
@@ -101,15 +96,15 @@ func TestRegisterBeginRequiresSession(t *testing.T) {
 }
 
 func TestRegisterBeginReturnsOptions(t *testing.T) {
-	r, users, passwords, _, svc := newTestRouter(t)
-	cookie, u := signIn(t, r, users, passwords, false)
+	r, users, passwords, _, svc, sessions := newTestRouter(t)
+	cookie, u := signIn(t, r, users, passwords, sessions, false)
 
 	// Surface the service error directly: the handler hides it.
 	_, _, err := svc.BeginRegistration(t.Context(), u.ID)
 	require.NoError(t, err)
 	_ = cookie
 	req := httptest.NewRequest(http.MethodPost, "/api/webauthn/register/begin", nil)
-	req.Header.Set("Cookie", session.CookieName+"="+cookie)
+	req.Header.Set("Authorization", "Bearer "+cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -128,7 +123,7 @@ func TestRegisterBeginReturnsOptions(t *testing.T) {
 }
 
 func TestLoginBeginAnonymousAndFinishValidation(t *testing.T) {
-	r, _, _, _, _ := newTestRouter(t)
+	r, _, _, _, _, _ := newTestRouter(t)
 
 	// The discoverable login ceremony is anonymous.
 	w := httptest.NewRecorder()
@@ -155,106 +150,15 @@ func TestLoginBeginAnonymousAndFinishValidation(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code, "an unknown ceremony session must be rejected")
 }
 
-func TestCredentialAdminCRUD(t *testing.T) {
-	r, users, passwords, store, _ := newTestRouter(t)
-	cookie, _ := signIn(t, r, users, passwords, true)
-
-	// Seed a passkey for another account through the store.
-	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
-	member, err := users.Create(t.Context(), user.CreateParams{
-		Username: "keymember_" + stamp,
-		Email:    "keymember-" + stamp + "@example.com",
-	})
-	require.NoError(t, err)
-	credential := StoredCredential{
-		ID:              identity.NewID[CredentialID](),
-		UserID:          member.ID,
-		Name:            "laptop",
-		CredentialID:    []byte("credential-bytes-" + stamp),
-		PublicKey:       []byte("public-key-bytes"),
-		DeviceType:      "singleDevice",
-		AttestationType: "none",
-		Transport:       []string{"internal"},
-		BackupEligible:  false,
-		BackupState:     false,
-	}
-	require.NoError(t, store.InsertCredential(t.Context(), &credential))
-
-	// The admin lists the member's passkeys.
-	w := doGet(t, r, "/api/users/"+member.ID.String()+"/webauthn-credentials", cookie)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	var listed struct {
-		Data []map[string]any `json:"data"`
-	}
-	require.NoError(t, jsonv2.Unmarshal(w.Body.Bytes(), &listed))
-	require.Len(t, listed.Data, 1)
-	assert.Equal(t, "laptop", listed.Data[0]["name"])
-	assert.NotContains(t, w.Body.String(), "public-key-bytes", "key material never leaves the store")
-
-	// Rename through the admin surface.
-	req := httptest.NewRequest(http.MethodPut,
-		"/api/users/"+member.ID.String()+"/webauthn-credentials/"+credential.ID.String(),
-		strings.NewReader(`{"name":"travel key"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	// Delete, then the listing is empty and a repeat is 404.
-	w = doDelete(t, r, "/api/users/"+member.ID.String()+"/webauthn-credentials/"+credential.ID.String(), cookie)
-	assert.Equal(t, http.StatusNoContent, w.Code)
-
-	w = doGet(t, r, "/api/users/"+member.ID.String()+"/webauthn-credentials", cookie)
-	require.Equal(t, http.StatusOK, w.Code)
-	assert.NotContains(t, w.Body.String(), "travel key")
-
-	w = doDelete(t, r, "/api/users/"+member.ID.String()+"/webauthn-credentials/"+credential.ID.String(), cookie)
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestCredentialRoutesAreAdminGated(t *testing.T) {
-	r, users, passwords, _, _ := newTestRouter(t)
-	cookie, member := signIn(t, r, users, passwords, false)
-
-	// A signed-in non-admin cannot read another account's passkeys.
-	w := doGet(t, r, "/api/users/"+member.ID.String()+"/webauthn-credentials", cookie)
-	assert.Equal(t, http.StatusForbidden, w.Code)
-
-	// Anonymous requests fail closed too.
-	w = doGet(t, r, "/api/users/"+member.ID.String()+"/webauthn-credentials", "")
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func doGet(t *testing.T, r chi.Router, path, cookie string) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	if cookie != "" {
-		req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
-	}
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	return w
-}
-
-func doDelete(t *testing.T, r chi.Router, path, cookie string) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodDelete, path, nil)
-	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	return w
-}
-
 // TestRegisterFinishRejectsMissingSession pins the ceremony contract:
 // the finish endpoint fails closed before any crypto when the
 // ceremony session id is absent.
 func TestRegisterFinishRejectsMissingSession(t *testing.T) {
-	r, users, passwords, _, _ := newTestRouter(t)
-	cookie, _ := signIn(t, r, users, passwords, false)
+	r, users, passwords, _, _, sessions := newTestRouter(t)
+	cookie, _ := signIn(t, r, users, passwords, sessions, false)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/webauthn/register/finish", strings.NewReader("{}"))
-	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookie})
+	req.Header.Set("Authorization", "Bearer "+cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code, "finish without a session id must be rejected")

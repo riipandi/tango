@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/pkg/responder"
@@ -31,17 +30,20 @@ func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	return p, ok
 }
 
-// RequireAuth resolves the session cookie and rejects anonymous requests.
-func RequireAuth(auth Authenticator, cookieName string) func(http.Handler) http.Handler {
+// RequireAuth resolves the session credential from the Authorization
+// bearer header and rejects anonymous requests. The caller presents
+// the session token the sign-in response returned; there is no cookie
+// channel.
+func RequireAuth(auth Authenticator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			cookie, err := r.Cookie(cookieName)
-			if err != nil || cookie.Value == "" {
+			token, ok := BearerFromHeader(r.Header)
+			if !ok {
 				responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
 				return
 			}
 
-			principal, err := auth.ResolveSession(r.Context(), cookie.Value)
+			principal, err := auth.ResolveSession(r.Context(), token)
 			if err != nil {
 				responder.Fail(w, r, http.StatusUnauthorized, "invalid or expired session")
 				return
@@ -66,25 +68,4 @@ func RequireAdmin(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-// RequireAPIKey resolves the X-API-KEY header for machine clients.
-func RequireAPIKey(verifier APIKeyVerifier) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := strings.TrimSpace(r.Header.Get("X-API-KEY"))
-			if key == "" {
-				responder.Fail(w, r, http.StatusUnauthorized, "API key required")
-				return
-			}
-
-			principal, err := verifier(r.Context(), key)
-			if err != nil {
-				responder.Fail(w, r, http.StatusUnauthorized, "invalid API key")
-				return
-			}
-
-			next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), principal)))
-		})
-	}
 }

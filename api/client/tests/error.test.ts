@@ -19,12 +19,12 @@ describe('error normalization', () => {
     const { fetchMock } = mockFetch([
       errorEnvelope(422, 'validation failed', [
         { field: 'identity', message: 'cannot be blank' },
-        { field: 'secret', message: 'cannot be blank' }
+        { field: 'password', message: 'cannot be blank' }
       ])
     ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.auth.signInWithPassword({ identity: '', secret: '' }))
+    const error = await catchError(client.auth.forgotPassword({ identity: '' }))
 
     expect(error).toBeInstanceOf(ApiClientError)
     expect(error.status).toBe(422)
@@ -32,7 +32,7 @@ describe('error normalization', () => {
     expect(error.message).toBe('validation failed')
     expect(error.fieldErrors).toEqual([
       { field: 'identity', message: 'cannot be blank' },
-      { field: 'secret', message: 'cannot be blank' }
+      { field: 'password', message: 'cannot be blank' }
     ])
   })
 
@@ -53,9 +53,7 @@ describe('error normalization', () => {
     ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(
-      client.auth.signInWithPassword({ identity: 'abbey', secret: 'x' })
-    )
+    const error = await catchError(client.auth.forgotPassword({ identity: 'abbey' }))
 
     expect(error.status).toBe(429)
     expect(error.rateLimit).toEqual({ limit: 5, remaining: 0, reset: 1760000000 })
@@ -65,25 +63,18 @@ describe('error normalization', () => {
     const { fetchMock } = mockFetch([errorEnvelope(401, 'authentication required')])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.account.getProfile())
+    const error = await catchError(client.auth.signOut())
 
     expect(error.message).toBe('authentication required')
     expect(error.status).toBe(401)
     expect(error.fieldErrors).toEqual([])
   })
 
-  it('ignores a 404 envelope for setupAvailable and reports false', async () => {
-    const { fetchMock } = mockFetch([errorEnvelope(404, 'setup not available')])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    await expect(client.auth.setupAvailable()).resolves.toBe(false)
-  })
-
   it('falls back to api_error for non-envelope error bodies', async () => {
     const { fetchMock } = mockFetch([{ status: 500, body: 'oops' }])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.users.get('user_01j'))
+    const error = await catchError(client.system.health())
 
     expect(error.code).toBe('api_error')
     expect(error.status).toBe(500)
@@ -95,7 +86,7 @@ describe('error normalization', () => {
     }) as unknown as typeof globalThis.fetch
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
-    const error = await catchError(client.users.list())
+    const error = await catchError(client.system.health())
 
     expect(error.code).toBe('network_error')
     expect(error.status).toBeUndefined()
@@ -109,7 +100,7 @@ describe('error normalization', () => {
     }) as unknown as typeof globalThis.fetch
     const client = createApiClient({ baseUrl: BASE_URL, fetch: abortingFetch })
 
-    const error = await catchError(client.users.list())
+    const error = await catchError(client.system.health())
 
     expect(error.code).toBe('aborted')
   })

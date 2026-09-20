@@ -1,9 +1,14 @@
 ---
-status: planned
-updated: 2026-09-18
+status: done
+updated: 2026-09-19
 ---
 
 # Phase 00: Scope and Route Decisions
+
+> Completed 2026-09-19. The decision record lives in
+> [endpoint-reference.md](./endpoint-reference.md): live route inventory, Connect service/method
+> matrix, generated-code layout, Yaak coverage map, and ambiguities A1–A5. A1–A5 must be resolved
+> before the corresponding protos are frozen in phase 02; they do not gate phase 01.
 
 ## Outcome
 
@@ -33,7 +38,7 @@ Freeze the transport split before implementation. The route matrix in
 - Approved endpoint reference.
 - Route inventory and caller inventory.
 - `api/connect/*.proto` package and generated-code layout decision.
-- Yaak folder/request mapping for retained REST and new gRPC/ConnectRPC coverage.
+- Yaak folder/request mapping for retained REST and new Connect Protocol coverage.
 - Exact Connect service/method matrix, including authorization and message ownership.
 - A list of REST routes that may be deleted after cutover.
 

@@ -1,6 +1,6 @@
 ---
-status: planned
-updated: 2026-09-18
+status: done
+updated: 2026-09-19
 ---
 
 # Phase 06: REST Retirement and Cleanup
@@ -29,7 +29,7 @@ Remove obsolete internal REST infrastructure without touching public protocol co
 
 The route table contains only intended REST routes and ConnectRPC routes; stale internal REST calls
 are absent; production builds do not include deleted handlers; Yaak MCP requests cover the retained
-REST and gRPC/ConnectRPC surfaces.
+REST and Connect Protocol surfaces.
 
 ## Commit
 

@@ -3,7 +3,6 @@ import { createApiClient, ApiClientError } from '../index'
 import { envelope, expectCall, mockFetch } from './helpers'
 
 const BASE_URL = 'http://localhost:3080'
-const SESSION_TOKEN = 'st_testtoken'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -134,35 +133,5 @@ describe('client core', () => {
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
 
     await expect(client.raw('GET', '/account')).rejects.toBeInstanceOf(ApiClientError)
-  })
-
-  it('signs in through the auth namespace', async () => {
-    const user = {
-      id: 'user_01j',
-      username: 'abbey',
-      email: 'abbey@tango.local',
-      display_name: 'Abbey',
-      is_admin: true,
-      disabled: false,
-      created_at: '2026-01-01T00:00:00Z'
-    }
-    const { fetchMock, calls } = mockFetch([
-      envelope({
-        user,
-        session_id: SESSION_TOKEN,
-        provider: 'password',
-        expires_at: '2026-02-01T00:00:00Z'
-      })
-    ])
-    const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
-
-    const result = await client.auth.signInWithPassword({ identity: 'abbey', secret: 's3cret' })
-
-    expect(result.session_id).toBe(SESSION_TOKEN)
-    expect(result.user.username).toBe('abbey')
-    const call = expectCall(calls)
-    expect(call.method).toBe('POST')
-    expect(call.path).toBe('/api/auth/sign-in')
-    expect(call.body).toBe(JSON.stringify({ identity: 'abbey', secret: 's3cret' }))
   })
 })

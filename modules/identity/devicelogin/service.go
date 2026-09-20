@@ -171,7 +171,7 @@ func (s *Service) Exchange(ctx context.Context, requestID, deviceToken string) (
 			if consumeErr := s.store.Consume(ctx, request.ID); consumeErr != nil {
 				return user.User{}, "", consumeErr
 			}
-			token, issueErr := s.sessions.IssueForUser(ctx, uid, "devicelogin", session.Meta{})
+			token, _, issueErr := s.sessions.IssueForUser(ctx, uid, "devicelogin", session.Meta{})
 			if issueErr != nil {
 				return user.User{}, "", issueErr
 			}

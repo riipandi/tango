@@ -1,0 +1,556 @@
+// First-party identity RPCs: authentication, account, signup, MFA,
+// one-time access, email verification, users, groups, device approval,
+// and custom claims. Timestamps and TypeIDs are strings at the wire
+// boundary; show-once secrets appear only in the response that issues
+// them and are never returned by any read RPC.
+syntax = "proto3";
+
+package tango.identity.v1;
+
+import "common.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1;identityv1";
+
+// User mirrors the account projection shared by the SPA and admin
+// console.
+message User {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  optional string first_name = 4;
+  optional string last_name = 5;
+  optional string avatar_url = 6;
+  optional string locale = 7;
+  string display_name = 8;
+  bool is_admin = 9;
+  bool disabled = 10;
+  optional string email_verified_at = 11;
+  string created_at = 12;
+  optional string updated_at = 13;
+  optional string last_login_at = 14;
+}
+
+// SessionView is the client-safe session projection; it never carries
+// the token hash.
+message SessionView {
+  string id = 1;
+  string provider = 2;
+  optional string user_agent = 3;
+  optional string device_name = 4;
+  optional string ip_address = 5;
+  string created_at = 6;
+  string expires_at = 7;
+  optional string refreshed_at = 8;
+}
+
+// UserGroup is an access group binding users to OIDC clients.
+message UserGroup {
+  string id = 1;
+  string name = 2;
+  string display_name = 3;
+  string created_at = 4;
+  optional string updated_at = 5;
+}
+
+// WebAuthnCredential is the admin/self-service credential projection.
+message WebAuthnCredential {
+  string id = 1;
+  optional string name = 2;
+  string credential_id = 3;
+  optional string attestation_type = 4;
+  repeated string transport = 5;
+  optional bool backup_eligible = 6;
+  optional bool backup_state = 7;
+  optional string created_at = 8;
+  optional string last_used_at = 9;
+}
+
+// CustomClaim is a claim entry bound to a user or a user group.
+message CustomClaim {
+  string id = 1;
+  string key = 2;
+  string value = 3;
+  optional string user_id = 4;
+  optional string user_group_id = 5;
+  string created_at = 6;
+}
+
+// SignedIn is the session-issuing response shared by sign-in, signup,
+// setup, and pending-MFA completion. Every credential travels in the
+// body: the client keeps the session token and presents it to refresh,
+// and uses the access token as the RPC bearer.
+message SignedIn {
+  User user = 1;
+  string session_id = 2;
+  string provider = 3;
+  optional string expires_at = 4;
+  bool pending = 5;
+  bool remember = 6;
+  // session_token is the rotating session credential. Absent while a
+  // second factor is still pending.
+  string session_token = 7;
+  // access_token is the short-lived internal bearer JWT. Absent while
+  // a second factor is still pending.
+  string access_token = 8;
+  // pending_token is the bridge credential for the pending second
+  // factor. Present only when pending is true.
+  optional string pending_token = 9;
+}
+
+// AuthService covers authentication lifecycle RPCs. Protected methods
+// require `Authorization: Bearer <internal-access-token>`; the
+// sign-in/forgot/reset flow is anonymous but rate-limited.
+service AuthService {
+  rpc SignIn(SignInRequest) returns (SignedIn);
+  rpc SignOut(google.protobuf.Empty) returns (google.protobuf.Empty);
+  rpc GetSession(google.protobuf.Empty) returns (SignedIn);
+  rpc ForgotPassword(ForgotPasswordRequest) returns (google.protobuf.Empty);
+  rpc ResetPassword(ResetPasswordRequest) returns (google.protobuf.Empty);
+}
+
+message SignInRequest {
+  // identity is the username or email the account is looked up by.
+  string identity = 1;
+  // password is the plaintext credential, verified and never stored.
+  string password = 2;
+  // remember selects the session duration: true issues a long-lived
+  // session, false a short one.
+  bool remember = 3;
+}
+
+message ForgotPasswordRequest {
+  string identity = 1;
+}
+
+message ResetPasswordRequest {
+  string token = 1;
+  string new_password = 2;
+}
+
+// AccountService is the self-service surface for the signed-in user.
+// AccountService covers the tango-only self-service surfaces that
+// upstream has no equivalent for: upstream signs users in with
+// passkeys and exposes no password or session API. Profile read and
+// write stay on UserService, matching upstream's `GET/PUT
+// /api/users/me`.
+service AccountService {
+  rpc ChangePassword(ChangePasswordRequest) returns (google.protobuf.Empty);
+  rpc ListSessions(google.protobuf.Empty) returns (ListSessionsResponse);
+  rpc RevokeSession(RevokeSessionRequest) returns (google.protobuf.Empty);
+}
+
+message UpdateProfileRequest {
+  optional string first_name = 1;
+  optional string last_name = 2;
+  optional string display_name = 3;
+  optional string avatar_url = 4;
+  optional string locale = 5;
+}
+
+message ChangePasswordRequest {
+  string current_password = 1;
+  string new_password = 2;
+}
+
+message ListSessionsResponse {
+  repeated SessionView sessions = 1;
+}
+
+message RevokeSessionRequest {
+  string session_id = 1;
+}
+
+// SignupService covers account creation and initial admin setup plus
+// signup-token administration.
+service SignupService {
+  rpc Signup(SignupRequest) returns (SignedIn);
+  rpc GetSetupAvailability(google.protobuf.Empty) returns (GetSetupAvailabilityResponse);
+  rpc SetupInitialAdmin(SetupInitialAdminRequest) returns (SignedIn);
+  rpc ListSignupTokens(common.v1.PageRequest) returns (ListSignupTokensResponse);
+  rpc CreateSignupToken(CreateSignupTokenRequest) returns (SignupTokenSecret);
+  rpc DeleteSignupToken(DeleteSignupTokenRequest) returns (google.protobuf.Empty);
+}
+
+message SignupRequest {
+  string username = 1;
+  string email = 2;
+  optional string first_name = 3;
+  optional string last_name = 4;
+  optional string token = 5;
+}
+
+message GetSetupAvailabilityResponse {
+  bool available = 1;
+}
+
+message SetupInitialAdminRequest {
+  string username = 1;
+  string email = 2;
+}
+
+message SignupToken {
+  string id = 1;
+  int32 usage_limit = 2;
+  int32 usage_count = 3;
+  string created_at = 4;
+  string expires_at = 5;
+  repeated string user_groups = 6;
+}
+
+// SignupTokenSecret carries the raw signup token exactly once, in the
+// creation response only.
+message SignupTokenSecret {
+  SignupToken token_info = 1;
+  string token = 2;
+}
+
+message ListSignupTokensResponse {
+  repeated SignupToken tokens = 1;
+  common.v1.ResponseMetadata metadata = 2;
+}
+
+message CreateSignupTokenRequest {
+  // Go duration string (e.g. "24h"); empty means no expiry policy.
+  optional string ttl = 1;
+  int32 usage_limit = 2;
+  repeated string user_group_ids = 3;
+}
+
+message DeleteSignupTokenRequest {
+  string token_id = 1;
+}
+
+// MfaService manages the TOTP lifecycle. Enroll/confirm/rotate answers
+// are show-once; verify completes a pending sign-in.
+service MfaService {
+  rpc EnrollTotp(google.protobuf.Empty) returns (EnrollTotpResponse);
+  rpc ConfirmTotp(ConfirmTotpRequest) returns (ConfirmTotpResponse);
+  rpc GetTotpStatus(google.protobuf.Empty) returns (GetTotpStatusResponse);
+  rpc VerifyPending(VerifyPendingRequest) returns (SignedIn);
+  rpc RotateRecoveryCodes(ConfirmTotpRequest) returns (ConfirmTotpResponse);
+  rpc DisableTotp(DisableTotpRequest) returns (google.protobuf.Empty);
+}
+
+// EnrollTotpResponse carries the raw secret and provisioning URI
+// exactly once.
+message EnrollTotpResponse {
+  string secret = 1;
+  string provisioning_uri = 2;
+}
+
+message ConfirmTotpRequest {
+  string code = 1;
+}
+
+// ConfirmTotpResponse carries the new recovery codes exactly once.
+message ConfirmTotpResponse {
+  repeated string recovery_codes = 1;
+}
+
+message GetTotpStatusResponse {
+  bool confirmed = 1;
+  int32 recovery_codes_remaining = 2;
+}
+
+message VerifyPendingRequest {
+  string code = 1;
+  // pending_token is the bridge credential issued by the pending
+  // sign-in response.
+  string pending_token = 2;
+}
+
+message DisableTotpRequest {
+  string password = 1;
+}
+
+// OneTimeAccessService covers email-token bootstrap. The token
+// exchange itself stays a REST email-link endpoint and is not an RPC.
+service OneTimeAccessService {
+  rpc RequestEmail(RequestEmailRequest) returns (google.protobuf.Empty);
+  rpc AdminSendEmail(AdminSendEmailRequest) returns (google.protobuf.Empty);
+  rpc AdminIssueToken(AdminIssueTokenRequest) returns (AdminIssueTokenResponse);
+}
+
+message RequestEmailRequest {
+  string identity = 1;
+}
+
+message AdminSendEmailRequest {
+  string user_id = 1;
+}
+
+message AdminIssueTokenRequest {
+  string user_id = 1;
+}
+
+// AdminIssueTokenResponse carries the raw one-time access token
+// exactly once.
+message AdminIssueTokenResponse {
+  string token = 1;
+}
+
+// EmailVerificationService sends the verification email from the SPA;
+// the verify step is the email-link REST endpoint and stays HTTP.
+service EmailVerificationService {
+  rpc SendEmail(google.protobuf.Empty) returns (google.protobuf.Empty);
+}
+
+// UserService is the admin console CRUD surface plus self-service
+// profile and credential management.
+service UserService {
+  rpc ListUsers(common.v1.PageRequest) returns (ListUsersResponse);
+  rpc GetUser(GetUserRequest) returns (User);
+  rpc CreateUser(CreateUserRequest) returns (User);
+  rpc UpdateUser(UpdateUserRequest) returns (User);
+  rpc DeleteUser(DeleteUserRequest) returns (google.protobuf.Empty);
+  rpc UpdateMe(UpdateProfileRequest) returns (User);
+  rpc UpdateMyProfilePicture(UpdateMyProfilePictureRequest) returns (User);
+  rpc DeleteMyProfilePicture(google.protobuf.Empty) returns (User);
+  rpc UpdateProfilePicture(UpdateProfilePictureRequest) returns (User);
+  rpc DeleteProfilePicture(DeleteProfilePictureRequest) returns (User);
+  rpc ListUserGroups(ListUserGroupsRequest) returns (ListUserGroupsResponse);
+  rpc ReplaceUserGroups(ReplaceUserGroupsRequest) returns (google.protobuf.Empty);
+  rpc ListWebAuthnCredentials(ListWebAuthnCredentialsRequest) returns (ListWebAuthnCredentialsResponse);
+  rpc UpdateWebAuthnCredential(UpdateWebAuthnCredentialRequest) returns (WebAuthnCredential);
+  rpc DeleteWebAuthnCredential(DeleteWebAuthnCredentialRequest) returns (google.protobuf.Empty);
+}
+
+message ListUsersResponse {
+  repeated User users = 1;
+  common.v1.ResponseMetadata metadata = 2;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message CreateUserRequest {
+  string username = 1;
+  string email = 2;
+  optional string first_name = 3;
+  optional string last_name = 4;
+  optional string display_name = 5;
+  bool is_admin = 6;
+}
+
+message UpdateUserRequest {
+  string user_id = 1;
+  optional string email = 2;
+  optional string first_name = 3;
+  optional string last_name = 4;
+  optional string display_name = 5;
+  optional bool is_admin = 6;
+  optional bool disabled = 7;
+}
+
+message DeleteUserRequest {
+  string user_id = 1;
+}
+
+message UpdateMyProfilePictureRequest {
+  // Raw image bytes; the server validates the content type.
+  bytes image = 1;
+}
+
+message UpdateProfilePictureRequest {
+  string user_id = 1;
+  // Raw image bytes; the server validates the content type.
+  bytes image = 2;
+}
+
+message DeleteProfilePictureRequest {
+  string user_id = 1;
+}
+
+// ListUserGroupsRequest lists one user's group memberships. Bounded:
+// a user belongs to a bounded set of groups, so no page window.
+message ListUserGroupsRequest {
+  string user_id = 1;
+}
+
+message ListUserGroupsResponse {
+  repeated UserGroup groups = 1;
+}
+
+message ReplaceUserGroupsRequest {
+  string user_id = 1;
+  // Atomic replacement: the binding becomes exactly this set.
+  repeated string group_ids = 2;
+}
+
+// ListWebAuthnCredentialsRequest lists one user's passkeys. Bounded:
+// a user registers a handful of credentials, so no page window.
+message ListWebAuthnCredentialsRequest {
+  string user_id = 1;
+}
+
+message ListWebAuthnCredentialsResponse {
+  repeated WebAuthnCredential credentials = 1;
+}
+
+message UpdateWebAuthnCredentialRequest {
+  string user_id = 1;
+  string credential_id = 2;
+  string name = 3;
+}
+
+message DeleteWebAuthnCredentialRequest {
+  string user_id = 1;
+  string credential_id = 2;
+}
+
+// UserGroupService is the admin CRUD surface for access groups.
+service UserGroupService {
+  rpc ListGroups(common.v1.PageRequest) returns (ListGroupsResponse);
+  rpc GetGroup(GetUserGroupRequest) returns (UserGroup);
+  rpc CreateGroup(CreateUserGroupRequest) returns (UserGroup);
+  rpc UpdateGroup(UpdateUserGroupRequest) returns (UserGroup);
+  rpc DeleteGroup(DeleteUserGroupRequest) returns (google.protobuf.Empty);
+  rpc ListGroupUsers(ListGroupUsersRequest) returns (ListGroupUsersResponse);
+  rpc ReplaceGroupUsers(ReplaceGroupUsersRequest) returns (google.protobuf.Empty);
+  rpc ReplaceAllowedOidcClients(ReplaceAllowedOidcClientsRequest) returns (google.protobuf.Empty);
+}
+
+message ListGroupsResponse {
+  repeated UserGroup groups = 1;
+  common.v1.ResponseMetadata metadata = 2;
+}
+
+message GetUserGroupRequest {
+  string group_id = 1;
+}
+
+message CreateUserGroupRequest {
+  string name = 1;
+  string display_name = 2;
+}
+
+message UpdateUserGroupRequest {
+  string group_id = 1;
+  optional string name = 2;
+  optional string display_name = 3;
+}
+
+message DeleteUserGroupRequest {
+  string group_id = 1;
+}
+
+message ListGroupUsersRequest {
+  string group_id = 1;
+  common.v1.PageRequest page = 2;
+}
+
+message ListGroupUsersResponse {
+  repeated User users = 1;
+  common.v1.ResponseMetadata metadata = 2;
+}
+
+message ReplaceGroupUsersRequest {
+  string group_id = 1;
+  // Atomic replacement: the membership becomes exactly this set.
+  repeated string user_ids = 2;
+}
+
+message ReplaceAllowedOidcClientsRequest {
+  string group_id = 1;
+  // Atomic replacement: the allowlist becomes exactly this set.
+  repeated string client_ids = 2;
+}
+
+// DeviceApprovalService backs the internal approval UI for device
+// login (RFC 8628 device side stays REST).
+service DeviceApprovalService {
+  rpc GetPendingRequest(GetPendingRequestRequest) returns (VerificationInfo);
+  rpc DecideRequest(DecideRequestRequest) returns (google.protobuf.Empty);
+}
+
+message GetPendingRequestRequest {
+  // The user code shown on the device awaiting approval.
+  string user_code = 1;
+}
+
+message VerificationInfo {
+  string user_code = 1;
+  string device = 2;
+  string ip_address = 3;
+  string city = 4;
+  string country = 5;
+  string expires_at = 6;
+}
+
+message DecideRequestRequest {
+  string user_code = 1;
+  bool approve = 2;
+}
+
+// CustomClaimService administers claim entries on users and groups.
+service CustomClaimService {
+  rpc Suggest(SuggestRequest) returns (SuggestResponse);
+  rpc ListUserClaims(ListUserClaimsRequest) returns (ListClaimsResponse);
+  rpc CreateUserClaim(CreateUserClaimRequest) returns (CustomClaim);
+  rpc UpdateUserClaim(UpdateClaimRequest) returns (CustomClaim);
+  rpc DeleteUserClaim(DeleteClaimRequest) returns (google.protobuf.Empty);
+  rpc ListGroupClaims(ListGroupClaimsRequest) returns (ListClaimsResponse);
+  rpc CreateGroupClaim(CreateGroupClaimRequest) returns (CustomClaim);
+  rpc UpdateGroupClaim(UpdateGroupClaimRequest) returns (CustomClaim);
+  rpc DeleteGroupClaim(DeleteGroupClaimRequest) returns (google.protobuf.Empty);
+}
+
+message SuggestRequest {
+  string query = 1;
+}
+
+message SuggestResponse {
+  repeated string keys = 1;
+}
+
+// ListUserClaimsRequest lists one user's custom claims. Bounded: the
+// claim set is small and fixed per user, so no page window.
+message ListUserClaimsRequest {
+  string user_id = 1;
+}
+
+// ListGroupClaimsRequest lists one group's custom claims. Bounded: the
+// claim set is small and fixed per group, so no page window.
+message ListGroupClaimsRequest {
+  string user_group_id = 1;
+}
+
+message ListClaimsResponse {
+  repeated CustomClaim claims = 1;
+}
+
+message CreateUserClaimRequest {
+  string user_id = 1;
+  string key = 2;
+  string value = 3;
+}
+
+message CreateGroupClaimRequest {
+  string user_group_id = 1;
+  string key = 2;
+  string value = 3;
+}
+
+message UpdateClaimRequest {
+  string user_id = 1;
+  string claim_id = 2;
+  string value = 3;
+}
+
+message UpdateGroupClaimRequest {
+  string user_group_id = 1;
+  string claim_id = 2;
+  string value = 3;
+}
+
+message DeleteClaimRequest {
+  string user_id = 1;
+  string claim_id = 2;
+}
+
+message DeleteGroupClaimRequest {
+  string user_group_id = 1;
+  string claim_id = 2;
+}

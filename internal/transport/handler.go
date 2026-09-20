@@ -38,28 +38,8 @@ func RootHealthzHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// VersionCurrentHandler returns the deployed version.
-func VersionCurrentHandler(w http.ResponseWriter, r *http.Request) {
-	responder.Success(w, r, http.StatusOK, map[string]string{
-		"current_version": config.AppVersion,
-	})
-}
-
-// VersionLatestHandler returns the cached newest release.
-func VersionLatestHandler(feed LatestVersionSource) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		version := config.AppVersion
-		if feed != nil {
-			version = feed.Latest()
-		}
-		// The release feed is polled on a fixed delay, so clients may
-		// cache the answer instead of re-fetching per request.
-		w.Header().Set("Cache-Control", "public, max-age=300, stale-while-revalidate=900")
-		responder.Success(w, r, http.StatusOK, map[string]string{"latest_version": version})
-	}
-}
-
-// LatestVersionSource exposes the cached newest release.
+// LatestVersionSource exposes the cached newest release for the RPC
+// version surface.
 type LatestVersionSource interface {
 	Latest() string
 }

@@ -7,5 +7,19 @@
     "rules": {
         "typescript/no-floating-promises": "error",
         "typescript/no-misused-promises": "error"
-    }
+    },
+    "ignorePatterns": [
+        ".output",
+        ".tanstack",
+        ".wrangler",
+        "**/*.md",
+        "**/*.mdx",
+        "**/*.yml",
+        "**/*.yaml",
+        "**/*.toml",
+        "**/*.tmpl",
+        "/codegen/**",
+        "/public/**",
+        "/temp/**"
+    ]
 }

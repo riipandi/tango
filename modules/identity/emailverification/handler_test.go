@@ -32,7 +32,7 @@ import (
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
-func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Service, *token.PostgresStore) {
+func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Service, *token.PostgresStore, *session.Service) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -49,7 +49,7 @@ func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Ser
 		crypto.NewPasswordHasher().WithAlgorithm(crypto.AlgorithmArgon2id), nil)
 	sessions := session.NewService(session.NewPostgresStore(ds), passwords, users, nil)
 
-	selfGuard := middleware.RequireAuth(sessions, session.CookieName)
+	selfGuard := middleware.RequireAuth(sessions)
 
 	tokens := token.NewStore(ds, token.PurposeEmailVerification)
 	// Same adapter the registry wires: the user store satisfies the
@@ -68,10 +68,10 @@ func newTestRouter(t *testing.T) (chi.Router, *user.PostgresStore, *password.Ser
 		sessions.APIRoutes(r, identity.RouteGroups{})
 		feature.APIRoutes(r, identity.RouteGroups{Self: selfGuard})
 	})
-	return r, users, passwords, tokens
+	return r, users, passwords, tokens, sessions
 }
 
-func signIn(t *testing.T, r chi.Router, users *user.PostgresStore, passwords *password.Service) (string, user.User) {
+func signIn(t *testing.T, r chi.Router, users *user.PostgresStore, passwords *password.Service, sessions *session.Service) (string, user.User) {
 	t.Helper()
 	stamp := strconv.FormatInt(time.Now().UnixNano(), 10)
 
@@ -82,34 +82,15 @@ func signIn(t *testing.T, r chi.Router, users *user.PostgresStore, passwords *pa
 	require.NoError(t, err)
 	require.NoError(t, passwords.SetPassword(t.Context(), u.ID, "s3cret-p@ss"))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/sign-in",
-		strings.NewReader(`{"identity":"verify_`+stamp+`","secret":"s3cret-p@ss"}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	cookies := w.Result().Cookies()
-	require.NotEmpty(t, cookies)
-	return cookies[0].Value, u
-}
-
-func TestSendDoesNotLeakToken(t *testing.T) {
-	r, users, passwords, _ := newTestRouter(t)
-	cookie, _ := signIn(t, r, users, passwords)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/users/me/send-email-verification", nil)
-	req.Header.Set("Cookie", session.CookieName+"="+cookie)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusNoContent, w.Code)
-	assert.NotContains(t, w.Body.String(), "token")
+	result, err := sessions.SignInWithPending(t.Context(), u.Username, "s3cret-p@ss", session.Meta{})
+	require.NoError(t, err)
+	require.False(t, result.Pending)
+	return result.Token, u
 }
 
 func TestVerifyConsumesScopedToken(t *testing.T) {
-	r, users, passwords, tokens := newTestRouter(t)
-	cookie, u := signIn(t, r, users, passwords)
+	r, users, passwords, tokens, sessions := newTestRouter(t)
+	cookie, u := signIn(t, r, users, passwords, sessions)
 
 	// Mint through the store and keep the raw value only here.
 	raw := "rawver_" + strconv.FormatInt(time.Now().UnixNano(), 10)
@@ -124,7 +105,7 @@ func TestVerifyConsumesScopedToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/users/me/verify-email",
 		strings.NewReader(`{"token":"totally-unknown"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Cookie", session.CookieName+"="+cookie)
+	req.Header.Set("Authorization", "Bearer "+cookie)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -133,7 +114,7 @@ func TestVerifyConsumesScopedToken(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/api/users/me/verify-email",
 		strings.NewReader(`{"token":"`+raw+`"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Cookie", session.CookieName+"="+cookie)
+	req.Header.Set("Authorization", "Bearer "+cookie)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
@@ -146,14 +127,14 @@ func TestVerifyConsumesScopedToken(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/api/users/me/verify-email",
 		strings.NewReader(`{"token":"`+raw+`"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Cookie", session.CookieName+"="+cookie)
+	req.Header.Set("Authorization", "Bearer "+cookie)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestVerifyRequiresSession(t *testing.T) {
-	r, _, _, _ := newTestRouter(t)
+	r, _, _, _, _ := newTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/users/me/verify-email", strings.NewReader(`{"token":"x"}`))
 	req.Header.Set("Content-Type", "application/json")

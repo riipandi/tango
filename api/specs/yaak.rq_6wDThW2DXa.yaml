@@ -1,0 +1,49 @@
+type: http_request
+model: http_request
+id: rq_6wDThW2DXa
+createdAt: 2026-09-18T20:58:00.984820
+updatedAt: 2026-09-19T18:11:37.543020
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_iMD6Wv2JMZ
+authentication: {}
+authenticationType: null
+body:
+  text: |-
+    {
+      "name": "${[ faker.string.alphanumeric(options='{"length": 10}') ]}",
+      "display_name": "${[ faker.company.name() ]}"
+    }
+bodyType: application/json
+description: The name is generated per run with Faker; a user group name must match the username pattern, so only letters and digits are used.
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: Create user group
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/CreateGroup
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

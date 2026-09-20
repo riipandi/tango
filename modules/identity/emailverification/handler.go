@@ -1,7 +1,8 @@
 package emailverification
 
-// handler.go owns the email verification HTTP surface: send (self)
-// and verify (self, token body). Mail delivery uses the built-in queue.
+// handler.go owns the email verification HTTP surface: the verify
+// email link. SendEmail serves ConnectRPC (handler_rpc.go); mail
+// delivery uses the built-in queue.
 
 import (
 	"context"
@@ -14,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-ozzo/ozzo-validation/v4"
 
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity"
@@ -64,6 +66,7 @@ func (s *Service) Name() string { return "emailverification" }
 // Feature is the wireable unit.
 type Feature struct {
 	service *Service
+	access  kernel.AccessAuthenticator
 }
 
 // New wires the feature to its service.
@@ -72,86 +75,29 @@ func New(service *Service) Feature { return Feature{service: service} }
 // Name names the feature for logs.
 func (Feature) Name() string { return "emailverification" }
 
-// APIRoutes mounts the endpoints relative to the /api group. Without
-// a self group nothing mounts (fail closed: verification is
-// self-service only).
+// WithAccessAuthenticator wires the bearer resolver the self
+// procedures guard with.
+func (f Feature) WithAccessAuthenticator(access kernel.AccessAuthenticator) Feature {
+	f.access = access
+	return f
+}
+
+// RPCService returns the Connect registration for the email
+// verification surface.
+func (f Feature) RPCService() (string, http.Handler) {
+	return f.service.RPCService(f.access)
+}
+
+// APIRoutes mounts the retained endpoints relative to the /api
+// group: only the email-link verify step. The send action serves
+// ConnectRPC below /rpc. Without a self group nothing mounts (fail
+// closed: verification is self-service only).
 func (f Feature) APIRoutes(r chi.Router, g identity.RouteGroups) {
 	if g.Self == nil {
 		return
 	}
 	self := r.With(g.Self)
-	self.Post("/users/me/send-email-verification", f.service.handleSend)
 	self.Post("/users/me/verify-email", f.service.handleVerify)
-}
-
-// handleSend serves POST /users/me/send-email-verification: mints a
-// token for the current user and queues the verification email.
-// Return 204 with no body; the token travels by email only.
-func (s *Service) handleSend(w http.ResponseWriter, r *http.Request) {
-	principal, ok := middleware.PrincipalFromContext(r.Context())
-	if !ok {
-		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
-		return
-	}
-	userID, err := identity.ParseID[user.UserID](principal.UserID)
-	if err != nil {
-		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
-		return
-	}
-
-	raw, err := s.mint(r.Context(), userID)
-	if err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to create verification token")
-		return
-	}
-	if err := s.sendVerificationEmail(r.Context(), userID, raw); err != nil {
-		responder.Fail(w, r, http.StatusInternalServerError, "failed to queue email")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// sendVerificationEmail queues the verification mail for the user. A
-// queued send means the SMTP transaction happens on a worker; a
-// failure here only reports that the queue entry was not written.
-func (s *Service) sendVerificationEmail(ctx context.Context, userID user.UserID, token string) error {
-	if s.sender == nil {
-		return nil
-	}
-
-	u, err := s.users.GetByID(ctx, userID)
-	if err != nil {
-		return err
-	}
-
-	return s.sender.EnqueueEmail(ctx, mailer.Message{
-		To:       u.Email,
-		Subject:  "Verify your email address",
-		Template: "email-verification",
-		Data: map[string]any{
-			"UserFullName":     displayNameOf(u),
-			"VerificationLink": s.appURL + "/verify-email?token=" + token,
-		},
-	})
-}
-
-// displayNameOf prefers the account's display name for the greeting.
-func displayNameOf(u user.User) string {
-	if u.DisplayName != "" {
-		return u.DisplayName
-	}
-	return u.Username
-}
-
-// verifyRequest is the POST verify-email body.
-type verifyRequest struct {
-	Token string `json:"token"`
-}
-
-func (r verifyRequest) Validate() error {
-	return validation.ValidateStruct(&r,
-		validation.Field(&r.Token, validation.Required),
-	)
 }
 
 // handleVerify serves POST /users/me/verify-email: consumes the
@@ -199,6 +145,29 @@ func (s *Service) handleVerify(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// sendVerificationEmail queues the verification mail for the user;
+// the token travels by email only.
+func (s *Service) sendVerificationEmail(ctx context.Context, userID user.UserID, token string) error {
+	if s.sender == nil {
+		return nil
+	}
+
+	u, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	return s.sender.EnqueueEmail(ctx, mailer.Message{
+		To:       u.Email,
+		Subject:  "Verify your email address",
+		Template: "email-verification",
+		Data: map[string]any{
+			"UserFullName":     displayNameOf(u),
+			"VerificationLink": s.appURL + "/verify-email?token=" + token,
+		},
+	})
+}
+
 // mint creates a fresh verification token; returns the raw value.
 func (s *Service) mint(ctx context.Context, userID user.UserID) (string, error) {
 	raw, err := token.NewRaw()
@@ -215,4 +184,23 @@ func (s *Service) mint(ctx context.Context, userID user.UserID) (string, error) 
 		return "", err
 	}
 	return raw, nil
+}
+
+// verifyRequest is the POST /users/me/verify-email body.
+type verifyRequest struct {
+	Token string `json:"token"`
+}
+
+func (r verifyRequest) Validate() error {
+	return validation.ValidateStruct(&r,
+		validation.Field(&r.Token, validation.Required),
+	)
+}
+
+// displayNameOf prefers the display name, falling back to username.
+func displayNameOf(u user.User) string {
+	if u.DisplayName != "" {
+		return u.DisplayName
+	}
+	return u.Username
 }

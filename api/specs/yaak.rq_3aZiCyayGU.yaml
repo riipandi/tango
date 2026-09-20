@@ -1,0 +1,46 @@
+type: http_request
+model: http_request
+id: rq_3aZiCyayGU
+createdAt: 2026-09-19T00:34:24.838883
+updatedAt: 2026-09-19T14:58:03.442763
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_WNyJqCXLvz
+authentication: {}
+authenticationType: null
+body:
+  bodyType: application/json
+  text: '{}'
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: List OIDC clients
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/ListClients
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

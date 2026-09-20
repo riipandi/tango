@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/huandu/go-sqlbuilder"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.jetify.com/typeid"
 
@@ -33,13 +34,15 @@ func NewPostgresStore(exec datastore.Executor) *PostgresStore {
 // Create inserts a session; ID, TokenHash, and ExpiresAt are preset
 // by the service.
 // sessionUUID converts the TypeID form to the bare UUID the column
-// stores; the ID must already be a valid session TypeID.
-func sessionUUID(id string) string {
+// stores. A value that is not a session TypeID can match no row, and
+// passing it through would surface a Postgres cast failure as an
+// internal error, so callers map the error onto a miss.
+func sessionUUID(id string) (string, error) {
 	parsed, err := identity.ParseID[SessionID](id)
 	if err != nil {
-		return id
+		return "", err
 	}
-	return parsed.UUID()
+	return parsed.UUID(), nil
 }
 
 // sessionTypeID converts the stored UUID back to the TypeID form;
@@ -55,9 +58,13 @@ func sessionTypeID(id string) string {
 func (s *PostgresStore) Create(ctx context.Context, se *Session) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(sessionsTable)
-	ib.Cols("id", "user_id", "provider", "token_hash", "user_agent", "device_name", "ip_address", "expires_at")
-	ib.Values(sessionUUID(se.ID), se.UserID.UUIDBytes(), se.Provider, se.TokenHash,
-		textOrNull(datastore.Deref(se.UserAgent)), textOrNull(datastore.Deref(se.DeviceName)), textOrNull(datastore.Deref(se.IPAddress)), se.ExpiresAt)
+	ib.Cols("id", "user_id", "provider", "token_hash", "user_agent", "device_name", "ip_address", "expires_at", "remember")
+	sessionID, err := sessionUUID(se.ID)
+	if err != nil {
+		return fmt.Errorf("session create: %w", err)
+	}
+	ib.Values(sessionID, se.UserID.UUIDBytes(), se.Provider, se.TokenHash,
+		textOrNull(datastore.Deref(se.UserAgent)), textOrNull(datastore.Deref(se.DeviceName)), textOrNull(datastore.Deref(se.IPAddress)), se.ExpiresAt, se.Remember)
 	ib.Returning("created_at")
 
 	query, args := ib.Build()
@@ -73,20 +80,72 @@ func (s *PostgresStore) Create(ctx context.Context, se *Session) error {
 // and revoked rows are invisible (indistinguishable from missing).
 func (s *PostgresStore) ValidByTokenHash(ctx context.Context, tokenHash string) (Session, user.User, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select(
-		"s.id", "s.provider", "s.token_hash", "s.user_agent", "s.device_name", "s.ip_address",
-		"s.created_at", "s.expires_at", "s.refreshed_at", "s.revoked_at",
-		"u.id", "u.username", "u.email", "u.first_name", "u.last_name",
-		"u.display_name", "u.avatar_url", "u.locale", "u.is_admin", "u.disabled",
-		"u.email_verified_at", "u.created_at", "u.updated_at", "u.last_login_at",
-	)
+	sb.Select(sessionUserColumns...)
 	sb.From(sessionsTable + " s")
 	sb.Join("public.users u ON u.id = s.user_id")
 	sb.Where(sb.E("s.token_hash", tokenHash), sb.IsNull("s.revoked_at"),
 		sb.GT("s.expires_at", time.Now().UTC()))
 
 	query, args := sb.Build()
+	return scanSessionRow(s.exec.QueryRow(ctx, query, args...), "")
+}
 
+// ValidByID resolves one live session with its user by ID; expired
+// and revoked rows are invisible (indistinguishable from missing).
+func (s *PostgresStore) ValidByID(ctx context.Context, id string) (Session, user.User, error) {
+	uuid, err := sessionUUID(id)
+	if err != nil {
+		return Session{}, user.User{}, ErrNotFound
+	}
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select(sessionUserColumns...)
+	sb.From(sessionsTable + " s")
+	sb.Join("public.users u ON u.id = s.user_id")
+	sb.Where(sb.E("s.id", uuid), sb.IsNull("s.revoked_at"),
+		sb.GT("s.expires_at", time.Now().UTC()))
+
+	query, args := sb.Build()
+	return scanSessionRow(s.exec.QueryRow(ctx, query, args...), "")
+}
+
+// Rotate replaces the session's refresh token hash and restarts its
+// sliding expiry; the previous token stops resolving.
+func (s *PostgresStore) Rotate(ctx context.Context, id string, tokenHash string, expiresAt time.Time) error {
+	uuid, err := sessionUUID(id)
+	if err != nil {
+		return ErrNotFound
+	}
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(sessionsTable)
+	ub.Set(ub.Assign("token_hash", tokenHash), ub.Assign("expires_at", expiresAt),
+		ub.Assign("refreshed_at", time.Now().UTC()))
+	ub.Where(ub.E("id", uuid), ub.IsNull("revoked_at"))
+
+	query, args := ub.Build()
+	tag, err := s.exec.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("session rotate: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// sessionUserColumns lists the joined session+user projection read
+// by the single-row live-session lookups.
+var sessionUserColumns = []string{
+	"s.id", "s.provider", "s.token_hash", "s.user_agent", "s.device_name", "s.ip_address",
+	"s.created_at", "s.expires_at", "s.refreshed_at", "s.revoked_at", "s.remember",
+	"u.id", "u.username", "u.email", "u.first_name", "u.last_name",
+	"u.display_name", "u.avatar_url", "u.locale", "u.is_admin", "u.disabled",
+	"u.email_verified_at", "u.created_at", "u.updated_at", "u.last_login_at",
+}
+
+// scanSessionRow decodes the joined projection; id is the TypeID the
+// caller already resolved (empty for token-hash lookups, which read
+// it from the row).
+func scanSessionRow(row pgx.Row, id string) (Session, user.User, error) {
 	var (
 		se          Session
 		userAgent   pgtype.Text
@@ -110,9 +169,9 @@ func (s *PostgresStore) ValidByTokenHash(ctx context.Context, tokenHash string) 
 		uUpdatedAt      pgtype.Timestamptz
 		uLastLoginAt    pgtype.Timestamptz
 	)
-	err := s.exec.QueryRow(ctx, query, args...).Scan(
+	err := row.Scan(
 		&se.ID, &se.Provider, &se.TokenHash, &userAgent, &deviceName, &ipAddress,
-		&se.CreatedAt, &se.ExpiresAt, &refreshedAt, &revokedAt,
+		&se.CreatedAt, &se.ExpiresAt, &refreshedAt, &revokedAt, &se.Remember,
 		&uid, &username, &email, &firstName, &lastName,
 		&displayName, &avatarURL, &locale, &isAdmin, &disabled,
 		&emailVerifiedAt, &uCreatedAt, &uUpdatedAt, &uLastLoginAt,
@@ -121,7 +180,11 @@ func (s *PostgresStore) ValidByTokenHash(ctx context.Context, tokenHash string) 
 		return Session{}, user.User{}, mapErr(err)
 	}
 
-	se.ID = sessionTypeID(se.ID)
+	if id != "" {
+		se.ID = id
+	} else {
+		se.ID = sessionTypeID(se.ID)
+	}
 	se.UserID = user.MustID(uid)
 	se.UserAgent = datastore.TextPtr(userAgent)
 	se.DeviceName = datastore.TextPtr(deviceName)
@@ -151,14 +214,17 @@ func (s *PostgresStore) ValidByTokenHash(ctx context.Context, tokenHash string) 
 // Touch extends a live session's expiry (sliding window) and marks
 // the refresh time.
 func (s *PostgresStore) Touch(ctx context.Context, id string, expiresAt time.Time) error {
+	uuid, err := sessionUUID(id)
+	if err != nil {
+		return ErrNotFound
+	}
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(sessionsTable)
 	ub.Set(ub.Assign("expires_at", expiresAt), ub.Assign("refreshed_at", time.Now().UTC()))
-	ub.Where(ub.E("id", id), ub.IsNull("revoked_at"))
+	ub.Where(ub.E("id", uuid), ub.IsNull("revoked_at"))
 
 	query, args := ub.Build()
-	_, err := s.exec.Exec(ctx, query, args...)
-	if err != nil {
+	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
 		return fmt.Errorf("session touch: %w", err)
 	}
 	return nil
@@ -181,10 +247,14 @@ func (s *PostgresStore) RevokeByTokenHash(ctx context.Context, tokenHash string)
 // RevokeForUser revokes one session owned by the user; unknown or
 // foreign session IDs surface ErrNotFound.
 func (s *PostgresStore) RevokeForUser(ctx context.Context, userID user.UserID, sessionID string) error {
+	uuid, err := sessionUUID(sessionID)
+	if err != nil {
+		return ErrNotFound
+	}
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(sessionsTable)
 	ub.Set(ub.Assign("revoked_at", time.Now().UTC()))
-	ub.Where(ub.E("id", sessionUUID(sessionID)), ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"))
+	ub.Where(ub.E("id", uuid), ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"))
 
 	query, args := ub.Build()
 	tag, err := s.exec.Exec(ctx, query, args...)
@@ -206,8 +276,12 @@ func (s *PostgresStore) RevokeAllForUser(ctx context.Context, userID user.UserID
 	if exceptID == "" {
 		ub.Where(ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"))
 	} else {
+		uuid, err := sessionUUID(exceptID)
+		if err != nil {
+			return ErrNotFound
+		}
 		ub.Where(ub.E("user_id", userID.UUIDBytes()), ub.IsNull("revoked_at"),
-			ub.NE("id", sessionUUID(exceptID)))
+			ub.NE("id", uuid))
 	}
 
 	query, args := ub.Build()
@@ -221,7 +295,7 @@ func (s *PostgresStore) RevokeAllForUser(ctx context.Context, userID user.UserID
 func (s *PostgresStore) ListActiveForUser(ctx context.Context, userID user.UserID) ([]Session, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("id", "user_id", "provider", "token_hash", "user_agent", "device_name",
-		"ip_address", "created_at", "expires_at", "refreshed_at", "revoked_at")
+		"ip_address", "created_at", "expires_at", "refreshed_at", "revoked_at", "remember")
 	sb.From(sessionsTable)
 	sb.Where(sb.E("user_id", userID.UUIDBytes()), sb.IsNull("revoked_at"),
 		sb.GT("expires_at", time.Now().UTC()))
@@ -248,7 +322,7 @@ func (s *PostgresStore) ListActiveForUser(ctx context.Context, userID user.UserI
 			revokedAt   pgtype.Timestamptz
 		)
 		if scanErr := rows.Scan(&se.ID, &uid, &se.Provider, &se.TokenHash, &userAgent,
-			&deviceName, &ipAddress, &createdAt, &expiresAt, &refreshedAt, &revokedAt); scanErr != nil {
+			&deviceName, &ipAddress, &createdAt, &expiresAt, &refreshedAt, &revokedAt, &se.Remember); scanErr != nil {
 			continue
 		}
 		se.ID = sessionTypeID(se.ID)

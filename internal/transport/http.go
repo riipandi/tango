@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/logger"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/web"
@@ -18,14 +17,18 @@ type HTTPServer struct {
 	Server *http.Server
 }
 
+// RPC deadline budget: every RPC request gets a hard context
+// deadline so a stalled handler cannot pin a connection.
+const rpcRequestTimeout = 30 * time.Second
+
 // RouteSet carries the explicit route-mount callbacks from the
 // application runtime so the transport boundary needs no registry.
 type RouteSet struct {
 	MountRoot func(chi.Router)
 	MountAPI  func(chi.Router)
-	// RequireSession protects metadata endpoints that upstream serves
-	// to any signed-in user; nil leaves those routes unmounted.
-	RequireSession kernel.Guard
+	// MountRPC registers module-owned Connect services into the
+	// shared /rpc handler tree; nil leaves only the smoke service.
+	MountRPC func(r chi.Router)
 }
 
 // NewHTTPServer wires middleware, core routes, and runtime routes.
@@ -56,13 +59,27 @@ func NewHTTPServer(routes RouteSet, cfg *config.Config, log logger.Logger, limit
 		}
 		r.Get("/", APIRootHandler)
 		r.Get("/healthz", newHealthHandler(checks).ServeHTTP)
-		if routes.RequireSession != nil {
-			r.Get("/version/current", routes.RequireSession(http.HandlerFunc(VersionCurrentHandler)).ServeHTTP)
-		}
-		r.Get("/version/latest", VersionLatestHandler(latest))
+		// Version metadata serves ConnectRPC exclusively (the
+		// VersionService below /rpc); /api/version* is gone.
 		if routes.MountAPI != nil {
 			routes.MountAPI(r)
 		}
+	})
+
+	// Mount the ConnectRPC surface. Shares the global request-ID,
+	// logger, recovery, and CORS middleware; adds a per-request
+	// deadline. The mount happens before the SPA fallback so unknown
+	// /rpc paths answer Connect 404s, never the SPA document. chi's
+	// Mount only shifts its route context, never r.URL.Path, so the
+	// Connect tree needs an explicit StripPrefix — the generated
+	// handlers match procedure paths exactly.
+	rpcRouter := newRPCRouter(routes.MountRPC)
+	r.Group(func(r chi.Router) {
+		if limiter != nil {
+			r.Use(limiter)
+		}
+		r.Use(middleware.RequestTimeout(rpcRequestTimeout))
+		r.Mount("/rpc", http.StripPrefix("/rpc", rpcRouter))
 	})
 
 	// Mount the SPA fallback last.

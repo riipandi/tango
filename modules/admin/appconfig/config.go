@@ -37,8 +37,6 @@ type configKey struct {
 	Default string
 	// OneOf restricts string values to a fixed set (empty = free).
 	OneOf []string
-	// Sensitive marks values that must be hidden in admin responses.
-	Sensitive bool
 	// ValidateJSON, when set, checks the stored string form against
 	// the named JSON shape (the reader of this key parses it).
 	ValidateJSON func(value string) error
@@ -48,7 +46,6 @@ type configKey struct {
 // internal/config + .env.example.
 var configKeys = []configKey{
 	{Key: "app_name", Type: typeString, Public: true, Default: "tango"},
-	{Key: "session_duration", Type: typeInt, Default: "43200"}, // minutes; 30 days
 	{Key: "home_page_url", Type: typeString, Public: true, Default: "/"},
 	{Key: "accent_color", Type: typeString, Public: true},
 	{Key: "disable_animations", Type: typeBool, Public: true},
@@ -59,22 +56,13 @@ var configKeys = []configKey{
 	{Key: "signup_default_user_group_ids", Type: typeString},
 	{Key: "signup_default_custom_claims", Type: typeString},
 
-	// Email policy (SMTP relay settings live under the SMTP section)
+	// Email policy
 	{Key: "require_user_email", Type: typeBool, Public: true},
 	{Key: "email_login_notification_enabled", Type: typeBool, Default: "true"},
 	{Key: "email_one_time_access_as_unauthenticated_enabled", Type: typeBool, Public: true},
 	{Key: "email_one_time_access_as_admin_enabled", Type: typeBool, Public: true, Default: "true"},
 	{Key: "email_api_key_expiration_enabled", Type: typeBool, Default: "true"},
 	{Key: "email_verification_enabled", Type: typeBool, Public: true},
-
-	// SMTP relay (defaults fold from MAILER_* env; password redacted)
-	{Key: "smtp_from_email", Type: typeString, Default: "mailer@example.com"},
-	{Key: "smtp_from_name", Type: typeString, Default: "MyApplication"},
-	{Key: "smtp_host", Type: typeString, Default: "localhost"},
-	{Key: "smtp_port", Type: typeInt, Default: "1025"},
-	{Key: "smtp_username", Type: typeString},
-	{Key: "smtp_password", Type: typeString, Sensitive: true},
-	{Key: "smtp_secure", Type: typeBool},
 
 	// WebAuthn policy
 	{Key: "webauthn_user_verification", Type: typeString, Default: "preferred", OneOf: webauthnVerifications},
@@ -139,17 +127,13 @@ type variable struct {
 	IsPublic bool   `json:"is_public,omitzero"`
 }
 
-// mergedValues folds DB overrides over env-provided defaults, which
-// in turn fold over the catalog defaults: catalog < env < DB.
-func mergedValues(envDefaults, overrides map[string]string) map[string]string {
+// mergedValues folds DB overrides over the catalog defaults:
+// catalog < DB. There is no env layer — environment-backed settings
+// have their own single source and are not admin-editable.
+func mergedValues(overrides map[string]string) map[string]string {
 	out := make(map[string]string, len(configKeys))
 	for _, entry := range configKeys {
 		out[entry.Key] = entry.Default
-	}
-	for key, value := range envDefaults {
-		if _, known := lookup(key); known {
-			out[key] = value
-		}
 	}
 	for key, value := range overrides {
 		if _, known := lookup(key); known {
@@ -168,26 +152,6 @@ func publicView(values map[string]string) []variable {
 			continue
 		}
 		out = append(out, variable{Key: entry.Key, Type: string(entry.Type), Value: values[entry.Key]})
-	}
-	return out
-}
-
-// allView lists every key with its visibility flag (admin). The
-// stored value of a sensitive key never leaves the server: the
-// response carries an empty string instead.
-func allView(values map[string]string) []variable {
-	out := make([]variable, 0, len(configKeys))
-	for _, entry := range configKeys {
-		value := values[entry.Key]
-		if entry.Sensitive {
-			value = ""
-		}
-		out = append(out, variable{
-			Key:      entry.Key,
-			Type:     string(entry.Type),
-			Value:    value,
-			IsPublic: entry.Public,
-		})
 	}
 	return out
 }

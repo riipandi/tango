@@ -7,7 +7,6 @@ package oidc
 import (
 	"context"
 	"errors"
-	"net/url"
 
 	"github.com/lestrrat-go/jwx/v3/jwa"
 
@@ -76,7 +75,7 @@ func (s *Service) EndSession(ctx context.Context, hint, clientID, postLogoutRedi
 		return "", ErrMissingAuthorization
 	}
 
-	// Resolve the callback first: like upstream's transaction, a
+	// Resolve the callback before revoking: a
 	// bad post-logout URI must not cost the grant its tokens.
 	callback := ""
 	if len(client.LogoutCallbackURLs) > 0 {
@@ -97,26 +96,11 @@ func (s *Service) EndSession(ctx context.Context, hint, clientID, postLogoutRedi
 
 	// The access token carries the same jti as its session row; the
 	// whole family (refresh included) dies with the grant. A missing
-	// row skips revocation, matching upstream's tolerant store.
+	// row skips revocation: a gone grant has nothing left to revoke.
 	if access, getErr := s.store.GetSession(ctx, KindAccessToken, verified.JWTID); getErr == nil {
 		if deactErr := s.store.DeactivateFamily(ctx, access.RequestID); deactErr != nil {
 			return "", deactErr
 		}
 	}
 	return callback, nil
-}
-
-// appendStateToURL re-encodes the callback with the state parameter.
-func appendStateToURL(callbackURL, state string) string {
-	if state == "" {
-		return callbackURL
-	}
-	parsed, err := url.Parse(callbackURL)
-	if err != nil {
-		return callbackURL
-	}
-	query := parsed.Query()
-	query.Set("state", state)
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
 }

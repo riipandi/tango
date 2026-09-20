@@ -1,0 +1,39 @@
+// Canonical internal RPC contract for transport-owned system surfaces.
+// The public health endpoints stay REST; HealthService exists only as
+// the Connect transport smoke target.
+syntax = "proto3";
+
+package tango.system.v1;
+
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/system/v1;systemv1";
+
+// HealthService is the transport smoke target for the /rpc mount.
+service HealthService {
+  rpc Check(CheckRequest) returns (CheckResponse);
+}
+
+// VersionService exposes the deployed build metadata. Current mirrors
+// the REST route's session requirement; Latest answers the cached
+// release tag anonymously.
+service VersionService {
+  rpc Current(CurrentRequest) returns (CurrentResponse);
+  rpc Latest(LatestRequest) returns (LatestResponse);
+}
+
+message CurrentRequest {}
+
+message CurrentResponse {
+  string current_version = 1;
+}
+
+message LatestRequest {}
+
+message LatestResponse {
+  string latest_version = 1;
+}
+
+message CheckRequest {}
+
+message CheckResponse {
+  string status = 1;
+}

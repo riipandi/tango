@@ -208,8 +208,7 @@ func (s *PostgresStore) list(ctx context.Context, sb *sqlbuilder.SelectBuilder, 
 	return out, rows.Err()
 }
 
-// SuggestedKeys lists distinct claim keys, most used first —
-// upstream orders the suggestions by usage count.
+// SuggestedKeys lists distinct claim keys, most used first.
 func (s *PostgresStore) SuggestedKeys(ctx context.Context) ([]string, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("key")
