@@ -106,22 +106,62 @@ func printRollback(w io.Writer, selected []database.MigrationStatus) error {
 	return err
 }
 
-// printStatus reports every embedded migration and the database version, which
-// is the highest applied migration.
+// migrationTimestamp is how applied times are rendered. The migration handle
+// pins the session to UTC, so the values carry no zone.
+const migrationTimestamp = "2006-01-02 15:04:05"
+
+// printStatus reports every embedded migration, the database version, and when
+// the migrations last ran. A time comes from the tstamp column goose writes
+// when it records a migration, so it is the moment that migration last ran,
+// not when its file changed.
 func printStatus(w io.Writer, statuses []database.MigrationStatus, version int64) error {
 	applied := 0
 	for _, status := range statuses {
 		state := "pending"
+		at := "-"
 		if status.Applied {
 			state = "applied"
+			at = status.AppliedAt.UTC().Format(migrationTimestamp)
 			applied++
 		}
-		if _, err := fmt.Fprintf(w, "%05d %-7s %s\n", status.Version, state, status.Name); err != nil {
+		if _, err := fmt.Fprintf(w, "%05d %-7s %-19s %s\n",
+			status.Version, state, at, status.Name); err != nil {
 			return err
 		}
 	}
-	_, err := fmt.Fprintf(w, "\nversion %05d; %d of %d applied\n", version, applied, len(statuses))
+
+	if _, err := fmt.Fprintf(w, "\nversion %05d; %d of %d applied\n",
+		version, applied, len(statuses)); err != nil {
+		return err
+	}
+
+	last, ok := lastRun(statuses)
+	if !ok {
+		_, err := fmt.Fprintln(w, "no migrations applied yet")
+		return err
+	}
+	_, err := fmt.Fprintf(w, "last run %s UTC (%s)\n",
+		last.AppliedAt.UTC().Format(migrationTimestamp), last.Name)
 	return err
+}
+
+// lastRun returns the migration that ran most recently. Comparing timestamps
+// rather than taking the highest version keeps the answer right when
+// --allow-out-of-order applied an older version last.
+func lastRun(statuses []database.MigrationStatus) (database.MigrationStatus, bool) {
+	var (
+		last database.MigrationStatus
+		ok   bool
+	)
+	for _, status := range statuses {
+		if !status.Applied {
+			continue
+		}
+		if !ok || status.AppliedAt.After(last.AppliedAt) {
+			last, ok = status, true
+		}
+	}
+	return last, ok
 }
 
 // confirm asks the question and reports whether the user agreed. A

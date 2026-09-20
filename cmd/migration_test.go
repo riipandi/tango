@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -334,16 +335,68 @@ func TestMigrateStatus(t *testing.T) {
 
 	out, err := runMigrateStatusCmd(t, "--env-file="+envFile)
 	require.NoError(t, err)
-	assert.Contains(t, out, "00001 pending 00001_initialize_schema.sql")
+	assert.Contains(t, out, "00001 pending -                   00001_initialize_schema.sql")
 	assert.Contains(t, out, "version 00000; 0 of 9 applied")
+	assert.Contains(t, out, "no migrations applied yet")
 
 	_, err = runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
 
 	out, err = runMigrateStatusCmd(t, "--env-file="+envFile)
 	require.NoError(t, err)
-	assert.Contains(t, out, "00001 applied 00001_initialize_schema.sql")
+	assert.Contains(t, out, "00001 applied")
+	assert.Contains(t, out, "00001_initialize_schema.sql")
 	assert.Contains(t, out, "version 00009; 9 of 9 applied")
+	assert.Contains(t, out, "last run ")
+	assert.Contains(t, out, " UTC (00009_add_session_remember.sql)")
+}
+
+// After a rollback the last run is the migration that ran before it, not the
+// one that was just removed.
+func TestMigrateStatusReportsLastRunAfterRollback(t *testing.T) {
+	container := testutils.StartPostgres(t.Context(), t)
+	envFile := writeEnvFile(t, container.NewDatabase(t))
+
+	_, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
+	require.NoError(t, err)
+
+	_, err = runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=2")
+	require.NoError(t, err)
+
+	out, err := runMigrateStatusCmd(t, "--env-file="+envFile)
+	require.NoError(t, err)
+	assert.Contains(t, out, "last run ")
+	assert.Contains(t, out, "(00007_create_rate_limits_table.sql)")
+	assert.NotContains(t, out, "(00009_add_session_remember.sql)")
+}
+
+// The applied time must be a real timestamp, not a zero value.
+func TestMigrateStatusShowsAppliedTime(t *testing.T) {
+	container := testutils.StartPostgres(t.Context(), t)
+	envFile := writeEnvFile(t, container.NewDatabase(t))
+
+	_, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
+	require.NoError(t, err)
+
+	out, err := runMigrateStatusCmd(t, "--env-file="+envFile)
+	require.NoError(t, err)
+
+	// 00001 applied 2026-09-21 04:31:07 00001_initialize_schema.sql
+	line := ""
+	for _, candidate := range strings.Split(out, "\n") {
+		if strings.HasPrefix(candidate, "00001 applied ") {
+			line = candidate
+			break
+		}
+	}
+	require.NotEmpty(t, line, "status must list 00001 as applied")
+
+	// The stamp has a space in it, so the date and the time are two fields.
+	fields := strings.Fields(line)
+	require.GreaterOrEqual(t, len(fields), 4)
+	stamp := fields[2] + " " + fields[3]
+	_, err = time.ParseInLocation(migrationTimestamp, stamp, time.UTC)
+	require.NoError(t, err, "applied time %q must be a timestamp", stamp)
 }
 
 func TestMigrateVersion(t *testing.T) {

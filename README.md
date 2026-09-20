@@ -67,6 +67,10 @@ task db:validate
 non-consecutive versions, malformed annotations, and missing Down blocks. It runs as part of
 `task check`.
 
+`migrate:status` lists every migration with the time it last ran, and closes with the most recent
+run. Times come from the `tstamp` column goose writes when it records a migration, so they show when
+a migration last ran, not when its file changed. Times are UTC.
+
 Concurrent runs are safe: the migrator holds a Postgres session advisory lock, so a second process
 waits instead of applying the same migration twice.
 
