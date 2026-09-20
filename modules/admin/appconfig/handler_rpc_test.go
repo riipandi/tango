@@ -55,7 +55,7 @@ func TestRPCConfigLifecycle(t *testing.T) {
 	// Validation rejects a bad value for a known key.
 	_, err = h.Update(t.Context(), connect.NewRequest(&adminv1.UpdateConfigVariablesRequest{
 		Variables: []*adminv1.ConfigVariable{
-			{Key: "session_duration", Type: adminv1.ConfigVariable_TYPE_INT, Value: "not-a-number"},
+			{Key: "disable_animations", Type: adminv1.ConfigVariable_TYPE_BOOL, Value: "maybe"},
 		},
 	}))
 	require.Error(t, err)

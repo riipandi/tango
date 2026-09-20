@@ -46,7 +46,6 @@ type configKey struct {
 // internal/config + .env.example.
 var configKeys = []configKey{
 	{Key: "app_name", Type: typeString, Public: true, Default: "tango"},
-	{Key: "session_duration", Type: typeInt, Default: "43200"}, // minutes; 30 days
 	{Key: "home_page_url", Type: typeString, Public: true, Default: "/"},
 	{Key: "accent_color", Type: typeString, Public: true},
 	{Key: "disable_animations", Type: typeBool, Public: true},

@@ -61,7 +61,7 @@ func TestConfigCRUD(t *testing.T) {
 		names[v.GetKey()] = v.GetIsPublic()
 	}
 	assert.True(t, names["app_name"], "public key visible")
-	assert.False(t, names["session_duration"], "private key present but flagged")
+	assert.False(t, names["cimd_url_allowlist"], "private key present but flagged")
 
 	// Update persists keys, ignores unknown ones, and echoes the full view.
 	updated, err := h.Update(ctx, connect.NewRequest(&adminv1.UpdateConfigVariablesRequest{
