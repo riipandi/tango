@@ -27,11 +27,20 @@ func (s *stubPool) Ping(context.Context) error {
 func TestPostgresCheckPassesWhenPoolPings(t *testing.T) {
 	pool := &stubPool{}
 
-	result := health.NewChecker(health.WithCheck(health.PostgresCheck(pool))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.PostgresCheck(pool, "localhost:5432/test"))).Check(t.Context())
 
 	assert.True(t, pool.called)
 	assert.Equal(t, health.GlobalHealthy, result.Status)
 	assert.Equal(t, health.CheckNamePostgres, result.Details["postgres"].Name)
+}
+
+// The target must be reported, so the text output says which database was
+// reached, and must never carry the password from the DSN.
+func TestPostgresCheckReportsTarget(t *testing.T) {
+	check := health.PostgresCheck(&stubPool{}, "localhost:5432/test")
+
+	assert.Equal(t, "localhost:5432/test", check.Target)
+	assert.NotContains(t, check.Target, "@")
 }
 
 // The error must name Postgres, so a failing probe says which dependency is
@@ -39,7 +48,7 @@ func TestPostgresCheckPassesWhenPoolPings(t *testing.T) {
 func TestPostgresCheckWrapsPingError(t *testing.T) {
 	pool := &stubPool{err: errors.New("connection refused")}
 
-	result := health.NewChecker(health.WithCheck(health.PostgresCheck(pool))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.PostgresCheck(pool, "localhost:5432/test"))).Check(t.Context())
 
 	assert.Equal(t, health.GlobalUnhealthy, result.Status)
 	assert.Contains(t, result.Details["postgres"].Error, "postgres")
@@ -49,7 +58,7 @@ func TestPostgresCheckWrapsPingError(t *testing.T) {
 // The check must be required, so a dead database fails the probe rather than
 // being reported as an optional extra.
 func TestPostgresCheckIsRequired(t *testing.T) {
-	check := health.PostgresCheck(&stubPool{})
+	check := health.PostgresCheck(&stubPool{}, "localhost:5432/test")
 	assert.False(t, check.Optional)
 
 	// It carries its own timeout, shorter than the checker default, so a
@@ -68,7 +77,7 @@ func TestPostgresCheckAgainstRealPool(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 
-	result := health.NewChecker(health.WithCheck(health.PostgresCheck(pool))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.PostgresCheck(pool, "localhost:5432/test"))).Check(t.Context())
 	assert.Equal(t, health.GlobalHealthy, result.Status)
 	assert.Empty(t, result.Failed())
 
@@ -77,7 +86,7 @@ func TestPostgresCheckAgainstRealPool(t *testing.T) {
 	pool.Close()
 
 	result = health.NewChecker(
-		health.WithCheck(health.PostgresCheck(pool)),
+		health.WithCheck(health.PostgresCheck(pool, "localhost:5432/test")),
 		health.WithTimeout(5*time.Second),
 	).Check(t.Context())
 	assert.Equal(t, health.GlobalUnhealthy, result.Status)

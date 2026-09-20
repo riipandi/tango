@@ -26,10 +26,20 @@ func passing(context.Context) error { return nil }
 
 // runHealthCmd executes the health command with args and returns stdout.
 //
+// The harness passes --data-dir pointing at a fresh temp directory: the test
+// working directory is cmd/, which has no storage/ next to it, and the storage
+// check would otherwise fail for a reason the test does not care about.
+//
 // The root command installs a no-op ExitErrHandler: without it cli.HandleExitCoder
 // calls os.Exit, which would end the test binary instead of returning the error
 // this test asserts on.
 func runHealthCmd(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	return runHealthCmdIn(t, t.TempDir(), args...)
+}
+
+// runHealthCmdIn runs the health command with an explicit data directory.
+func runHealthCmdIn(t *testing.T, dataDir string, args ...string) (string, error) {
 	t.Helper()
 
 	var out bytes.Buffer
@@ -39,10 +49,12 @@ func runHealthCmd(t *testing.T, args ...string) (string, error) {
 		Commands: []*cli.Command{healthCheckCmd},
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "env-file", Usage: "Load environment variables from a file"},
+			&cli.StringFlag{Name: "data-dir", Usage: "Set the Application data directory"},
 		},
 		ExitErrHandler: func(context.Context, *cli.Command, error) {},
 	}
-	err := root.Run(context.Background(), append([]string{"tango", healthCheckCmd.Name}, args...))
+	args = append([]string{"tango", healthCheckCmd.Name, "--data-dir=" + dataDir}, args...)
+	err := root.Run(context.Background(), args)
 	return out.String(), err
 }
 
@@ -109,12 +121,18 @@ func TestHealthJSONOutput(t *testing.T) {
 	// same shape and the same order.
 	details, ok := result["details"].([]any)
 	require.True(t, ok, "details must be an array")
-	require.Len(t, details, 1)
+	require.Len(t, details, 2)
 
-	postgres, ok := details[0].(map[string]any)
+	// Ordered by check name, so the CLI and the API always agree.
+	first, ok := details[0].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "postgres", postgres["name"])
-	assert.Equal(t, "up", postgres["status"])
+	assert.Equal(t, "postgres", first["name"])
+	assert.Equal(t, "up", first["status"])
+
+	second, ok := details[1].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "storage", second["name"])
+	assert.Equal(t, "up", second["status"])
 }
 
 // --short must print one word, so a shell script reads it without parsing.
@@ -145,9 +163,46 @@ func TestHealthTextOutput(t *testing.T) {
 	assert.Contains(t, out, "name: tango")
 	assert.Contains(t, out, "version: "+config.AppVersion)
 	assert.Contains(t, out, "status: healthy")
-	assert.Contains(t, out, "checks: 1 up, 0 down")
-	assert.Contains(t, out, "CHECK")
-	assert.Contains(t, out, "postgres  up")
+	assert.Contains(t, out, "checks: 2 up, 0 down")
+	assert.Contains(t, out, "postgres: up (")
+	assert.Contains(t, out, "storage: up (")
+}
+
+// The storage check must reach the CLI report and use the resolved data
+// directory, so an unusable directory fails the command.
+func TestHealthReportsUnusableDataDir(t *testing.T) {
+	container := testutils.StartPostgres(t.Context(), t)
+	envFile := healthEnvFile(t, container.NewDatabase(t))
+
+	// A directory that does not exist: the application would only discover
+	// this when it tried to store the first file.
+	out, err := runHealthCmdIn(t, filepath.Join(t.TempDir(), "nope"), "--env-file="+envFile)
+	require.Error(t, err)
+
+	var exitErr cli.ExitCoder
+	require.ErrorAs(t, err, &exitErr)
+	assert.Equal(t, exitUnhealthy, exitErr.ExitCode())
+	assert.Contains(t, out, "storage: down")
+	assert.Contains(t, out, "does not exist")
+}
+
+// A world-writable data directory must fail the probe, because it holds uploads
+// and certificates.
+func TestHealthReportsWorldWritableDataDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+
+	container := testutils.StartPostgres(t.Context(), t)
+	envFile := healthEnvFile(t, container.NewDatabase(t))
+
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o777))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	out, err := runHealthCmdIn(t, dir, "--env-file="+envFile)
+	require.Error(t, err)
+	assert.Contains(t, out, "world-writable")
 }
 
 // Every failing check must be reported, not just the first.
@@ -213,4 +268,39 @@ func TestHealthNoCacheFlagExists(t *testing.T) {
 	out, err := runHealthCmd(t, "--env-file="+envFile, "--no-cache", "--short")
 	require.NoError(t, err)
 	assert.Equal(t, "healthy\n", out)
+}
+
+// The report names the database that was reached, and never its password: an
+// operator pastes this output into a ticket.
+func TestPostgresTargetOmitsCredentials(t *testing.T) {
+	tests := []struct {
+		name string
+		dsn  string
+		want string
+	}{
+		{
+			name: "url form",
+			dsn:  "postgresql://postgres:supersecret@db.internal:5432/tango?sslmode=disable",
+			want: "db.internal:5432/tango",
+		},
+		{
+			name: "key value form",
+			dsn:  "host=db.internal port=5432 dbname=tango user=postgres password=supersecret",
+			want: "db.internal:5432/tango",
+		},
+		{
+			name: "unparsable dsn reports nothing",
+			dsn:  "://not-a-dsn",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := postgresTarget(tt.dsn)
+
+			assert.Equal(t, tt.want, target)
+			assert.NotContains(t, target, "supersecret")
+		})
+	}
 }

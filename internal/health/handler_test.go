@@ -241,10 +241,12 @@ func TestWriteTextHealthyReport(t *testing.T) {
 		Details: map[string]health.CheckResult{
 			"postgres": {
 				Name:      "postgres",
+				Target:    "localhost:5432/postgres",
 				Status:    health.StatusUp,
 				Timestamp: time.Now().Add(-2 * time.Second),
 				Duration:  235 * time.Microsecond,
 			},
+			"storage": {Name: "storage", Target: "/srv/storage", Status: health.StatusUp},
 		},
 		Info: map[string]string{"name": "tango", "version": "1.2.3"},
 	}
@@ -256,26 +258,27 @@ func TestWriteTextHealthyReport(t *testing.T) {
 version: 1.2.3
 status: healthy
 duration: 1.5 s
-checks: 1 up, 0 down
+checks: 2 up, 0 down
 
-CHECK     STATUS  DURATION  CHECKED        ERROR
-postgres  up      235 µs    2 seconds ago
+postgres: up (localhost:5432/postgres)
+storage: up (/srv/storage)
 `, out.String())
 }
 
-// A failing check must appear in the table with its error, and the summary must
-// name it, so a reader knows what is wrong without extra tooling.
+// A failing check must carry its error on its own line, and the summary must
+// count it, so `grep ': down'` finds every problem without extra tooling.
 func TestWriteTextFailingReport(t *testing.T) {
 	result := health.Result{
 		Status: health.GlobalUnhealthy,
 		Details: map[string]health.CheckResult{
 			"postgres": {
 				Name:     "postgres",
+				Target:   "localhost:5432/postgres",
 				Status:   health.StatusDown,
 				Error:    "connection refused",
 				Duration: 2 * time.Millisecond,
 			},
-			"valkey": {Name: "valkey", Status: health.StatusUp, Optional: true, Duration: time.Millisecond},
+			"valkey": {Name: "valkey", Status: health.StatusUp, Optional: true},
 		},
 	}
 
@@ -284,18 +287,59 @@ func TestWriteTextFailingReport(t *testing.T) {
 
 	assert.Contains(t, out.String(), "status: unhealthy")
 	assert.Contains(t, out.String(), "checks: 1 up, 1 down, 1 optional")
-	assert.Contains(t, out.String(), "postgres  down           2 ms      never    connection refused")
-	assert.Contains(t, out.String(), "valkey    up (optional)  1 ms      never")
+	assert.Contains(t, out.String(), "postgres: down (localhost:5432/postgres): connection refused")
+	assert.Contains(t, out.String(), "valkey: up optional")
+}
+
+// Every line must be "<name>: <status>...", so a reader or a script can split on
+// the first ": " without knowing which check it is looking at.
+func TestWriteTextCheckLinesAreParseable(t *testing.T) {
+	result := health.Result{
+		Status: health.GlobalUnhealthy,
+		Details: map[string]health.CheckResult{
+			"postgres": {Name: "postgres", Status: health.StatusDown, Error: "boom"},
+			"storage":  {Name: "storage", Target: "/srv/storage", Status: health.StatusUp},
+			"valkey":   {Name: "valkey", Status: health.StatusUp, Optional: true},
+		},
+	}
+
+	var out strings.Builder
+	require.NoError(t, health.WriteText(&out, result))
+
+	for _, line := range checkLines(t, out.String()) {
+		name, rest, found := strings.Cut(line, ": ")
+		require.True(t, found, "check line must be name: status: %q", line)
+		assert.Contains(t, result.Details, name, "line must start with a check name: %q", line)
+		assert.True(t,
+			strings.HasPrefix(rest, "up") || strings.HasPrefix(rest, "down"),
+			"line must carry a status right after the name: %q", line)
+	}
+}
+
+// checkLines returns the check lines of a report: everything after the blank
+// line that separates the summary from the checks.
+func checkLines(t *testing.T, report string) []string {
+	t.Helper()
+
+	lines := nonEmptyLines(report)
+	for i, line := range lines {
+		if strings.HasPrefix(line, "checks: ") {
+			require.Less(t, i+1, len(lines), "report has no check lines:\n%s", report)
+			return lines[i+1:]
+		}
+	}
+	t.Fatalf("report has no checks summary:\n%s", report)
+	return nil
 }
 
 // Output must not carry trailing spaces: they are noise in a diff and in a
-// copied line. tabwriter pads columns, so this is a real risk.
+// copied line.
 func TestWriteTextHasNoTrailingWhitespace(t *testing.T) {
 	result := health.Result{
 		Status: health.GlobalHealthy,
 		Details: map[string]health.CheckResult{
 			"a-short":           {Name: "a-short", Status: health.StatusUp},
-			"a-much-longer-one": {Name: "a-much-longer-one", Status: health.StatusUp},
+			"a-much-longer-one": {Name: "a-much-longer-one", Status: health.StatusUp, Target: "/x"},
 		},
 	}
 
@@ -307,93 +351,50 @@ func TestWriteTextHasNoTrailingWhitespace(t *testing.T) {
 	}
 }
 
-// The table must be aligned, so a reader can scan the columns. tabwriter pads
-// each column to the widest cell.
-func TestWriteTextAlignsColumns(t *testing.T) {
-	result := health.Result{
-		Status: health.GlobalHealthy,
-		Details: map[string]health.CheckResult{
-			"a":              {Name: "a", Status: health.StatusUp},
-			"a-longer-check": {Name: "a-longer-check", Status: health.StatusUp},
-		},
-	}
-
-	var out strings.Builder
-	require.NoError(t, health.WriteText(&out, result))
-
-	lines := nonEmptyLines(out.String())
-	header := tableHeaderIndex(t, lines)
-	require.Greater(t, header, 0, "header must hold a STATUS column")
-
-	rows := lines[headerIndex(lines)+1:]
-	require.Len(t, rows, 2)
-	for _, line := range rows {
-		assert.Equal(t, header, strings.Index(line, "up"), "STATUS column is not aligned: %q", line)
-	}
-}
-
-// headerIndex returns the position of the table header, which is the only line
-// that starts with the CHECK column name.
-func headerIndex(lines []string) int {
-	for i, line := range lines {
-		if strings.HasPrefix(line, "CHECK") {
-			return i
-		}
-	}
-	return -1
-}
-
-// tableHeaderIndex returns the column position of STATUS in the table header.
-func tableHeaderIndex(t *testing.T, lines []string) int {
-	t.Helper()
-
-	index := headerIndex(lines)
-	require.NotEqual(t, -1, index, "table header missing from:\n%s", strings.Join(lines, "\n"))
-	return strings.Index(lines[index], "STATUS")
-}
-
 // A result with no checks must still print a summary, so an empty checker does
-// not produce an empty report.
+// not produce an empty report or a dangling blank line.
 func TestWriteTextWithoutChecks(t *testing.T) {
 	var out strings.Builder
 	require.NoError(t, health.WriteText(&out, health.Result{Status: health.GlobalHealthy}))
 
-	assert.Contains(t, out.String(), "status: healthy")
-	assert.NotContains(t, out.String(), "CHECK")
+	assert.Equal(t, "status: healthy\nduration: 0 s\nchecks: 0 up, 0 down\n", out.String())
 }
 
-// Duration must be humanized, not raw nanoseconds: "1.5 s" is readable where
-// "1500000000" is not.
+// The whole-call duration must be humanized, not raw nanoseconds: "1.5 s" is
+// readable where "1500000000" is not.
 func TestWriteTextHumanizesDurations(t *testing.T) {
 	result := health.Result{
 		Status:   health.GlobalHealthy,
 		Duration: 1500 * time.Millisecond,
-		Details: map[string]health.CheckResult{
-			"postgres": {Name: "postgres", Status: health.StatusUp, Duration: 235 * time.Microsecond},
-		},
 	}
 
 	var out strings.Builder
 	require.NoError(t, health.WriteText(&out, result))
 
 	assert.Contains(t, out.String(), "duration: 1.5 s")
-	assert.Contains(t, out.String(), "235 µs")
 }
 
-// Timestamps must be humanized, so a reader sees how long ago a check ran
-// instead of comparing raw timestamps by eye.
-func TestWriteTextHumanizesTimestamps(t *testing.T) {
+// Per-check durations and timestamps are absent from the text report: they are
+// per-run numbers that answer no question a reader has. They stay in JSON.
+func TestWriteTextOmitsPerCheckTiming(t *testing.T) {
 	result := health.Result{
 		Status: health.GlobalHealthy,
 		Details: map[string]health.CheckResult{
-			"postgres": {Name: "postgres", Status: health.StatusUp, Timestamp: time.Now().Add(-2 * time.Hour)},
+			"postgres": {
+				Name:      "postgres",
+				Status:    health.StatusUp,
+				Duration:  235 * time.Microsecond,
+				Timestamp: time.Now().Add(-2 * time.Hour),
+			},
 		},
 	}
 
 	var out strings.Builder
 	require.NoError(t, health.WriteText(&out, result))
 
-	assert.Contains(t, out.String(), "2 hours ago")
+	assert.NotContains(t, out.String(), "235 µs")
+	assert.NotContains(t, out.String(), "hours ago")
+	assert.Equal(t, "postgres: up\n", checkLines(t, out.String())[0]+"\n")
 }
 
 // WriteShort is the --short output: one word, so a shell script reads it without

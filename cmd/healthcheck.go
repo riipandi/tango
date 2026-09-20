@@ -5,9 +5,11 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/urfave/cli/v3"
 
 	"github.com/riipandi/tango/internal/config"
@@ -27,6 +29,10 @@ var healthCheckCmd = &cli.Command{
 	Description: `Checks the application dependencies and reports the aggregated
 availability status. The same result is published by the REST handler,
 so the CLI and the API always agree.
+
+It checks that Postgres answers and that the application data directory
+(storage by default, or --data-dir) exists, is writable, and is not
+world-writable.
 
 Output is text by default; pass --json for a machine-readable result or
 --short for the aggregated status alone.
@@ -56,6 +62,15 @@ The check needs DATABASE_URL; pass --env-file or export it.`,
 		},
 	},
 	Action: runHealthCheck,
+}
+
+// dataDir resolves the application data directory. The root --data-dir flag
+// sets it; config.DefaultDataDir is the default.
+func dataDir(cmd *cli.Command) string {
+	if dir := cmd.String("data-dir"); dir != "" {
+		return dir
+	}
+	return config.DefaultDataDir
 }
 
 // runHealthCheck opens the database pool, runs the checks, and prints the
@@ -106,13 +121,35 @@ func checkHealth(ctx context.Context, cmd *cli.Command, dsn string) health.Resul
 
 	options := []health.Option{
 		health.WithTimeout(cmd.Duration("timeout")),
-		health.WithCheck(health.PostgresCheck(pool)),
+		health.WithChecks(
+			health.PostgresCheck(pool, postgresTarget(dsn)),
+			health.StorageCheck(dataDir(cmd)),
+		),
 		health.WithInfo(info),
 	}
 	if cmd.Bool("no-cache") {
 		options = append(options, health.WithCacheTTL(0))
 	}
 	return health.NewChecker(options...).Check(ctx)
+}
+
+// postgresTarget names the database the check reached, without its credentials.
+// The DSN holds a password, which must not appear in a report an operator
+// pastes into a ticket.
+func postgresTarget(dsn string) string {
+	parsed, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return ""
+	}
+
+	target := parsed.Host
+	if parsed.Port != 0 {
+		target += ":" + strconv.FormatUint(uint64(parsed.Port), 10)
+	}
+	if parsed.Database != "" {
+		target += "/" + parsed.Database
+	}
+	return target
 }
 
 // printHealth writes the result in the requested format. --short wins over

@@ -66,6 +66,10 @@ type Check struct {
 	// Check is the function to run. Required. Returning an error marks the
 	// component down.
 	Check func(ctx context.Context) error
+	// Target names what is inspected, such as a DSN host or a directory. It
+	// appears in the text report so a reader can see which database or path was
+	// checked. Optional: a check that inspects nothing specific leaves it empty.
+	Target string
 	// Timeout bounds this check. It can only shorten the checker timeout, so
 	// one check cannot outlive the whole call.
 	Timeout time.Duration
@@ -110,6 +114,9 @@ type CheckResult struct {
 	// Name is the check this result belongs to, repeated here so a result
 	// stays readable once it is detached from the map that held it.
 	Name string
+	// Target is what the check inspected, empty when it inspects nothing
+	// specific.
+	Target string
 	// Status is up when the check passed and down when it did not.
 	Status Status
 	// Error is the failure message, empty when the check passed. It is a
@@ -296,6 +303,7 @@ func (c *Checker) runOne(ctx context.Context, check Check) CheckResult {
 
 	result := CheckResult{
 		Name:      check.Name,
+		Target:    check.Target,
 		Status:    StatusUp,
 		Timestamp: started.UTC(),
 		Duration:  c.cfg.now().Sub(started),

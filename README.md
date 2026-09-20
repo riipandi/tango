@@ -101,20 +101,28 @@ task health -- --short
 task health -- --json
 ```
 
-Text output is `key: value` lines followed by an aligned per-check table. Durations and timestamps
-go through `go-humanize`, so a reader sees `235 µs` and `2 seconds ago` instead of nanoseconds and a
-raw timestamp:
+Text output is a flat list, one fact per line, so it greps and pipes without column padding to
+strip. Durations go through `go-humanize`, so a reader sees `235 µs` instead of nanoseconds:
 
 ```text
 name: tango
 version: 0.0.0
 status: healthy
-duration: 343.916 µs
-checks: 1 up, 0 down
+duration: 339.792 µs
+checks: 2 up, 0 down
 
-CHECK     STATUS  DURATION    CHECKED  ERROR
-postgres  up      322.833 µs  now
+postgres: up (localhost:5432/postgres)
+storage: up (storage)
 ```
+
+Every check line is `name: status[ optional][ (target)][: error]`, so `grep ': down'` finds every
+problem. Per-check durations and timestamps are absent from the text output — they are per-run
+numbers a reader does not act on — and stay in `--json` for a machine that measures them.
+
+Two checks run by default: **postgres** (the pool answers) and **storage** (the application data
+directory exists, is writable, and is not world-writable). The data directory is `storage` relative
+to the working directory, or whatever `--data-dir` sets; the report shows the password-free
+`host:port/database` target, never the DSN.
 
 The vocabulary is deliberate: a component is `up` or `down`, the system is `healthy` or `unhealthy`.
 A component marked optional is reported but does not affect the aggregate, so a missing optional
@@ -122,7 +130,7 @@ backend is not an outage. Checks run concurrently under a global timeout (`--tim
 with a short result cache; `--no-cache` runs every check now.
 
 Exit codes: `0` healthy, `3` unhealthy, `1` on a usage error such as a missing `DATABASE_URL`. A
-database that cannot be reached is reported as `unhealthy`, not as a command failure.
+database or directory that cannot be used is reported as `unhealthy`, not as a command failure.
 
 ### Secret keys
 

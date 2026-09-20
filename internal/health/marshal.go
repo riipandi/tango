@@ -21,6 +21,7 @@ import (
 type jsonCheckResult struct {
 	Name       string    `json:"name"`
 	Status     Status    `json:"status"`
+	Target     string    `json:"target,omitempty"`
 	Error      string    `json:"error,omitempty"`
 	Timestamp  time.Time `json:"timestamp"`
 	DurationMS float64   `json:"duration_ms"`
@@ -59,6 +60,7 @@ func (r CheckResult) wire() jsonCheckResult {
 	return jsonCheckResult{
 		Name:       r.Name,
 		Status:     r.Status,
+		Target:     r.Target,
 		Error:      r.Error,
 		Timestamp:  r.Timestamp,
 		DurationMS: milliseconds(r.Duration),

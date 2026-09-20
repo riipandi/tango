@@ -35,6 +35,7 @@ var rootCmd = &cli.Command{
 			Name:     "data-dir",
 			Usage:    "Set the Application data directory",
 			Required: false,
+			Value:    config.DefaultDataDir,
 		},
 		&cli.BoolFlag{
 			Name:    "version",

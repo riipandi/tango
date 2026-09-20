@@ -23,9 +23,10 @@ type Pinger interface {
 //
 // Ping uses a connection from the pool, so this also fails while the pool is
 // exhausted, which is the state a saturated service is in.
-func PostgresCheck(pool Pinger) Check {
+func PostgresCheck(pool Pinger, target string) Check {
 	return Check{
 		Name:    CheckNamePostgres,
+		Target:  target,
 		Timeout: DefaultPostgresTimeout,
 		Check: func(ctx context.Context) error {
 			if err := pool.Ping(ctx); err != nil {
