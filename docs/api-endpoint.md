@@ -32,6 +32,24 @@ Two conventions apply throughout:
   token storage and never authorize an RPC. Browser ceremony surfaces (device approval, MFA, the
   auth lifecycle) never accept a machine credential.
 
+## Lifetimes
+
+Every authentication lifetime is configured through the environment, in
+**seconds**, and validated at startup: a non-positive value, or a short session
+longer than the remembered one, fails startup instead of degrading at runtime.
+
+| Variable | Bounds |
+| --- | --- |
+| `AUTH_ACCESS_TOKEN_EXPIRY` | internal RPC bearer JWT; refresh stays cookie-only |
+| `AUTH_SESSION_LIFETIME` | session issued with `remember: true` |
+| `AUTH_SESSION_SHORT_LIFETIME` | session issued with `remember: false` or absent |
+| `OIDC_ACCESS_TOKEN_EXPIRY` | provider default; a client's own duration overrides it |
+| `OIDC_REFRESH_TOKEN_EXPIRY` | provider default; a client's own duration overrides it |
+| `OIDC_AUTHORIZATION_CODE_EXPIRY` | one-time authorization code |
+| `OIDC_INTERACTION_EXPIRY` | sign-in / consent interaction bridge |
+| `OIDC_DEVICE_CODE_EXPIRY` | device authorization window (RFC 8628) |
+| `OIDC_PAR_EXPIRY` | pushed authorization `request_uri` (RFC 9126) |
+
 ## Authentication
 
 Password authentication is a tango-only surface; upstream Pocket ID signs users in with passkeys
@@ -43,7 +61,8 @@ password and session procedures.
 `SignIn` takes `{"identity": "<username or email>", "password": "<plaintext>", "remember": <bool>}`.
 `remember` selects the session duration: `true` issues the long lifetime
 (`AUTH_SESSION_LIFETIME`), `false` or absent the short one
-(`AUTH_SESSION_SHORT_LIFETIME`). The choice is stored on the session, so a sliding
+(`AUTH_SESSION_SHORT_LIFETIME`). Both are seconds and must be configured so the
+short lifetime does not exceed the long one. The choice is stored on the session, so a sliding
 refresh or token rotation never promotes a short session to the long lifetime. The
 response echoes the mode as `remember`.
 

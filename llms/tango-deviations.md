@@ -32,6 +32,16 @@ match the upstream endpoint contract.
   duration. `true` issues `AUTH_SESSION_LIFETIME`, `false` or absent issues
   `AUTH_SESSION_SHORT_LIFETIME`. The choice is stored on the session row and carried across the
   MFA bridge, so a sliding refresh or rotation never promotes a short session to the long one.
+- **Authentication lifetimes are environment-configured, in seconds.** Upstream stores
+  `sessionDuration` (minutes) in its database and derives the rest from compiled constants; tango
+  resolves every lifetime from the environment layer at startup and validates it. The keys are
+  `AUTH_ACCESS_TOKEN_EXPIRY` (internal RPC bearer JWT), `AUTH_SESSION_LIFETIME` /
+  `AUTH_SESSION_SHORT_LIFETIME` (with / without "remember me"), and the `OIDC_*` group
+  (`ACCESS_TOKEN_EXPIRY`, `REFRESH_TOKEN_EXPIRY`, `AUTHORIZATION_CODE_EXPIRY`,
+  `INTERACTION_EXPIRY`, `DEVICE_CODE_EXPIRY`, `PAR_EXPIRY`). A non-positive value or a short
+  session longer than the remembered one fails startup instead of degrading at runtime. Upstream's
+  `sessionDuration` app-config key stays in the catalog for contract parity but is not the source
+  of the session lifetime.
 - **`AccountService`** — tango-only, and deliberately narrow: `ChangePassword`, `ListSessions`,
   and `RevokeSession`. Upstream has no password or session API because it authenticates with
   passkeys. Self-profile read and write are **not** here — they stay on `UserService`, matching
