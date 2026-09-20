@@ -37,13 +37,14 @@ type authRPC struct {
 }
 
 func (h *authRPC) SignIn(ctx context.Context, req *connect.Request[identityv1.SignInRequest]) (*connect.Response[identityv1.SignedIn], error) {
-	identity, secret := req.Msg.GetIdentity(), req.Msg.GetSecret()
-	if identity == "" || secret == "" {
-		return nil, rpcerr.InvalidArgument("identity and secret are required")
+	identity, password := req.Msg.GetIdentity(), req.Msg.GetPassword()
+	if identity == "" || password == "" {
+		return nil, rpcerr.InvalidArgument("identity and password are required")
 	}
 
-	result, err := h.service.SignInWithPending(ctx, identity, secret, Meta{
+	result, err := h.service.SignInWithPending(ctx, identity, password, Meta{
 		UserAgent: req.Header().Get("User-Agent"),
+		Remember:  req.Msg.GetRemember(),
 	})
 	if err != nil {
 		return nil, rpcerr.Unauthenticated("invalid credentials")
@@ -128,6 +129,7 @@ func signedInProto(u user.User, se Session, pending bool) *identityv1.SignedIn {
 		User:     user.ProtoView(u),
 		Pending:  pending,
 		Provider: se.Provider,
+		Remember: se.Remember,
 	}
 	if !pending {
 		out.SessionId = se.ID

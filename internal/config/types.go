@@ -29,10 +29,13 @@ type AuthConfig struct {
 	AccessTokenExpiry  int    `koanf:"access_token_expiry"`
 	RefreshTokenExpiry int    `koanf:"refresh_token_expiry"`
 	SessionLifetime    int    `koanf:"session_lifetime"`
-	GithubClientID     string `koanf:"github_client_id"`
-	GithubClientSecret string `koanf:"github_client_secret"`
-	GoogleClientID     string `koanf:"google_client_id"`
-	GoogleClientSecret string `koanf:"google_client_secret"`
+	// SessionShortLifetime bounds a session issued without "remember
+	// me"; it must not exceed SessionLifetime.
+	SessionShortLifetime int    `koanf:"session_short_lifetime"`
+	GithubClientID       string `koanf:"github_client_id"`
+	GithubClientSecret   string `koanf:"github_client_secret"`
+	GoogleClientID       string `koanf:"google_client_id"`
+	GoogleClientSecret   string `koanf:"google_client_secret"`
 }
 
 type DatabaseConfig struct {

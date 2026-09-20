@@ -165,7 +165,7 @@ func TestLifecycleOverPostgres(t *testing.T) {
 
 	// The pending bridge resolves to the user once, then never again.
 	pendingRaw := "pending-bridge-token"
-	require.NoError(t, store.PutPending(ctx, created.ID, hashToken(pendingRaw), identity.PendingCookieTTL))
+	require.NoError(t, store.PutPending(ctx, created.ID, hashToken(pendingRaw), identity.PendingCookieTTL, false))
 	resolved, err := store.ConsumePending(ctx, hashToken(pendingRaw))
 	require.NoError(t, err)
 	assert.Equal(t, created.ID, resolved)

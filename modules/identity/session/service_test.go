@@ -60,7 +60,15 @@ func TestSignInAndResolve(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 	assert.Equal(t, "password", issued.Provider)
-	assert.WithinDuration(t, time.Now().Add(defaultLifetime), issued.ExpiresAt, time.Minute)
+	// Without "remember me" the session takes the short lifetime.
+	assert.False(t, issued.Remember)
+	assert.WithinDuration(t, time.Now().Add(defaultShortLifetime), issued.ExpiresAt, time.Minute)
+
+	// With it, the configured long lifetime applies.
+	_, _, remembered, err := sessions.SignIn(ctx, u.Username, "s3cret-p@ss", Meta{Remember: true})
+	require.NoError(t, err)
+	assert.True(t, remembered.Remember)
+	assert.WithinDuration(t, time.Now().Add(defaultLifetime), remembered.ExpiresAt, time.Minute)
 
 	resolvedUser, resolved, err := sessions.Resolve(ctx, token)
 	require.NoError(t, err)
@@ -92,8 +100,11 @@ func TestRevokeCurrent(t *testing.T) {
 }
 
 func TestExpiry(t *testing.T) {
-	// Short lifetime: past it, the session is invisible.
-	sessions, passwords, users := newTestStack(t, WithLifetime(60*time.Millisecond))
+	// Short lifetime: past it, the session is invisible. A default
+	// sign-in (no "remember me") uses the short window, so both
+	// lifetimes are pinned to the same tiny value.
+	sessions, passwords, users := newTestStack(t,
+		WithLifetime(60*time.Millisecond), WithShortLifetime(60*time.Millisecond))
 	u := newUser(t, users, passwords, "exp")
 	ctx := t.Context()
 

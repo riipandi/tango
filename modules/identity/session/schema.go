@@ -50,6 +50,11 @@ type Session struct {
 	ExpiresAt   time.Time
 	RefreshedAt *time.Time
 	RevokedAt   *time.Time
+
+	// Remember records the duration requested at sign-in: a session
+	// issued with remember=false keeps the short lifetime across
+	// sliding refreshes and rotations.
+	Remember bool
 }
 
 // Meta carries request context captured at sign-in.
@@ -57,6 +62,9 @@ type Meta struct {
 	UserAgent  string
 	DeviceName string
 	IPAddress  string
+	// Remember selects the long session lifetime; the zero value asks
+	// for the short one.
+	Remember bool
 }
 
 // Errors surfaced by stores and the service.

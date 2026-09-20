@@ -3,7 +3,8 @@ import { UserSchema } from './user.schema'
 
 export const SignInSchema = z.object({
   identity: z.string(),
-  secret: z.string()
+  password: z.string(),
+  remember: z.boolean().optional()
 })
 
 export const ForgotPasswordSchema = z.object({
@@ -19,7 +20,8 @@ export const SignInResultSchema = z.object({
   user: UserSchema,
   session_id: z.string(),
   provider: z.string(),
-  expires_at: z.string().optional()
+  expires_at: z.string().optional(),
+  remember: z.boolean().optional()
 })
 
 // Client-safe session projection served by /account/sessions: never the

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_5SgzmJyWWh
 createdAt: 2026-09-18T19:38:03.314271
-updatedAt: 2026-09-19T16:50:10.847272
+updatedAt: 2026-09-20T10:26:38.483763
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vJemVfyfFL
 authentication: {}
@@ -11,10 +11,11 @@ body:
   text: |-
     {
       "identity": "${[ identity ]}",
-      "secret": "${[ password ]}"
+      "password": "${[ password ]}",
+      "remember": ${[ remember ]}
     }
 bodyType: application/json
-description: Credentials come from the `identity` and `password` environment variables, so the request needs no editing per environment. Development values are seeded by the Yaak environment; override them there rather than in the body.
+description: 'Credentials come from the `identity` and `password` environment variables, so the request needs no editing per environment. `remember` selects the session duration: true issues a long-lived session, false a short one.'
 headers:
 - enabled: true
   name: Content-Type

@@ -85,6 +85,7 @@ message SignedIn {
   string provider = 3;
   optional string expires_at = 4;
   bool pending = 5;
+  bool remember = 6;
 }
 
 // AuthService covers authentication lifecycle RPCs. Protected methods
@@ -99,8 +100,13 @@ service AuthService {
 }
 
 message SignInRequest {
+  // identity is the username or email the account is looked up by.
   string identity = 1;
-  string secret = 2;
+  // password is the plaintext credential, verified and never stored.
+  string password = 2;
+  // remember selects the session duration: true issues a long-lived
+  // session, false a short one.
+  bool remember = 3;
 }
 
 message ForgotPasswordRequest {

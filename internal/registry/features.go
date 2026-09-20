@@ -158,6 +158,7 @@ func newIdentityFeatures(deps Deps, jobsReg *jobs.Registry, recorder identity.Re
 		user.NewPostgresStore(deps.DB),
 		recorder,
 		session.WithLifetime(time.Duration(deps.Config.Auth.SessionLifetime)*time.Second),
+		session.WithShortLifetime(time.Duration(deps.Config.Auth.SessionShortLifetime)*time.Second),
 		session.WithCookieSecure(deps.Config.App.Mode != "development"),
 		session.WithMFAPort(totpService),
 		session.WithAccessTokens(session.NewAccessTokenSigner(

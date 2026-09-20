@@ -27,7 +27,10 @@ const user = {
 
 describe('schema contracts', () => {
   it('accepts a valid sign-in and rejects missing credentials', () => {
-    expect(SignInSchema.safeParse({ identity: 'abbey', secret: 's3cret' }).success).toBe(true)
+    expect(SignInSchema.safeParse({ identity: 'abbey', password: 's3cret' }).success).toBe(true)
+    expect(
+      SignInSchema.safeParse({ identity: 'abbey', password: 's3cret', remember: true }).success
+    ).toBe(true)
     expect(SignInSchema.safeParse({ identity: 'abbey' }).success).toBe(false)
   })
 

@@ -56,11 +56,13 @@ type Store interface {
 	// code was unknown or already spent.
 	ConsumeRecoveryCode(ctx context.Context, userID user.UserID, codeHash string) (bool, error)
 
-	// PutPending replaces the single pending-auth row.
-	PutPending(ctx context.Context, userID user.UserID, tokenHash string, ttl time.Duration) error
-	// PeekPending resolves the bridge owner without consuming it;
-	// verification must succeed before the bridge is deleted.
-	PeekPending(ctx context.Context, tokenHash string) (user.UserID, error)
+	// PutPending replaces the single pending-auth row, recording the
+	// duration the caller requested before the second factor.
+	PutPending(ctx context.Context, userID user.UserID, tokenHash string, ttl time.Duration, remember bool) error
+	// PeekPending resolves the bridge owner and its requested
+	// duration without consuming it; verification must succeed
+	// before the bridge is deleted.
+	PeekPending(ctx context.Context, tokenHash string) (user.UserID, bool, error)
 	// DeletePending removes the bridge by its token hash.
 	DeletePending(ctx context.Context, tokenHash string) error
 	ConsumePending(ctx context.Context, tokenHash string) (user.UserID, error)
@@ -256,12 +258,12 @@ func (s *PostgresStore) ConsumeRecoveryCode(ctx context.Context, userID user.Use
 }
 
 // PutPending replaces the single pending-auth row (one per user).
-func (s *PostgresStore) PutPending(ctx context.Context, userID user.UserID, tokenHash string, ttl time.Duration) error {
+func (s *PostgresStore) PutPending(ctx context.Context, userID user.UserID, tokenHash string, ttl time.Duration, remember bool) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(pendingTable)
-	ib.Cols("user_id", "token_hash", "expires_at")
-	ib.Values(userID.UUIDBytes(), tokenHash, time.Now().UTC().Add(ttl))
-	ib.SQL("ON CONFLICT (user_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at, created_at = CURRENT_TIMESTAMP")
+	ib.Cols("user_id", "token_hash", "expires_at", "remember")
+	ib.Values(userID.UUIDBytes(), tokenHash, time.Now().UTC().Add(ttl), remember)
+	ib.SQL("ON CONFLICT (user_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at, remember = EXCLUDED.remember, created_at = CURRENT_TIMESTAMP")
 
 	query, args := ib.Build()
 	if _, err := s.exec.Exec(ctx, query, args...); err != nil {
@@ -270,24 +272,26 @@ func (s *PostgresStore) PutPending(ctx context.Context, userID user.UserID, toke
 	return nil
 }
 
-// PeekPending resolves the bridge owner without consuming it; the
-// bridge only dies after a successful verification.
-func (s *PostgresStore) PeekPending(ctx context.Context, tokenHash string) (user.UserID, error) {
+// PeekPending resolves the bridge owner and its requested duration
+// without consuming it; the bridge only dies after a successful
+// verification.
+func (s *PostgresStore) PeekPending(ctx context.Context, tokenHash string) (user.UserID, bool, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select("user_id")
+	sb.Select("user_id", "remember")
 	sb.From(pendingTable)
 	sb.Where(sb.And(sb.E("token_hash", tokenHash), sb.GT("expires_at", time.Now().UTC())))
 
 	query, args := sb.Build()
 	var userUUID string
-	err := s.exec.QueryRow(ctx, query, args...).Scan(&userUUID)
+	var remember bool
+	err := s.exec.QueryRow(ctx, query, args...).Scan(&userUUID, &remember)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return user.UserID{}, ErrNoEnrollment
+			return user.UserID{}, false, ErrNoEnrollment
 		}
-		return user.UserID{}, fmt.Errorf("totp store: peek pending: %w", err)
+		return user.UserID{}, false, fmt.Errorf("totp store: peek pending: %w", err)
 	}
-	return user.MustID(userUUID), nil
+	return user.MustID(userUUID), remember, nil
 }
 
 // DeletePending removes the bridge by its token hash.

@@ -22,6 +22,10 @@ type Service struct {
 	users    user.Store
 
 	lifetime time.Duration
+	// shortLifetime bounds a session issued without "remember me".
+	// The sliding refresh and rotation reuse the session's own mode,
+	// so an active short session is never promoted to the long one.
+	shortLifetime time.Duration
 	// cookieSecure marks the session cookie Secure (HTTPS-only);
 	// development runs over plain HTTP.
 	cookieSecure bool
@@ -46,6 +50,9 @@ type Verifier interface {
 // Default session lifetime when none is configured.
 const defaultLifetime = 30 * 24 * time.Hour
 
+// Default lifetime for a session issued without "remember me".
+const defaultShortLifetime = 12 * time.Hour
+
 // ServiceOption configures the session service.
 type ServiceOption func(*Service)
 
@@ -67,6 +74,12 @@ func WithLifetime(d time.Duration) ServiceOption {
 	return func(s *Service) { s.lifetime = d }
 }
 
+// WithShortLifetime sets the lifetime of a session issued without
+// "remember me". It must not exceed the lifetime set by WithLifetime.
+func WithShortLifetime(d time.Duration) ServiceOption {
+	return func(s *Service) { s.shortLifetime = d }
+}
+
 // WithCookieSecure toggles the Secure cookie flag.
 func WithCookieSecure(secure bool) ServiceOption {
 	return func(s *Service) { s.cookieSecure = secure }
@@ -86,12 +99,13 @@ func WithAccessTokens(signer *AccessTokenSigner) ServiceOption {
 // NewService builds the session feature.
 func NewService(store Store, verifier Verifier, users user.Store, recorder identity.Recorder, opts ...ServiceOption) *Service {
 	s := &Service{
-		store:    store,
-		verifier: verifier,
-		users:    users,
-		lifetime: defaultLifetime,
-		now:      time.Now,
-		recorder: recorder,
+		store:         store,
+		verifier:      verifier,
+		users:         users,
+		lifetime:      defaultLifetime,
+		shortLifetime: defaultShortLifetime,
+		now:           time.Now,
+		recorder:      recorder,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -134,7 +148,7 @@ func (s *Service) SignInWithPending(ctx context.Context, identityText, secret st
 			return SignInWithPendingResult{}, requiredErr
 		}
 		if required {
-			pendingToken, pendingErr := s.mfa.CreatePending(ctx, u.ID.String())
+			pendingToken, pendingErr := s.mfa.CreatePending(ctx, u.ID.String(), meta.Remember)
 			if pendingErr != nil {
 				return SignInWithPendingResult{}, pendingErr
 			}
@@ -204,7 +218,8 @@ func (s *Service) issueSession(ctx context.Context, u user.User, provider string
 		UserID:    u.ID,
 		Provider:  provider,
 		TokenHash: hashToken(token),
-		ExpiresAt: now.Add(s.lifetime),
+		ExpiresAt: now.Add(s.lifetimeFor(meta.Remember)),
+		Remember:  meta.Remember,
 	}
 	applyMeta(&se, meta)
 
@@ -231,9 +246,11 @@ func (s *Service) Resolve(ctx context.Context, token string) (user.User, Session
 	}
 
 	// Sliding expiry: refresh once past half-life so active sessions
-	// never expire mid-use.
-	if remaining := time.Until(se.ExpiresAt); remaining < s.lifetime/2 {
-		expiresAt := s.now().Add(s.lifetime)
+	// never expire mid-use. The window follows the session's own
+	// remember mode, so refreshing never lengthens a short session.
+	lifetime := s.lifetimeFor(se.Remember)
+	if remaining := time.Until(se.ExpiresAt); remaining < lifetime/2 {
+		expiresAt := s.now().Add(lifetime)
 		if err := s.store.Touch(ctx, se.ID, expiresAt); err != nil {
 			return user.User{}, Session{}, err
 		}
@@ -278,7 +295,7 @@ func (s *Service) Rotate(ctx context.Context, se Session) (string, Session, erro
 	if err != nil {
 		return "", Session{}, fmt.Errorf("session: token: %w", err)
 	}
-	expiresAt := s.now().Add(s.lifetime)
+	expiresAt := s.now().Add(s.lifetimeFor(se.Remember))
 	if err := s.store.Rotate(ctx, se.ID, hashToken(token), expiresAt); err != nil {
 		return "", Session{}, err
 	}
@@ -358,6 +375,17 @@ func hashToken(token string) string {
 }
 
 // applyMeta copies optional sign-in context, empty → NULL.
+// lifetimeFor returns the session duration for the requested mode.
+func (s *Service) lifetimeFor(remember bool) time.Duration {
+	if remember {
+		return s.lifetime
+	}
+	if s.shortLifetime > 0 {
+		return s.shortLifetime
+	}
+	return defaultShortLifetime
+}
+
 func applyMeta(se *Session, meta Meta) {
 	if meta.UserAgent != "" {
 		se.UserAgent = &meta.UserAgent

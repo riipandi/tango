@@ -41,15 +41,21 @@ func TestResolveTouchesSlidingExpiry(t *testing.T) {
 		 VALUES ($1, 'password', $2, NOW() + INTERVAL '1 hour')`, u.ID.UUIDBytes(), hashToken(token))
 	require.NoError(t, err)
 
-	svc := NewService(NewPostgresStore(ds), nil, nil, nil)
+	// The row was seeded without "remember me", so the sliding window
+	// is the short lifetime.
+	short := 12 * time.Hour
+	svc := NewService(NewPostgresStore(ds), nil, nil, nil, WithShortLifetime(short))
 	pu, _, rerr := svc.Resolve(ctx, token)
 	require.NoError(t, rerr)
 	assert.Equal(t, u.ID.String(), pu.ID.String())
 
-	// The touch refreshed the expiry beyond the seeded window.
+	// The touch refreshed the expiry beyond the seeded window, by the
+	// short lifetime the session was issued under.
 	row := ds.Pool().QueryRow(ctx, `SELECT expires_at FROM public.sessions WHERE token_hash = $1`, hashToken(token))
 	var expiresAt time.Time
 	require.NoError(t, row.Scan(&expiresAt))
-	assert.Greater(t, expiresAt, time.Now().Add(25*24*time.Hour),
-		"touch must extend a half-life session by the full lifetime")
+	assert.Greater(t, expiresAt, time.Now().Add(short/2),
+		"touch must extend a half-life session by its own lifetime")
+	assert.Less(t, expiresAt, time.Now().Add(short+time.Minute),
+		"a short session must not be promoted to the long lifetime")
 }

@@ -58,13 +58,13 @@ func sessionTypeID(id string) string {
 func (s *PostgresStore) Create(ctx context.Context, se *Session) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(sessionsTable)
-	ib.Cols("id", "user_id", "provider", "token_hash", "user_agent", "device_name", "ip_address", "expires_at")
+	ib.Cols("id", "user_id", "provider", "token_hash", "user_agent", "device_name", "ip_address", "expires_at", "remember")
 	sessionID, err := sessionUUID(se.ID)
 	if err != nil {
 		return fmt.Errorf("session create: %w", err)
 	}
 	ib.Values(sessionID, se.UserID.UUIDBytes(), se.Provider, se.TokenHash,
-		textOrNull(datastore.Deref(se.UserAgent)), textOrNull(datastore.Deref(se.DeviceName)), textOrNull(datastore.Deref(se.IPAddress)), se.ExpiresAt)
+		textOrNull(datastore.Deref(se.UserAgent)), textOrNull(datastore.Deref(se.DeviceName)), textOrNull(datastore.Deref(se.IPAddress)), se.ExpiresAt, se.Remember)
 	ib.Returning("created_at")
 
 	query, args := ib.Build()
@@ -136,7 +136,7 @@ func (s *PostgresStore) Rotate(ctx context.Context, id string, tokenHash string,
 // by the single-row live-session lookups.
 var sessionUserColumns = []string{
 	"s.id", "s.provider", "s.token_hash", "s.user_agent", "s.device_name", "s.ip_address",
-	"s.created_at", "s.expires_at", "s.refreshed_at", "s.revoked_at",
+	"s.created_at", "s.expires_at", "s.refreshed_at", "s.revoked_at", "s.remember",
 	"u.id", "u.username", "u.email", "u.first_name", "u.last_name",
 	"u.display_name", "u.avatar_url", "u.locale", "u.is_admin", "u.disabled",
 	"u.email_verified_at", "u.created_at", "u.updated_at", "u.last_login_at",
@@ -171,7 +171,7 @@ func scanSessionRow(row pgx.Row, id string) (Session, user.User, error) {
 	)
 	err := row.Scan(
 		&se.ID, &se.Provider, &se.TokenHash, &userAgent, &deviceName, &ipAddress,
-		&se.CreatedAt, &se.ExpiresAt, &refreshedAt, &revokedAt,
+		&se.CreatedAt, &se.ExpiresAt, &refreshedAt, &revokedAt, &se.Remember,
 		&uid, &username, &email, &firstName, &lastName,
 		&displayName, &avatarURL, &locale, &isAdmin, &disabled,
 		&emailVerifiedAt, &uCreatedAt, &uUpdatedAt, &uLastLoginAt,
@@ -295,7 +295,7 @@ func (s *PostgresStore) RevokeAllForUser(ctx context.Context, userID user.UserID
 func (s *PostgresStore) ListActiveForUser(ctx context.Context, userID user.UserID) ([]Session, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("id", "user_id", "provider", "token_hash", "user_agent", "device_name",
-		"ip_address", "created_at", "expires_at", "refreshed_at", "revoked_at")
+		"ip_address", "created_at", "expires_at", "refreshed_at", "revoked_at", "remember")
 	sb.From(sessionsTable)
 	sb.Where(sb.E("user_id", userID.UUIDBytes()), sb.IsNull("revoked_at"),
 		sb.GT("expires_at", time.Now().UTC()))
@@ -322,7 +322,7 @@ func (s *PostgresStore) ListActiveForUser(ctx context.Context, userID user.UserI
 			revokedAt   pgtype.Timestamptz
 		)
 		if scanErr := rows.Scan(&se.ID, &uid, &se.Provider, &se.TokenHash, &userAgent,
-			&deviceName, &ipAddress, &createdAt, &expiresAt, &refreshedAt, &revokedAt); scanErr != nil {
+			&deviceName, &ipAddress, &createdAt, &expiresAt, &refreshedAt, &revokedAt, &se.Remember); scanErr != nil {
 			continue
 		}
 		se.ID = sessionTypeID(se.ID)

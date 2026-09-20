@@ -19,7 +19,7 @@ describe('error normalization', () => {
     const { fetchMock } = mockFetch([
       errorEnvelope(422, 'validation failed', [
         { field: 'identity', message: 'cannot be blank' },
-        { field: 'secret', message: 'cannot be blank' }
+        { field: 'password', message: 'cannot be blank' }
       ])
     ])
     const client = createApiClient({ baseUrl: BASE_URL, fetch: fetchMock })
@@ -32,7 +32,7 @@ describe('error normalization', () => {
     expect(error.message).toBe('validation failed')
     expect(error.fieldErrors).toEqual([
       { field: 'identity', message: 'cannot be blank' },
-      { field: 'secret', message: 'cannot be blank' }
+      { field: 'password', message: 'cannot be blank' }
     ])
   })
 

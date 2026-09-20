@@ -44,8 +44,69 @@ func mustRPCUser(t *testing.T, passwords *password.Service, users user.Store, na
 func signInViaRPC(t *testing.T, h *authRPC, identity, secret string) (*connect.Response[identityv1.SignedIn], error) {
 	t.Helper()
 	return h.SignIn(t.Context(), connect.NewRequest(&identityv1.SignInRequest{
-		Identity: identity, Secret: secret,
+		Identity: identity, Password: secret,
 	}))
+}
+
+// TestRPCSignInRememberSelectsLifetime pins the remember contract at
+// the wire boundary: the flag reaches the issued session, is echoed on
+// the response, and selects between the long and short lifetimes.
+func TestRPCSignInRememberSelectsLifetime(t *testing.T) {
+	long := 30 * 24 * time.Hour
+	short := 45 * time.Minute
+	h, sessions, passwords, users := rpcStack(t)
+	sessions.lifetime = long
+	sessions.shortLifetime = short
+
+	u := mustRPCUser(t, passwords, users, "remember")
+
+	// remember=true -> the long lifetime.
+	resp, err := h.SignIn(t.Context(), connect.NewRequest(&identityv1.SignInRequest{
+		Identity: u.Username, Password: "s3cret-p@ss", Remember: true,
+	}))
+	require.NoError(t, err)
+	assert.True(t, resp.Msg.GetRemember())
+	assert.InDelta(t, long.Seconds(), time.Until(mustExpiry(t, resp.Msg.GetExpiresAt())).Seconds(), 60)
+
+	// remember=false (the zero value) -> the short lifetime.
+	resp, err = h.SignIn(t.Context(), connect.NewRequest(&identityv1.SignInRequest{
+		Identity: u.Username, Password: "s3cret-p@ss",
+	}))
+	require.NoError(t, err)
+	assert.False(t, resp.Msg.GetRemember())
+	assert.InDelta(t, short.Seconds(), time.Until(mustExpiry(t, resp.Msg.GetExpiresAt())).Seconds(), 60)
+}
+
+// TestSessionRememberSurvivesSlidingRefresh pins the reason the flag
+// is persisted: refreshing an active short session must not promote it
+// to the long lifetime.
+func TestSessionRememberSurvivesSlidingRefresh(t *testing.T) {
+	short := 40 * time.Minute
+	sessions, passwords, users := newTestStack(t, WithShortLifetime(short))
+	u := mustRPCUser(t, passwords, users, "slide")
+
+	result, err := sessions.SignInWithPending(t.Context(), u.Username, "s3cret-p@ss", Meta{})
+	require.NoError(t, err)
+	require.False(t, result.Session.Remember)
+	token := result.Token
+
+	// Move the clock past half-life so the next Resolve slides the
+	// expiry forward, then assert the window stayed short.
+	base := time.Now().UTC()
+	sessions.now = func() time.Time { return base.Add(short) }
+	_, refreshed, err := sessions.Resolve(t.Context(), token)
+	require.NoError(t, err)
+	assert.False(t, refreshed.Remember, "sliding refresh must not change the mode")
+	assert.InDelta(t, short.Seconds(), time.Until(refreshed.ExpiresAt).Seconds(), 90)
+}
+
+// mustExpiry parses the RFC 3339 expiry the response carries.
+func mustExpiry(t *testing.T, value string) time.Time {
+	t.Helper()
+	require.NotEmpty(t, value)
+	parsed, err := time.Parse(time.RFC3339, value)
+	require.NoError(t, err)
+	return parsed
 }
 
 // TestRPCSignInIssuesCookies covers the public entry point: refresh +

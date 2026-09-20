@@ -46,7 +46,7 @@ func rpcSignIn(t *testing.T, sessions *Service, identityText, secret string) (st
 	t.Helper()
 	h := &authRPC{service: sessions}
 	resp, err := h.SignIn(t.Context(), connect.NewRequest(&identityv1.SignInRequest{
-		Identity: identityText, Secret: secret,
+		Identity: identityText, Password: secret,
 	}))
 	require.NoError(t, err)
 	return setCookieValue(resp.Header(), CookieName), setCookieValue(resp.Header(), AccessTokenCookieName)

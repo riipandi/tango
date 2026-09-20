@@ -163,7 +163,7 @@ func TestMfaRPCVerifyPending(t *testing.T) {
 
 	// Seed a pending bridge row.
 	pendingRaw := "pending-bridge-token-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")
-	require.NoError(t, store.PutPending(ctx, created.ID, hashToken(pendingRaw), identity.PendingCookieTTL))
+	require.NoError(t, store.PutPending(ctx, created.ID, hashToken(pendingRaw), identity.PendingCookieTTL, false))
 
 	// No cookie → unauthenticated.
 	w := rpcPost(t, h, "VerifyPending", `{"code":"000000"}`, "")
@@ -182,4 +182,26 @@ func TestMfaRPCVerifyPending(t *testing.T) {
 	assert.Equal(t, "tango_session", cookies[0].Name)
 	assert.Equal(t, identity.PendingCookieName, cookies[1].Name)
 	assert.Empty(t, cookies[1].Value)
+}
+
+// TestMfaPendingCarriesRemember pins that the duration requested
+// before the second factor reaches the session issued after it. The
+// bridge outlives the sign-in call, so dropping the flag here would
+// silently shorten or lengthen the session.
+func TestMfaPendingCarriesRemember(t *testing.T) {
+	h, svc, created, store := newRPCStack(t)
+	ctx := t.Context()
+
+	secret, _, err := svc.Enroll(ctx, created)
+	require.NoError(t, err)
+	_, err = svc.Confirm(ctx, created, codeAt(t, secret, time.Now().UTC()))
+	require.NoError(t, err)
+
+	pendingRaw := "pending-remember-token-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")
+	require.NoError(t, store.PutPending(ctx, created.ID, hashToken(pendingRaw), identity.PendingCookieTTL, true))
+
+	w := rpcPost(t, h, "VerifyPending", `{"code":"`+codeAt(t, secret, time.Now().UTC())+`"}`, pendingRaw)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), `"remember":true`,
+		"the requested duration must survive the second factor")
 }

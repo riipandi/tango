@@ -96,12 +96,12 @@ func (h *mfaRPC) VerifyPending(ctx context.Context, req *connect.Request[identit
 		return nil, rpcerr.Unauthenticated("verification required")
 	}
 
-	u, token, err := h.service.VerifyPending(ctx, pending, req.Msg.GetCode())
+	u, token, remember, err := h.service.VerifyPending(ctx, pending, req.Msg.GetCode())
 	if err != nil {
 		return nil, rpcError(err)
 	}
 
-	resp := connect.NewResponse(signedInProto(u))
+	resp := connect.NewResponse(signedInProto(u, remember))
 	secure := h.secure
 	addCookie(resp, sessionCookie(token, secure))
 	addCookie(resp, expiredCookie(identity.PendingCookieName, "/", secure))
@@ -178,8 +178,8 @@ func rpcError(err error) error {
 
 // signedInProto maps the completed pending sign-in onto the shared
 // message; the session id rides the cookie, not the body.
-func signedInProto(u user.User) *identityv1.SignedIn {
-	return &identityv1.SignedIn{User: user.ProtoView(u), Pending: false}
+func signedInProto(u user.User, remember bool) *identityv1.SignedIn {
+	return &identityv1.SignedIn{User: user.ProtoView(u), Pending: false, Remember: remember}
 }
 
 // pendingTokenFrom reads the pending-auth cookie from the Connect
