@@ -1,0 +1,183 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json
+
+x-common: &common
+  networks: ['intranet']
+  extra_hosts: ['host.docker.internal:host-gateway']
+  restart: unless-stopped
+
+services:
+  perses:
+    <<: *common
+    # @ref: https://perses.dev/perses/docs/configuration/configuration
+    image: docker.io/persesdev/perses:${PERSES_VERSION:-latest}
+    hostname: perses
+    ports: ['3380:3380']
+    volumes: ['../.storage/perses_data:/perses:rw']
+    configs: [{ source: perses_config, target: /etc/perses/config.yaml }]
+    command: '-web.listen-address=0.0.0.0:3380 -log.level=error --config=/etc/perses/config.yaml'
+    security_opt: ['no-new-privileges:true']
+    shm_size: 128m # set shared memory limit
+    mem_limit: 256m # set memory limit
+    healthcheck:
+      test: ['CMD', 'percli', 'version']
+      interval: 3s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      victoria-metrics: { condition: service_healthy }
+      victoria-logs: { condition: service_healthy }
+      victoria-traces: { condition: service_healthy }
+
+  victoria-metrics:
+    <<: *common
+    image: docker.io/victoriametrics/victoria-metrics:${VICTORIA_METRICS_VERSION:-v1.143.0}
+    hostname: victoria-metrics
+    ports: ['8428:8428']
+    volumes: ['../.storage/victoria_metrics_data:/victoria_metrics_data']
+    configs: [{ source: victoria_metrics_config, target: /victoria_metrics_data/scrape.yaml }]
+    command: '-storageDataPath=/victoria_metrics_data -promscrape.config=/victoria_metrics_data/scrape.yaml'
+    security_opt: ['no-new-privileges:true']
+    shm_size: 128m # set shared memory limit
+    mem_limit: 256m # set memory limit
+    healthcheck:
+      test: ['CMD', 'nc', '-vz', '127.0.0.1', '8428']
+      interval: 3s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres-exporter: { condition: service_healthy }
+
+  victoria-logs:
+    <<: *common
+    image: docker.io/victoriametrics/victoria-logs:${VICTORIA_LOGS_VERSION:-v1.50.0}
+    hostname: victoria-logs
+    ports: ['9428:9428']
+    volumes: ['../.storage/victoria_logs_data:/victoria_logs_data']
+    command: '-storageDataPath=/victoria_logs_data'
+    security_opt: ['no-new-privileges:true']
+    shm_size: 128m # set shared memory limit
+    mem_limit: 256m # set memory limit
+    healthcheck:
+      test: ['CMD', 'nc', '-vz', '127.0.0.1', '9428']
+      interval: 3s
+      timeout: 5s
+      retries: 3
+
+  victoria-traces:
+    <<: *common
+    image: docker.io/victoriametrics/victoria-traces:${VICTORIA_TRACES_VERSION:-v0.8.2}
+    hostname: victoria-traces
+    ports: ['10428:10428']
+    volumes: ['../.storage/victoria_traces_data:/victoria_traces_data']
+    command: '-storageDataPath=/victoria_traces_data -retentionPeriod=8w'
+    security_opt: ['no-new-privileges:true']
+    shm_size: 128m # set shared memory limit
+    mem_limit: 256m # set memory limit
+    healthcheck:
+      test: ['CMD', 'nc', '-vz', '127.0.0.1', '10428']
+      interval: 3s
+      timeout: 5s
+      retries: 3
+
+  postgres-exporter:
+    <<: *common
+    image: quay.io/prometheuscommunity/postgres-exporter:${PG_EXPORTER_VERSION:-latest}
+    hostname: postgres-exporter
+    ports: ['9187:9187']
+    environment:
+      DATA_SOURCE_URI: pgsql:5432/postgres?sslmode=disable
+      DATA_SOURCE_USER: postgres
+      DATA_SOURCE_PASS: securedb
+    security_opt: ['no-new-privileges:true']
+    shm_size: 128m # set shared memory limit
+    mem_limit: 256m # set memory limit
+    healthcheck:
+      test: ['CMD', 'nc', '-vz', '127.0.0.1', '9187']
+      interval: 3s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      pgsql: { condition: service_healthy }
+
+  redis-exporter:
+    <<: *common
+    image: docker.io/cleanstart/redis-exporter:${REDIS_EXPORTER_VERSION:-latest}
+    hostname: redis-exporter
+    ports: ['9121:9121']
+    environment:
+      REDIS_USER: default
+      REDIS_PASSWORD: securedb
+      REDIS_ADDR: redis://redis:6379
+      REDIS_EXPORTER_WEB_LISTEN_ADDRESS: 0.0.0.0:9121
+    security_opt: ['no-new-privileges:true']
+    shm_size: 128m # set shared memory limit
+    mem_limit: 256m # set memory limit
+    healthcheck:
+      test: ['CMD', '/usr/bin/redis_exporter', '--version']
+      interval: 3s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      redis: { condition: service_healthy }
+
+# ================================================================================================
+# Configuration file
+# Behind Cloudflare: proxy_set_header X-Client-IP $http_cf_connecting_ip;
+# ================================================================================================
+
+configs:
+  perses_config:
+    content: |
+      security:
+        readonly: false
+        enable_auth: false
+        encryption_key: ef7b4e8c2595a15f9872c01144dc4ff8
+      database:
+        file:
+          folder: '/perses'
+          extension: 'json'
+      dashboard:
+      datasource:
+        # global:
+        #   disable: false
+        #   # discovery: <GlobalDatasourceDiscovery config> # Optional
+        project:
+          disable: true
+        disable_local: true
+
+  victoria_metrics_config:
+    content: |
+      scrape_configs:
+        - job_name: victoria-metrics
+          static_configs:
+            - targets: ['http://localhost:8428/metrics']
+        - job_name: postgres-db
+          static_configs:
+            - targets: ['postgres-exporter:9187']
+              labels:
+                instance: pg-server-01
+        - job_name: redis-db
+          static_configs:
+            - targets: ['redis-exporter:9121']
+              labels:
+                instance: redis-server-01
+          metrics_path: /scrape
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: redis-exporter:9121
+        - job_name: redis-exporter
+          static_configs:
+            - targets: ['redis-exporter:9121']
+        - job_name: tango
+          static_configs:
+            - targets: ['host.docker.internal:3030']
+
+volumes:
+  victoria_metrics_data:
+  victoria_logs_data:
+  victoria_traces_data:
+  perses_data:

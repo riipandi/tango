@@ -7,6 +7,9 @@ x-common: &common
   extra_hosts: ["host.docker.internal:host-gateway"]
   restart: unless-stopped
 
+include:
+  - ./docker/compose-metrics.yaml
+
 services:
   # tango:
   #   <<: *common
@@ -235,13 +238,9 @@ configs:
 
 volumes:
   pgsql_data:
-    driver: local
   redis_data:
-    driver: local
   mailpit_data:
-    driver: local
   silo_data:
-    driver: local
 
 networks:
   intranet:
