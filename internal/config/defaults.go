@@ -73,6 +73,12 @@ const DefaultPrometheusPath = "/metrics"
 // redeploy of the configuration could have changed.
 const DefaultCORSMaxAge = time.Hour
 
+// DefaultCacheMaxMemory is the byte budget of the in-memory cache driver. It
+// bounds what the driver may hold: a cache that grows without bound would
+// quietly become the largest consumer of the process. A deployment serving
+// more replaces it through the configuration.
+const DefaultCacheMaxMemory = 32 << 20
+
 // DefaultCORSOrigins is the origin list a fresh checkout gets: the Vite dev
 // server the SPA is served from in development. Production names its own
 // origin through the configuration, so a browser has to prove where the call
@@ -133,6 +139,9 @@ func Default() Config {
 		Cache: Cache{
 			Driver: CacheMemory,
 			TTL:    5 * time.Minute,
+			// A budget the deployment can reason about: most of a small
+			// container's memory must not belong to the cache by default.
+			MaxMemory: DefaultCacheMaxMemory,
 		},
 		Database: Database{
 			MaxConns:        10,

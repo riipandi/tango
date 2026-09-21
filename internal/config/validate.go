@@ -39,6 +39,7 @@ func (c Config) Validate() error {
 	check(isOneOf(c.Cache.Driver, CacheMemory, CacheKV),
 		"cache.driver: %q is not one of %s", c.Cache.Driver, joinValues(CacheMemory, CacheKV))
 	check(c.Cache.TTL > 0, "cache.ttl: must be positive")
+	check(c.Cache.MaxMemory > 0, "cache.max_memory: must be positive")
 
 	check(c.Database.URL != "", "database.url: %s",
 		c.unsetNote("database.url", "must not be empty (set DATABASE_URL)"))

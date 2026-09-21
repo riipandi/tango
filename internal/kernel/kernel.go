@@ -2,9 +2,7 @@
 // transport can serve a route without knowing which module owns it.
 package kernel
 
-import (
-	"github.com/go-chi/chi/v5"
-)
+import "github.com/go-chi/chi/v5"
 
 // Module is one feature slice the server mounts. A module owns its package
 // (schema, repository, service, handlers) and registers its endpoints through

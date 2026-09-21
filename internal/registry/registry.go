@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	do "github.com/samber/do/v2"
+	"github.com/samber/do/v2"
 
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"

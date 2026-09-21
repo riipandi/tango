@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	do "github.com/samber/do/v2"
+	"github.com/samber/do/v2"
 	"github.com/urfave/cli/v3"
 
 	"github.com/riipandi/tango/internal/registry"

@@ -28,7 +28,9 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/mailpit v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/minio v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
+	github.com/testcontainers/testcontainers-go/modules/valkey v0.44.0
 	github.com/urfave/cli/v3 v3.13.0
+	github.com/valkey-io/valkey-go v1.0.78
 	go.jetify.com/typeid v1.3.0
 	go.loglayer.dev/integrations/sloghandler/v3 v3.0.0
 	go.loglayer.dev/transports/lumberjack/v3 v3.0.0
@@ -118,6 +120,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jdx/go-netrc v1.0.0 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/knadh/koanf/maps v0.1.3 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
@@ -130,6 +133,7 @@ require (
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
+	github.com/mdelapenya/tlscert v0.2.0 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect

@@ -64,6 +64,10 @@ type Cache struct {
 	Driver string `koanf:"driver" json:"driver"`
 	// TTL is the default lifetime of a cached entry.
 	TTL time.Duration `koanf:"ttl" json:"ttl"`
+	// MaxMemory is the byte budget of the in-memory driver. When the budget
+	// runs out the driver resets itself, keeping the memory it already owns
+	// rather than growing without bound.
+	MaxMemory int64 `koanf:"max_memory" json:"max_memory"`
 }
 
 // Database holds the Postgres connection and pool settings. The fields mirror
