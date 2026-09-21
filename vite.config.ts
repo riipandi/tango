@@ -43,7 +43,7 @@ export default defineConfig({
       build: {
         embedDir: 'web/output',
         outputDir: BUILD_MODE === 'debug' ? 'build/debug' : 'build/release',
-        buildTags: [BUILD_MODE],
+        buildTags: [BUILD_MODE, 'noasm', 'nounsafe'],
         buildFlags: ['-trimpath', '-buildmode=pie', '-buildvcs=false'],
         ldflags: [
           '-w -s -extldflags -static',

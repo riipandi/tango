@@ -36,11 +36,11 @@ tasks:
     cmd: go run -tags debug ./cmd migrate:seed --env-file=.env.local {{.CLI_ARGS}}
 
   db:export:
-    desc: Export the database to a SQL file (add -- --output=path)
+    desc: Export the database to a SQL file (add -- --compression=gzip)
     cmd: go run -tags debug ./cmd db:export --env-file=.env.local {{.CLI_ARGS}}
 
   db:import:
-    desc: Import a backup file (task db:import -- storage/backup/file.sql)
+    desc: Import a backup file (task db:import -- storage/backup/file.sql.gz)
     cmd: go run -tags debug ./cmd db:import --env-file=.env.local {{.CLI_ARGS}}
 
   health:

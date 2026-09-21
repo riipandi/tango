@@ -158,21 +158,39 @@ task db:export -- --output=/tmp/dump.sql
 task db:export -- --schema-only
 task db:export -- --data-only
 
+# Compress the dump. The suffix is added to the name: .sql.gz, .sql.zz, .sql.zip.
+task db:export -- --compression=gzip
+
 # Load a dump. The file is a required argument.
-task db:import -- storage/backup/tango-20260921_0018.sql
+task db:import -- storage/backup/tango-20260921_0018.sql.gz
+
+# See what a restore would load, without touching the database.
+task db:import -- --dry-run storage/backup/tango-20260921_0018.sql.gz
 
 # Replace the contents of the tables in the dump instead of colliding with them.
 task db:import -- --truncate --force storage/backup/tango-20260921_0018.sql
 ```
 
-The default output is `storage/backup/tango-<YYYYMMDD_hhmm>.sql`, in UTC. The name is readable to the
-minute, so a second export inside the same minute lands on the same path; rather than lose the first
-dump, the run stops and says so unless `--overwrite` is passed.
+The default output is `storage/backup/tango-<YYYYMMDD_hhmm>.sql`, in UTC, and the directory is created
+when it is missing. The name is readable to the minute, so a second export inside the same minute
+lands on the same path; rather than lose the first dump, the run stops and says so unless
+`--overwrite` is passed. An `--output` path you type is used as it is, and its directory is not
+created, so a typo stays visible.
+
+`--compression` picks the container: `none` (the default), `gzip`, `zlib`, or `zip`. The dump is
+written plain first and compressed once it is complete, so a failure during the dump cannot leave a
+half-written archive that still looks valid. The compressed file replaces the plain one, and the
+report names the file it wrote and its size.
+
+`db:import` detects the container from the file's own bytes, never from the name, so a renamed dump
+still loads and a name that claims a format the bytes do not carry is not believed. A format this
+tool does not write, such as `bzip2` or `zstd`, is refused by name. A `--dry-run` reports the tables
+and rows a restore would load and changes nothing; it does not open a database at all.
 
 Rows travel through the PostgreSQL `COPY` protocol, so the server does the escaping and a value
 holding a tab, a quote, a newline, or the `\.` terminator survives the round trip. Each table is
 ordered by its primary key, so two dumps of the same state produce the same file apart from the
-header timestamp.
+header timestamp. Compression is reproducible too: the same dump compresses to the same bytes.
 
 A schema dump is idempotent: applying it twice is safe. `CREATE TABLE`, `CREATE INDEX`,
 `CREATE SEQUENCE`, `CREATE SCHEMA`, and `CREATE EXTENSION` carry `IF NOT EXISTS`, and triggers use
@@ -187,7 +205,9 @@ ordered by foreign key rather than by the order they appear in the file, so a ta
 before the table it references. A failure half way leaves the database untouched.
 
 `--truncate` empties the tables in the dump before loading them, which is what a restore into a
-populated database needs. It is destructive, so it asks for confirmation unless `--force` is passed.
+populated database needs. A restore is destructive either way — it replaces rows in the tables the
+dump carries — so it asks for confirmation unless `--force` is passed. A piped or non-interactive run
+proceeds without a prompt, so `task` and CI never block.
 
 `public.app_migration` is never dumped: it is the migrator's bookkeeping, derived from the migration
 files by `migrate:up`, so carrying it would claim a schema state the target does not have.

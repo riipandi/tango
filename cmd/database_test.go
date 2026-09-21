@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/riipandi/tango/database"
 )
 
@@ -224,6 +226,84 @@ func TestDBImportTruncateDeclined(t *testing.T) {
 	assert.Zero(t, countUsers(t, targetEnv))
 }
 
+// The backup directory may not exist yet, on a fresh checkout or after a
+// cleanup. A generated path creates it, and --overwrite must not change that: a
+// first run that happens to pass --overwrite has nothing to overwrite.
+func TestDBExportCreatesTheBackupDirectory(t *testing.T) {
+	envFile := migratedDatabase(t)
+
+	for _, extra := range [][]string{nil, {"--overwrite"}, {"--compression=gzip"}, {"--overwrite", "--compression=zip"}} {
+		t.Run(strings.Join(extra, "+"), func(t *testing.T) {
+			dataDir := filepath.Join(t.TempDir(), "storage")
+
+			args := append([]string{"--env-file=" + envFile, "--data-only", "--data-dir=" + dataDir}, extra...)
+			_, err := runDBExportCmd(t, args...)
+			require.NoError(t, err)
+
+			entries, err := os.ReadDir(filepath.Join(dataDir, backupDir))
+			require.NoError(t, err)
+			assert.Len(t, entries, 1)
+		})
+	}
+}
+
+// A directory that cannot be created or written is reported, rather than
+// failing somewhere further along with no explanation.
+func TestDBExportReportsAnUnusableBackupDirectory(t *testing.T) {
+	envFile := migratedDatabase(t)
+
+	// A file where the directory should be.
+	dataDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, backupDir), []byte("not a directory"), 0o644))
+
+	_, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only", "--data-dir="+dataDir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "backup directory")
+}
+
+// An --output path keeps its directory uncreated, so a typo stays visible rather
+// than turning into a directory tree.
+func TestDBExportDoesNotCreateAnOutputDirectory(t *testing.T) {
+	envFile := migratedDatabase(t)
+	path := filepath.Join(t.TempDir(), "missing", "dump.sql")
+
+	_, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only", "--output="+path)
+	require.Error(t, err)
+	assert.NoFileExists(t, path)
+}
+
+// The report names the file it wrote and how big it is, which is the answer a
+// reader looks for after an export.
+func TestDBExportReportsTheFileSize(t *testing.T) {
+	envFile := migratedDatabase(t)
+	path := filepath.Join(t.TempDir(), "dump.sql")
+
+	out, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only", "--output="+path)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "size:")
+
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Contains(t, out, humanize.Bytes(uint64(info.Size())), "the size must be the real one")
+}
+
+// A compressed dump reports the size of the compressed file, not the plain one
+// it was made from.
+func TestDBExportReportsTheCompressedSize(t *testing.T) {
+	envFile := migratedDatabase(t)
+	path := filepath.Join(t.TempDir(), "dump.sql")
+
+	out, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only",
+		"--compression=gzip", "--output="+path)
+	require.NoError(t, err)
+
+	compressed := path + ".gz"
+	info, err := os.Stat(compressed)
+	require.NoError(t, err)
+	assert.Contains(t, out, humanize.Bytes(uint64(info.Size())))
+}
+
 // --force skips the prompt, which is what a script needs.
 func TestDBImportTruncateForceSkipsPrompt(t *testing.T) {
 	sourceEnv := migratedDatabase(t)
@@ -245,4 +325,183 @@ func TestDBImportTruncateForceSkipsPrompt(t *testing.T) {
 
 	assert.NotContains(t, out, "import cancelled")
 	assert.Equal(t, 1, countUsers(t, targetEnv))
+}
+
+// Every compression format exports to the right name and imports back, which is
+// the contract the pair exists for.
+func TestDBExportImportCompressionRoundTrip(t *testing.T) {
+	sourceEnv := migratedDatabase(t)
+	_, err := runMigrateSeedCmd(t, "", "--env-file="+sourceEnv, "--force")
+	require.NoError(t, err)
+
+	for _, format := range []string{"none", "gzip", "zlib", "zip"} {
+		t.Run(format, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "dump.sql")
+			exportTo(t, sourceEnv, path, "--data-only", "--compression="+format)
+
+			// The suffix is added to the name the user gave.
+			written := path
+			switch format {
+			case "gzip":
+				written += ".gz"
+			case "zlib":
+				written += ".zz"
+			case "zip":
+				written += ".zip"
+			}
+			assert.FileExists(t, written)
+			if format != "none" {
+				assert.NoFileExists(t, path, "the plain dump must not be left behind")
+			}
+
+			targetEnv := migratedDatabase(t)
+			out, err := runDBImportCmd(t, "", "--env-file="+targetEnv, "--truncate", "--force", written)
+			require.NoError(t, err)
+			assert.Equal(t, 1, countUsers(t, targetEnv), "the rows must survive the container")
+
+			if format != "none" {
+				assert.Contains(t, out, "format:")
+				assert.Contains(t, out, format)
+			}
+		})
+	}
+}
+
+// A generated name carries the compression suffix exactly once.
+func TestDBExportGeneratedNameCarriesTheSuffixOnce(t *testing.T) {
+	envFile := migratedDatabase(t)
+	dataDir := filepath.Join(t.TempDir(), "storage")
+
+	out, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only",
+		"--compression=gzip", "--data-dir="+dataDir)
+	require.NoError(t, err)
+
+	entries, err := os.ReadDir(filepath.Join(dataDir, backupDir))
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Regexp(t, `^tango-\d{8}_\d{4}\.sql\.gz$`, entries[0].Name(), "the suffix must appear once")
+	assert.Contains(t, out, entries[0].Name())
+}
+
+// A generated name that already exists is refused for the file the run would
+// actually leave behind, which is the compressed one.
+func TestDBExportRefusesToOverwriteACompressedGeneratedDump(t *testing.T) {
+	envFile := migratedDatabase(t)
+	dataDir := filepath.Join(t.TempDir(), "storage")
+
+	_, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only",
+		"--compression=gzip", "--data-dir="+dataDir)
+	require.NoError(t, err)
+
+	_, err = runDBExportCmd(t, "--env-file="+envFile, "--data-only",
+		"--compression=gzip", "--data-dir="+dataDir)
+	require.ErrorIs(t, err, ErrDumpFileExists)
+
+	_, err = runDBExportCmd(t, "--env-file="+envFile, "--data-only",
+		"--compression=gzip", "--data-dir="+dataDir, "--overwrite")
+	require.NoError(t, err)
+
+	entries, err := os.ReadDir(filepath.Join(dataDir, backupDir))
+	require.NoError(t, err)
+	assert.Len(t, entries, 1, "--overwrite replaces the file rather than adding one")
+}
+
+// A different format is a different file, so it does not collide with one
+// already exported in another format.
+func TestDBExportCompressionDoesNotCollideAcrossFormats(t *testing.T) {
+	envFile := migratedDatabase(t)
+	dataDir := filepath.Join(t.TempDir(), "storage")
+
+	for _, format := range []string{"gzip", "zlib"} {
+		_, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only",
+			"--compression="+format, "--data-dir="+dataDir)
+		require.NoError(t, err, "format %s must not collide with the other", format)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(dataDir, backupDir))
+	require.NoError(t, err)
+	assert.Len(t, entries, 2)
+}
+
+// An unknown value is refused before any work starts, and the error names what
+// would have worked.
+func TestDBExportRejectsUnknownCompression(t *testing.T) {
+	envFile := migratedDatabase(t)
+
+	_, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only",
+		"--compression=tar", "--output="+filepath.Join(t.TempDir(), "dump.sql"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "supported:")
+	assert.Contains(t, err.Error(), "gzip")
+}
+
+// A dry run reports the work and changes nothing, and it needs no database at
+// all: the point is to look before agreeing to a restore.
+func TestDBImportDryRunChangesNothing(t *testing.T) {
+	sourceEnv := migratedDatabase(t)
+	_, err := runMigrateSeedCmd(t, "", "--env-file="+sourceEnv, "--force")
+	require.NoError(t, err)
+
+	path := filepath.Join(t.TempDir(), "dump.sql")
+	exportTo(t, sourceEnv, path, "--data-only")
+
+	targetEnv := migratedDatabase(t)
+
+	out, err := runDBImportCmd(t, "", "--env-file="+targetEnv, "--dry-run", path)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "loaded:")
+	assert.Contains(t, out, "status: nothing loaded (dry run)")
+	assert.Zero(t, countUsers(t, targetEnv), "a dry run must not write")
+}
+
+// A dry run must not need a reachable database, so it works with a DSN that
+// points nowhere.
+func TestDBImportDryRunNeedsNoDatabase(t *testing.T) {
+	sourceEnv := migratedDatabase(t)
+	path := filepath.Join(t.TempDir(), "dump.sql")
+	exportTo(t, sourceEnv, path, "--data-only")
+
+	ghostEnv := filepath.Join(t.TempDir(), "ghost.env")
+	require.NoError(t, os.WriteFile(ghostEnv,
+		[]byte("DATABASE_URL=postgresql://nobody@127.0.0.1:1/ghost?sslmode=disable\n"), 0o600))
+
+	out, err := runDBImportCmd(t, "", "--env-file="+ghostEnv, "--dry-run", path)
+	require.NoError(t, err)
+	assert.Contains(t, out, "status: nothing loaded (dry run)")
+}
+
+// A format this tool does not write is refused by name, before anything is
+// touched.
+func TestDBImportRejectsUnsupportedFormat(t *testing.T) {
+	envFile := migratedDatabase(t)
+	path := filepath.Join(t.TempDir(), "foreign.sql.bz2")
+	require.NoError(t, os.WriteFile(path, []byte{'B', 'Z', 'h', '9', 0x31}, 0o644))
+
+	_, err := runDBImportCmd(t, "", "--env-file="+envFile, path)
+	require.ErrorIs(t, err, database.ErrUnsupportedCompression)
+	assert.Contains(t, err.Error(), "bzip2")
+}
+
+// A restore is destructive, so it asks even without --truncate. A declined
+// prompt leaves the database alone.
+func TestDBImportAsksBeforeRestoring(t *testing.T) {
+	sourceEnv := migratedDatabase(t)
+	_, err := runMigrateSeedCmd(t, "", "--env-file="+sourceEnv, "--force")
+	require.NoError(t, err)
+
+	path := filepath.Join(t.TempDir(), "dump.sql")
+	exportTo(t, sourceEnv, path, "--data-only")
+
+	targetEnv := migratedDatabase(t)
+
+	previous := terminalCheck
+	terminalCheck = func(*cli.Command) bool { return true }
+	t.Cleanup(func() { terminalCheck = previous })
+
+	out, err := runDBImportCmd(t, "n\n", "--env-file="+targetEnv, path)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "import cancelled")
+	assert.Zero(t, countUsers(t, targetEnv))
 }

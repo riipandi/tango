@@ -13,6 +13,7 @@ require (
 	github.com/go-ozzo/ozzo-validation/v4 v4.4.1
 	github.com/huandu/go-sqlbuilder v1.43.0
 	github.com/jackc/pgx/v5 v5.11.0
+	github.com/klauspost/compress v1.20.0
 	github.com/lestrrat-go/jwx/v3 v3.3.0
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/stretchr/testify v1.12.1
@@ -79,13 +80,12 @@ require (
 	github.com/google/go-containerregistry v0.22.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/huandu/go-clone v1.7.3 // indirect
-	github.com/huandu/xstrings v1.4.0 // indirect
+	github.com/huandu/xstrings v1.6.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jdx/go-netrc v1.0.0 // indirect
-	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
 	github.com/lestrrat-go/dsig v1.4.0 // indirect

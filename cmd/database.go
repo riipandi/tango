@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/printext"
@@ -37,13 +39,25 @@ UTC. Pass --output to write somewhere else. A generated name that
 already exists is not replaced unless --overwrite is given, so a
 second export inside the same minute cannot lose the first dump.
 
-db:import reads the file back. It loads the COPY blocks and ignores
-the DDL, so the target database gets its schema from migrate:up.
-That keeps the migrations the single source of truth for the schema.`,
+--compression picks the container the dump is stored in: none (the
+default), gzip, zlib, or zip. The dump is written plain first and
+compressed after it is complete, and the suffix is added to the name
+(.sql.gz, .sql.zz, .sql.zip).
+
+db:import reads the file back. It detects the container from the
+file's own bytes, so a renamed dump still loads, and it loads the
+COPY blocks while ignoring the DDL. The target database gets its
+schema from migrate:up, which keeps the migrations the single source
+of truth for the schema.`,
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "output",
 			Usage: "Write the dump to this path",
+		},
+		&cli.StringFlag{
+			Name:  "compression",
+			Usage: "Compress the dump: none, gzip, zlib, or zip",
+			Value: string(database.CompressionNone),
 		},
 		&cli.BoolFlag{
 			Name:  "schema-only",
@@ -70,8 +84,17 @@ var dbImportCmd = &cli.Command{
 application database. DDL in the file is ignored: run migrate:up
 first, so the schema comes from the migrations and nothing else.
 
-The whole load runs in one transaction. A failure half way leaves
-the database untouched.`,
+The container is detected from the file's own bytes, so a dump named
+.sql.gz, .sql.zz, .sql.zip, or plain .sql all load the same way. A
+format this tool does not write, such as bzip2 or zstd, is refused by
+name rather than loaded as garbage.
+
+A restore is destructive, so it asks before it starts: it replaces
+rows in the tables the dump carries, and --truncate empties every
+table first. Pass --force to skip the prompt, or --dry-run to report
+what would be loaded without touching the database. The whole load
+runs in one transaction, so a failure half way leaves the database
+untouched.`,
 	Arguments: []cli.Argument{
 		&cli.StringArg{
 			Name:      "file",
@@ -87,6 +110,10 @@ the database untouched.`,
 		&cli.BoolFlag{
 			Name:  "force",
 			Usage: "Skip the confirmation prompt",
+		},
+		&cli.BoolFlag{
+			Name:  "dry-run",
+			Usage: "Report what would be loaded without changing the database",
 		},
 	},
 	Action: runDBImport,
@@ -128,6 +155,11 @@ func runDBExport(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("--schema-only and --data-only are mutually exclusive")
 	}
 
+	format, err := database.ParseCompression(cmd.String("compression"))
+	if err != nil {
+		return err
+	}
+
 	store, dsn, err := openStore(ctx, cmd)
 	if err != nil {
 		return err
@@ -142,8 +174,12 @@ func runDBExport(ctx context.Context, cmd *cli.Command) error {
 	if path == "" {
 		path, generated = defaultExportPath(cmd), true
 	}
+	// The dump is written plain and compressed after it is complete, so the file
+	// that finally exists is the compressed one. The overwrite guard and the
+	// consent prompt are therefore about that final name, not the plain one.
+	target := path + format.Ext()
 
-	file, err := createExportFile(path, generated, cmd.Bool("overwrite"))
+	file, err := createExportFile(path, generated, cmd.Bool("overwrite"), target)
 	if err != nil {
 		return err
 	}
@@ -156,11 +192,47 @@ func runDBExport(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("database: write dump: %w", err)
+	if closeErr := file.Close(); closeErr != nil {
+		return fmt.Errorf("database: write dump: %w", closeErr)
 	}
 
-	return printExportSummary(p, path, stats, time.Since(started))
+	written := path
+	if format.IsCompressed() {
+		written, err = compressDump(p, path, format)
+		if err != nil {
+			return err
+		}
+	}
+
+	return printExportSummary(p, written, stats, time.Since(started))
+}
+
+// compressDump compresses a finished dump in place and returns the file it
+// wrote.
+//
+// The plain file is removed only after the compressed one is complete, so an
+// interrupted run leaves a usable dump behind instead of nothing.
+func compressDump(p printext.Palette, path string, format database.Compression) (string, error) {
+	target := path + format.Ext()
+
+	spin := newSpinner(p.Writer())
+	if spin != nil {
+		spin.Suffix = " compressing"
+		spin.Start()
+	}
+	err := database.CompressFile(path, target, format, filepath.Base(path))
+	if spin != nil {
+		spin.Stop()
+	}
+	if err != nil {
+		// The plain dump is still there and still valid, so the failure is
+		// reported against it rather than discarding the work.
+		return "", fmt.Errorf("%w (plain dump kept at %s)", err, path)
+	}
+	if err := os.Remove(path); err != nil {
+		return "", fmt.Errorf("database: remove uncompressed dump: %w", err)
+	}
+	return target, nil
 }
 
 // ErrDumpFileExists is returned when a dump would overwrite an existing file.
@@ -169,15 +241,25 @@ var ErrDumpFileExists = errors.New("database: dump file already exists")
 // createExportFile opens the dump for writing.
 //
 // A generated path gets its directory created, because the default location
-// lives under the data directory and that may not exist on a fresh checkout. The
-// name carries a timestamp to the minute, so a second export within the same
+// lives under the data directory and that may not exist on a fresh checkout or
+// after a cleanup. The directory is created whether or not the file is replaced:
+// a first run with --overwrite must not fail for a reason that has nothing to do
+// with overwriting.
+//
+// The name carries a timestamp to the minute, so a second export within the same
 // minute lands on the same path. Rather than lose the first dump, the run stops
 // and says so, unless --overwrite asks for it.
 //
+// final is the name the run will leave behind once the dump is compressed, which
+// is what an existing file has to be compared against. The guard is on that
+// name, not on the temporary plain one: with --compression set, the plain path is
+// an intermediate that is removed again, so a stale plain file must not stop a
+// run whose compressed output does not exist yet.
+//
 // A path the user typed is used as it is: it is truncated like any other file
 // the user named, and its directory is not created, so a typo stays visible.
-func createExportFile(path string, generated, force bool) (*os.File, error) {
-	if !generated || force {
+func createExportFile(path string, generated, force bool, final string) (*os.File, error) {
+	if !generated {
 		file, err := os.Create(path)
 		if err != nil {
 			return nil, fmt.Errorf("database: create dump file: %w", err)
@@ -188,6 +270,22 @@ func createExportFile(path string, generated, force bool) (*os.File, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("database: create backup directory: %w", err)
 	}
+
+	if force {
+		file, err := os.Create(path)
+		if err != nil {
+			return nil, fmt.Errorf("database: create dump file: %w", err)
+		}
+		return file, nil
+	}
+
+	if _, err := os.Stat(final); err == nil {
+		return nil, fmt.Errorf("%w: %s; pass --output to pick another name, or --overwrite to replace it",
+			ErrDumpFileExists, final)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("database: check dump file: %w", err)
+	}
+
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if errors.Is(err, fs.ErrExist) {
 		return nil, fmt.Errorf("%w: %s; pass --output to pick another name, or --overwrite to replace it",
@@ -205,8 +303,16 @@ func createExportFile(path string, generated, force bool) (*os.File, error) {
 //
 // The path is the answer the reader is looking for, so it is left in the default
 // colour against its dim label.
-func printExportSummary(p printext.Palette, path string, stats database.DumpStats, elapsed time.Duration) error {
+func printExportSummary(
+	p printext.Palette,
+	path string,
+	stats database.DumpStats,
+	elapsed time.Duration,
+) error {
 	fields := []field{{"written", path}}
+	if size := fileSize(path); size != "" {
+		fields = append(fields, field{"size", p.Green(size)})
+	}
 	if stats.Statements > 0 {
 		fields = append(fields, field{"schema", p.Green(fmt.Sprintf("%d %s",
 			stats.Statements, printext.Plural(stats.Statements, "statement")))})
@@ -220,15 +326,35 @@ func printExportSummary(p printext.Palette, path string, stats database.DumpStat
 	return printFields(p, fields)
 }
 
+// fileSize renders the size of a written dump. An unreadable path yields an
+// empty string rather than an error: the file was just written and named in the
+// line above, so a stat that fails is not worth failing the command over.
+//
+// A negative size cannot occur for a regular file, but the conversion is guarded
+// anyway rather than casting a signed value straight to unsigned.
+func fileSize(path string) string {
+	info, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	if size := info.Size(); size >= 0 {
+		return humanize.Bytes(uint64(size))
+	}
+	return ""
+}
+
 // printImportSummary reports what was loaded and from where.
 func printImportSummary(p printext.Palette, path string, stats database.DumpStats, elapsed time.Duration) error {
-	return printFields(p, []field{
-		{"loaded", path},
-		{"data", p.Green(fmt.Sprintf("%d %s, %d %s",
+	fields := []field{{"loaded", path}}
+	if size := fileSize(path); size != "" {
+		fields = append(fields, field{"size", p.Green(size)})
+	}
+	fields = append(fields,
+		field{"data", p.Green(fmt.Sprintf("%d %s, %d %s",
 			stats.Tables, printext.Plural(stats.Tables, "table"),
 			stats.Rows, printext.Plural(int(stats.Rows), "row")))},
-		{"duration", p.Dim(printext.Duration(elapsed))},
-	})
+		field{"duration", p.Dim(printext.Duration(elapsed))})
+	return printFields(p, fields)
 }
 
 // field is one labelled value in a report.
@@ -284,11 +410,31 @@ func runDBImport(ctx context.Context, cmd *cli.Command) error {
 	p := printext.NewPalette(cmd.Root().Writer)
 	path := cmd.StringArg("file")
 
-	file, err := os.Open(path)
+	// The container is detected before anything else, so an unsupported file is
+	// refused by name and a dry run never needs a database.
+	reader, format, err := database.OpenDump(path)
 	if err != nil {
-		return fmt.Errorf("database: open backup file: %w", err)
+		return err
 	}
-	defer func() { _ = file.Close() }()
+	defer func() { _ = reader.Close() }()
+
+	dryRun := cmd.Bool("dry-run")
+	truncate := cmd.Bool("truncate")
+
+	// A dry run reads the file and stops. It opens no database, so it cannot
+	// change one, and it is the way to see the size of a restore before
+	// agreeing to it.
+	if dryRun {
+		if err = printDatabaseHeader(p, cmd, format); err != nil {
+			return err
+		}
+		var stats database.DumpStats
+		stats, err = database.InspectDump(reader)
+		if err != nil {
+			return err
+		}
+		return printDryRunSummary(p, path, stats, truncate)
+	}
 
 	store, dsn, err := openStore(ctx, cmd)
 	if err != nil {
@@ -299,14 +445,21 @@ func runDBImport(ctx context.Context, cmd *cli.Command) error {
 	if err = printDatabase(p, dsn); err != nil {
 		return err
 	}
+	if format.IsCompressed() {
+		if err = printFields(p, []field{{label: "format", value: p.Dim(string(format))}}); err != nil {
+			return err
+		}
+	}
 
-	// Emptying a table is destructive, so it is confirmed like every other
-	// destructive command. --force skips the prompt, which is what a script
-	// wants.
-	truncate := cmd.Bool("truncate")
-	if truncate && !cmd.Bool("force") {
-		proceed, promptErr := confirm(p, cmd, terminalCheck(cmd),
-			"empty every table in the dump before loading it?")
+	// A restore is destructive: it writes rows into tables that may already hold
+	// data, and --truncate empties every table first. It is confirmed like every
+	// other destructive command, and --force is what a script passes.
+	if !cmd.Bool("force") {
+		question := "replace the rows in the tables this dump carries?"
+		if truncate {
+			question = "empty every table in the dump before loading it?"
+		}
+		proceed, promptErr := confirm(p, cmd, terminalCheck(cmd), question)
 		if promptErr != nil {
 			return promptErr
 		}
@@ -317,11 +470,51 @@ func runDBImport(ctx context.Context, cmd *cli.Command) error {
 
 	started := time.Now()
 	progress := withSpinner(p.Writer())
-	stats, err := database.NewRestorer(store, truncate).Restore(ctx, file, progress.step)
+	stats, err := database.NewRestorer(store, truncate).Restore(ctx, reader, progress.step)
 	progress.finish()
 	if err != nil {
 		return err
 	}
 
 	return printImportSummary(p, path, stats, time.Since(started))
+}
+
+// printDatabaseHeader writes the target line for a dry run, which never opens a
+// connection. The database name comes from the configuration, so the run still
+// says where a real restore would land.
+func printDatabaseHeader(p printext.Palette, cmd *cli.Command, format database.Compression) error {
+	dsn, err := databaseURL(cmd)
+	if err != nil {
+		return err
+	}
+	if err := printDatabase(p, dsn); err != nil {
+		return err
+	}
+	if format.IsCompressed() {
+		return printFields(p, []field{{label: "format", value: p.Dim(string(format))}})
+	}
+	return nil
+}
+
+// printDryRunSummary reports what a restore would load, and says nothing was
+// loaded. The work is the answer, so it is reported with the same labels a real
+// run uses. The format is already named on the header line, so it is not
+// repeated here.
+func printDryRunSummary(
+	p printext.Palette,
+	path string,
+	stats database.DumpStats,
+	truncate bool,
+) error {
+	fields := []field{{"loaded", p.Dim(path)}}
+	fields = append(fields, field{"data", p.Green(fmt.Sprintf("%d %s, %d %s",
+		stats.Tables, printext.Plural(stats.Tables, "table"),
+		stats.Rows, printext.Plural(int(stats.Rows), "row")))})
+	if truncate {
+		fields = append(fields, field{"truncate", p.Yellow("yes")})
+	}
+	if err := printFields(p, fields); err != nil {
+		return err
+	}
+	return printStatusLine(p, "nothing loaded (dry run)")
 }
