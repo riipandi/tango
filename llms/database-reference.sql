@@ -1,7 +1,7 @@
 --
 -- Pocket ID database schema reference (schema-only dump)
 --
--- Source        : live instance "pocketid" (see compose.yaml service `pocketid`)
+-- Source        : live instance "pocketid" (see docker/compose.yaml service `pocketid`)
 -- Image         : ghcr.io/pocket-id/pocket-id:v2 (docker sha256:83cfbfafd21a)
 -- Upstream tag  : v2.14.0 (.version = 2.14.0)
 -- Cut-off       : migration 20260814120000_api_client_access (schema_migrations holds

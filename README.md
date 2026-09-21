@@ -27,7 +27,7 @@ pnpm dlx tiged riipandi/tango myapp-name
 3. Install the frontend dependencies: `pnpm install`
 4. Write a starter config file: `task config:generate`
 5. Generate the secret keys into your env file: `task key:generate`
-6. Start the local Postgres: `docker compose up -d pgsql`
+6. Start the local Postgres: `docker compose up -f docker/compose.yaml -d pgsql`
 7. Set `DATABASE_URL` in `.env.local` (see `.env.example`)
 8. Run the database migrations: `task db:migrate`
 9. Start the development servers: `task dev`
@@ -68,7 +68,7 @@ replaced, so a value can be traced back to the key that produced it, and the con
 reduced to `host:port/database`. A secret shorter than 16 characters is hidden completely, because
 keeping eight of its characters would leave most of it readable.
 
-```
+```text
 KEY                          VALUE                      SOURCE
 app.mode                     development                default
 app.secret_key               11c0****5806               config-file
@@ -428,7 +428,7 @@ stored data during rotation.
 
 Run `task` to list every target. Most targets live in `tasks/`, one file per group; the root
 `Taskfile.yml` declares the shared variables, includes them, and keeps the `compose:*` targets
-itself, next to the `compose.yaml` they drive.
+itself, next to the `docker/compose.yaml` they drive.
 
 ```text
 Taskfile.yml       shared variables, includes, default, compose:*
@@ -472,7 +472,7 @@ depend on a task in another by its plain name.
 
 ## Local HTTPS
 
-The nginx service in `compose.yaml` reads certificates from `storage/certs`. Generate them with
+The nginx service in `docker/compose.yaml` reads certificates from `storage/certs`. Generate them with
 [`mkcert`](https://github.com/FiloSottile/mkcert), falling back to a self-signed `openssl` certificate when
 `mkcert` is unavailable:
 
