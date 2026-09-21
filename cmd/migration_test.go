@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -130,7 +131,7 @@ func TestMigrateUpAppliesAndIsIdempotent(t *testing.T) {
 
 	out, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
-	assert.Contains(t, out, "00001_initialize_schema.sql applied")
+	assertMigrationRow(t, out, 1, "applied")
 	assert.Contains(t, out, "9 migrations applied")
 
 	out, err = runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
@@ -215,7 +216,7 @@ func TestMigrateDownRollsBackNewestFirst(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
-	assert.Contains(t, out, "00009_add_session_remember.sql rolled back")
+	assertMigrationRow(t, out, 9, "rolled back")
 	assert.Contains(t, out, "1 migration rolled back")
 
 	// The queue tables arrive in 00008, which is now the highest applied
@@ -253,7 +254,7 @@ func TestMigrateDownCountAndDryRun(t *testing.T) {
 
 	out, err = runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=3")
 	require.NoError(t, err)
-	assert.Contains(t, out, "00007_create_rate_limits_table.sql rolled back")
+	assertMigrationRow(t, out, 7, "rolled back")
 	assert.Contains(t, out, "3 migrations rolled back")
 	assert.Equal(t, int64(6), currentVersion(t, dsn))
 }
@@ -326,8 +327,51 @@ func TestMigrateDownAcceptedPrompt(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "y\n", "--env-file="+envFile)
 	require.NoError(t, err)
-	assert.Contains(t, out, "00009_add_session_remember.sql rolled back")
+	assertMigrationRow(t, out, 9, "rolled back")
 	assert.Equal(t, int64(8), currentVersion(t, dsn))
+}
+
+// assertMigrationRow asserts that a migration appears as a full row of the
+// shared report shape: version, state, timestamp, name, and duration. Asserting
+// the whole row, not just the file name, is what pins the format the three
+// migrate:* commands must agree on.
+func assertMigrationRow(t *testing.T, out string, version int64, state string) {
+	t.Helper()
+
+	prefix := fmt.Sprintf("  %05d %s ", version, state)
+	line := rowStartingWith(out, prefix)
+	require.NotEmpty(t, line, "no %q row in:\n%s", prefix, out)
+
+	rest := strings.TrimPrefix(line, prefix)
+	require.GreaterOrEqual(t, len(rest), len(migrationTimestamp)+1,
+		"row must carry a timestamp after the state: %q", line)
+
+	// The timestamp itself holds a space, so it is cut by width rather than by
+	// splitting on the separator.
+	stamp, tail := rest[:len(migrationTimestamp)], rest[len(migrationTimestamp)+1:]
+	_, err := time.Parse(migrationTimestamp, stamp)
+	require.NoError(t, err, "the timestamp column must hold a timestamp, got %q", stamp)
+
+	assert.Regexp(t, `^\d{5}_[a-z0-9_]+\.sql \(\d+(\.\d+)? (µs|ms|s)\)$`, tail,
+		"the row must end with the file name and a humanized duration: %q", line)
+}
+
+// rowStartingWith returns the row that begins with prefix, up to the end of its
+// line, or "" when there is none.
+//
+// The search is not anchored to the start of a line: a confirmed run writes its
+// prompt without a trailing newline and relies on the terminal to echo the
+// Enter, which a test's stub reader does not do.
+func rowStartingWith(out, prefix string) string {
+	start := strings.Index(out, prefix)
+	if start < 0 {
+		return ""
+	}
+	row := out[start:]
+	if end := strings.IndexByte(row, '\n'); end >= 0 {
+		row = row[:end]
+	}
+	return strings.TrimRight(row, "\r")
 }
 
 func TestMigrateStatus(t *testing.T) {

@@ -271,13 +271,29 @@ func printSeedLine(p printext.Palette, seeder, key, verb, dryRunVerb string, dry
 	return p.Printf("%s%s %s %s\n", progressIndent, seeder, key, p.Paint(style, verb))
 }
 
+// restart begins a new phase of the same command. It resets the clock and the
+// state column, so the second half of `migrate:reset --up` is timed on its own
+// and uses its own width.
+//
+// The reporter is reset in place rather than replaced: the migrator holds a
+// method value taken from this reporter, so a new instance would never be called
+// and the second half would silently keep the first half's width and clock.
+//
+// It lives in this file because `migrate:reset` is debug-only, and a release
+// build would compile it into an unused method.
+func (r *reporter) restart(stateWidth int) {
+	r.stop()
+	r.started = time.Now()
+	r.stateWidth = stateWidth
+}
+
 // runMigrateReset rolls back every applied migration and, with --up, applies
 // them again. On a database with nothing applied, --up alone applies the
 // migrations, so resetting a fresh database still builds the schema.
 // --dry-run lists both halves without touching the database.
 func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 	p := printext.NewPalette(cmd.Root().Writer)
-	report := newReporter(p)
+	report := newReporter(p, migrationStateWidth(string(database.ProgressRolledBack)))
 
 	migrator, dsn, closeDB, err := openMigrator(ctx, cmd,
 		database.MigratorOptions{Progress: report.progress})
@@ -356,9 +372,10 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	// The re-apply is timed on its own, so its summary reports the up half
-	// rather than the whole reset.
-	report = newReporter(p)
+	// The re-apply is timed on its own and uses its own state column, so its
+	// summary reports the up half rather than the whole reset. The reporter is
+	// restarted in place because the migrator holds its progress callback.
+	report.restart(migrationStateWidth(string(database.ProgressApplied)))
 	reapplied, err := migrator.Up(ctx)
 	if err != nil {
 		if writeErr := report.failed(); writeErr != nil {

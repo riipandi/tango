@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -141,7 +142,7 @@ func TestReportTargetSkipsUnparsableDSN(t *testing.T) {
 func TestReporterIndentsProgressOnly(t *testing.T) {
 	var out bytes.Buffer
 	p := plain(&out)
-	report := newReporter(p)
+	report := newReporter(p, migrationStateWidth(string(database.ProgressApplied)))
 
 	report.progress(database.ProgressEvent{
 		Version:   2,
@@ -152,7 +153,11 @@ func TestReporterIndentsProgressOnly(t *testing.T) {
 	})
 	require.NoError(t, report.failed())
 
-	assert.Equal(t, "  00002_create_identity_tables.sql applied (37 ms)\n", out.String())
+	// A finished migration is reported in the same shape migrate:status uses:
+	// version, state, time, name, and duration.
+	assert.Regexp(t,
+		`^  00002 applied \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} 00002_create_identity_tables\.sql \(37 ms\)\n$`,
+		out.String())
 
 	out.Reset()
 	require.NoError(t, printSummary(p, 1, "applied", "migration", 100*time.Millisecond))
@@ -162,12 +167,86 @@ func TestReporterIndentsProgressOnly(t *testing.T) {
 	assert.True(t, strings.HasPrefix(line, "1 migration applied in "), "summary must start at column zero: %q", line)
 }
 
+// A rollback must be reported the same way an apply is, with its own state word
+// and duration, so the two directions read as one report.
+func TestReporterReportsRollbackRows(t *testing.T) {
+	var out bytes.Buffer
+	report := newReporter(plain(&out), migrationStateWidth(string(database.ProgressRolledBack)))
+
+	report.progress(database.ProgressEvent{
+		Version:   9,
+		Name:      "00009_add_session_remember.sql",
+		Direction: "down",
+		State:     database.ProgressRolledBack,
+		Duration:  3 * time.Millisecond,
+	})
+	require.NoError(t, report.failed())
+
+	assert.Regexp(t,
+		`^  00009 rolled back \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} 00009_add_session_remember\.sql \(3 ms\)\n$`,
+		out.String())
+}
+
+// An empty migration is a state to notice, not a failure, and it still carries
+// its duration because it did run.
+func TestReporterReportsEmptyMigration(t *testing.T) {
+	var out bytes.Buffer
+	report := newReporter(plain(&out), migrationStateWidth(string(database.ProgressApplied)))
+
+	report.progress(database.ProgressEvent{
+		Version:   10,
+		Name:      "00010_noop.sql",
+		Direction: "up",
+		State:     database.ProgressEmpty,
+		Duration:  0,
+	})
+	require.NoError(t, report.failed())
+
+	assert.Contains(t, out.String(), "  00010 empty ")
+	assert.Contains(t, out.String(), "00010_noop.sql (0 s)")
+}
+
+// A dry run lists work that has not happened, so the state column reads
+// "pending" and the time column is empty rather than a fabricated timestamp.
+func TestPrintPendingUsesTheSharedRowShape(t *testing.T) {
+	var out bytes.Buffer
+	require.NoError(t, printPending(plain(&out), []database.MigrationStatus{
+		{Version: 1, Name: "00001_initialize_schema.sql"},
+		{Version: 2, Name: "00002_create_identity_tables.sql"},
+	}))
+
+	assert.Equal(t,
+		expectedRow(1, "pending", 7, "-", "00001_initialize_schema.sql")+
+			expectedRow(2, "pending", 7, "-", "00002_create_identity_tables.sql")+
+			"\n2 migrations pending\n", out.String())
+}
+
+// A rollback plan says "rollback", not "rolled back": nothing has run yet.
+func TestPrintRollbackUsesTheSharedRowShape(t *testing.T) {
+	var out bytes.Buffer
+	require.NoError(t, printRollback(plain(&out), []database.MigrationStatus{
+		{Version: 9, Name: "00009_add_session_remember.sql"},
+	}))
+
+	assert.Equal(t,
+		expectedRow(9, "rollback", 8, "-", "00009_add_session_remember.sql")+
+			"\n1 migration to roll back\n", out.String())
+}
+
+// expectedRow builds one row of the shared report shape, with the widths written
+// out rather than counted by hand, so a test cannot drift from the renderer by a
+// single space.
+func expectedRow(version int64, state string, stateWidth int, at, name string) string {
+	return fmt.Sprintf("  %05d %-*s %-*s %s\n",
+		version, stateWidth, state, migrationTimestampWidth, at, name)
+}
+
 // A started event starts the spinner and draws no line of its own: a line for a
 // migration that is still running would be overwritten on a terminal and lost in
 // a log.
 func TestReporterIgnoresStartedEvents(t *testing.T) {
 	var out bytes.Buffer
-	report := newReporter(plain(&out))
+	report := newReporter(plain(&out), migrationStateWidth(string(database.ProgressApplied)))
 
 	report.progress(database.ProgressEvent{
 		Version:   1,
@@ -183,7 +262,7 @@ func TestReporterIgnoresStartedEvents(t *testing.T) {
 // A write failure cannot be returned from the progress callback, so it must be
 // held and surfaced when the command can report it.
 func TestReporterHoldsWriteFailure(t *testing.T) {
-	report := newReporter(printext.NewPalette(failingWriter{}))
+	report := newReporter(printext.NewPalette(failingWriter{}), migrationStateWidth(string(database.ProgressApplied)))
 
 	report.progress(database.ProgressEvent{
 		Version:   1,

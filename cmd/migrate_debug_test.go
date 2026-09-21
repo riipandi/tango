@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -79,6 +80,19 @@ func TestMigrateResetWithUpReappliesEverything(t *testing.T) {
 	assert.Contains(t, out, "9 migrations rolled back")
 	assert.Contains(t, out, "9 migrations applied")
 	assert.Equal(t, int64(9), currentVersion(t, dsn))
+
+	// The two halves must each use their own state column and their own clock.
+	// The migrator holds the reporter's progress callback, so a half that
+	// replaced the reporter instead of restarting it would keep the other half's
+	// width and include the other half's time.
+	assertMigrationRow(t, out, 9, "rolled back")
+	assertMigrationRow(t, out, 1, "applied")
+
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "applied ") && strings.Contains(line, "00001_initialize") {
+			assert.Contains(t, line, "  00001 applied 2", "the up half must use its own column width: %q", line)
+		}
+	}
 }
 
 func TestMigrateResetDryRunChangesNothing(t *testing.T) {

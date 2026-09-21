@@ -65,27 +65,40 @@ func openMigrator(
 	return migrator, dsn, func() { _ = db.Close() }, nil
 }
 
-// printPending reports the migrations the database has not applied yet.
+// printPending reports the migrations the database has not applied yet. Each
+// line carries a "-" in the time column and no duration, because nothing has run.
 func printPending(p printext.Palette, pending []database.MigrationStatus) error {
 	if len(pending) == 0 {
 		return p.Printf("no pending migrations\n")
 	}
+	rows := make([]migrationRow, 0, len(pending))
 	for _, status := range pending {
-		if err := p.Printf("%s%05d %s %s\n", progressIndent,
-			status.Version, status.Name, p.Yellow("pending")); err != nil {
-			return err
-		}
+		rows = append(rows, migrationRow{
+			Version: status.Version,
+			State:   statePending,
+			Name:    status.Name,
+		})
+	}
+	if err := printMigrationRows(p, migrationStateWidth(statePending), rows); err != nil {
+		return err
 	}
 	return printSummary(p, len(pending), "pending", "migration", 0)
 }
 
 // printRollback reports the migrations a rollback would consume, newest first.
+// The state column reads "rollback", not "rolled back": a dry run describes work
+// that has not happened.
 func printRollback(p printext.Palette, selected []database.MigrationStatus) error {
+	rows := make([]migrationRow, 0, len(selected))
 	for _, status := range selected {
-		if err := p.Printf("%s%05d %s %s\n", progressIndent,
-			status.Version, status.Name, p.Yellow("rollback")); err != nil {
-			return err
-		}
+		rows = append(rows, migrationRow{
+			Version: status.Version,
+			State:   stateRollback,
+			Name:    status.Name,
+		})
+	}
+	if err := printMigrationRows(p, migrationStateWidth(stateRollback), rows); err != nil {
+		return err
 	}
 	return printSummary(p, len(selected), "to roll back", "migration", 0)
 }
@@ -102,26 +115,30 @@ const migrationTimestampWidth = len(migrationTimestamp)
 // the migrations last ran. A time comes from the tstamp column goose writes
 // when it records a migration, so it is the moment that migration last ran,
 // not when its file changed.
+//
+// No duration is shown: the recorded time says when a migration ran, not how
+// long it took, and this command does not run anything to find out.
 func printStatus(p printext.Palette, statuses []database.MigrationStatus, version int64) error {
 	applied := 0
+	rows := make([]migrationRow, 0, len(statuses))
 	for _, status := range statuses {
-		state := p.Yellow("pending")
-		at := "-"
+		state := statePending
 		if status.Applied {
-			state = p.Green("applied")
-			at = status.AppliedAt.UTC().Format(migrationTimestamp)
+			state = string(database.ProgressApplied)
 			applied++
 		}
-		// The state and the timestamp are padded before they are coloured: a
-		// colour code is invisible but not zero-width to fmt, so padding a
-		// painted string would break the column.
-		if err := p.Printf("%s%05d %s %s %s\n", progressIndent,
-			status.Version,
-			printext.PadRight(state, len("applied")),
-			p.Dim(printext.PadRight(at, migrationTimestampWidth)),
-			status.Name); err != nil {
-			return err
-		}
+		rows = append(rows, migrationRow{
+			Version: status.Version,
+			State:   state,
+			At:      status.AppliedAt,
+			Name:    status.Name,
+		})
+	}
+
+	// One state column for the whole list, sized from the words this list
+	// actually uses.
+	if err := printMigrationRows(p, migrationStateWidth(statePending, string(database.ProgressApplied)), rows); err != nil {
+		return err
 	}
 
 	if err := p.Printf("\nversion %05d; %s\n",
@@ -203,7 +220,7 @@ func confirm(p printext.Palette, cmd *cli.Command, interactive bool, question st
 // changes nothing.
 func runMigrateUp(ctx context.Context, cmd *cli.Command) error {
 	p := printext.NewPalette(cmd.Root().Writer)
-	report := newReporter(p)
+	report := newReporter(p, migrationStateWidth(string(database.ProgressApplied)))
 
 	migrator, dsn, closeDB, err := openMigrator(ctx, cmd,
 		database.MigratorOptions{Progress: report.progress})
@@ -271,7 +288,7 @@ func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	p := printext.NewPalette(cmd.Root().Writer)
-	report := newReporter(p)
+	report := newReporter(p, migrationStateWidth(string(database.ProgressRolledBack)))
 
 	migrator, dsn, closeDB, err := openMigrator(ctx, cmd,
 		database.MigratorOptions{Progress: report.progress})

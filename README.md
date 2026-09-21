@@ -1,17 +1,13 @@
 [![Go](https://img.shields.io/badge/Go-1.27-blue.svg?logo=Go&logoColor=white)](https://go.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-7.0-blue.svg?logo=typescript&logoColor=blue)](https://www.typescriptlang.org)
 [![React](https://img.shields.io/badge/React-19-blue.svg?logo=react)](https://react.dev)
-[![Go Report Card](https://goreportcard.com/badge/github.com/riipandi/tango)](https://goreportcard.com/report/github.com/riipandi/tango)
+[![Postgres](https://img.shields.io/badge/Postgres-18-blue.svg?logo=postgresql)](https://www.postgresql.org)
 
 Starter project template built with [Go][golang], [chi][go-chi] (HTTP router), [ConnectRPC][connectrpc] (RPC),
 [Postgres][postgres] (database), [React][react], and [TanStack][tanstack] (Router, Query, Store). It exists so you
 can start building without repeating the initial setup.
 
 ---
-
-```bash
-pnpm dlx tiged riipandi/tango myapp-name
-```
 
 > [!NOTE]
 > This project is a template I use for my personal use, so you may encounter bugs.
@@ -22,6 +18,10 @@ pnpm dlx tiged riipandi/tango myapp-name
 You will need [`Go >= 1.27`][golang], [`Node.js >= 24.21`][nodejs], [`PNPM >= 12.5`][pnpm], and
 [`Docker >= 20.10`][docker] installed on your machine.
 
+```bash
+pnpm dlx tiged riipandi/tango myapp-name
+```
+
 1. Install the Go toolchain binaries: `task deps`
 2. Find and replace `tango`, `Tango`, and `MyApplication` across the source files.
 3. Install the frontend dependencies: `pnpm install`
@@ -31,7 +31,7 @@ You will need [`Go >= 1.27`][golang], [`Node.js >= 24.21`][nodejs], [`PNPM >= 12
 7. Run the database migrations: `task db:migrate`
 8. Start the development servers: `task dev`
 
-Vite serves the frontend on `:3000` and proxies `/api`, `/rpc`, `/.well-known`, and `/static` to Go on `:3080`.
+Vite serves the frontend on `:3000` and proxies `/api`, `/rpc`, `/.well-known`, `/metrics`, and `/static` to Go on `:3080`.
 Go files are watched and rebuilt automatically.
 
 ### Database
@@ -85,17 +85,27 @@ wrong server is visible before anything changes. Credentials are never printed:
 $ task db:migrate
 database: localhost:5432/tango
 
-  00001_initialize_schema.sql applied (25.832 ms)
-  00002_create_identity_tables.sql applied (37.919 ms)
+  00001 applied 2026-09-21 01:10:37 00001_initialize_schema.sql (30.816 ms)
+  00002 applied 2026-09-21 01:10:37 00002_create_identity_tables.sql (39.898 ms)
   ...
 
-9 migrations applied in 202.525 ms
+9 migrations applied in 1.404 s
 ```
 
 A run reports each migration as it finishes, not in one block at the end, so a slow migration leaves
-the ones before it visible. Counts are pluralized (`1 migration`, `9 migrations`) and durations are
-humanized. `migrate:version` is the exception: it prints the bare number, because scripts read it
-directly.
+the ones before it visible. The line shape is the same one `migrate:status` prints — version, state,
+time, name, and duration — so applying, rolling back, and listing all read alike:
+
+```text
+  00009 rolled back 2026-09-21 01:03:07 00009_add_session_remember.sql (3.674 ms)
+  00008 rolled back 2026-09-21 01:03:07 00008_create_queue_tables.sql (4.359 ms)
+```
+
+`migrate:status` omits the duration, because the recorded time says when a migration ran, not how
+long it took, and that command runs nothing to find out. A `--dry-run` lists rows too, with the time
+column empty (`-`) and no duration, because nothing has run. Counts are pluralized (`1 migration`,
+`9 migrations`) and durations are humanized. `migrate:version` is the exception: it prints the bare
+number, because scripts read it directly.
 
 `migrate:seed` creates the default records a fresh database needs. It refuses to run until every
 migration is applied — a seeder writes columns the schema must already have — and reports the

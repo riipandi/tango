@@ -94,25 +94,115 @@ func reportTarget(p printext.Palette, dsn string) error {
 	return p.Printf("%s %s\n\n", p.Dim("database:"), p.Dim(target))
 }
 
+// migrationRow is one line of a migration report. Every migrate:* command
+// builds these, so a migration reads the same whether it is listed, applied, or
+// rolled back.
+type migrationRow struct {
+	Version int64
+	// State is the word in the state column: "applied", "empty", "rolled back",
+	// or "pending".
+	State string
+	// At is when the migration last ran. The zero value means it has not run,
+	// which is rendered as "-".
+	At   time.Time
+	Name string
+	// Duration is how long the migration took, and Measured says whether there
+	// is one to show. A measured zero is a real answer (a migration with no
+	// statements takes no time), so the two cannot be one field.
+	Duration time.Duration
+	Measured bool
+}
+
+// The state words a report uses for a migration that has not run, and for the
+// plan a dry run describes. The words for a migration that has run come from
+// database.ProgressState.
+const (
+	statePending  = "pending"
+	stateRollback = "rollback"
+)
+
+// migrationStateWidth is the width the state column needs for the given words.
+//
+// It is computed per report rather than fixed, so a run that only applies
+// ("applied") is not padded to the width of one that rolls back ("rolled back"),
+// while two lists printed by one command still share a column.
+func migrationStateWidth(states ...string) int {
+	width := 0
+	for _, state := range states {
+		width = max(width, len(state))
+	}
+	return width
+}
+
+// printMigrationRows renders one line per migration with the columns every
+// migrate:* command shares: version, state, time, name, and duration. One
+// renderer is what makes `migrate:up`, `migrate:down`, and `migrate:status` read
+// as the same report instead of three dialects of it.
+func printMigrationRows(p printext.Palette, stateWidth int, rows []migrationRow) error {
+	for _, row := range rows {
+		at := "-"
+		if !row.At.IsZero() {
+			at = row.At.UTC().Format(migrationTimestamp)
+		}
+
+		// Pad before colouring, never after: an escape code is invisible but
+		// not zero-width to fmt, so padding a painted string would break the
+		// column it was meant to hold.
+		line := fmt.Sprintf("%s%05d %s %s %s",
+			progressIndent,
+			row.Version,
+			p.Paint(stateColour(row.State), printext.PadRight(row.State, stateWidth)),
+			p.Dim(printext.PadRight(at, migrationTimestampWidth)),
+			row.Name)
+		if row.Measured {
+			line += " " + p.Dim("("+printext.Duration(row.Duration)+")")
+		}
+		if err := p.Printf("%s\n", line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// stateColour maps a migration state to its colour. Applied is a success; an
+// empty migration and a rollback both did what was asked, so they are states to
+// notice rather than failures.
+func stateColour(state string) printext.Colour {
+	if state == string(database.ProgressApplied) {
+		return printext.Green
+	}
+	return printext.Yellow
+}
+
 // reporter renders a migration run while it happens.
 //
 // goose reports each migration through the Progress callback, so the run is
 // visible as it happens rather than appearing all at once at the end. A
 // migration that is still running is shown by the spinner, because a line for it
 // would be overwritten on a terminal and lost in a log; a migration that has
-// finished becomes a line that stays.
+// finished becomes a line that stays, in the same shape migrate:status prints.
 type reporter struct {
 	p       printext.Palette
 	started time.Time
 	spin    *spinner.Spinner
+	// stateWidth is the width of the state column, which the caller knows from
+	// the direction of the run: an apply reports "applied", a rollback reports
+	// "rolled back".
+	stateWidth int
 	// err is the first write failure. A progress callback cannot return one, so
 	// it is held until the command can report it.
 	err error
 }
 
-// newReporter starts timing a run.
-func newReporter(p printext.Palette) *reporter {
-	return &reporter{p: p, started: time.Now(), spin: newSpinner(p.Writer())}
+// newReporter starts timing a run. stateWidth is the width of the state column,
+// from migrationStateWidth.
+func newReporter(p printext.Palette, stateWidth int) *reporter {
+	return &reporter{
+		p:          p,
+		started:    time.Now(),
+		spin:       newSpinner(p.Writer()),
+		stateWidth: stateWidth,
+	}
 }
 
 // progress is the callback handed to the migrator.
@@ -125,11 +215,17 @@ func (r *reporter) progress(event database.ProgressEvent) {
 		return
 	}
 	r.stop()
-	r.err = r.p.Printf("%s%s %s (%s)\n",
-		progressIndent,
-		event.Name,
-		r.p.Paint(stateAttribute(event.State), string(event.State)),
-		r.p.Dim(printext.Duration(event.Duration)))
+	r.err = printMigrationRows(r.p, r.stateWidth, []migrationRow{{
+		Version: event.Version,
+		State:   string(event.State),
+		// The migration has just finished, so now is when it ran. Reading the
+		// recorded time back would give the same answer for an apply and nothing
+		// at all for a rollback, whose row goose deletes.
+		At:       time.Now(),
+		Name:     event.Name,
+		Duration: event.Duration,
+		Measured: true,
+	}})
 }
 
 // begin names the migration now in flight and starts the animation.
@@ -160,16 +256,6 @@ func (r *reporter) failed() error {
 
 // elapsed is how long the command has been running.
 func (r *reporter) elapsed() time.Duration { return time.Since(r.started) }
-
-// stateAttribute maps a migration state to its colour. A state that is not a
-// plain success is a warning rather than a failure: an empty migration or a
-// rollback both did what was asked.
-func stateAttribute(state database.ProgressState) printext.Colour {
-	if state == database.ProgressApplied {
-		return printext.Green
-	}
-	return printext.Yellow
-}
 
 // printSummary closes a report with what happened and how long it took. The
 // duration is omitted when nothing was measured.
