@@ -9,7 +9,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	otlpbridge "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -110,32 +112,9 @@ func compression(cfg config.Config) otlptracehttp.Compression {
 // continues, while a background goroutine drains the queue. A full queue drops
 // the oldest span rather than blocking the caller.
 func newTracerProvider(ctx context.Context, cfg config.Config, res *resource.Resource) (*sdktrace.TracerProvider, error) {
-	endpoint, err := url.Parse(cfg.OTEL.Endpoint)
+	exporter, err := newTraceExporter(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("observer: otel endpoint: %w", err)
-	}
-
-	options := []otlptracehttp.Option{
-		otlptracehttp.WithEndpointURL(cfg.OTEL.Endpoint),
-		otlptracehttp.WithHeaders(map[string]string{}),
-		otlptracehttp.WithCompression(compression(cfg)),
-		otlptracehttp.WithTimeout(cfg.OTEL.Tracing.ExportTimeout),
-	}
-	// A route is applied only when one is named or the endpoint carries none.
-	// An address that already names a route says where the traces go, and
-	// overriding it with the default would send them elsewhere.
-	if path := signalPath(cfg.OTEL.Tracing.Path, endpoint.Path, otlpTracesPath); path != "" {
-		options = append(options, otlptracehttp.WithURLPath(path))
-	}
-	// A nil TLS configuration is not the same as leaving the option out: it is
-	// what stops the exporter from loading OTEL_EXPORTER_OTLP_CERTIFICATE and
-	// friends. An https endpoint gets the floor of TLS 1.2 and the system's root
-	// certificates, because the configuration names no certificate of its own.
-	options = append(options, otlptracehttp.WithTLSClientConfig(tlsConfig(cfg.OTEL.Endpoint)))
-
-	exporter, err := otlptracehttp.New(ctx, options...)
-	if err != nil {
-		return nil, fmt.Errorf("observer: trace exporter: %w", err)
+		return nil, err
 	}
 
 	return sdktrace.NewTracerProvider(
@@ -150,6 +129,69 @@ func newTracerProvider(ctx context.Context, cfg config.Config, res *resource.Res
 	), nil
 }
 
+// newTraceExporter builds the trace exporter for the configured protocol.
+//
+// The two protocols are separate exporter packages with separate option types,
+// so the branch is a branch and not a shared option list. Both close the same
+// door: every setting is passed explicitly, including the ones left at their
+// default, so the exporter cannot read OTEL_EXPORTER_OTLP_* for its address,
+// headers, compression, or TLS material. The options are applied after the
+// exporter's own environment pass, so a value passed here is the one that wins.
+func newTraceExporter(ctx context.Context, cfg config.Config) (sdktrace.SpanExporter, error) {
+	if !config.UsesHTTP(cfg.OTEL.Protocol) {
+		options := []otlptracegrpc.Option{
+			otlptracegrpc.WithEndpoint(cfg.CollectorEndpoint()),
+			otlptracegrpc.WithHeaders(cfg.OTEL.Headers),
+			otlptracegrpc.WithCompressor(grpcCompressor(cfg)),
+			otlptracegrpc.WithTimeout(cfg.OTEL.Tracing.ExportTimeout),
+			// Explicit credentials rather than WithInsecure: the two reach the
+			// same place, but credentials take priority over anything the
+			// environment contributed, so an OTEL_EXPORTER_OTLP_CERTIFICATE in
+			// the shell cannot turn a plaintext connection into a TLS one.
+			otlptracegrpc.WithTLSCredentials(grpcTransport(cfg.CollectorSecure())),
+		}
+		exporter, err := otlptracegrpc.New(ctx, options...)
+		if err != nil {
+			return nil, fmt.Errorf("observer: trace exporter: %w", err)
+		}
+		return exporter, nil
+	}
+
+	endpoint, err := url.Parse(cfg.OTEL.Endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("observer: otel endpoint: %w", err)
+	}
+
+	options := []otlptracehttp.Option{
+		otlptracehttp.WithEndpointURL(cfg.OTEL.Endpoint),
+		otlptracehttp.WithHeaders(cfg.OTEL.Headers),
+		otlptracehttp.WithCompression(compression(cfg)),
+		otlptracehttp.WithTimeout(cfg.OTEL.Tracing.ExportTimeout),
+	}
+	// Only the trace exporter encodes JSON, which is why Validate refuses
+	// http/json for the other two signals rather than shipping them as protobuf.
+	if cfg.OTEL.Protocol == config.OTELProtocolHTTPJSON {
+		options = append(options, otlptracehttp.WithEncoding(otlptracehttp.EncodingJSON))
+	}
+	// A route is applied only when one is named or the endpoint carries none.
+	// An address that already names a route says where the traces go, and
+	// overriding it with the default would send them elsewhere.
+	if path := signalPath(cfg.OTEL.Tracing.Path, endpoint.Path, otlpTracesPath); path != "" {
+		options = append(options, otlptracehttp.WithURLPath(path))
+	}
+	// A nil TLS configuration is not the same as leaving the option out: it is
+	// what stops the exporter from loading OTEL_EXPORTER_OTLP_CERTIFICATE and
+	// friends. An https endpoint gets the floor of TLS 1.2 and the system's root
+	// certificates, because the configuration names no certificate of its own.
+	options = append(options, otlptracehttp.WithTLSClientConfig(tlsConfig(cfg.CollectorSecure())))
+
+	exporter, err := otlptracehttp.New(ctx, options...)
+	if err != nil {
+		return nil, fmt.Errorf("observer: trace exporter: %w", err)
+	}
+	return exporter, nil
+}
+
 // newMeterProvider builds the metric pipeline the configuration describes.
 //
 // Metrics leave by two routes at once. The periodic reader pushes to the
@@ -162,25 +204,9 @@ func newTracerProvider(ctx context.Context, cfg config.Config, res *resource.Res
 // therefore reads a snapshot the reader already holds rather than waiting on the
 // application, and an unreachable collector costs dropped exports, not latency.
 func newMeterProvider(ctx context.Context, cfg config.Config, res *resource.Resource, o *Observer) (*metric.MeterProvider, error) {
-	endpoint, err := url.Parse(cfg.OTEL.Endpoint)
+	exporter, err := newMetricExporter(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("observer: otel endpoint: %w", err)
-	}
-
-	options := []otlpmetrichttp.Option{
-		otlpmetrichttp.WithEndpointURL(cfg.OTEL.Endpoint),
-		otlpmetrichttp.WithHeaders(map[string]string{}),
-		otlpmetrichttp.WithCompression(metricCompression(cfg)),
-		otlpmetrichttp.WithTimeout(cfg.OTEL.Metrics.ExportTimeout),
-		otlpmetrichttp.WithTLSClientConfig(tlsConfig(cfg.OTEL.Endpoint)),
-	}
-	if path := signalPath(cfg.OTEL.Metrics.Path, endpoint.Path, otlpMetricsPath); path != "" {
-		options = append(options, otlpmetrichttp.WithURLPath(path))
-	}
-
-	exporter, err := otlpmetrichttp.New(ctx, options...)
-	if err != nil {
-		return nil, fmt.Errorf("observer: metric exporter: %w", err)
+		return nil, err
 	}
 
 	push := metric.NewPeriodicReader(exporter,
@@ -202,6 +228,50 @@ func newMeterProvider(ctx context.Context, cfg config.Config, res *resource.Reso
 		metric.WithReader(push),
 		metric.WithReader(bridge),
 	), nil
+}
+
+// newMetricExporter builds the metric exporter for the configured protocol.
+//
+// Metrics have no JSON encoder in the Go SDK, so the protocol reaches here as
+// either gRPC or http/protobuf: Validate refuses http/json before a signal is
+// built, which is why there is no third branch to write.
+func newMetricExporter(ctx context.Context, cfg config.Config) (metric.Exporter, error) {
+	if !config.UsesHTTP(cfg.OTEL.Protocol) {
+		options := []otlpmetricgrpc.Option{
+			otlpmetricgrpc.WithEndpoint(cfg.CollectorEndpoint()),
+			otlpmetricgrpc.WithHeaders(cfg.OTEL.Headers),
+			otlpmetricgrpc.WithCompressor(grpcCompressor(cfg)),
+			otlpmetricgrpc.WithTimeout(cfg.OTEL.Metrics.ExportTimeout),
+			otlpmetricgrpc.WithTLSCredentials(grpcTransport(cfg.CollectorSecure())),
+		}
+		exporter, err := otlpmetricgrpc.New(ctx, options...)
+		if err != nil {
+			return nil, fmt.Errorf("observer: metric exporter: %w", err)
+		}
+		return exporter, nil
+	}
+
+	endpoint, err := url.Parse(cfg.OTEL.Endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("observer: otel endpoint: %w", err)
+	}
+
+	options := []otlpmetrichttp.Option{
+		otlpmetrichttp.WithEndpointURL(cfg.OTEL.Endpoint),
+		otlpmetrichttp.WithHeaders(cfg.OTEL.Headers),
+		otlpmetrichttp.WithCompression(metricCompression(cfg)),
+		otlpmetrichttp.WithTimeout(cfg.OTEL.Metrics.ExportTimeout),
+		otlpmetrichttp.WithTLSClientConfig(tlsConfig(cfg.CollectorSecure())),
+	}
+	if path := signalPath(cfg.OTEL.Metrics.Path, endpoint.Path, otlpMetricsPath); path != "" {
+		options = append(options, otlpmetrichttp.WithURLPath(path))
+	}
+
+	exporter, err := otlpmetrichttp.New(ctx, options...)
+	if err != nil {
+		return nil, fmt.Errorf("observer: metric exporter: %w", err)
+	}
+	return exporter, nil
 }
 
 // SetGlobals installs the providers as the process defaults, so a package that

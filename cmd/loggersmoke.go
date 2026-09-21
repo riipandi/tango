@@ -69,11 +69,15 @@ func runLoggerSmoke(ctx context.Context, cmd *cli.Command) error {
 	//
 	// Each call is written out rather than looped, so the rendered source line
 	// differs per level: that is one of the things this command exists to check.
+	//
+	// The logger is bound once rather than reached through log.Slog() at every
+	// call, which is what a caller does when it emits more than one line.
+	sl := log.Slog()
 	started := time.Now()
-	log.Slog().Debug("logger smoke", "marker", smokeMarker, "probe", "debug")
-	log.Slog().Info("logger smoke", "marker", smokeMarker, "probe", "info")
-	log.Slog().Warn("logger smoke", "marker", smokeMarker, "probe", "warn")
-	log.Slog().Error("logger smoke", "marker", smokeMarker, "probe", "error")
+	sl.Debug("logger smoke", "marker", smokeMarker, "probe", "debug")
+	sl.Info("logger smoke", "marker", smokeMarker, "probe", "info")
+	sl.Warn("logger smoke", "marker", smokeMarker, "probe", "warn")
+	sl.Error("logger smoke", "marker", smokeMarker, "probe", "error")
 
 	// The queue is flushed here rather than left to the root After, so a
 	// transport that failed to ship is reported by this command and not as a

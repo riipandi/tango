@@ -3,6 +3,7 @@ package observer_test
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -318,6 +319,52 @@ func TestTheEndpointPathIsKeptWhenItCarriesOne(t *testing.T) {
 	received := server.requests()
 	require.NotEmpty(t, received)
 	assert.Equal(t, "/collector/v1/traces", received[0].path)
+}
+
+func TestConfiguredHeadersReachTheCollector(t *testing.T) {
+	// Headers are what a collector authenticating the sender reads, so the value
+	// from the configuration must be the one on the wire. The other half of the
+	// rule is asserted in TestTheServiceResourceIsBuiltHere: a header the
+	// environment set is not sent.
+	server := newCollector(t)
+	cfg := traceConfig(server.URL)
+	cfg.OTEL.Headers = map[string]string{"authorization": "Bearer configured"}
+
+	obs, err := observer.New(context.Background(), cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { shutdownDraining(t, obs) })
+
+	_, span := obs.Tracer().Tracer("test").Start(context.Background(), "work")
+	span.End()
+	require.NoError(t, obs.Shutdown(context.Background()))
+
+	received := server.requests()
+	require.NotEmpty(t, received)
+	assert.Equal(t, "Bearer configured", received[0].authorization)
+}
+
+func TestJSONEncodingIsUsedWhenTheProtocolAsksForIt(t *testing.T) {
+	// Traces are the one signal the Go SDK can encode as JSON, so the protocol
+	// selects the encoding rather than being accepted and ignored. The collector
+	// here answers protobuf, so the test asserts on what was sent, not on a
+	// successful decode.
+	server := newCollector(t)
+	cfg := traceConfig(server.URL)
+	cfg.OTEL.Protocol = config.OTELProtocolHTTPJSON
+
+	obs, err := observer.New(context.Background(), cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { shutdownDraining(t, obs) })
+
+	_, span := obs.Tracer().Tracer("test").Start(context.Background(), "json-encoded")
+	span.End()
+	_ = obs.Shutdown(context.Background())
+
+	received := server.requests()
+	require.NotEmpty(t, received)
+	assert.True(t, json.Valid(received[0].body),
+		"http/json must send a JSON payload, not protobuf: %q", received[0].body)
+	assert.Contains(t, string(received[0].body), "json-encoded")
 }
 
 // collector is a stand-in for an OpenTelemetry collector. It records the path,

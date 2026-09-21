@@ -1,5 +1,3 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/perses/perses/main/schemas/globaldatasource.json
-#
 # The metrics store this application is scraped into. A global datasource rather
 # than a project one: this stack has no projects, and the perses config switches
 # project-scoped datasources off, so a datasource defined inside a project would

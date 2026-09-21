@@ -103,11 +103,17 @@ func isValueStruct(valueType reflect.Type) bool {
 
 // flattenNested flattens a nested map into dotted keys, the form koanf merges
 // per key. It is used for a JSON config file, which arrives as a tree.
+//
+// A key in mapKeys is kept whole rather than walked into, because it is a map of
+// its own: otel.headers is one value holding several header names, not a section
+// with a key per header. Walking it would turn a header named "authorization"
+// into the config key otel.headers.authorization, which filterKnown then drops
+// for not being part of Config, leaving the header silently unset.
 func flattenNested(nested map[string]any, prefix []string) map[string]any {
 	out := make(map[string]any)
 	for key, value := range nested {
 		path := append(append([]string{}, prefix...), key)
-		if child, ok := value.(map[string]any); ok {
+		if child, ok := value.(map[string]any); ok && !slices.Contains(mapKeys, strings.Join(path, Delim)) {
 			maps.Copy(out, flattenNested(child, path))
 			continue
 		}

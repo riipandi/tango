@@ -455,6 +455,8 @@ its own path, never its own address.
 | Key                        | Default                  | Read when                     |
 | -------------------------- | ------------------------ | ----------------------------- |
 | `otel.endpoint`            | `http://localhost:4318`  | any signal is on              |
+| `otel.protocol`            | `http/protobuf`          | any signal is on              |
+| `otel.headers`             | `{}`                     | any signal is on              |
 | `otel.service_name`        | the app identifier       | any signal is on              |
 | `otel.environment`         | empty                    | any signal is on              |
 | `otel.compression`         | `gzip`                   | any signal is on              |
@@ -464,6 +466,39 @@ its own path, never its own address.
 | `otel.metrics.enable`      | `false`                  | —                             |
 | `otel.metrics.prometheus_path` | `/metrics`           | metrics are on                |
 
+The protocol is one of `grpc`, `http/protobuf`, `http/json` — the specification's own
+three, spelled the way it spells them. `http/protobuf` is the default: it travels over
+the port the default endpoint belongs to, and an HTTP deployment can put it behind the
+same proxy and TLS terminator as the rest of its traffic.
+
+`grpc` reuses `otel.endpoint`. A gRPC exporter is addressed by host and port alone, so
+the URL is reduced to `host:port` — which means one address serves either protocol.
+Keep the scheme: it is what decides TLS, for both. The gRPC port is `4317`, so moving
+to gRPC means moving the address too; leaving it at the HTTP default is refused by
+name rather than dialled, because the two protocols are two listeners of one collector.
+
+```bash
+OTEL_PROTOCOL=grpc OTEL_ENDPOINT=localhost:4317
+```
+
+`http/json` is refused for metrics and logs, because only the trace exporter encodes
+JSON in the Go SDK. The alternative is sending protobuf to a collector expecting JSON,
+which fails somewhere far from the key that caused it.
+
+Headers authenticate the sender to the collector. A JSON object in the file, and the
+specification's own `name=value,...` string behind a variable:
+
+```json
+"otel": { "headers": { "authorization": "env:COLLECTOR_TOKEN" } }
+```
+
+```bash
+OTEL_HEADERS="authorization=Bearer token,x-tenant=acme"
+```
+
+Header values are treated as secrets: an authorization token is why the key exists.
+`config:print` shows the names and hides the values.
+
 Both signals are off by default: a signal nothing consumes is work nothing asked for. Traces go through
 a batch span processor and measurements through a periodic reader, so **nothing on the request path
 blocks** — a span or a measurement is enqueued and the caller returns, and a collector that is slow or
@@ -471,7 +506,9 @@ unreachable costs dropped telemetry rather than a slow request.
 
 Metrics leave by two routes at once: the push to the collector, and the Prometheus exposition at
 `otel.metrics.prometheus_path` on the application's own port. The exposition is served from a registry
-this application owns, so a scrape reports its instruments and not a dependency's.
+this application owns, so a scrape reports its instruments and not a dependency's. Mounting the handler
+belongs to `internal/transport`, which is not implemented yet, so the `tango` scrape job stays `down`
+until `serve` serves that path.
 
 ```bash
 OTEL_TRACING_ENABLE=true OTEL_METRICS_ENABLE=true
@@ -502,7 +539,9 @@ VictoriaMetrics is scraping. Perses is provisioned with the three datasources, s
 
 The collector is what makes one address work: each Victoria service serves OTLP on its own port, so
 `docker/otelcol.yaml` fans the three signals out to them. Without it the application would need three
-addresses, which is the second configuration source `otel.endpoint` exists to prevent.
+addresses, which is the second configuration source `otel.endpoint` exists to prevent. The collector
+listens on both protocols — `4318` for HTTP and `4317` for gRPC — so switching `otel.protocol` needs no
+change to the stack.
 
 VictoriaLogs and VictoriaTraces run distroless images, which carry no shell and no HTTP client, so
 they cannot carry a container healthcheck — an exec probe fails with `exec: "nc": executable file

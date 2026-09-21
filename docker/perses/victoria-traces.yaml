@@ -1,5 +1,3 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/perses/perses/main/schemas/globaldatasource.json
-#
 # The trace store. VictoriaTraces exposes the Jaeger query API, which is what
 # this datasource speaks, so traces are readable without a collector in front of
 # it.

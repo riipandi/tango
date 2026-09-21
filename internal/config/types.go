@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"net/url"
+	"time"
+)
 
 // Config is the resolved application configuration. It is the result of merging
 // the built-in defaults, the JSON config file, and the command-line flags, in
@@ -170,9 +173,15 @@ type LogFile struct {
 // Every signal is opt-in and none is required, like every other external
 // backend: a run that enables nothing dials nothing and needs no collector.
 type OTEL struct {
-	// Endpoint is the collector's OTLP/HTTP address, such as
-	// http://localhost:4318 or https://collector.example.com:4318. The scheme
-	// decides whether the connection is TLS, so it is not a separate setting.
+	// Endpoint is the collector's OTLP address: http://localhost:4318 or
+	// https://collector.example.com:4318 for an HTTP protocol, and
+	// localhost:4317 for gRPC. The scheme decides whether an HTTP connection is
+	// TLS, so it is not a separate setting.
+	//
+	// One address serves every signal, including the protocol that addresses a
+	// service by host and port alone: an HTTP collector and a gRPC collector are
+	// two listeners of one collector, so a deployment that runs both points this
+	// at the one its signals use.
 	//
 	// It is read when any signal is enabled: logs name the otlp transport,
 	// traces set tracing.enable, or metrics set metrics.enable.
@@ -185,10 +194,24 @@ type OTEL struct {
 	// or staging. It is a resource attribute, so one collector can tell two
 	// deployments apart.
 	Environment string `koanf:"environment" json:"environment"`
+	// Protocol is one of OTELProtocols, the wire protocol every signal is sent
+	// with. It is shared rather than per-signal because a collector accepts one
+	// protocol per listener: a deployment that needs two would be running two
+	// collectors, which is what a second address would be.
+	Protocol string `koanf:"protocol" json:"protocol"`
 	// Compression is OTELCompressionGzip or OTELCompressionNone. Gzip is the
 	// protocol's own default; none saves the CPU on a collector reached over a
 	// loopback or a local network.
 	Compression string `koanf:"compression" json:"compression"`
+	// Headers are sent with every export, for a collector that authenticates
+	// the sender. They are shared by the three signals because the one collector
+	// they reach is the one that checks them.
+	//
+	// A header value is a secret by default: an authorization token is the
+	// reason this key exists at all, and a value that must not be logged cannot
+	// be told from one that may, so every value is rendered through the same
+	// path a secret takes.
+	Headers map[string]string `koanf:"headers" json:"headers"`
 	// Queue bounds the in-memory buffer each signal exports from.
 	Queue OTELQueue `koanf:"queue" json:"queue"`
 	// Tracing holds the trace export settings.
@@ -401,6 +424,74 @@ func OTELSamplers() []string {
 // applied and is not.
 func usesOTELRatio(sampler string) bool {
 	return sampler == OTELSamplerRatio || sampler == OTELSamplerParentRatio
+}
+
+// Protocol names OTEL.Protocol accepts, spelled the way the OpenTelemetry
+// specification spells them so a value can be copied from its documentation.
+const (
+	// OTELProtocolGRPC is the protobuf payload over gRPC, on the protocol's own
+	// port (4317).
+	OTELProtocolGRPC = "grpc"
+	// OTELProtocolHTTPProtobuf is the protobuf payload over HTTP, on port 4318.
+	// It is the default here because it is the protocol an HTTP deployment can
+	// put behind the same proxy, TLS terminator, and firewall rule as the rest
+	// of its traffic.
+	OTELProtocolHTTPProtobuf = "http/protobuf"
+	// OTELProtocolHTTPJSON is the JSON payload over HTTP. It is readable with
+	// curl, which is what makes it useful against a collector being debugged.
+	//
+	// The Go exporters implement it unevenly — only the trace exporter encodes
+	// JSON — so Validate refuses it for metrics and logs rather than sending
+	// them as protobuf to a collector expecting JSON.
+	OTELProtocolHTTPJSON = "http/json"
+)
+
+// OTELProtocols returns every accepted protocol name.
+//
+// The three are the whole set the specification defines. A name outside it is
+// refused rather than mapped to a default, because a deployment that asked for
+// one protocol and silently got another has telemetry its collector may reject
+// without saying so.
+func OTELProtocols() []string {
+	return []string{OTELProtocolGRPC, OTELProtocolHTTPProtobuf, OTELProtocolHTTPJSON}
+}
+
+// UsesHTTP reports whether the protocol travels over HTTP, which is what decides
+// whether a signal's path and the endpoint's own path mean anything. A gRPC
+// service is addressed by host and port alone.
+func UsesHTTP(protocol string) bool {
+	return protocol != OTELProtocolGRPC
+}
+
+// CollectorEndpoint returns the collector address in the form the configured
+// protocol's exporter wants.
+//
+// The two forms differ because the two protocols address a service differently.
+// An HTTP exporter wants the URL it can dial, scheme included. A gRPC exporter
+// wants host:port and takes the scheme from the credentials instead, so an
+// endpoint written as a URL is reduced to its host and port: the same value
+// serves both protocols, which is what one shared endpoint means.
+func (c Config) CollectorEndpoint() string {
+	if UsesHTTP(c.OTEL.Protocol) {
+		return c.OTEL.Endpoint
+	}
+	parsed, err := url.Parse(c.OTEL.Endpoint)
+	if err != nil || parsed.Host == "" {
+		return c.OTEL.Endpoint
+	}
+	return parsed.Host
+}
+
+// CollectorSecure reports whether the collector connection uses TLS.
+//
+// It is read from the endpoint's own scheme, so there is no second setting that
+// could disagree with the address: an https URL is TLS for an HTTP protocol, and
+// an https:// URL is what turns it on for gRPC, whose address carries no scheme
+// of its own. A bare host:port is plaintext, which is what a collector on the
+// same host or the same private network wants.
+func (c Config) CollectorSecure() bool {
+	parsed, err := url.Parse(c.OTEL.Endpoint)
+	return err == nil && parsed.Scheme == "https"
 }
 
 // Compression names OTEL.Compression accepts.

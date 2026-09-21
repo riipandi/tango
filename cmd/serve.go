@@ -59,6 +59,7 @@ file decides.`,
 		log.Slog().Info("starting",
 			"mode", cfg.App.Mode,
 			"transport", cfg.Log.Transport,
+			"protocol", cfg.OTEL.Protocol,
 			"tracing", obs.Tracing(),
 			"metrics", obs.Metrics(),
 			"address", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port))

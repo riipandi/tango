@@ -1,9 +1,11 @@
 package config
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -252,6 +254,7 @@ func TestEverySampleSecretIsRendered(t *testing.T) {
 	cfg.Database.URL = probeDSN
 	cfg.KVStore.URL = probeKVURL
 	cfg.Mailer.SMTPPassword = probeSecret
+	cfg.OTEL.Headers = map[string]string{"authorization": probeSecret}
 	cfg.Storage.S3.AccessKeyID = probeSecret
 	cfg.Storage.S3.AccessKeySecret = probeSecret
 
@@ -276,7 +279,8 @@ func TestMaskedShowsNothingOfAShortSecret(t *testing.T) {
 }
 
 // valueAt reads a config key back out of a Config, so the redaction assertion
-// covers every key in the list without naming each field.
+// covers every key in the list without naming each field. A map-valued key is
+// read as its values joined, which is what a rendering has to hide.
 func valueAt(cfg Config, key string) string {
 	switch key {
 	case "app.secret_key":
@@ -293,6 +297,8 @@ func valueAt(cfg Config, key string) string {
 		return cfg.KVStore.URL
 	case "mailer.smtp_password":
 		return cfg.Mailer.SMTPPassword
+	case "otel.headers":
+		return strings.Join(slices.Sorted(maps.Values(cfg.OTEL.Headers)), ",")
 	case "storage.s3.access_key_id":
 		return cfg.Storage.S3.AccessKeyID
 	case "storage.s3.access_key_secret":

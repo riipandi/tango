@@ -8,8 +8,13 @@
 receivers:
   otlp:
     protocols:
+      # Both protocols the application can be configured with, so switching
+      # otel.protocol needs no change here: 4318 is the HTTP listener and 4317
+      # the gRPC one.
       http:
         endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
 
 processors:
   # Bound what one export can hold, so a burst is shed by the collector rather

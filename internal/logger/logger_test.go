@@ -93,6 +93,8 @@ func TestConfiguredLevelIsTheLoggerThreshold(t *testing.T) {
 }
 
 func TestStructuredFormatWritesOneJSONObjectPerLine(t *testing.T) {
+	// The slog frontend is the one the application calls, so a field added
+	// through slog must survive into the entry the transports write.
 	log, buf := newLogger(t, func(cfg *config.Config) { cfg.Log.Format = config.LogStructured })
 
 	log.Slog().Info("served", "user", "alice", "status", 200)
@@ -106,6 +108,36 @@ func TestStructuredFormatWritesOneJSONObjectPerLine(t *testing.T) {
 	assert.Equal(t, "info", entry["level"])
 	assert.Equal(t, "alice", entry["user"], "an attribute must survive as a field")
 	assert.Equal(t, float64(200), entry["status"])
+}
+
+func TestSlogChainCarriesFieldsThroughThePipeline(t *testing.T) {
+	// Both slog idioms reach the transports, because the handler behind the
+	// logger is what implements them: With(...) accumulates attributes on a
+	// derived handler and every later record carries them, while WithGroup(...)
+	// nests what follows under one key. Feature code is expected to use these
+	// rather than reaching for the LogLayer core, so the path is asserted here
+	// rather than assumed.
+	log, buf := newLogger(t, func(cfg *config.Config) { cfg.Log.Format = config.LogStructured })
+
+	request := log.Slog().With("request_id", "abc123")
+	request.Info("first")
+	request.WithGroup("user").Info("second", "id", 42)
+
+	lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
+	require.Len(t, lines, 2)
+
+	var first, second map[string]any
+	require.NoError(t, json.Unmarshal(lines[0], &first))
+	require.NoError(t, json.Unmarshal(lines[1], &second))
+
+	assert.Equal(t, "abc123", first["request_id"],
+		"an attribute added through With must reach every later record")
+	assert.Equal(t, "abc123", second["request_id"],
+		"a derived logger must keep the attribute its parent set")
+	assert.Equal(t, "second", second["msg"])
+	user, ok := second["user"].(map[string]any)
+	require.True(t, ok, "WithGroup must nest what follows under its key")
+	assert.Equal(t, float64(42), user["id"])
 }
 
 func TestConsoleStaysPlainTextOffATerminal(t *testing.T) {
@@ -283,6 +315,31 @@ func TestOTLPEndpointPathIsUsedWhenTheConfigurationNamesOne(t *testing.T) {
 	received := server.requests()
 	require.Len(t, received, 1)
 	assert.Equal(t, "/collector/v1/logs", received[0].path)
+}
+
+func TestOTLPHeadersReachTheCollector(t *testing.T) {
+	// Headers are what a collector authenticating the sender reads, so the value
+	// from the configuration must be the one on the wire. A header the
+	// environment set must not be, which is the rule the whole package follows.
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer leaked")
+
+	server := newOTLPTestServer(t)
+
+	cfg := config.Default()
+	cfg.Log.Transport = []string{config.LogTransportOTLP}
+	cfg.OTEL.Endpoint = server.URL
+	cfg.OTEL.Headers = map[string]string{"authorization": "Bearer configured"}
+
+	log, err := logger.New(cfg, logger.WithWriter(&bytes.Buffer{}))
+	require.NoError(t, err)
+
+	log.Slog().Info("authenticated")
+	require.NoError(t, log.Shutdown(context.Background()))
+
+	received := server.requests()
+	require.Len(t, received, 1)
+	assert.Equal(t, "Bearer configured", received[0].authorization,
+		"the configured header is the one sent, not one the shell set")
 }
 
 func TestAConfigurationThatOmitsOTLPDialsNothing(t *testing.T) {

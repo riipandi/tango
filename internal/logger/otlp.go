@@ -9,10 +9,13 @@ import (
 
 	"go.loglayer.dev/transports/otellog/v3"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/riipandi/tango/internal/config"
 )
@@ -45,39 +48,9 @@ type otlpSink struct {
 // The address is otel.endpoint, shared with traces and metrics: one collector
 // receives every signal, so a second copy of the address could disagree with it.
 func newOTLPSink(cfg config.Config) (*otlpSink, error) {
-	endpoint, err := url.Parse(cfg.OTEL.Endpoint)
+	exporter, err := newLogExporter(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("logger: otlp endpoint: %w", err)
-	}
-
-	options := []otlploghttp.Option{
-		otlploghttp.WithEndpointURL(cfg.OTEL.Endpoint),
-		otlploghttp.WithHeaders(map[string]string{}),
-		otlploghttp.WithCompression(logCompression(cfg)),
-		otlploghttp.WithTimeout(otlpTimeout),
-	}
-	// A route is applied only when the configuration names one, or when the
-	// endpoint carries no path of its own: an address that already names a route
-	// — a collector mounted under a prefix, or a backend whose route is not the
-	// protocol's — says where the logs go, and overriding it with the default
-	// would send them somewhere the user did not ask for. An explicit
-	// log.otlp.path wins over both, being the one thing that is unambiguous.
-	if path := logPath(cfg, endpoint.Path); path != "" {
-		options = append(options, otlploghttp.WithURLPath(path))
-	}
-	// A nil TLS configuration is not the same as leaving the option out: it is
-	// what stops the exporter from loading OTEL_EXPORTER_OTLP_CERTIFICATE and
-	// friends. An https endpoint gets the floor of TLS 1.2 and the system's root
-	// certificates, because the config file names no certificate of its own.
-	tlsConfig := (*tls.Config)(nil)
-	if endpoint.Scheme == "https" {
-		tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
-	}
-	options = append(options, otlploghttp.WithTLSClientConfig(tlsConfig))
-
-	exporter, err := otlploghttp.New(context.Background(), options...)
-	if err != nil {
-		return nil, fmt.Errorf("logger: otlp exporter: %w", err)
+		return nil, err
 	}
 
 	// The resource is built rather than taken from resource.Default, which reads
@@ -119,6 +92,64 @@ func newOTLPSink(cfg config.Config) (*otlpSink, error) {
 	}, nil
 }
 
+// newLogExporter builds the log exporter for the configured protocol.
+//
+// Logs have no JSON encoder in the Go SDK, so the protocol reaches here as
+// either gRPC or http/protobuf: Validate refuses http/json before the sink is
+// built, which is why there is no third branch to write.
+func newLogExporter(cfg config.Config) (sdklog.Exporter, error) {
+	if !config.UsesHTTP(cfg.OTEL.Protocol) {
+		options := []otlploggrpc.Option{
+			otlploggrpc.WithEndpoint(cfg.CollectorEndpoint()),
+			otlploggrpc.WithHeaders(cfg.OTEL.Headers),
+			otlploggrpc.WithCompressor(logCompressor(cfg)),
+			otlploggrpc.WithTimeout(otlpTimeout),
+			// Explicit credentials rather than WithInsecure: the two reach the
+			// same place, but credentials take priority over anything the
+			// environment contributed, so an OTEL_EXPORTER_OTLP_CERTIFICATE in
+			// the shell cannot turn a plaintext connection into a TLS one.
+			otlploggrpc.WithTLSCredentials(grpcTransport(cfg.CollectorSecure())),
+		}
+		exporter, err := otlploggrpc.New(context.Background(), options...)
+		if err != nil {
+			return nil, fmt.Errorf("logger: otlp exporter: %w", err)
+		}
+		return exporter, nil
+	}
+
+	endpoint, err := url.Parse(cfg.OTEL.Endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("logger: otlp endpoint: %w", err)
+	}
+
+	options := []otlploghttp.Option{
+		otlploghttp.WithEndpointURL(cfg.OTEL.Endpoint),
+		otlploghttp.WithHeaders(cfg.OTEL.Headers),
+		otlploghttp.WithCompression(logCompression(cfg)),
+		otlploghttp.WithTimeout(otlpTimeout),
+	}
+	// A route is applied only when the configuration names one, or when the
+	// endpoint carries no path of its own: an address that already names a route
+	// — a collector mounted under a prefix, or a backend whose route is not the
+	// protocol's — says where the logs go, and overriding it with the default
+	// would send them somewhere the user did not ask for. An explicit
+	// log.otlp.path wins over both, being the one thing that is unambiguous.
+	if path := logPath(cfg, endpoint.Path); path != "" {
+		options = append(options, otlploghttp.WithURLPath(path))
+	}
+	// A nil TLS configuration is not the same as leaving the option out: it is
+	// what stops the exporter from loading OTEL_EXPORTER_OTLP_CERTIFICATE and
+	// friends. A secure endpoint gets the floor of TLS 1.2 and the system's root
+	// certificates, because the config file names no certificate of its own.
+	options = append(options, otlploghttp.WithTLSClientConfig(tlsConfig(cfg.CollectorSecure())))
+
+	exporter, err := otlploghttp.New(context.Background(), options...)
+	if err != nil {
+		return nil, fmt.Errorf("logger: otlp exporter: %w", err)
+	}
+	return exporter, nil
+}
+
 // logPath is the collector route for logs, or empty when the endpoint already
 // names one.
 //
@@ -140,6 +171,45 @@ func logCompression(cfg config.Config) otlploghttp.Compression {
 		return otlploghttp.NoCompression
 	}
 	return otlploghttp.GzipCompression
+}
+
+// logCompressor maps the configured name to what a gRPC exporter accepts.
+//
+// gRPC supports gzip alone, so `none` is an empty compressor and anything else
+// is gzip. Validate has already refused a third value by the time this runs.
+func logCompressor(cfg config.Config) string {
+	if cfg.OTEL.Compression == config.OTELCompressionNone {
+		return ""
+	}
+	return "gzip"
+}
+
+// grpcTransport returns the transport credentials for a gRPC exporter.
+//
+// Explicit credentials are what stop the exporter from applying the TLS material
+// OTEL_EXPORTER_OTLP_CERTIFICATE and its friends describe: those options are
+// appended before a caller's, and transport credentials take priority over both
+// the insecure and the TLS default, so passing them closes the door at the point
+// where the exporter opens it.
+func grpcTransport(secure bool) credentials.TransportCredentials {
+	if secure {
+		return credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})
+	}
+	return insecure.NewCredentials()
+}
+
+// tlsConfig returns the TLS configuration for an HTTP collector endpoint.
+//
+// A nil configuration is not the same as leaving the option out: passing nil is
+// what stops the exporter from loading OTEL_EXPORTER_OTLP_CERTIFICATE and
+// friends, which would be a second source deciding what this process trusts. A
+// secure endpoint gets the floor of TLS 1.2 and the system's root certificates,
+// because the config file names no certificate of its own.
+func tlsConfig(secure bool) *tls.Config {
+	if secure {
+		return &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	return nil
 }
 
 // shutdown drains the queued records and stops the exporter.

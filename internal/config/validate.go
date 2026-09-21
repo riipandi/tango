@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/mail"
 	"net/url"
 	"slices"
@@ -89,17 +90,53 @@ func (c Config) Validate() error {
 			c.unsetNote("otel.endpoint", "must not be empty when log.transport names otlp"))
 	}
 
+	check(isOneOf(c.OTEL.Protocol, OTELProtocols()...),
+		"otel.protocol: %q is not one of %s", c.OTEL.Protocol, joinValues(OTELProtocols()...))
 	check(isOneOf(c.OTEL.Compression, OTELCompressions()...),
 		"otel.compression: %q is not one of %s", c.OTEL.Compression, joinValues(OTELCompressions()...))
 	check(c.OTEL.Queue.MaxSize > 0, "otel.queue.max_size: must be positive")
 
+	// A header name becomes part of the request, so an empty one or a value
+	// that cannot be a header value is refused here rather than at the first
+	// export, where the exporter reports it far from the key that caused it.
+	for name := range c.OTEL.Headers {
+		check(name != "", "otel.headers: a header name must not be empty")
+	}
+
+	// http/json is the one protocol combination the Go exporters do not all
+	// implement: only the trace exporter encodes JSON. Metrics and logs would
+	// silently send protobuf to a collector expecting JSON, so the mismatch is
+	// refused by name instead of shipped. The signals are named in one message
+	// so a deployment that enabled both fixes both in one pass.
+	if c.OTEL.Protocol == OTELProtocolHTTPJSON {
+		check(len(c.jsonUnsupportedSignals()) == 0,
+			"otel.protocol: %q is not supported for %s; use %q",
+			OTELProtocolHTTPJSON, joinValues(c.jsonUnsupportedSignals()...), OTELProtocolHTTPProtobuf)
+	}
+
 	// The address is checked whenever any signal is enabled, and the scheme
-	// decides TLS, so a bad one fails here rather than at the first export.
+	// decides TLS, so a bad one fails here rather than at the first export. gRPC
+	// addresses a service by host and port, so it is held to that instead of to
+	// a URL.
 	if c.otelEnabled() {
 		check(c.OTEL.Endpoint != "", "otel.endpoint: %s",
 			c.unsetNote("otel.endpoint", "must not be empty when a signal is enabled"))
-		check(c.OTEL.Endpoint == "" || isHTTPURL(c.OTEL.Endpoint),
-			"otel.endpoint: %q must be an absolute http or https URL", c.OTEL.Endpoint)
+		if UsesHTTP(c.OTEL.Protocol) {
+			check(c.OTEL.Endpoint == "" || isHTTPURL(c.OTEL.Endpoint),
+				"otel.endpoint: %q must be an absolute http or https URL for protocol %q",
+				c.OTEL.Endpoint, c.OTEL.Protocol)
+		} else {
+			check(c.OTEL.Endpoint == "" || isGRPCTarget(c.OTEL.Endpoint),
+				"otel.endpoint: %q must be host:port for protocol %q", c.OTEL.Endpoint, c.OTEL.Protocol)
+			// The HTTP default port is the trap this catches: switching the
+			// protocol without moving the address is the one change that looks
+			// applied and sends nothing, because the collector's two protocols
+			// are two listeners. A host other than the default's is left alone,
+			// since a deployment may legitimately front both on one port.
+			check(!strings.HasSuffix(c.OTEL.Endpoint, ":"+DefaultOTELHTTPPort),
+				"otel.endpoint: %q is the HTTP port; protocol %q listens on %s",
+				c.OTEL.Endpoint, c.OTEL.Protocol, DefaultOTELGRPCPort)
+		}
 		check(c.OTEL.ServiceName != "", "otel.service_name: must not be empty")
 	}
 
@@ -318,6 +355,21 @@ func (c Config) otelEnabled() bool {
 	return c.logTransport(LogTransportOTLP) || c.OTEL.Tracing.Enable || c.OTEL.Metrics.Enable
 }
 
+// jsonUnsupportedSignals names the enabled signals whose exporter cannot encode
+// JSON. It is what turns the one protocol the Go SDK implements unevenly into a
+// message naming the signal that would be wrong, rather than a bare refusal of a
+// value the specification allows.
+func (c Config) jsonUnsupportedSignals() []string {
+	var signals []string
+	if c.OTEL.Metrics.Enable {
+		signals = append(signals, "metrics")
+	}
+	if c.logTransport(LogTransportOTLP) {
+		signals = append(signals, "logs")
+	}
+	return signals
+}
+
 // kvStoreDrivers returns the feature keys whose driver is the key-value backend.
 // It is what turns "a driver points at a switched-off backend" into a message
 // that names the key, rather than a failure at start-up.
@@ -397,6 +449,25 @@ func isHTTPURL(value string) bool {
 		return false
 	}
 	return parsed.Host != ""
+}
+
+// isGRPCTarget reports whether value is what a gRPC exporter accepts as an
+// address: a bare host:port, such as localhost:4317.
+//
+// A scheme is refused rather than stripped. The gRPC exporter takes the host
+// from a URL and ignores everything else, so http://localhost:4317 would work
+// while looking like it meant something — and a user who writes it has probably
+// mistaken the port as well. Naming the expected form is more useful than
+// quietly accepting one that is nearly right.
+func isGRPCTarget(value string) bool {
+	if strings.Contains(value, "://") || strings.Contains(value, "/") {
+		return false
+	}
+	_, port, err := net.SplitHostPort(value)
+	if err != nil {
+		return false
+	}
+	return port != ""
 }
 
 // isOTELPath reports whether value is a usable OTLP route: empty, or a URL path
@@ -485,6 +556,23 @@ func mask(secret string) string {
 // secretRenderer renders one secret for display.
 type secretRenderer func(string) string
 
+// redactHeaders renders every header value through the secret path.
+//
+// A header is a secret as a whole rather than by name: an authorization token is
+// why the key exists, and a map is one config value, so there is no key to list
+// per entry. The names are kept, because a name says which credential is missing
+// without revealing it, and they are read by a person rather than a matcher.
+func redactHeaders(headers map[string]string, render secretRenderer) map[string]string {
+	if headers == nil {
+		return nil
+	}
+	out := make(map[string]string, len(headers))
+	for name, value := range headers {
+		out[name] = render(value)
+	}
+	return out
+}
+
 // withSecrets returns a copy with every secret passed through render.
 //
 // A connection string is always reduced to host:port/database rather than
@@ -501,6 +589,7 @@ func (c Config) withSecrets(render secretRenderer) Config {
 	out.Mailer.SMTPPassword = render(c.Mailer.SMTPPassword)
 	out.Storage.S3.AccessKeyID = render(c.Storage.S3.AccessKeyID)
 	out.Storage.S3.AccessKeySecret = render(c.Storage.S3.AccessKeySecret)
+	out.OTEL.Headers = redactHeaders(c.OTEL.Headers, render)
 	out.origin = nil
 	out.unresolved = nil
 	return out

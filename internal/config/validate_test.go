@@ -583,6 +583,149 @@ func TestValidationAcceptsAnOTLPDeployment(t *testing.T) {
 	}
 }
 
+func TestValidationRefusesAnUnknownProtocol(t *testing.T) {
+	// A name outside the specification's three is refused rather than mapped to
+	// a default: a deployment that asked for one protocol and silently got
+	// another has telemetry its collector may reject without saying so.
+	err := resolveFile(t, `"log": {"transport": ["otlp"]}, "otel": {"protocol": "http"}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "otel.protocol")
+	assert.Contains(t, err.Error(), "http/protobuf")
+}
+
+func TestValidationHoldsTheEndpointToTheConfiguredProtocol(t *testing.T) {
+	// The two protocols address a service differently: HTTP wants a URL, gRPC
+	// wants host:port. Each is held to its own form, so a value that would fail
+	// at the first export fails here instead, beside the key that caused it.
+	for _, protocol := range []string{"http/protobuf", "http/json"} {
+		body := `"log": {"transport": ["otlp"]}, "otel": {"endpoint": "localhost:4318", "protocol": ` +
+			strconv.Quote(protocol) + `}`
+		err := resolveFile(t, body)
+		require.ErrorIs(t, err, config.ErrInvalid, protocol)
+		assert.Contains(t, err.Error(), "must be an absolute http or https URL", protocol)
+	}
+
+	// A scheme on a gRPC address is refused rather than stripped: the exporter
+	// would accept it and ignore the scheme, so a user who wrote one has likely
+	// mistaken the port as well.
+	body := `"log": {"transport": ["otlp"]}, "otel": {"endpoint": "http://localhost:4317", "protocol": "grpc"}`
+	err := resolveFile(t, body)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "must be host:port")
+
+	// The HTTP default port is refused for gRPC: switching the protocol without
+	// moving the address is the one change that looks applied and sends nothing,
+	// because the collector's two protocols are two listeners.
+	body = `"log": {"transport": ["otlp"]}, "otel": {"endpoint": "localhost:4318", "protocol": "grpc"}`
+	err = resolveFile(t, body)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "is the HTTP port")
+	assert.Contains(t, err.Error(), "4317")
+
+	assert.NoError(t, resolveFile(t,
+		`"log": {"transport": ["otlp"]}, "otel": {"endpoint": "localhost:4317", "protocol": "grpc"}`))
+}
+
+func TestValidationRefusesJSONForTheSignalsTheSDKCannotEncode(t *testing.T) {
+	// Only the trace exporter encodes JSON. Metrics and logs would send protobuf
+	// to a collector expecting JSON, so the mismatch is refused by name rather
+	// than shipped — and the message names the signal that would be wrong.
+	err := resolveFile(t,
+		`"log": {"transport": ["otlp"]}, "otel": {"protocol": "http/json", "tracing": {"enable": true}}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "http/json")
+	assert.Contains(t, err.Error(), "logs")
+
+	// Traces alone are fine: that exporter is the one that implements it.
+	assert.NoError(t, resolveFile(t,
+		`"log": {"transport": ["console"]}, "otel": {"protocol": "http/json", "tracing": {"enable": true}}`))
+
+	// Metrics are refused, and both offending signals are named in one message.
+	err = resolveFile(t,
+		`"log": {"transport": ["otlp"]}, "otel": {"protocol": "http/json", "metrics": {"enable": true}}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "logs")
+	assert.Contains(t, err.Error(), "metrics")
+}
+
+func TestValidationAcceptsHeadersInBothForms(t *testing.T) {
+	// A JSON object is what a config file writes, and the specification's own
+	// comma-separated string is what a directive resolves to. Both must reach
+	// the field the exporters read.
+	cfg, err := resolveAndValidate(t, config.Options{
+		ConfigFile: writeConfig(t, `{
+			"database": {"url": "env:DATABASE_URL"},
+			"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
+			"log": {"transport": ["otlp"]},
+			"otel": {"headers": {"authorization": "Bearer token", "x-tenant": "acme"}}
+		}`),
+		Environ: baseEnv(),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{
+		"authorization": "Bearer token",
+		"x-tenant":      "acme",
+	}, cfg.OTEL.Headers, "a JSON object must survive as a map")
+
+	cfg, err = resolveAndValidate(t, config.Options{
+		ConfigFile: writeConfig(t, `{
+			"database": {"url": "env:DATABASE_URL"},
+			"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
+			"log": {"transport": ["otlp"]},
+			"otel": {"headers": "env:OTEL_HEADERS"}
+		}`),
+		Environ: append(baseEnv(), "OTEL_HEADERS=authorization=Bearer token,x-tenant=acme"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{
+		"authorization": "Bearer token",
+		"x-tenant":      "acme",
+	}, cfg.OTEL.Headers, "a comma-separated directive must become the same map")
+}
+
+func TestRedactedHidesHeaderValuesButKeepsTheirNames(t *testing.T) {
+	// A header value is a secret: an authorization token is why the key exists,
+	// and a value that must not be logged cannot be told from one that may. The
+	// names are kept, because a name says which credential is missing without
+	// revealing it.
+	cfg := config.Default()
+	cfg.OTEL.Headers = map[string]string{"authorization": "Bearer super-secret"}
+
+	redacted := cfg.Redacted()
+	require.Contains(t, redacted.OTEL.Headers, "authorization")
+	assert.NotContains(t, redacted.OTEL.Headers["authorization"], "super-secret")
+
+	masked := cfg.Masked()
+	assert.NotContains(t, masked.OTEL.Headers["authorization"], "super-secret")
+}
+
+func TestCollectorEndpointServesBothProtocolForms(t *testing.T) {
+	// One endpoint is shared by the three signals, and the two protocols address
+	// a service differently. The gRPC form is the URL reduced to its host and
+	// port, so the same value reaches both exporters.
+	cfg := config.Default()
+	cfg.OTEL.Endpoint = "http://collector.example.com:4317"
+
+	cfg.OTEL.Protocol = config.OTELProtocolHTTPProtobuf
+	assert.Equal(t, "http://collector.example.com:4317", cfg.CollectorEndpoint())
+	assert.False(t, cfg.CollectorSecure())
+
+	cfg.OTEL.Protocol = config.OTELProtocolGRPC
+	assert.Equal(t, "collector.example.com:4317", cfg.CollectorEndpoint(),
+		"a gRPC exporter wants host:port, not the URL")
+
+	// The scheme is what decides TLS, for both protocols: a gRPC address carries
+	// none of its own, so an https URL is how a secure connection is asked for.
+	cfg.OTEL.Endpoint = "https://collector.example.com:4317"
+	assert.Equal(t, "collector.example.com:4317", cfg.CollectorEndpoint())
+	assert.True(t, cfg.CollectorSecure())
+
+	// A bare host:port is plaintext, which is what a collector on the same host
+	// or the same private network wants.
+	cfg.OTEL.Endpoint = "collector.example.com:4317"
+	assert.False(t, cfg.CollectorSecure())
+}
+
 func TestRedactedLeavesTheLogTargetsAlone(t *testing.T) {
 	// Neither the transport list nor the collector address is a credential, and
 	// a report that hid them could not say where the logs go.

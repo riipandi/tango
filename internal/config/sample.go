@@ -14,6 +14,13 @@ import (
 // A secret is a property of the key, not of its default: server.base_url has an
 // empty default too, and it is not a secret.
 //
+// otel.headers is the one key here whose value is a map rather than a string,
+// and it is a secret as a whole: an authorization token is the reason the key
+// exists, and the names inside are chosen by the user, so there is no per-entry
+// key to list. Every value is rendered through the same path (see
+// redactHeaders), and a generated file asks for the one variable that carries
+// them all.
+//
 // A test asserts this list is exactly the set of keys Redacted replaces, so the
 // two cannot drift: adding a secret to one without the other fails.
 var secretKeys = []string{
@@ -24,6 +31,7 @@ var secretKeys = []string{
 	"database.url",
 	"kvstore.url",
 	"mailer.smtp_password",
+	"otel.headers",
 	"storage.s3.access_key_id",
 	"storage.s3.access_key_secret",
 }
@@ -88,6 +96,7 @@ var envKeys = map[string]string{
 	"otel.endpoint":           "OTEL_ENDPOINT",
 	"otel.environment":        "OTEL_ENVIRONMENT",
 	"otel.metrics.enable":     "OTEL_METRICS_ENABLE",
+	"otel.protocol":           "OTEL_PROTOCOL",
 	"otel.service_name":       "OTEL_SERVICE_NAME",
 	"otel.tracing.enable":     "OTEL_TRACING_ENABLE",
 	"server.base_url":         "PUBLIC_BASE_URL",

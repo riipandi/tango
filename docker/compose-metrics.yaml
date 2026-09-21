@@ -4,6 +4,9 @@ x-common: &common
   networks: ['intranet']
   extra_hosts: ['host.docker.internal:host-gateway']
   restart: unless-stopped
+  security_opt: ['no-new-privileges:true']
+  shm_size: 128m # set shared memory limit
+  mem_limit: 256m # set memory limit
 
 # VictoriaLogs v1.52+ and VictoriaTraces v0.11+ are distroless: no shell, no HTTP
 # client, so an exec healthcheck cannot run and every `depends_on:
@@ -20,13 +23,11 @@ services:
     image: docker.io/otel/opentelemetry-collector-contrib:${OTELCOL_VERSION:-0.140.0}
     hostname: otel-collector
     ports:
-      - '4318:4318' # OTLP/HTTP, the endpoint the application dials
+      - '4318:4318' # OTLP/HTTP, the endpoint the application dials by default
+      - '4317:4317' # OTLP/gRPC, for otel.protocol: grpc
       - '13133:13133' # health_check extension
     volumes: ['./otelcol.yaml:/etc/otelcol/config.yaml:ro']
     command: ['--config=/etc/otelcol/config.yaml']
-    security_opt: ['no-new-privileges:true']
-    shm_size: 128m # set shared memory limit
-    mem_limit: 256m # set memory limit
     healthcheck:
       test: ['CMD', '/otelcol-contrib', '--version']
       interval: 3s
@@ -43,16 +44,9 @@ services:
     image: docker.io/persesdev/perses:${PERSES_VERSION:-latest}
     hostname: perses
     ports: ['3380:3380']
-    volumes:
-      - '../.storage/perses_data:/perses:rw'
-      # Read on every start, so the datasources a developer needs are there
-      # without clicking through the UI.
-      - './perses:/etc/perses/provisioning:ro'
+    volumes: ['../.storage/perses_data:/perses:rw', './perses:/etc/perses/provisioning:ro']
     configs: [{ source: perses_config, target: /etc/perses/config.yaml }]
     command: '-web.listen-address=0.0.0.0:3380 -log.level=error --config=/etc/perses/config.yaml'
-    security_opt: ['no-new-privileges:true']
-    shm_size: 128m # set shared memory limit
-    mem_limit: 256m # set memory limit
     healthcheck:
       test: ['CMD', 'percli', 'version']
       interval: 3s
@@ -64,6 +58,21 @@ services:
       victoria-traces: { condition: service_started }
       otel-collector: { condition: service_started }
 
+  perses-mcp:
+    <<: *common
+    image: docker.io/persesdev/mcp-server:${PERSES_MCP_VERSION:-v0.2-distroless}
+    hostname: perses-mcp
+    ports: ['3880:3880']
+    configs: [{ source: perses_mcp_config, target: /etc/perses-mcp-config.yaml }]
+    command: '--config=/etc/perses-mcp-config.yaml'
+    # healthcheck:
+    #   test: ['CMD', '/bin/perses-mcp-server', 'healthcheck']
+    #   interval: 3s
+    #   timeout: 5s
+    #   retries: 3
+    depends_on:
+      perses: { condition: service_healthy }
+
   victoria-metrics:
     <<: *common
     image: docker.io/victoriametrics/victoria-metrics:${VICTORIA_METRICS_VERSION:-v1.152.0}
@@ -72,9 +81,6 @@ services:
     volumes: ['../.storage/victoria_metrics_data:/victoria_metrics_data']
     configs: [{ source: victoria_metrics_config, target: /victoria_metrics_data/scrape.yaml }]
     command: '-storageDataPath=/victoria_metrics_data -promscrape.config=/victoria_metrics_data/scrape.yaml'
-    security_opt: ['no-new-privileges:true']
-    shm_size: 128m # set shared memory limit
-    mem_limit: 256m # set memory limit
     healthcheck:
       test: ['CMD', 'nc', '-vz', '127.0.0.1', '8428']
       interval: 3s
@@ -95,9 +101,6 @@ services:
       -storageDataPath=/victoria_logs_data
       -retentionPeriod=14d
       -opentelemetry.maxRequestSize=16777216
-    security_opt: ['no-new-privileges:true']
-    shm_size: 128m # set shared memory limit
-    mem_limit: 256m # set memory limit
 
   victoria-traces:
     <<: *common
@@ -106,9 +109,6 @@ services:
     ports: ['10428:10428']
     volumes: ['../.storage/victoria_traces_data:/victoria_traces_data']
     command: '-storageDataPath=/victoria_traces_data -retentionPeriod=8w'
-    security_opt: ['no-new-privileges:true']
-    shm_size: 128m # set shared memory limit
-    mem_limit: 256m # set memory limit
 
   postgres-exporter:
     <<: *common
@@ -119,9 +119,6 @@ services:
       DATA_SOURCE_URI: pgsql:5432/postgres?sslmode=disable
       DATA_SOURCE_USER: postgres
       DATA_SOURCE_PASS: securedb
-    security_opt: ['no-new-privileges:true']
-    shm_size: 128m # set shared memory limit
-    mem_limit: 256m # set memory limit
     healthcheck:
       test: ['CMD', 'nc', '-vz', '127.0.0.1', '9187']
       interval: 3s
@@ -140,9 +137,6 @@ services:
       REDIS_PASSWORD: securedb
       REDIS_ADDR: redis://redis:6379
       REDIS_EXPORTER_WEB_LISTEN_ADDRESS: 0.0.0.0:9121
-    security_opt: ['no-new-privileges:true']
-    shm_size: 128m # set shared memory limit
-    mem_limit: 256m # set memory limit
     healthcheck:
       test: ['CMD', '/usr/bin/redis_exporter', '--version']
       interval: 3s
@@ -180,15 +174,66 @@ configs:
           - 'tempo'
       dashboard:
       datasource:
-        # global:
-        #   disable: false
-        #   # discovery: <GlobalDatasourceDiscovery config> # Optional
         project:
           disable: true
         disable_local: true
       provisioning:
         folders:
           - '/etc/perses/provisioning'
+
+  # perses_vm_logs:
+  #   content: |
+  #     kind: "GlobalDatasource"
+  #     metadata:
+  #       name: "victoria-logs"
+  #     spec:
+  #       display:
+  #         name: "VictoriaLogs"
+  #       default: true
+  #       plugin:
+  #         kind: "VictoriaLogsDatasource"
+  #         spec:
+  #           directUrl: "http://localhost:9428"
+
+  # perses_vm_metrics:
+  #   content: |
+  #     kind: "GlobalDatasource"
+  #     metadata:
+  #       name: "victoria-metrics"
+  #     spec:
+  #       display:
+  #         name: "VictoriaMetrics"
+  #       default: true
+  #       plugin:
+  #         kind: "PrometheusDatasource"
+  #         spec:
+  #           # directUrl keeps the query on the browser side, so a developer can read
+  #           # the store without routing every request through the Perses proxy.
+  #           directUrl: "http://localhost:8428"
+  #           scrapeInterval: "15s"
+
+  # perses_vm_traces:
+  #   content: |
+  #     kind: "GlobalDatasource"
+  #     metadata:
+  #       name: "victoria-traces"
+  #     spec:
+  #       display:
+  #         name: "VictoriaTraces"
+  #       default: true
+  #       plugin:
+  #         kind: "JaegerDatasource"
+  #         spec:
+  #           directUrl: "http://localhost:10428/select/jaeger"
+
+  perses_mcp_config:
+    content: |
+      transport: http
+      listen_address: "0.0.0.0:3880"
+      read_only: false
+      resources: ""
+      perses_server:
+        url: "http://perses:3380"
 
   victoria_metrics_config:
     content: |
