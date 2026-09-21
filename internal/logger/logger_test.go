@@ -229,7 +229,7 @@ func TestUnsetOTLPVariableDoesNotReachTheSink(t *testing.T) {
 	server := newOTLPTestServer(t)
 	cfg := config.Default()
 	cfg.Log.Transport = []string{config.LogTransportConsole, config.LogTransportOTLP}
-	cfg.Log.OTLP.Endpoint = server.URL
+	cfg.OTEL.Endpoint = server.URL
 
 	log, err := logger.New(cfg, logger.WithWriter(&bytes.Buffer{}))
 	require.NoError(t, err)
@@ -253,7 +253,7 @@ func TestOTLPSinkShipsToTheConfiguredEndpoint(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.Log.Transport = []string{config.LogTransportOTLP}
-	cfg.Log.OTLP.Endpoint = server.URL
+	cfg.OTEL.Endpoint = server.URL
 
 	log, err := logger.New(cfg, logger.WithWriter(&bytes.Buffer{}))
 	require.NoError(t, err)
@@ -271,7 +271,7 @@ func TestOTLPEndpointPathIsUsedWhenTheConfigurationNamesOne(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.Log.Transport = []string{config.LogTransportOTLP}
-	cfg.Log.OTLP.Endpoint = server.URL + "/collector/v1/logs"
+	cfg.OTEL.Endpoint = server.URL + "/collector/v1/logs"
 
 	log, err := logger.New(cfg, logger.WithWriter(&bytes.Buffer{}))
 	require.NoError(t, err)
@@ -294,7 +294,7 @@ func TestAConfigurationThatOmitsOTLPDialsNothing(t *testing.T) {
 
 	log, _ := newLogger(t, func(cfg *config.Config) {
 		cfg.Log.Transport = []string{config.LogTransportConsole}
-		cfg.Log.OTLP.Endpoint = server.URL
+		cfg.OTEL.Endpoint = server.URL
 	})
 	log.Slog().Info("local only")
 	require.NoError(t, log.Shutdown(context.Background()))
@@ -314,7 +314,7 @@ func TestEveryNamedSinkReceivesTheEntry(t *testing.T) {
 			config.LogTransportFile,
 			config.LogTransportOTLP,
 		}
-		cfg.Log.OTLP.Endpoint = server.URL
+		cfg.OTEL.Endpoint = server.URL
 	})
 
 	log.Slog().Info("everywhere", "n", 7)

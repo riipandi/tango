@@ -12,6 +12,31 @@ x-common: &common
 # Restore the healthchecks once `-health` ships (VictoriaLogs#1741).
 
 services:
+  # The one address the three signals share, which is what otel.endpoint names.
+  # The fan-out to the three Victoria services lives here rather than in the
+  # application: they listen on three ports, and the application names one.
+  otel-collector:
+    <<: *common
+    image: docker.io/otel/opentelemetry-collector-contrib:${OTELCOL_VERSION:-0.140.0}
+    hostname: otel-collector
+    ports:
+      - '4318:4318' # OTLP/HTTP, the endpoint the application dials
+      - '13133:13133' # health_check extension
+    volumes: ['./otelcol.yaml:/etc/otelcol/config.yaml:ro']
+    command: ['--config=/etc/otelcol/config.yaml']
+    security_opt: ['no-new-privileges:true']
+    shm_size: 128m # set shared memory limit
+    mem_limit: 256m # set memory limit
+    healthcheck:
+      test: ['CMD', '/otelcol-contrib', '--version']
+      interval: 3s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      victoria-logs: { condition: service_started }
+      victoria-metrics: { condition: service_healthy }
+      victoria-traces: { condition: service_started }
+
   perses:
     <<: *common
     # @ref: https://perses.dev/perses/docs/configuration/configuration
@@ -37,6 +62,7 @@ services:
       victoria-metrics: { condition: service_healthy }
       victoria-logs: { condition: service_started }
       victoria-traces: { condition: service_started }
+      otel-collector: { condition: service_started }
 
   victoria-metrics:
     <<: *common
@@ -141,6 +167,17 @@ configs:
         file:
           folder: '/perses'
           extension: 'json'
+      plugin:
+        disabled:
+          - 'pyroscope'
+          - 'prometheus'
+          - 'opensearch'
+          - 'greptimedb'
+          - 'jaeger'
+          - 'loki'
+          - 'clickHouse'
+          - 'splunk'
+          - 'tempo'
       dashboard:
       datasource:
         # global:

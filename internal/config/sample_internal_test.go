@@ -133,16 +133,28 @@ func TestDurationKeysMatchTheStruct(t *testing.T) {
 
 func TestSampleWritesTheLogKeys(t *testing.T) {
 	// The transport list is a directive, because a deployment is the one that
-	// decides whether it keeps the terminal, ships to a collector, or both. The
-	// collector address is a directive for the same reason.
+	// decides whether it keeps the terminal, ships to a collector, or both.
 	flat := sampleDoc(t)
 
 	assert.Equal(t, "env:LOG_TRANSPORT", flat["log.transport"])
-	assert.Equal(t, "env:LOG_OTLP_ENDPOINT", flat["log.otlp.endpoint"])
 	assert.Equal(t, float64(100), flat["log.file.max_size"])
 	assert.Equal(t, float64(7), flat["log.file.max_backups"])
 	assert.Equal(t, float64(30), flat["log.file.max_age"])
 	assert.Equal(t, true, flat["log.file.compress"])
+}
+
+func TestSampleWritesTheOTELKeys(t *testing.T) {
+	// The collector address and the service identity are directives: a
+	// deployment is the one that knows where its collector listens and what the
+	// service is called there. The two enable switches stay in the file, so a
+	// checkout that ships nothing keeps shipping nothing.
+	flat := sampleDoc(t)
+
+	assert.Equal(t, "env:OTEL_ENDPOINT", flat["otel.endpoint"])
+	assert.Equal(t, "env:OTEL_SERVICE_NAME", flat["otel.service_name"])
+	assert.Equal(t, "env:OTEL_ENVIRONMENT", flat["otel.environment"])
+	assert.Equal(t, "env:OTEL_TRACING_ENABLE", flat["otel.tracing.enable"])
+	assert.Equal(t, "env:OTEL_METRICS_ENABLE", flat["otel.metrics.enable"])
 }
 
 func TestSampleWritesTheTransportListAsOneDirective(t *testing.T) {

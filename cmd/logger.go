@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/logger"
+	"github.com/riipandi/tango/internal/observer"
 )
 
 // # The process logger
@@ -52,6 +55,95 @@ func loggerFrom(ctx context.Context) (*logger.Logger, error) {
 // loggerKey is the context key the logger state is stored under. It is a private
 // struct type so no other package can collide with it.
 type loggerKey struct{}
+
+// # The process observer
+//
+// Traces and metrics follow the logger: the same lazy state, the same context
+// key, the same close at the end of a run. They are kept apart because a command
+// that logs has no reason to build a tracer, and a command that reports a
+// measurement has no reason to open a file sink.
+
+// observerState holds the observer for this run, built on first use. The reason
+// it is lazy is the logger's: the configuration may not resolve yet, and a
+// command that needs neither a signal nor the configuration must not fail
+// because one could not be built.
+type observerState struct {
+	once sync.Once
+
+	observer *observer.Observer
+	err      error
+	cfg      config.Config
+}
+
+// observerFrom returns the process observer, building it on first call.
+func observerFrom(ctx context.Context) (*observer.Observer, error) {
+	state, ok := ctx.Value(observerKey{}).(*observerState)
+	if !ok {
+		return nil, errors.New("observer: not installed for this command")
+	}
+
+	state.once.Do(func() {
+		state.observer, state.err = observer.New(context.WithoutCancel(ctx), state.cfg)
+		if state.err == nil {
+			state.observer.SetGlobals()
+		}
+	})
+	return state.observer, state.err
+}
+
+// observerKey is the context key the observer state is stored under.
+type observerKey struct{}
+
+// installObserver puts the observer state on the context, beside the logger's.
+func installObserver(ctx context.Context, cmd *cli.Command) context.Context {
+	cfg, err := configFrom(ctx)
+	if err != nil {
+		return context.WithValue(ctx, observerKey{}, &observerState{err: err})
+	}
+	return context.WithValue(ctx, observerKey{}, &observerState{cfg: cfg})
+}
+
+// closeObserver drains every queued span and measurement at the end of a run.
+//
+// It gets its own deadline for the logger's reason: a cancelled run reaches here
+// with a context that is already done, and the queues are the one thing that
+// still has to be drained. It is a no-op when no command built an observer,
+// which is the common case.
+//
+// A failure to drain is reported, never returned. Telemetry is a side channel:
+// a collector that is down at shutdown means some spans and measurements were
+// lost, which is worth saying and is not a reason for the command to fail. The
+// alternative — a non-zero exit because a collector was unreachable — would
+// report an application that worked as one that did not.
+func closeObserver(ctx context.Context) error {
+	state, ok := ctx.Value(observerKey{}).(*observerState)
+	if !ok || state.observer == nil {
+		return nil
+	}
+
+	flush, cancel := context.WithTimeout(context.WithoutCancel(ctx), observerShutdownTimeout)
+	defer cancel()
+	if err := state.observer.Shutdown(flush); err != nil {
+		reportTelemetryLoss(ctx, "observer", err)
+	}
+	return nil
+}
+
+// observerShutdownTimeout bounds the final drain. The metric reader's own
+// timeout is a fraction of it, so the provider stops before the deadline the
+// caller is waiting on rather than after it.
+const observerShutdownTimeout = 10 * time.Second
+
+// reportTelemetryLoss records a shutdown that could not drain a queue. It writes
+// through the logger when one exists, because that is the channel a user reads,
+// and falls back to stderr when the logger itself is what failed to drain.
+func reportTelemetryLoss(ctx context.Context, component string, err error) {
+	if state, ok := ctx.Value(loggerKey{}).(*loggerState); ok && state.log != nil {
+		state.log.Slog().Warn("telemetry dropped at shutdown", "component", component, "error", err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%s: telemetry dropped at shutdown: %v\n", component, err)
+}
 
 // installLogger builds the logger the configuration describes and puts it on the
 // context, so every command that logs lands in the same pipeline.

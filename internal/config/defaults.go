@@ -25,9 +25,38 @@ const LogFileName = "tango.log"
 const DefaultS3Region = "us-east-1"
 
 // DefaultOTLPEndpoint is the address a local OpenTelemetry collector listens on.
-// It is the protocol's own default port, so an enable flag alone reaches a
-// collector started on the same host.
+// It is the protocol's own default port, so one endpoint reaches a collector
+// started on the same host. It is shared by logs, traces, and metrics: a
+// collector is one endpoint receiving three signals.
 const DefaultOTLPEndpoint = "http://localhost:4318"
+
+// DefaultOTELQueueSize is how many items one signal buffers before it starts
+// dropping. The queue is what keeps export off the request path, so it is sized
+// to absorb a collector that is briefly down rather than to a minimum.
+const DefaultOTELQueueSize = 4096
+
+// DefaultOTELBatchTimeout is how long a span waits in the queue before it is
+// shipped, and DefaultOTELMaxBatchSize is how many go in one export. Together
+// they trade export frequency against payload size.
+const (
+	DefaultOTELBatchTimeout = 5 * time.Second
+	DefaultOTELMaxBatchSize = 512
+)
+
+// DefaultOTELExportTimeout bounds one export attempt for every signal. It is
+// shorter than the batch interval so a stalled collector cannot make the export
+// goroutine fall behind its own schedule.
+const DefaultOTELExportTimeout = 10 * time.Second
+
+// DefaultOTELMetricInterval is how often measurements are handed to the
+// exporter. It is longer than the trace batch because a metric export carries
+// the state of every instrument at once, not one event.
+const DefaultOTELMetricInterval = 60 * time.Second
+
+// DefaultPrometheusPath is where the Prometheus exposition is served on the
+// application's own port. It is the path a scraper looks for by convention, so
+// a scrape job needs no configuration beyond the address.
+const DefaultPrometheusPath = "/metrics"
 
 // Mode names of the supported runtime modes.
 const (
@@ -105,10 +134,37 @@ func Default() Config {
 				MaxAge:     DefaultLogMaxAge,
 				Compress:   true,
 			},
-			OTLP: LogOTLP{
-				// The collector a local OTLP receiver listens on, so naming the
-				// transport is the only step needed.
-				Endpoint: DefaultOTLPEndpoint,
+			// No path: a collector serves the protocol's own route, and the
+			// address is otel.endpoint.
+			OTLP: LogOTLP{},
+		},
+		OTEL: OTEL{
+			// The collector a local receiver listens on, so enabling a signal
+			// is the only step needed.
+			Endpoint:    DefaultOTLPEndpoint,
+			ServiceName: AppIdentifier,
+			Compression: OTELCompressionGzip,
+			Queue: OTELQueue{
+				MaxSize: DefaultOTELQueueSize,
+			},
+			// No path on any signal: a collector serves the protocol's own
+			// routes, and the shared endpoint already names where it is.
+			Tracing: OTELTracing{
+				// Disabled: a signal nothing consumes is work nothing asked
+				// for. The sampler records everything once it is switched on,
+				// which is what a developer wiring the stack wants to see.
+				Enable:        false,
+				Sampler:       OTELSamplerAlways,
+				Ratio:         1,
+				BatchTimeout:  DefaultOTELBatchTimeout,
+				ExportTimeout: DefaultOTELExportTimeout,
+				MaxBatchSize:  DefaultOTELMaxBatchSize,
+			},
+			Metrics: OTELMetrics{
+				Enable:         false,
+				PrometheusPath: DefaultPrometheusPath,
+				Interval:       DefaultOTELMetricInterval,
+				ExportTimeout:  DefaultOTELExportTimeout,
 			},
 		},
 		Mailer: Mailer{

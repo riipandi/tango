@@ -42,11 +42,11 @@ var nullKeys = []string{
 // the value is not a secret, mapped to the variable each one names.
 //
 // A deployment sets the runtime mode, the public base URL, and the collector it
-// ships logs to, so a generated file asks for the variable rather than baking in
-// a value that would be wrong there. The variable name is written out instead of
-// derived from the key, because the two do not always agree: server.base_url is
-// PUBLIC_BASE_URL, the name the origin is known by outside this file, not
-// SERVER_BASE_URL.
+// ships telemetry to, so a generated file asks for the variable rather than
+// baking in a value that would be wrong there. The variable name is written out
+// instead of derived from the key, because the two do not always agree:
+// server.base_url is PUBLIC_BASE_URL, the name the origin is known by outside
+// this file, not SERVER_BASE_URL.
 //
 // A path is deliberately not here. storage.local_path comes from the file alone:
 // where an instance writes its files is a property of the deployment image, and a
@@ -56,8 +56,9 @@ var nullKeys = []string{
 //
 // The collector is the other way round, and reads like the kvstore section: a
 // deployment is the one that knows whether it has a collector and where it
-// listens, so its endpoint is a directive. The name happens to be what EnvName
-// derives; it is written out for the reason the key is a directive at all.
+// listens, so its address is a directive. The endpoint is shared by the three
+// signals, so one variable moves all of them together, and each signal keeps its
+// own enable switch in the file.
 //
 // The transport list is a directive for a third reason: it is the one logging
 // key a deployment changes per environment, keeping the terminal locally and
@@ -70,7 +71,7 @@ var nullKeys = []string{
 //
 // Validate reports a key here only when the variable leaves it unusable. An unset
 // APP_MODE falls back to development, an empty base_url is a valid value, an
-// unset LOG_OTLP_ENDPOINT falls back to the collector on the default port, and an
+// unset OTEL_ENDPOINT falls back to the collector on the default port, and an
 // unset HOST or PORT falls back to the listen address in the defaults, so none of
 // them is an error on its own: naming them would report a choice the user made on
 // purpose.
@@ -79,12 +80,16 @@ var envKeys = map[string]string{
 	"kvstore.db":              "VALKEY_DB",
 	"kvstore.enable":          "VALKEY_ENABLE",
 	"kvstore.url":             "VALKEY_URL",
-	"log.otlp.endpoint":       "LOG_OTLP_ENDPOINT",
 	"log.transport":           "LOG_TRANSPORT",
 	"mailer.smtp_host":        "MAILER_SMTP_HOST",
 	"mailer.smtp_port":        "MAILER_SMTP_PORT",
 	"mailer.smtp_secure":      "MAILER_SMTP_SECURE",
 	"mailer.smtp_username":    "MAILER_SMTP_USERNAME",
+	"otel.endpoint":           "OTEL_ENDPOINT",
+	"otel.environment":        "OTEL_ENVIRONMENT",
+	"otel.metrics.enable":     "OTEL_METRICS_ENABLE",
+	"otel.service_name":       "OTEL_SERVICE_NAME",
+	"otel.tracing.enable":     "OTEL_TRACING_ENABLE",
 	"server.base_url":         "PUBLIC_BASE_URL",
 	"server.host":             "SERVER_HOST",
 	"server.port":             "SERVER_PORT",

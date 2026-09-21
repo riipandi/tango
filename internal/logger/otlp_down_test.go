@@ -20,7 +20,7 @@ func TestACollectorThatIsDownDoesNotStopConstruction(t *testing.T) {
 	// turn an observability outage into an application outage.
 	cfg := config.Default()
 	cfg.Log.Transport = []string{config.LogTransportConsole, config.LogTransportOTLP}
-	cfg.Log.OTLP.Endpoint = "http://127.0.0.1:1"
+	cfg.OTEL.Endpoint = "http://127.0.0.1:1"
 
 	buf := &bytes.Buffer{}
 	log, err := logger.New(cfg, logger.WithWriter(buf))

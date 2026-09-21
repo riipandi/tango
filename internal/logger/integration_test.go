@@ -30,7 +30,7 @@ func TestOTLPShipsToARealVictoriaLogs(t *testing.T) {
 	marker := "tango-otlp-e2e"
 	cfg := config.Default()
 	cfg.Log.Transport = []string{config.LogTransportOTLP}
-	cfg.Log.OTLP.Endpoint = store.OTLPEndpoint
+	cfg.OTEL.Endpoint = store.OTLPEndpoint
 	cfg.Log.Level = config.LogDebug
 
 	log, err := logger.New(cfg, logger.WithWriter(&bytes.Buffer{}))
@@ -73,7 +73,7 @@ func TestEveryTransportShipsTheSameEntry(t *testing.T) {
 		config.LogTransportFile,
 		config.LogTransportOTLP,
 	}
-	cfg.Log.OTLP.Endpoint = store.OTLPEndpoint
+	cfg.OTEL.Endpoint = store.OTLPEndpoint
 	cfg.Log.Format = config.LogStructured
 
 	buf := &bytes.Buffer{}

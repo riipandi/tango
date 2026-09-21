@@ -541,37 +541,44 @@ func TestASpaceSeparatedDirectiveIsNotAList(t *testing.T) {
 	assert.Contains(t, err.Error(), "console file otlp")
 }
 
-func TestValidationChecksTheOTLPEndpointOnlyWhenNamed(t *testing.T) {
-	// A collector the run does not name is never dialled, so its endpoint is not
-	// held to anything.
-	require.NoError(t, resolveFile(t, `"log": {"transport": ["console"], "otlp": {"endpoint": "not-a-url"}}`))
+func TestValidationChecksTheOTLPEndpointOnlyWhenASignalIsOn(t *testing.T) {
+	// A collector the run never dials is not held to anything: a console-only
+	// run may carry an address for a later switch without it stopping the run.
+	require.NoError(t, resolveFile(t, `"log": {"transport": ["console"]}, "otel": {"endpoint": "not-a-url"}`))
 
-	err := resolveFile(t, `"log": {"transport": ["otlp"], "otlp": {"endpoint": "not-a-url"}}`)
+	err := resolveFile(t, `"log": {"transport": ["otlp"]}, "otel": {"endpoint": "not-a-url"}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
-	assert.Contains(t, err.Error(), "log.otlp.endpoint")
+	assert.Contains(t, err.Error(), "otel.endpoint")
+
+	// The same address is checked when a signal other than logs is switched on,
+	// because all three share it.
+	err = resolveFile(t, `"otel": {"endpoint": "not-a-url", "tracing": {"enable": true}}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "otel.endpoint")
 }
 
 func TestValidationFallsBackToAnEndpointTheExporterWillDial(t *testing.T) {
 	// The endpoint has a concrete default, so an unset variable leaves a usable
-	// value rather than an empty one: an unset LOG_OTLP_ENDPOINT must not stop a
+	// value rather than an empty one: an unset OTEL_ENDPOINT must not stop a
 	// deployment whose collector is on the default port.
 	cfg, err := resolveAndValidate(t, config.Options{
 		ConfigFile: writeConfig(t, `{
 			"database": {"url": "env:DATABASE_URL"},
 			"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
-			"log": {"transport": ["otlp"], "otlp": {"endpoint": "env:LOG_OTLP_ENDPOINT"}}
+			"log": {"transport": ["otlp"]},
+			"otel": {"endpoint": "env:OTEL_ENDPOINT"}
 		}`),
 		Environ: baseEnv(),
 	})
 	require.NoError(t, err)
-	assert.Equal(t, config.DefaultOTLPEndpoint, cfg.Log.OTLP.Endpoint)
+	assert.Equal(t, config.DefaultOTLPEndpoint, cfg.OTEL.Endpoint)
 }
 
 func TestValidationAcceptsAnOTLPDeployment(t *testing.T) {
 	// Both schemes are valid: the endpoint's scheme is what decides whether the
 	// connection is TLS, so there is no second setting to keep in step with it.
 	for _, endpoint := range []string{"http://localhost:4318", "https://collector.example.com:4318"} {
-		body := `"log": {"transport": ["otlp"], "otlp": {"endpoint": ` + strconv.Quote(endpoint) + `}}`
+		body := `"log": {"transport": ["otlp"]}, "otel": {"endpoint": ` + strconv.Quote(endpoint) + `}`
 		assert.NoError(t, resolveFile(t, body), endpoint)
 	}
 }
@@ -581,12 +588,12 @@ func TestRedactedLeavesTheLogTargetsAlone(t *testing.T) {
 	// a report that hid them could not say where the logs go.
 	cfg := config.Default()
 	cfg.Log.Transport = []string{"console", "otlp"}
-	cfg.Log.OTLP.Endpoint = "https://collector.example.com:4318"
+	cfg.OTEL.Endpoint = "https://collector.example.com:4318"
 
 	redacted := cfg.Redacted()
 
 	assert.Equal(t, cfg.Log.Transport, redacted.Log.Transport)
-	assert.Equal(t, cfg.Log.OTLP.Endpoint, redacted.Log.OTLP.Endpoint)
+	assert.Equal(t, cfg.OTEL.Endpoint, redacted.OTEL.Endpoint)
 }
 
 func TestRedactedHidesTheS3Credentials(t *testing.T) {

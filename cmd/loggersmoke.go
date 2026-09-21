@@ -29,7 +29,7 @@ so a run against a local VictoriaLogs can be checked without opening Perses:
 
   task metrics:up
   LOG_TRANSPORT=console,file,otlp \
-  LOG_OTLP_ENDPOINT=http://localhost:9428/insert/opentelemetry/v1/logs \
+  OTEL_ENDPOINT=http://localhost:4318 \
   task metrics:smoke
 
 Nothing is written to the configuration; this command only reads it.`,
@@ -112,7 +112,7 @@ func printSmokePlan(p printext.Palette, cfg config.Config) error {
 		case config.LogTransportFile:
 			targets = append(targets, field{"file", logger.LogFilePath(cfg)})
 		case config.LogTransportOTLP:
-			targets = append(targets, field{"otlp", cfg.Log.OTLP.Endpoint})
+			targets = append(targets, field{"otlp", cfg.OTEL.Endpoint})
 		}
 	}
 	if err := printFields(p, targets); err != nil {

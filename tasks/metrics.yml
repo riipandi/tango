@@ -10,9 +10,9 @@ tasks:
   # ----------------------------------------------------------------------------
 
   metrics:up:
-    desc: Start the observability stack (VictoriaMetrics, VictoriaLogs, VictoriaTraces, Perses)
+    desc: Start the observability stack (collector, VictoriaMetrics/Logs/Traces, Perses)
     cmds:
-      - docker compose -f docker/compose.yaml up --detach --remove-orphans victoria-metrics victoria-logs victoria-traces perses
+      - docker compose -f docker/compose.yaml up --detach --remove-orphans otel-collector victoria-metrics victoria-logs victoria-traces perses
       # The two distroless services cannot carry a healthcheck, so wait from the
       # host instead.
       - task: metrics:health
@@ -40,17 +40,19 @@ tasks:
       done
 
   metrics:endpoints:
-    desc: Print the stack endpoints and the LOG_* variables that reach them
+    desc: Print the stack endpoints and the variables that reach them
     cmds:
-      - echo "VictoriaLogs OTLP  http://localhost:9428/insert/opentelemetry/v1/logs"
+      - echo "OTLP collector     http://localhost:4318 (the one address the app dials)"
       - echo "VictoriaLogs query http://localhost:9428/select/logsql/query"
       - echo "VictoriaMetrics    http://localhost:8428"
       - echo "VictoriaTraces     http://localhost:10428/select/jaeger"
       - echo "Perses UI          http://localhost:3380"
       - echo ""
       - echo "Set these in .env.local to ship from the application:"
-      - echo "  LOG_OTLP_ENDPOINT=http://localhost:9428/insert/opentelemetry/v1/logs"
       - echo "  LOG_TRANSPORT=console,otlp"
+      - echo "  OTEL_ENDPOINT=http://localhost:4318"
+      - echo "  OTEL_TRACING_ENABLE=true"
+      - echo "  OTEL_METRICS_ENABLE=true"
 
   metrics:query:
     desc: Run a LogsQL query against the local log store (pass the query after --)
@@ -62,6 +64,10 @@ tasks:
       curl -sS --get --data-urlencode query={{.QUERY}} --data-urlencode 'limit=20' \
       http://localhost:9428/select/logsql/query
 
+  metrics:traces:
+    desc: List the services VictoriaTraces has received spans for
+    cmd: curl -sS 'http://localhost:10428/select/jaeger/api/services' | jq -r '.data[]'
+
   metrics:targets:
     desc: Show the scrape targets VictoriaMetrics is collecting
     cmd: curl -sS 'http://localhost:8428/api/v1/targets?state=active' | jq -r '.data.activeTargets[] | "\(.labels.job)\t\(.scrapeUrl)\t\(.health)"'
@@ -70,6 +76,10 @@ tasks:
     desc: Ship one line through every configured transport and read it back
     cmd: go run -tags debug ./cmd logger:smoke --env-file=.env.local {{.CLI_ARGS}}
 
+  metrics:smoke:otel:
+    desc: Record one span and one measurement through the configured signals
+    cmd: go run -tags debug ./cmd otel:smoke --env-file=.env.local {{.CLI_ARGS}}
+
   metrics:down:
     desc: Stop the observability stack
-    cmd: docker compose -f docker/compose.yaml stop victoria-metrics victoria-logs victoria-traces perses
+    cmd: docker compose -f docker/compose.yaml stop otel-collector victoria-metrics victoria-logs victoria-traces perses

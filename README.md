@@ -428,7 +428,7 @@ and order, replaces the existing key values, and appends the ones that are missi
 | --------- | -------------------------------------------------------- |
 | `console` | The terminal. `log.format` selects `pretty` or `structured`. |
 | `file`    | One JSON object per line, under `<storage.local_path>/logs/tango.log`, rotated. |
-| `otlp`    | An OpenTelemetry collector at `log.otlp.endpoint`.        |
+| `otlp`    | The OpenTelemetry collector at `otel.endpoint`.          |
 
 The default is `console` alone, so a fresh checkout needs no volume and no collector. In a JSON config
 file the list is an array; in the environment it is one comma-separated value, because that is what a
@@ -440,28 +440,69 @@ variable can carry:
 
 ```bash
 LOG_TRANSPORT=console,otlp
-LOG_OTLP_ENDPOINT=http://localhost:9428/insert/opentelemetry/v1/logs
+OTEL_ENDPOINT=http://localhost:4318
 ```
 
 Application code logs through `log/slog`; the transports are wired behind it, so `slog.Info(...)` — and
 any dependency that logs through slog — reaches every configured sink.
 
+### Tracing and metrics
+
+Logs, traces, and metrics share one collector address, `otel.endpoint`, because that is what a collector
+is: one endpoint receiving several signals. A signal that needs a different route on that collector sets
+its own path, never its own address.
+
+| Key                        | Default                  | Read when                     |
+| -------------------------- | ------------------------ | ----------------------------- |
+| `otel.endpoint`            | `http://localhost:4318`  | any signal is on              |
+| `otel.service_name`        | the app identifier       | any signal is on              |
+| `otel.environment`         | empty                    | any signal is on              |
+| `otel.compression`         | `gzip`                   | any signal is on              |
+| `otel.queue.max_size`      | `4096`                   | any signal is on              |
+| `otel.tracing.enable`      | `false`                  | —                             |
+| `otel.tracing.sampler`     | `always`                 | tracing is on                 |
+| `otel.metrics.enable`      | `false`                  | —                             |
+| `otel.metrics.prometheus_path` | `/metrics`           | metrics are on                |
+
+Both signals are off by default: a signal nothing consumes is work nothing asked for. Traces go through
+a batch span processor and measurements through a periodic reader, so **nothing on the request path
+blocks** — a span or a measurement is enqueued and the caller returns, and a collector that is slow or
+unreachable costs dropped telemetry rather than a slow request.
+
+Metrics leave by two routes at once: the push to the collector, and the Prometheus exposition at
+`otel.metrics.prometheus_path` on the application's own port. The exposition is served from a registry
+this application owns, so a scrape reports its instruments and not a dependency's.
+
+```bash
+OTEL_TRACING_ENABLE=true OTEL_METRICS_ENABLE=true
+```
+
 To prove the path against the local observability stack:
 
 ```bash
-# Start VictoriaMetrics, VictoriaLogs, VictoriaTraces, and Perses.
+# Start the collector, VictoriaMetrics, VictoriaLogs, VictoriaTraces, and Perses.
 task metrics:up
 
 # Emit one line per level through every configured transport.
 task metrics:smoke
 
-# Read it back from VictoriaLogs (LogsQL). The store is shared, so query the marker.
+# Record one span and one measurement through the configured signals.
+OTEL_TRACING_ENABLE=true OTEL_METRICS_ENABLE=true task metrics:smoke:otel
+
+# Read the log line back from VictoriaLogs (LogsQL). The store is shared, so query the marker.
 task metrics:query -- 'marker:"tango-logger-smoke"'
+
+# The service name VictoriaTraces has received spans for.
+task metrics:traces
 ```
 
 `task metrics:endpoints` prints every stack address, and `task metrics:targets` shows what
 VictoriaMetrics is scraping. Perses is provisioned with the three datasources, so
 <http://localhost:3380> reads the stack without any setup.
+
+The collector is what makes one address work: each Victoria service serves OTLP on its own port, so
+`docker/otelcol.yaml` fans the three signals out to them. Without it the application would need three
+addresses, which is the second configuration source `otel.endpoint` exists to prevent.
 
 VictoriaLogs and VictoriaTraces run distroless images, which carry no shell and no HTTP client, so
 they cannot carry a container healthcheck — an exec probe fails with `exec: "nc": executable file
@@ -492,7 +533,8 @@ tasks/
                    docker:images, docker:check
   lint.yml         format, check, lint, typecheck
   metrics.yml      metrics:up, metrics:down, metrics:health, metrics:endpoints,
-                   metrics:query, metrics:targets, metrics:smoke
+                   metrics:query, metrics:traces, metrics:targets, metrics:smoke,
+                   metrics:smoke:otel
   rpc.yml          rpc:generate, rpc:lint, rpc:breaking, rpc:stamp, rpc:stale
   test.yml         test, test:go, test:go:debug, test:ui, test:sdk, coverage
 ```
@@ -517,10 +559,12 @@ depend on a task in another by its plain name.
 | `task cert:trust`   | Trust the local CA in the system trust store        |
 | `task rpc:generate` | Generate Go and TypeScript from the proto contracts |
 | `task rpc:stale`    | Fail when generated code is out of date             |
-| `task metrics:up`   | Start the observability stack (VictoriaMetrics/Logs/Traces, Perses) |
+| `task metrics:up`   | Start the observability stack (collector, VictoriaMetrics/Logs/Traces, Perses) |
 | `task metrics:health`| Probe every stack endpoint and wait for each to answer |
 | `task metrics:query`| Run a LogsQL query against the local log store      |
+| `task metrics:traces`| List the services VictoriaTraces has received spans for |
 | `task metrics:smoke`| Emit one line through every configured log transport |
+| `task metrics:smoke:otel`| Record one span and one measurement through the configured signals |
 | `task compose:up`   | Start the docker compose services                   |
 | `task compose:down` | Stop the docker compose services                    |
 

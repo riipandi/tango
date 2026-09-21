@@ -47,9 +47,20 @@ file decides.`,
 		if err != nil {
 			return err
 		}
+
+		// The observer is built beside the logger, for the same reason: a signal
+		// that is switched on has to be reporting before the first request
+		// arrives, and its queues are drained by the root After.
+		obs, err := observerFrom(ctx)
+		if err != nil {
+			return err
+		}
+
 		log.Slog().Info("starting",
 			"mode", cfg.App.Mode,
 			"transport", cfg.Log.Transport,
+			"tracing", obs.Tracing(),
+			"metrics", obs.Metrics(),
 			"address", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port))
 
 		fmt.Println("not yet implemented")

@@ -82,12 +82,66 @@ func (c Config) Validate() error {
 	}
 
 	// The collector is dialled only when it is named, so its endpoint is held to
-	// a URL only then.
+	// a URL only then. The address is otel.endpoint for all three signals, so a
+	// log-only deployment still reads it here.
 	if c.logTransport(LogTransportOTLP) {
-		check(c.Log.OTLP.Endpoint != "", "log.otlp.endpoint: %s",
-			c.unsetNote("log.otlp.endpoint", "must not be empty when log.transport names otlp"))
-		check(c.Log.OTLP.Endpoint == "" || isHTTPURL(c.Log.OTLP.Endpoint),
-			"log.otlp.endpoint: %q must be an absolute http or https URL", c.Log.OTLP.Endpoint)
+		check(c.OTEL.Endpoint != "", "otel.endpoint: %s",
+			c.unsetNote("otel.endpoint", "must not be empty when log.transport names otlp"))
+	}
+
+	check(isOneOf(c.OTEL.Compression, OTELCompressions()...),
+		"otel.compression: %q is not one of %s", c.OTEL.Compression, joinValues(OTELCompressions()...))
+	check(c.OTEL.Queue.MaxSize > 0, "otel.queue.max_size: must be positive")
+
+	// The address is checked whenever any signal is enabled, and the scheme
+	// decides TLS, so a bad one fails here rather than at the first export.
+	if c.otelEnabled() {
+		check(c.OTEL.Endpoint != "", "otel.endpoint: %s",
+			c.unsetNote("otel.endpoint", "must not be empty when a signal is enabled"))
+		check(c.OTEL.Endpoint == "" || isHTTPURL(c.OTEL.Endpoint),
+			"otel.endpoint: %q must be an absolute http or https URL", c.OTEL.Endpoint)
+		check(c.OTEL.ServiceName != "", "otel.service_name: must not be empty")
+	}
+
+	// The trace section is read only when tracing is switched on: holding a
+	// sampler that never runs to anything would report a problem in a part of
+	// the file nothing reads.
+	if c.OTEL.Tracing.Enable {
+		check(isOneOf(c.OTEL.Tracing.Sampler, OTELSamplers()...),
+			"otel.tracing.sampler: %q is not one of %s",
+			c.OTEL.Tracing.Sampler, joinValues(OTELSamplers()...))
+		// A ratio is read by two samplers and ignored by the other two, so a
+		// value outside 0..1 is refused here rather than silently doing nothing.
+		if usesOTELRatio(c.OTEL.Tracing.Sampler) {
+			check(c.OTEL.Tracing.Ratio >= 0 && c.OTEL.Tracing.Ratio <= 1,
+				"otel.tracing.ratio: %v must be between 0 and 1 for sampler %q",
+				c.OTEL.Tracing.Ratio, c.OTEL.Tracing.Sampler)
+		}
+		check(c.OTEL.Tracing.BatchTimeout > 0, "otel.tracing.batch_timeout: must be positive")
+		check(c.OTEL.Tracing.ExportTimeout > 0, "otel.tracing.export_timeout: must be positive")
+		check(c.OTEL.Tracing.MaxBatchSize > 0, "otel.tracing.max_batch_size: must be positive")
+	}
+
+	if c.OTEL.Metrics.Enable {
+		check(isPath(c.OTEL.Metrics.PrometheusPath),
+			"otel.metrics.prometheus_path: %q must be a path such as /metrics", c.OTEL.Metrics.PrometheusPath)
+		check(c.OTEL.Metrics.Interval > 0, "otel.metrics.interval: must be positive")
+		check(c.OTEL.Metrics.ExportTimeout > 0, "otel.metrics.export_timeout: must be positive")
+	}
+
+	// A route is read only when the signal that owns it ships to a collector:
+	// the path of a signal nothing exports would be a value nothing reads.
+	if c.logTransport(LogTransportOTLP) {
+		check(isOTELPath(c.Log.OTLP.Path),
+			"log.otlp.path: %q must be a path such as /v1/logs", c.Log.OTLP.Path)
+	}
+	if c.OTEL.Tracing.Enable {
+		check(isOTELPath(c.OTEL.Tracing.Path),
+			"otel.tracing.path: %q must be a path such as /v1/traces", c.OTEL.Tracing.Path)
+	}
+	if c.OTEL.Metrics.Enable {
+		check(isOTELPath(c.OTEL.Metrics.Path),
+			"otel.metrics.path: %q must be a path such as /v1/metrics", c.OTEL.Metrics.Path)
 	}
 
 	// The key-value backend is opt-in. Its Enable flag and the per-feature driver
@@ -257,6 +311,13 @@ func (c Config) logTransport(name string) bool {
 	return slices.Contains(c.Log.Transport, name)
 }
 
+// otelEnabled reports whether any signal ships to the collector. It is what
+// makes the shared endpoint and service name required: with every signal off,
+// nothing dials and the values are not read.
+func (c Config) otelEnabled() bool {
+	return c.logTransport(LogTransportOTLP) || c.OTEL.Tracing.Enable || c.OTEL.Metrics.Enable
+}
+
 // kvStoreDrivers returns the feature keys whose driver is the key-value backend.
 // It is what turns "a driver points at a switched-off backend" into a message
 // that names the key, rather than a failure at start-up.
@@ -336,6 +397,34 @@ func isHTTPURL(value string) bool {
 		return false
 	}
 	return parsed.Host != ""
+}
+
+// isOTELPath reports whether value is a usable OTLP route: empty, or a URL path
+// that starts with a slash and carries no scheme or host.
+//
+// It is what a signal's collector route is held to. A full URL there would be a
+// second way to name a collector, which is the thing one shared otel.endpoint
+// exists to prevent, so it is refused rather than merged. Empty is accepted
+// because it means the protocol's own route.
+func isOTELPath(value string) bool {
+	if value == "" {
+		return true
+	}
+	if !strings.HasPrefix(value, "/") {
+		return false
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	return parsed.Scheme == "" && parsed.Host == "" && parsed.RawQuery == "" && parsed.Fragment == ""
+}
+
+// isPath reports whether value is a URL path: it starts with a slash and
+// carries no scheme or host. It is what the Prometheus endpoint is held to,
+// which must name a path rather than be empty.
+func isPath(value string) bool {
+	return value != "" && isOTELPath(value)
 }
 
 // isEmail reports whether value is an email address. net/mail accepts a bare

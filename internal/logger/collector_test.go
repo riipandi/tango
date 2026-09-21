@@ -1,6 +1,7 @@
 package logger_test
 
 import (
+	"compress/gzip"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -32,7 +33,7 @@ func newOTLPTestServer(t *testing.T) *otlpTestServer {
 
 	server := &otlpTestServer{}
 	server.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
+		body, err := io.ReadAll(decompressed(r))
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -54,6 +55,23 @@ func newOTLPTestServer(t *testing.T) *otlpTestServer {
 	t.Cleanup(server.Close)
 
 	return server
+}
+
+// decompressed reads an export body, which the exporter gzips by default.
+//
+// The reader is what a real collector does with Content-Encoding: without it a
+// test would assert against compressed bytes and see none of the payload. A body
+// that is not gzipped is read as-is, so a test that configures no compression
+// still works.
+func decompressed(r *http.Request) io.Reader {
+	if r.Header.Get("Content-Encoding") != "gzip" {
+		return r.Body
+	}
+	reader, err := gzip.NewReader(r.Body)
+	if err != nil {
+		return r.Body
+	}
+	return reader
 }
 
 // requests returns what the collector has been sent so far.

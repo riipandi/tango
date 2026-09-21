@@ -18,6 +18,7 @@ type Config struct {
 	KVStore   KVStore   `koanf:"kvstore" json:"kvstore"`
 	Log       Log       `koanf:"log" json:"log"`
 	Mailer    Mailer    `koanf:"mailer" json:"mailer"`
+	OTEL      OTEL      `koanf:"otel" json:"otel"`
 	RateLimit RateLimit `koanf:"rate_limit" json:"rate_limit"`
 	Server    Server    `koanf:"server" json:"server"`
 	Session   Session   `koanf:"session" json:"session"`
@@ -120,9 +121,23 @@ type Log struct {
 	// File holds the rotating file sink settings, read when Transport names
 	// LogTransportFile.
 	File LogFile `koanf:"file" json:"file"`
-	// OTLP holds the collector settings, read when Transport names
-	// LogTransportOTLP.
+	// OTLP holds the log export settings that are specific to logs, read when
+	// Transport names LogTransportOTLP.
 	OTLP LogOTLP `koanf:"otlp" json:"otlp"`
+}
+
+// LogOTLP holds the log export settings that are specific to logs.
+//
+// The address is deliberately not here: one collector receives every signal, so
+// where it is belongs to otel.endpoint, and a second copy of it could disagree.
+// What logs own is the route they take on that collector, which is where a
+// collector configured to split a signal puts them. It sits under log rather
+// than under otel because it is a property of this sink, the way log.file holds
+// the rotation settings of the file sink.
+type LogOTLP struct {
+	// Path is the collector route for logs. Empty means the protocol's own
+	// /v1/logs, which is what a collector serves.
+	Path string `koanf:"path" json:"path"`
 }
 
 // LogFile holds the rotating file sink settings.
@@ -144,16 +159,103 @@ type LogFile struct {
 	Compress bool `koanf:"compress" json:"compress"`
 }
 
-// LogOTLP holds the OpenTelemetry log export settings.
+// OTEL holds the OpenTelemetry settings the three signals share, plus the
+// section each one owns.
 //
-// It is opt-in and never required, like every other external backend: a run that
-// does not name the transport dials nothing and needs no collector.
-type LogOTLP struct {
+// One collector address serves all three, because that is what a collector is:
+// a single endpoint that receives logs, traces, and metrics. A signal whose
+// collector routes it elsewhere overrides only its own path, never its own
+// address, so there is one place that says where the collector is.
+//
+// Every signal is opt-in and none is required, like every other external
+// backend: a run that enables nothing dials nothing and needs no collector.
+type OTEL struct {
 	// Endpoint is the collector's OTLP/HTTP address, such as
 	// http://localhost:4318 or https://collector.example.com:4318. The scheme
 	// decides whether the connection is TLS, so it is not a separate setting.
-	// An empty path means the protocol's own /v1/logs.
+	//
+	// It is read when any signal is enabled: logs name the otlp transport,
+	// traces set tracing.enable, or metrics set metrics.enable.
 	Endpoint string `koanf:"endpoint" json:"endpoint"`
+	// ServiceName is the service every signal is attributed to. It defaults to
+	// the application identifier rather than to an empty string, because a
+	// record with no service name cannot be attributed at all.
+	ServiceName string `koanf:"service_name" json:"service_name"`
+	// Environment names the deployment a signal came from, such as production
+	// or staging. It is a resource attribute, so one collector can tell two
+	// deployments apart.
+	Environment string `koanf:"environment" json:"environment"`
+	// Compression is OTELCompressionGzip or OTELCompressionNone. Gzip is the
+	// protocol's own default; none saves the CPU on a collector reached over a
+	// loopback or a local network.
+	Compression string `koanf:"compression" json:"compression"`
+	// Queue bounds the in-memory buffer each signal exports from.
+	Queue OTELQueue `koanf:"queue" json:"queue"`
+	// Tracing holds the trace export settings.
+	Tracing OTELTracing `koanf:"tracing" json:"tracing"`
+	// Metrics holds the metric export settings.
+	Metrics OTELMetrics `koanf:"metrics" json:"metrics"`
+}
+
+// OTELQueue bounds the buffer a signal exports from.
+//
+// It is the setting that keeps export off the request path: a span or a
+// measurement is handed to an in-memory queue and the caller returns, while a
+// background goroutine drains the queue to the collector. Nothing here ever
+// blocks the goroutine that produced a signal, so a slow or unreachable
+// collector costs dropped telemetry, never a slow request.
+type OTELQueue struct {
+	// MaxSize is how many items one signal buffers before it starts dropping.
+	// The default is generous rather than minimal, because the queue is what
+	// absorbs a collector that is briefly down.
+	MaxSize int `koanf:"max_size" json:"max_size"`
+}
+
+// OTELTracing holds the trace export settings.
+//
+// It is read only when Enable is true, so a deployment that does not collect
+// traces is not held to a sampler it never runs.
+type OTELTracing struct {
+	// Enable exports spans. A service that does not trace dials nothing.
+	Enable bool `koanf:"enable" json:"enable"`
+	// Path is the collector route for traces. Empty means the protocol's own
+	// /v1/traces, which is what a collector serves.
+	Path string `koanf:"path" json:"path"`
+	// Sampler is one of OTELSamplers. It decides which traces are recorded.
+	Sampler string `koanf:"sampler" json:"sampler"`
+	// Ratio is the fraction of traces recorded, and is read only by the two
+	// ratio samplers. It is a fraction rather than a percentage so the value
+	// reads the way the sampler's own name does.
+	Ratio float64 `koanf:"ratio" json:"ratio"`
+	// BatchTimeout is how long a span waits in the queue before the exporter
+	// ships it, and ExportTimeout bounds one export attempt.
+	BatchTimeout  time.Duration `koanf:"batch_timeout" json:"batch_timeout"`
+	ExportTimeout time.Duration `koanf:"export_timeout" json:"export_timeout"`
+	// MaxBatchSize is how many spans one export carries.
+	MaxBatchSize int `koanf:"max_batch_size" json:"max_batch_size"`
+}
+
+// OTELMetrics holds the metric export settings.
+//
+// It is read only when Enable is true. Metrics leave by two routes at once, and
+// both are wanted: the push to the collector follows the other signals, and the
+// /metrics endpoint is what a Prometheus-style scraper reads. A deployment that
+// runs a scraper but no collector is served by the same switch.
+type OTELMetrics struct {
+	// Enable records and exports metrics.
+	Enable bool `koanf:"enable" json:"enable"`
+	// Path is the collector route for metrics. Empty means the protocol's own
+	// /v1/metrics.
+	Path string `koanf:"path" json:"path"`
+	// PrometheusPath is where the Prometheus exposition is served, on the
+	// application's own port. It is a path rather than a switch: the exposition
+	// is always served when metrics are enabled, and a scrape job needs the
+	// path to be a decision rather than a second enable flag.
+	PrometheusPath string `koanf:"prometheus_path" json:"prometheus_path"`
+	// Interval is how often measurements are handed to the exporter, and
+	// ExportTimeout bounds one export attempt.
+	Interval      time.Duration `koanf:"interval" json:"interval"`
+	ExportTimeout time.Duration `koanf:"export_timeout" json:"export_timeout"`
 }
 
 // Mailer holds the outbound email settings. The mailer is optional: with no SMTP
@@ -273,6 +375,48 @@ const (
 	StorageLocal  = "local"
 	StorageS3     = "s3"
 )
+
+// Sampler names OTEL.Tracing.Sampler accepts, mirroring the OpenTelemetry
+// samplers: always records every trace, never records any, and the two ratio
+// forms record a fraction of them.
+const (
+	OTELSamplerAlways = "always"
+	OTELSamplerNever  = "never"
+	OTELSamplerRatio  = "ratio"
+	// OTELSamplerParentRatio records a fraction of the traces that start fresh
+	// and follows the decision of a parent for the rest, so a service that
+	// receives a sampled request keeps the trace whole.
+	OTELSamplerParentRatio = "parent_ratio"
+)
+
+// OTELSamplers returns every accepted sampler name, in the order the
+// documentation lists them.
+func OTELSamplers() []string {
+	return []string{OTELSamplerAlways, OTELSamplerNever, OTELSamplerRatio, OTELSamplerParentRatio}
+}
+
+// OTEL.Tracing.Sampler accepts these two ratios, which are the ones that read
+// Tracing.Ratio. Every other sampler ignores it, so Validate refuses a ratio
+// that nothing would read rather than leaving a user with a value that looks
+// applied and is not.
+func usesOTELRatio(sampler string) bool {
+	return sampler == OTELSamplerRatio || sampler == OTELSamplerParentRatio
+}
+
+// Compression names OTEL.Compression accepts.
+const (
+	// OTELCompressionGzip compresses every export. It is the protocol's own
+	// default and what a collector across a network wants.
+	OTELCompressionGzip = "gzip"
+	// OTELCompressionNone sends the payload uncompressed, which saves the CPU
+	// when the collector is on the same host or the same local network.
+	OTELCompressionNone = "none"
+)
+
+// OTELCompressions returns every accepted compression name.
+func OTELCompressions() []string {
+	return []string{OTELCompressionGzip, OTELCompressionNone}
+}
 
 // Log transport names, the values Log.Transport accepts. Each one is a sink the
 // logger builds; naming it in the list is what switches it on.
