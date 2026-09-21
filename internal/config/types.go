@@ -141,6 +141,9 @@ type LogOTLP struct {
 	// Path is the collector route for logs. Empty means the protocol's own
 	// /v1/logs, which is what a collector serves.
 	Path string `koanf:"path" json:"path"`
+	// Timeout bounds one export attempt, the way otel.tracing.export_timeout
+	// bounds a trace export. Written as a plain number of seconds.
+	Timeout time.Duration `koanf:"timeout" json:"timeout"`
 }
 
 // LogFile holds the rotating file sink settings.

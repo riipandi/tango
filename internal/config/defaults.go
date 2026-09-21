@@ -144,9 +144,10 @@ func Default() Config {
 				MaxAge:     DefaultLogMaxAge,
 				Compress:   true,
 			},
-			// No path: a collector serves the protocol's own route, and the
-			// address is otel.endpoint.
-			OTLP: LogOTLP{},
+			// A ten-second export attempt, shared with the other signals:
+			// DefaultOTELExportTimeout is the one answer to "how long may one
+			// export hold".
+			OTLP: LogOTLP{Timeout: DefaultOTELExportTimeout},
 		},
 		OTEL: OTEL{
 			// The collector a local receiver listens on, so enabling a signal

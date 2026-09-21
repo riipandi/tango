@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"time"
 
 	"go.loglayer.dev/transports/otellog/v3"
 	"go.opentelemetry.io/otel/attribute"
@@ -22,9 +21,6 @@ import (
 // no path gets it, so the common case of a bare host:port works without the
 // caller knowing the protocol.
 const otlpPath = "/v1/logs"
-
-// otlpTimeout bounds one export attempt.
-const otlpTimeout = 10 * time.Second
 
 // otlpSink is the collector transport and the provider behind it, held together
 // because the provider owns the queue that Shutdown has to drain.
@@ -101,7 +97,7 @@ func newLogExporter(cfg config.Config) (sdklog.Exporter, error) {
 			otlploggrpc.WithEndpoint(cfg.CollectorEndpoint()),
 			otlploggrpc.WithHeaders(cfg.OTEL.Headers),
 			otlploggrpc.WithCompressor(otlp.Compressor(cfg.OTEL.Compression)),
-			otlploggrpc.WithTimeout(otlpTimeout),
+			otlploggrpc.WithTimeout(cfg.Log.OTLP.Timeout),
 			// Explicit credentials rather than WithInsecure: the two reach the
 			// same place, but credentials take priority over anything the
 			// environment contributed, so an OTEL_EXPORTER_OTLP_CERTIFICATE in
@@ -124,7 +120,7 @@ func newLogExporter(cfg config.Config) (sdklog.Exporter, error) {
 		otlploghttp.WithEndpointURL(cfg.OTEL.Endpoint),
 		otlploghttp.WithHeaders(cfg.OTEL.Headers),
 		otlploghttp.WithCompression(logCompression(cfg)),
-		otlploghttp.WithTimeout(otlpTimeout),
+		otlploghttp.WithTimeout(cfg.Log.OTLP.Timeout),
 	}
 	// A route is applied only when the configuration names one, or when the
 	// endpoint carries no path of its own: an address that already names a route

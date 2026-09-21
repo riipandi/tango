@@ -23,6 +23,7 @@ var durationKeys = []string{
 	"database.connect_timeout",
 	"database.max_conn_idle_time",
 	"database.max_conn_lifetime",
+	"log.otlp.timeout",
 	"otel.metrics.export_timeout",
 	"otel.metrics.interval",
 	"otel.tracing.batch_timeout",

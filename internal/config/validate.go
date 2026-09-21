@@ -171,6 +171,7 @@ func (c Config) Validate() error {
 	if c.logTransport(LogTransportOTLP) {
 		check(isOTELPath(c.Log.OTLP.Path),
 			"log.otlp.path: %q must be a path such as /v1/logs", c.Log.OTLP.Path)
+		check(c.Log.OTLP.Timeout > 0, "log.otlp.timeout: must be positive")
 	}
 	if c.OTEL.Tracing.Enable {
 		check(isOTELPath(c.OTEL.Tracing.Path),
