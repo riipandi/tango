@@ -8,16 +8,42 @@ x-common: &common
   shm_size: 128m # set shared memory limit
   mem_limit: 256m # set memory limit
 
-# VictoriaLogs v1.52+ and VictoriaTraces v0.11+ are distroless: no shell, no HTTP
-# client, so an exec healthcheck cannot run and every `depends_on:
-# service_healthy` behind it never starts. They carry none, their dependents wait
-# for `service_started`, and `task metrics:health` probes them from the host.
-# Restore the healthchecks once `-health` ships (VictoriaLogs#1741).
-
 services:
-  # The one address the three signals share, which is what otel.endpoint names.
-  # The fan-out to the three Victoria services lives here rather than in the
-  # application: they listen on three ports, and the application names one.
+  perses:
+    <<: *common
+    # @ref: https://perses.dev/perses/docs/configuration/configuration
+    image: docker.io/persesdev/perses:${PERSES_VERSION:-v0.55-distroless}
+    hostname: perses
+    ports: ['3380:3380']
+    volumes: ['../.storage/perses_data:/perses:rw', './perses:/etc/perses/provisioning:ro']
+    configs: [{ source: perses_config, target: /etc/perses/config.yaml }]
+    command: '-web.listen-address=0.0.0.0:3380 -log.level=error --config=/etc/perses/config.yaml'
+    healthcheck:
+      test: ['CMD', 'percli', 'version']
+      interval: 3s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      victoria-metrics: { condition: service_healthy }
+      victoria-logs: { condition: service_started }
+      victoria-traces: { condition: service_started }
+      otel-collector: { condition: service_started }
+
+  # perses-mcp:
+  #   <<: *common
+  #   image: docker.io/persesdev/mcp-server:${PERSES_MCP_VERSION:-v0.2-distroless}
+  #   hostname: perses-mcp
+  #   ports: ['3880:3880']
+  #   configs: [{ source: perses_mcp_config, target: /etc/perses-mcp-config.yaml }]
+  #   command: '--config=/etc/perses-mcp-config.yaml'
+  #   # healthcheck:
+  #   #   test: ['CMD', '/bin/perses-mcp-server', 'healthcheck']
+  #   #   interval: 3s
+  #   #   timeout: 5s
+  #   #   retries: 3
+  #   depends_on:
+  #     perses: { condition: service_healthy }
+
   otel-collector:
     <<: *common
     image: docker.io/otel/opentelemetry-collector-contrib:${OTELCOL_VERSION:-0.140.0}
@@ -38,40 +64,11 @@ services:
       victoria-metrics: { condition: service_healthy }
       victoria-traces: { condition: service_started }
 
-  perses:
-    <<: *common
-    # @ref: https://perses.dev/perses/docs/configuration/configuration
-    image: docker.io/persesdev/perses:${PERSES_VERSION:-latest}
-    hostname: perses
-    ports: ['3380:8080']
-    volumes: ['../.storage/perses_data:/perses:rw', './perses:/etc/perses/provisioning:ro']
-    configs: [{ source: perses_config, target: /etc/perses/config.yaml }]
-    entrypoint: ["/bin/sh", "-c", "chmod +x /etc/perses/provisioning/provision.sh && /etc/perses/provisioning/provision.sh && /perses -web.listen-address=0.0.0.0:8080 -log.level=error --config=/etc/perses/config.yaml"]
-    healthcheck:
-      test: ['CMD', 'percli', 'version']
-      interval: 3s
-      timeout: 5s
-      retries: 3
-    depends_on:
-      victoria-metrics: { condition: service_healthy }
-      victoria-logs: { condition: service_started }
-      victoria-traces: { condition: service_started }
-      otel-collector: { condition: service_started }
-
-  perses-mcp:
-    <<: *common
-    image: docker.io/persesdev/mcp-server:${PERSES_MCP_VERSION:-v0.2-distroless}
-    hostname: perses-mcp
-    ports: ['3880:3880']
-    configs: [{ source: perses_mcp_config, target: /etc/perses-mcp-config.yaml }]
-    command: '--config=/etc/perses-mcp-config.yaml'
-    # healthcheck:
-    #   test: ['CMD', '/bin/perses-mcp-server', 'healthcheck']
-    #   interval: 3s
-    #   timeout: 5s
-    #   retries: 3
-    depends_on:
-      perses: { condition: service_healthy }
+  # VictoriaLogs v1.52+ and VictoriaTraces v0.11+ are distroless: no shell, no HTTP
+  # client, so an exec healthcheck cannot run and every `depends_on:
+  # service_healthy` behind it never starts. They carry none, their dependents wait
+  # for `service_started`, and `task metrics:health` probes them from the host.
+  # Restore the healthchecks once `-health` ships (VictoriaLogs#1741).
 
   victoria-metrics:
     <<: *common
@@ -80,7 +77,9 @@ services:
     ports: ['8428:8428']
     volumes: ['../.storage/victoria_metrics_data:/victoria_metrics_data']
     configs: [{ source: victoria_metrics_config, target: /victoria_metrics_data/scrape.yaml }]
-    command: '-storageDataPath=/victoria_metrics_data -promscrape.config=/victoria_metrics_data/scrape.yaml'
+    command: >-
+      -storageDataPath=/victoria_metrics_data
+      -promscrape.config=/victoria_metrics_data/scrape.yaml
     healthcheck:
       test: ['CMD', 'nc', '-vz', '127.0.0.1', '8428']
       interval: 3s
@@ -95,8 +94,6 @@ services:
     hostname: victoria-logs
     ports: ['9428:9428']
     volumes: ['../.storage/victoria_logs_data:/victoria_logs_data']
-    # OTLP ingest is on by default, so the application ships straight here with
-    # no collector. Retention is short: a development store on a shared disk.
     command: >-
       -storageDataPath=/victoria_logs_data
       -retentionPeriod=14d
@@ -108,7 +105,9 @@ services:
     hostname: victoria-traces
     ports: ['10428:10428']
     volumes: ['../.storage/victoria_traces_data:/victoria_traces_data']
-    command: '-storageDataPath=/victoria_traces_data -retentionPeriod=8w'
+    command: >-
+      -storageDataPath=/victoria_traces_data
+      -retentionPeriod=8w
 
   postgres-exporter:
     <<: *common
@@ -135,7 +134,7 @@ services:
     environment:
       REDIS_USER: default
       REDIS_PASSWORD: securedb
-      REDIS_ADDR: redis://redis:6379
+      REDIS_ADDR: redis://valkey:6379
       REDIS_EXPORTER_WEB_LISTEN_ADDRESS: 0.0.0.0:9121
     healthcheck:
       test: ['CMD', '/usr/bin/redis_exporter', '--version']
@@ -143,7 +142,7 @@ services:
       timeout: 5s
       retries: 3
     depends_on:
-      redis: { condition: service_healthy }
+      valkey: { condition: service_healthy }
 
 # ================================================================================================
 # Configuration file
@@ -171,51 +170,6 @@ configs:
       provisioning:
         folders:
           - '/etc/perses/provisioning'
-
-  # perses_vm_logs:
-  #   content: |
-  #     kind: "GlobalDatasource"
-  #     metadata:
-  #       name: "victoria-logs"
-  #     spec:
-  #       display:
-  #         name: "VictoriaLogs"
-  #       default: true
-  #       plugin:
-  #         kind: "VictoriaLogsDatasource"
-  #         spec:
-  #           directUrl: "http://localhost:9428"
-
-  # perses_vm_metrics:
-  #   content: |
-  #     kind: "GlobalDatasource"
-  #     metadata:
-  #       name: "victoria-metrics"
-  #     spec:
-  #       display:
-  #         name: "VictoriaMetrics"
-  #       default: true
-  #       plugin:
-  #         kind: "PrometheusDatasource"
-  #         spec:
-  #           # directUrl keeps the query on the browser side, so a developer can read
-  #           # the store without routing every request through the Perses proxy.
-  #           directUrl: "http://localhost:8428"
-  #           scrapeInterval: "15s"
-
-  # perses_vm_traces:
-  #   content: |
-  #     kind: "GlobalDatasource"
-  #     metadata:
-  #       name: "victoria-traces"
-  #     spec:
-  #       display:
-  #         name: "VictoriaTraces"
-  #       default: true
-  #       plugin:
-  #         kind: "JaegerDatasource"
-  #         spec:
-  #           directUrl: "http://localhost:10428/select/jaeger"
 
   perses_mcp_config:
     content: |

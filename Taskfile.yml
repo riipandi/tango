@@ -70,7 +70,7 @@ tasks:
     desc: Stop services and remove volumes
     cmds:
       - docker-compose -f docker/compose.yaml down --remove-orphans --volumes
-      - pnpm dlx del-cli .storage/{mailpit_data,pgsql_data,redis_data,silo_data}
+      - pnpm dlx del-cli .storage/{mailpit_data,pgsql_data,valkey_data,silo_data}
 
   compose:restart:
     desc: Restart docker compose services
