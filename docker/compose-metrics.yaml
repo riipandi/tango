@@ -43,10 +43,10 @@ services:
     # @ref: https://perses.dev/perses/docs/configuration/configuration
     image: docker.io/persesdev/perses:${PERSES_VERSION:-latest}
     hostname: perses
-    ports: ['3380:3380']
+    ports: ['3380:8080']
     volumes: ['../.storage/perses_data:/perses:rw', './perses:/etc/perses/provisioning:ro']
     configs: [{ source: perses_config, target: /etc/perses/config.yaml }]
-    command: '-web.listen-address=0.0.0.0:3380 -log.level=error --config=/etc/perses/config.yaml'
+    entrypoint: ["/bin/sh", "-c", "chmod +x /etc/perses/provisioning/provision.sh && /etc/perses/provisioning/provision.sh && /perses -web.listen-address=0.0.0.0:8080 -log.level=error --config=/etc/perses/config.yaml"]
     healthcheck:
       test: ['CMD', 'percli', 'version']
       interval: 3s
@@ -162,16 +162,7 @@ configs:
           folder: '/perses'
           extension: 'json'
       plugin:
-        disabled:
-          - 'pyroscope'
-          - 'prometheus'
-          - 'opensearch'
-          - 'greptimedb'
-          - 'jaeger'
-          - 'loki'
-          - 'clickHouse'
-          - 'splunk'
-          - 'tempo'
+        disabled: []
       dashboard:
       datasource:
         project:

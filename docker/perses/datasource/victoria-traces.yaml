@@ -11,4 +11,4 @@ spec:
   plugin:
     kind: "JaegerDatasource"
     spec:
-      directUrl: "http://localhost:10428/select/jaeger"
+      directUrl: "http://victoria-traces:10428/select/jaeger"

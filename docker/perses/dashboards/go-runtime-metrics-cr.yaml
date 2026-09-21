@@ -1,0 +1,327 @@
+apiVersion: perses.dev/v1alpha1
+kind: PersesDashboard
+metadata:
+    namespace: ""
+    name: go-runtime-metrics
+spec:
+    display:
+        name: Go Runtime Metrics
+    variables:
+        - kind: ListVariable
+          spec:
+            display:
+                hidden: false
+            defaultValue: Prometheus
+            allowAllValue: false
+            allowMultiple: false
+            plugin:
+                kind: DatasourceVariable
+                spec:
+                    datasourcePluginKind: PrometheusDatasource
+            name: datasource
+        - kind: ListVariable
+          spec:
+            display:
+                name: job
+                hidden: false
+            allowAllValue: false
+            allowMultiple: false
+            sort: none
+            plugin:
+                kind: PrometheusLabelValuesVariable
+                spec:
+                    labelName: job
+                    matchers:
+                        - go_info
+            name: job
+        - kind: ListVariable
+          spec:
+            display:
+                name: instance
+                hidden: false
+            allowAllValue: true
+            allowMultiple: true
+            sort: none
+            plugin:
+                kind: PrometheusLabelValuesVariable
+                spec:
+                    labelName: instance
+                    matchers:
+                        - go_info{job="$job"}
+            name: instance
+    panels:
+        "0":
+            kind: Panel
+            spec:
+                display:
+                    name: Total Reserved Memory
+                    description: Average total bytes of memory reserved across all process instances of a job.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec: {}
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+        "1":
+            kind: Panel
+            spec:
+                display:
+                    name: Stack Memory Use
+                    description: Average stack memory usage across all instances of a job.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec: {}
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+        "2":
+            kind: Panel
+            spec:
+                display:
+                    name: Other Memory Reservations
+                    description: Average memory reservations by the runtime, not for stack or heap, across all instances of a job.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec: {}
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+        "3":
+            kind: Panel
+            spec:
+                display:
+                    name: Heap Memory
+                    description: Average memory reserved, and actually in use, by the heap, across all instances of a job.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec: {}
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+        "4":
+            kind: Panel
+            spec:
+                display:
+                    name: Allocation Rate, Bytes
+                    description: Average allocation rate in bytes per second, across all instances of a job.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec: {}
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+        "5":
+            kind: Panel
+            spec:
+                display:
+                    name: Heap Object Allocation Rate
+                    description: Average rate of heap object allocation, across all instances of a job.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec: {}
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+        "6":
+            kind: Panel
+            spec:
+                display:
+                    name: Number of Live Objects
+                    description: Average number of live memory objects across all instances of a job.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec: {}
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+        "7":
+            kind: Panel
+            spec:
+                display:
+                    name: Goroutines
+                    description: Average number of goroutines across instances of a job.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec: {}
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+        "8":
+            kind: Panel
+            spec:
+                display:
+                    name: GC min & max duration
+                plugin:
+                    kind: TimeSeriesChart
+                    spec: {}
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+        "9":
+            kind: Panel
+            spec:
+                display:
+                    name: Next GC, Bytes
+                    description: The number used bytes at which the runtime plans to perform the next GC, averaged across all instances of a job.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec: {}
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: migration_from_grafana_not_supported
+    layouts:
+        - kind: Grid
+          spec:
+            display:
+                title: Panel Group 1
+            items:
+                - x: 0
+                  "y": 0
+                  width: 12
+                  height: 8
+                  content:
+                    $ref: '#/spec/panels/0'
+                - x: 12
+                  "y": 0
+                  width: 12
+                  height: 8
+                  content:
+                    $ref: '#/spec/panels/1'
+                - x: 0
+                  "y": 8
+                  width: 12
+                  height: 8
+                  content:
+                    $ref: '#/spec/panels/2'
+                - x: 12
+                  "y": 8
+                  width: 12
+                  height: 8
+                  content:
+                    $ref: '#/spec/panels/3'
+                - x: 0
+                  "y": 16
+                  width: 12
+                  height: 8
+                  content:
+                    $ref: '#/spec/panels/4'
+                - x: 12
+                  "y": 16
+                  width: 12
+                  height: 8
+                  content:
+                    $ref: '#/spec/panels/5'
+                - x: 0
+                  "y": 24
+                  width: 12
+                  height: 8
+                  content:
+                    $ref: '#/spec/panels/6'
+                - x: 12
+                  "y": 24
+                  width: 12
+                  height: 8
+                  content:
+                    $ref: '#/spec/panels/7'
+                - x: 0
+                  "y": 32
+                  width: 12
+                  height: 8
+                  content:
+                    $ref: '#/spec/panels/8'
+                - x: 12
+                  "y": 32
+                  width: 12
+                  height: 8
+                  content:
+                    $ref: '#/spec/panels/9'
+    duration: 1h
+

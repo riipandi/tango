@@ -1,0 +1,573 @@
+apiVersion: perses.dev/v1alpha1
+kind: PersesDashboard
+metadata:
+    namespace: ""
+    name: redis-database
+spec:
+    display:
+        name: Redis Database
+    variables:
+        - kind: ListVariable
+          spec:
+            display:
+                hidden: false
+            allowAllValue: false
+            allowMultiple: false
+            sort: alphabetical-asc
+            plugin:
+                kind: PrometheusLabelValuesVariable
+                spec:
+                    labelName: namespace
+                    matchers:
+                        - redis_up
+            name: namespace
+        - kind: ListVariable
+          spec:
+            display:
+                hidden: false
+            allowAllValue: false
+            allowMultiple: true
+            sort: alphabetical-asc
+            plugin:
+                kind: PrometheusLabelValuesVariable
+                spec:
+                    labelName: instance
+                    matchers:
+                        - redis_up{namespace=~"$namespace"}
+            name: instance
+    panels:
+        "0":
+            kind: Panel
+            spec:
+                display:
+                    name: Max Uptime
+                plugin:
+                    kind: StatChart
+                    spec:
+                        calculation: last-number
+                        colorMode: none
+                        format:
+                            decimalPlaces: 0
+                            unit: seconds
+                        mappings:
+                            - kind: Misc
+                              spec:
+                                result:
+                                    value: N/A
+                                value: "null"
+                        sparkline: {}
+                        thresholds:
+                            steps:
+                                - color: '#73bf69'
+                                  value: 0
+                                - color: '#f2495c'
+                                  value: 80
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: max(max_over_time(redis_uptime_in_seconds{instance=~"$instance"}[$__interval]))
+                                seriesNameFormat: ""
+        "1":
+            kind: Panel
+            spec:
+                display:
+                    name: Clients
+                plugin:
+                    kind: StatChart
+                    spec:
+                        calculation: last-number
+                        colorMode: none
+                        format:
+                            decimalPlaces: 0
+                            unit: decimal
+                        mappings:
+                            - kind: Misc
+                              spec:
+                                result:
+                                    value: N/A
+                                value: "null"
+                        sparkline: {}
+                        thresholds:
+                            steps:
+                                - color: '#73bf69'
+                                  value: 0
+                                - color: '#f2495c'
+                                  value: 80
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                query: sum(redis_connected_clients{instance=~"$instance"})
+                                seriesNameFormat: ""
+        "2":
+            kind: Panel
+            spec:
+                display:
+                    name: Memory Usage
+                plugin:
+                    kind: GaugeChart
+                    spec:
+                        calculation: last-number
+                        format:
+                            decimalPlaces: 0
+                            unit: percent
+                        max: 100
+                        thresholds:
+                            steps:
+                                - color: rgba(50, 172, 45, 0.97)
+                                  value: 0
+                                - color: rgba(237, 129, 40, 0.89)
+                                  value: 80
+                                - color: rgba(245, 54, 54, 0.9)
+                                  value: 95
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                query: sum(100 * (redis_memory_used_bytes{instance=~"$instance"}  / redis_memory_max_bytes{instance=~"$instance"}))
+                                seriesNameFormat: ""
+        "3":
+            kind: Panel
+            spec:
+                display:
+                    name: Total Commands / sec
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            areaOpacity: 0.8
+                            connectNulls: true
+                            display: line
+                            lineWidth: 1
+                            stack: all
+                        yAxis:
+                            format:
+                                unit: decimal
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: sum(rate(redis_commands_total{instance=~"$instance"} [1m])) by (cmd)
+                                seriesNameFormat: '{{ cmd }}'
+        "4":
+            kind: Panel
+            spec:
+                display:
+                    name: Hits / Misses per Sec
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            areaOpacity: 0.1
+                            connectNulls: true
+                            display: line
+                            lineWidth: 2
+                        yAxis:
+                            format:
+                                unit: decimal
+                            min: 0
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: irate(redis_keyspace_hits_total{instance=~"$instance"}[5m])
+                                seriesNameFormat: hits, {{ instance }}
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: irate(redis_keyspace_misses_total{instance=~"$instance"}[5m])
+                                seriesNameFormat: misses, {{ instance }}
+        "5":
+            kind: Panel
+            spec:
+                display:
+                    name: Total Memory Usage
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: list
+                            position: bottom
+                        querySettings:
+                            - colorMode: fixed
+                              colorValue: '#BF1B00'
+                              queryIndex: 1
+                        visual:
+                            areaOpacity: 0.1
+                            connectNulls: false
+                            display: line
+                            lineWidth: 2
+                        yAxis:
+                            format:
+                                unit: bytes
+                            min: 0
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                query: redis_memory_used_bytes{instance=~"$instance"}
+                                seriesNameFormat: used, {{ instance }}
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                query: redis_memory_max_bytes{instance=~"$instance"}
+                                seriesNameFormat: max, {{ instance }}
+        "6":
+            kind: Panel
+            spec:
+                display:
+                    name: Network I/O
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: list
+                            position: bottom
+                        visual:
+                            areaOpacity: 0.1
+                            connectNulls: true
+                            display: line
+                            lineWidth: 2
+                        yAxis:
+                            format:
+                                unit: bytes
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                query: sum(rate(redis_net_input_bytes_total{instance=~"$instance"}[5m]))
+                                seriesNameFormat: '{{ input }}'
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: sum(rate(redis_net_output_bytes_total{instance=~"$instance"}[5m]))
+                                seriesNameFormat: '{{ output }}'
+        "7":
+            kind: Panel
+            spec:
+                display:
+                    name: Total Items per DB
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: list
+                            position: bottom
+                            values:
+                                - last-number
+                        visual:
+                            areaOpacity: 0.7
+                            connectNulls: true
+                            display: line
+                            lineWidth: 2
+                            stack: all
+                        yAxis:
+                            format:
+                                unit: decimal
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: sum (redis_db_keys{instance=~"$instance"}) by (db, instance)
+                                seriesNameFormat: '{{ db }}, {{ instance }}'
+        "8":
+            kind: Panel
+            spec:
+                display:
+                    name: Expiring vs Not-Expiring Keys
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: list
+                            position: bottom
+                        visual:
+                            areaOpacity: 0.7
+                            connectNulls: true
+                            display: line
+                            lineWidth: 2
+                            stack: all
+                        yAxis:
+                            format:
+                                unit: decimal
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: sum (redis_db_keys{instance=~"$instance"}) by (instance) - sum (redis_db_keys_expiring{instance=~"$instance"}) by (instance)
+                                seriesNameFormat: not expiring, {{ instance }}
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: sum (redis_db_keys_expiring{instance=~"$instance"}) by (instance)
+                                seriesNameFormat: expiring, {{ instance }}
+        "9":
+            kind: Panel
+            spec:
+                display:
+                    name: Expired/Evicted Keys
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: list
+                            position: bottom
+                        visual:
+                            areaOpacity: 0.1
+                            connectNulls: true
+                            display: line
+                            lineWidth: 2
+                        yAxis:
+                            format:
+                                unit: decimal
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: sum(rate(redis_expired_keys_total{instance=~"$instance"}[5m])) by (instance)
+                                seriesNameFormat: expired, {{ instance }}
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: sum(rate(redis_evicted_keys_total{instance=~"$instance"}[5m])) by (instance)
+                                seriesNameFormat: evicted, {{ instance }}
+        "10":
+            kind: Panel
+            spec:
+                display:
+                    name: Connected/Blocked Clients
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: list
+                            position: bottom
+                        visual:
+                            areaOpacity: 0.1
+                            connectNulls: false
+                            display: line
+                            lineWidth: 1
+                        yAxis:
+                            format:
+                                unit: decimal
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                query: sum(redis_connected_clients{instance=~"$instance"})
+                                seriesNameFormat: connected
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                query: sum(redis_blocked_clients{instance=~"$instance"})
+                                seriesNameFormat: blocked
+        "11":
+            kind: Panel
+            spec:
+                display:
+                    name: Average Time Spent by Command / sec
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: list
+                            position: bottom
+                        visual:
+                            areaOpacity: 0
+                            connectNulls: true
+                            display: line
+                            lineWidth: 1
+                        yAxis:
+                            format:
+                                unit: seconds
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: |
+                                    sum(irate(redis_commands_duration_seconds_total{instance =~ "$instance"}[1m])) by (cmd)
+                                      /
+                                    sum(irate(redis_commands_total{instance =~ "$instance"}[1m])) by (cmd)
+                                seriesNameFormat: '{{ cmd }}'
+        "12":
+            kind: Panel
+            spec:
+                display:
+                    name: Total Time Spent by Command / sec
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: list
+                            position: bottom
+                        visual:
+                            areaOpacity: 0.8
+                            connectNulls: true
+                            display: line
+                            lineWidth: 1
+                            stack: all
+                        yAxis:
+                            format:
+                                unit: seconds
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                datasource: ${DS_PROM}
+                                minStep: ""
+                                query: sum(irate(redis_commands_duration_seconds_total{instance=~"$instance"}[1m])) by (cmd) != 0
+                                seriesNameFormat: '{{ cmd }}'
+    layouts:
+        - kind: Grid
+          spec:
+            display:
+                title: Panel Group 1
+            items:
+                - x: 0
+                  "y": 0
+                  width: 3
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/0'
+                - x: 3
+                  "y": 0
+                  width: 2
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/1'
+                - x: 5
+                  "y": 0
+                  width: 3
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/2'
+                - x: 8
+                  "y": 0
+                  width: 8
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/3'
+                - x: 16
+                  "y": 0
+                  width: 8
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/4'
+                - x: 0
+                  "y": 7
+                  width: 12
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/5'
+                - x: 12
+                  "y": 7
+                  width: 12
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/6'
+                - x: 0
+                  "y": 14
+                  width: 12
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/7'
+                - x: 12
+                  "y": 14
+                  width: 12
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/8'
+                - x: 0
+                  "y": 21
+                  width: 12
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/9'
+                - x: 12
+                  "y": 21
+                  width: 12
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/10'
+                - x: 0
+                  "y": 28
+                  width: 12
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/11'
+                - x: 12
+                  "y": 28
+                  width: 12
+                  height: 7
+                  content:
+                    $ref: '#/spec/panels/12'
+    duration: 1h
+

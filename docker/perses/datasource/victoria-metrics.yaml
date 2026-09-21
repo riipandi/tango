@@ -14,5 +14,5 @@ spec:
     spec:
       # directUrl keeps the query on the browser side, so a developer can read
       # the store without routing every request through the Perses proxy.
-      directUrl: "http://localhost:8428"
+      directUrl: "http://victoria-metrics:8428"
       scrapeInterval: "15s"
