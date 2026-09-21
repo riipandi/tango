@@ -31,7 +31,7 @@ availability status. The same result is published by the REST handler,
 so the CLI and the API always agree.
 
 It checks that Postgres answers and that the application data directory
-(storage by default, or app.data_dir from the configuration) exists,
+(storage by default, or storage.local_path from the configuration) exists,
 is writable, and is not world-writable.
 
 Output is text by default; pass --json for a machine-readable result or

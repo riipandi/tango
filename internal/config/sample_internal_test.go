@@ -40,6 +40,27 @@ func TestSampleWritesEverySecretAsADirective(t *testing.T) {
 	}
 }
 
+func TestSampleWritesDeploymentKeysAsDirectives(t *testing.T) {
+	// A deployment sets the mode and the public origin, so the file asks for the
+	// variable instead of baking in a value that would be wrong there. The name
+	// is the one envKeys writes, which is not always the key upper-cased.
+	flat := sampleDoc(t)
+
+	for key, name := range envKeys {
+		assert.Equal(t, "env:"+name, flat[key], "%s must name %s", key, name)
+	}
+	assert.Equal(t, "env:PUBLIC_BASE_URL", flat["server.base_url"],
+		"the public origin is PUBLIC_BASE_URL, not SERVER_BASE_URL")
+}
+
+func TestDeploymentKeysAreNotSecrets(t *testing.T) {
+	// Redacted hides secrets, and a runtime mode is not one: hiding it would
+	// make a report harder to read for no gain.
+	for key := range envKeys {
+		assert.NotContains(t, secretKeys, key, "%s is not a secret", key)
+	}
+}
+
 func TestSampleCoversEveryKey(t *testing.T) {
 	// A generated file is also the list of what can be configured, so it must
 	// carry every key the struct defines.

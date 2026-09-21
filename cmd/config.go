@@ -106,13 +106,14 @@ func requireDatabaseURL(cfg config.Config) (string, error) {
 	return cfg.Database.URL, nil
 }
 
-// dataDir resolves the application data directory from the configuration. The
-// layer already applied the precedence, so there is nothing to re-check here.
+// dataDir resolves the application data directory from the configuration. It is
+// Storage.LocalPath, the one path the local driver writes to; the layer already
+// applied the precedence, so there is nothing to re-check here.
 func dataDir(cfg config.Config) string {
-	if cfg.App.DataDir == "" {
+	if cfg.Storage.LocalPath == "" {
 		return config.DefaultDataDir
 	}
-	return cfg.App.DataDir
+	return cfg.Storage.LocalPath
 }
 
 // configPath reports the file the configuration came from, so a command can name
@@ -208,7 +209,7 @@ func printConfigWritten(p printext.Palette, path string) error {
 	if err := printFields(p, []field{{"written", path}}); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(p.Writer(), "\nnext: run %s, then set %s\n",
+	if _, err := fmt.Fprintf(p.Writer(), "next step: run %s, then set %s\n",
 		p.Dim("key:generate --env-file=.env.local"), p.Dim(config.EnvName("database.url"))); err != nil {
 		return err
 	}

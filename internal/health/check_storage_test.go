@@ -148,7 +148,7 @@ func relativeToWorkingDir(t *testing.T, path string) string {
 	return relative
 }
 
-// The default must match the app.data_dir default the CLI and Taskfile use.
+// The default must match the storage.local_path default the CLI and Taskfile use.
 func TestStorageDefaultDataDir(t *testing.T) {
 	assert.Equal(t, "storage", config.DefaultDataDir)
 }

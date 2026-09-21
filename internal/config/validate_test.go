@@ -117,7 +117,7 @@ func TestKeysMatchTheStruct(t *testing.T) {
 	keys := config.Keys()
 	require.NotEmpty(t, keys)
 
-	assert.Contains(t, keys, "app.data_dir")
+	assert.Contains(t, keys, "storage.local_path")
 	assert.Contains(t, keys, "app.mode")
 	assert.Contains(t, keys, "database.url")
 	assert.Contains(t, keys, "server.port")

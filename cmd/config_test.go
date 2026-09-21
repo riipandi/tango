@@ -65,7 +65,7 @@ func configFor(t *testing.T, dataDir string) {
 
 	body := `{"database": {"url": "env:DATABASE_URL"}`
 	if dataDir != "" {
-		body += `, "app": {"data_dir": ` + strconv.Quote(dataDir) + `}`
+		body += `, "storage": {"local_path": ` + strconv.Quote(dataDir) + `}`
 	}
 	useConfig(t, body+"}")
 }
@@ -101,7 +101,7 @@ func TestConfigGenerateWritesEveryKey(t *testing.T) {
 	out, err := runConfigGenerateCmd(t, "--output="+path)
 	require.NoError(t, err)
 	assert.Contains(t, out, "written:   "+path)
-	assert.Contains(t, out, "next: run key:generate")
+	assert.Contains(t, out, "next step: run key:generate")
 	assert.Contains(t, out, "status: config file ready")
 
 	written, err := os.ReadFile(path)

@@ -23,9 +23,28 @@ var secretKeys = []string{
 	"database.url",
 }
 
+// envKeys are the keys a generated file writes as an env: directive even though
+// the value is not a secret, mapped to the variable each one names.
+//
+// A deployment sets the runtime mode and the public base URL, so a generated file
+// asks for the variable rather than baking in a value that would be wrong there.
+// The variable name is written out instead of derived from the key, because the
+// two do not always agree: server.base_url is PUBLIC_BASE_URL, the name the
+// origin is known by outside this file, not SERVER_BASE_URL.
+//
+// Validate reports a key here only when the variable leaves it unusable. An unset
+// APP_MODE falls back to development and an empty base_url is a valid value, so
+// neither is an error on its own: naming them would report a choice the user made
+// on purpose.
+var envKeys = map[string]string{
+	"app.mode":        "APP_MODE",
+	"server.base_url": "PUBLIC_BASE_URL",
+}
+
 // Sample renders the config file a fresh checkout starts from: every key with its
-// built-in default, and every secret as an env: directive naming the variable
-// key:generate writes for it.
+// built-in default, every secret as an env: directive naming the variable
+// key:generate writes for it, and every key in envKeys as a directive naming the
+// variable a deployment sets.
 //
 // Every key is written out rather than only the ones a user is likely to change,
 // so the file doubles as the list of what can be configured. The output is
@@ -37,6 +56,12 @@ func Sample() ([]byte, error) {
 			return nil, fmt.Errorf("config: secret key %s is not part of Config", key)
 		}
 		flat[key] = "env:" + EnvName(key)
+	}
+	for key, name := range envKeys {
+		if _, ok := flat[key]; !ok {
+			return nil, fmt.Errorf("config: env key %s is not part of Config", key)
+		}
+		flat[key] = "env:" + name
 	}
 
 	out, err := json.Marshal(nest(flat), jsontext.WithIndent("    "), json.Deterministic(true))

@@ -109,7 +109,7 @@ func TestDefaultsAreValid(t *testing.T) {
 
 	defaults := config.Default()
 	require.Equal(t, defaults.Server.Port, cfg.Server.Port)
-	require.Equal(t, defaults.App.DataDir, cfg.App.DataDir)
+	require.Equal(t, defaults.Storage.LocalPath, cfg.Storage.LocalPath)
 	require.Equal(t, defaults.Log.Level, cfg.Log.Level)
 	require.Equal(t, config.LayerDefault, cfg.Origin("server.port"))
 }

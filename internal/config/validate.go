@@ -3,9 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -28,25 +26,18 @@ func (c Config) Validate() error {
 		}
 	}
 
-	// An unresolved directive is reported first: the key it names kept its
-	// default, so every rule about that key would otherwise fire as well and
-	// bury the one problem the user has to fix.
-	for _, key := range slices.Sorted(maps.Keys(c.unresolved)) {
-		problems = append(problems, fmt.Errorf("%s: %s is not set", key, c.unresolved[key]))
-	}
-
 	check(isOneOf(c.App.Mode, ModeDevelopment, ModeStaging, ModeProduction, ModeTest),
 		"app.mode: %q is not one of %s", c.App.Mode,
 		joinValues(ModeDevelopment, ModeStaging, ModeProduction, ModeTest))
-	check(c.App.DataDir != "", "app.data_dir: must not be empty")
 	check(c.App.SecretKey == "" || isHexKey(c.App.SecretKey),
 		"app.secret_key: must be 64 hex characters")
 
-	check(isOneOf(c.Cache.Driver, CacheMemory, CacheValkey),
-		"cache.driver: %q is not one of %s", c.Cache.Driver, joinValues(CacheMemory, CacheValkey))
+	check(isOneOf(c.Cache.Driver, CacheMemory, CacheKV),
+		"cache.driver: %q is not one of %s", c.Cache.Driver, joinValues(CacheMemory, CacheKV))
 	check(c.Cache.TTL > 0, "cache.ttl: must be positive")
 
-	check(c.Database.URL != "", "database.url: must not be empty (set DATABASE_URL)")
+	check(c.Database.URL != "", "database.url: %s",
+		c.unsetNote("database.url", "must not be empty (set DATABASE_URL)"))
 	check(isPostgresDSN(c.Database.URL), "database.url: must be a postgres connection string")
 	check(c.Database.MaxConns > 0, "database.max_conns: must be positive")
 	check(c.Database.MinConns >= 0, "database.min_conns: must not be negative")
@@ -61,11 +52,11 @@ func (c Config) Validate() error {
 
 	check(isOneOf(c.Log.Level, LogDebug, LogInfo, LogWarn, LogError),
 		"log.level: %q is not one of %s", c.Log.Level, joinValues(LogDebug, LogInfo, LogWarn, LogError))
-	check(isOneOf(c.Log.Format, LogText, LogJSON),
-		"log.format: %q is not one of %s", c.Log.Format, joinValues(LogText, LogJSON))
+	check(isOneOf(c.Log.Format, LogPretty, LogStructured),
+		"log.format: %q is not one of %s", c.Log.Format, joinValues(LogPretty, LogStructured))
 
-	check(isOneOf(c.RateLimit.Driver, RateLimitDB, RateLimitVK),
-		"rate_limit.driver: %q is not one of %s", c.RateLimit.Driver, joinValues(RateLimitDB, RateLimitVK))
+	check(isOneOf(c.RateLimit.Driver, RateLimitDB, RateLimitKV),
+		"rate_limit.driver: %q is not one of %s", c.RateLimit.Driver, joinValues(RateLimitDB, RateLimitKV))
 	check(c.RateLimit.Limit > 0, "rate_limit.limit: must be positive")
 	check(c.RateLimit.Window > 0, "rate_limit.window: must be positive")
 
@@ -78,8 +69,8 @@ func (c Config) Validate() error {
 	check(c.Server.IdleTimeout > 0, "server.idle_timeout: must be positive")
 	check(c.Server.ShutdownTimeout > 0, "server.shutdown_timeout: must be positive")
 
-	check(isOneOf(c.Session.Driver, SessionDB, SessionVK),
-		"session.driver: %q is not one of %s", c.Session.Driver, joinValues(SessionDB, SessionVK))
+	check(isOneOf(c.Session.Driver, SessionDB, SessionKV),
+		"session.driver: %q is not one of %s", c.Session.Driver, joinValues(SessionDB, SessionKV))
 	check(c.Session.TTL > 0, "session.ttl: must be positive")
 
 	check(isOneOf(c.Storage.Driver, StorageLocal, StorageS3),
@@ -102,6 +93,22 @@ func (c Config) Validate() error {
 		return nil
 	}
 	return fmt.Errorf("%w:\n%s", ErrInvalid, indentProblems(problems))
+}
+
+// unsetNote describes a key left at its default because the variable its
+// directive named is not set.
+//
+// An unset variable is reported only where it leaves the key unusable, not for
+// every key that references one: app.mode falls back to development and
+// auth.private_key to the HMAC secret, so naming those would report a choice the
+// user made on purpose. The caller supplies the wording for the resolved case,
+// so the message reads the same whether the file named a variable or not.
+func (c Config) unsetNote(key, resolved string) string {
+	name, ok := c.unresolved[key]
+	if !ok {
+		return resolved
+	}
+	return fmt.Sprintf("must not be empty: the %s variable is not set", name)
 }
 
 // indentProblems renders one problem per line, each indented under the header.

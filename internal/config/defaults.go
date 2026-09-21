@@ -3,8 +3,8 @@ package config
 import "time"
 
 // DefaultDataDir is where the application keeps local files, relative to the
-// working directory. It is the default of App.DataDir and of the storage health
-// check, and it matches the compose volume (./storage:/srv/storage).
+// working directory. It is the default of Storage.LocalPath and of the storage
+// health check, and it matches the compose volume (./storage:/srv/storage).
 const DefaultDataDir = "storage"
 
 // Mode names of the supported runtime modes.
@@ -29,8 +29,7 @@ const (
 func Default() Config {
 	return Config{
 		App: App{
-			Mode:    ModeDevelopment,
-			DataDir: DefaultDataDir,
+			Mode: ModeDevelopment,
 		},
 		Auth: Auth{
 			Issuer:     "tango",
@@ -52,7 +51,7 @@ func Default() Config {
 		},
 		Log: Log{
 			Level:  LogInfo,
-			Format: LogText,
+			Format: LogPretty,
 		},
 		RateLimit: RateLimit{
 			Driver: RateLimitDB,

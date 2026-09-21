@@ -3,8 +3,9 @@ package config
 import "time"
 
 // Config is the resolved application configuration. It is the result of merging
-// the built-in defaults, an optional JSON config file, the system environment,
-// an optional env file, and the command-line flags, in that order.
+// the built-in defaults, the JSON config file, and the command-line flags, in
+// that order. The environment is not a layer: it is the table the config file's
+// directives resolve from.
 //
 // The struct is the schema: every key has a koanf tag (how a source names it),
 // a json tag (how it is written back out, and how Default is flattened), a
@@ -32,9 +33,6 @@ type Config struct {
 type App struct {
 	// Mode names the runtime mode: development, staging, production, or test.
 	Mode string `koanf:"mode" json:"mode"`
-	// DataDir is the application data directory, relative to the working
-	// directory or absolute. It matches DefaultDataDir.
-	DataDir string `koanf:"data_dir" json:"data_dir"`
 	// SecretKey is the hex-encoded AES-256 key used to seal stored values.
 	SecretKey string `koanf:"secret_key" json:"secret_key"`
 }
@@ -56,7 +54,7 @@ type Auth struct {
 
 // Cache holds the key-value cache settings.
 type Cache struct {
-	// Driver is CacheMemory or CacheValkey.
+	// Driver is CacheMemory or CacheKV.
 	Driver string `koanf:"driver" json:"driver"`
 	// TTL is the default lifetime of a cached entry.
 	TTL time.Duration `koanf:"ttl" json:"ttl"`
@@ -85,13 +83,13 @@ type Database struct {
 type Log struct {
 	// Level is one of debug, info, warn, or error.
 	Level string `koanf:"level" json:"level"`
-	// Format is LogText or LogJSON.
+	// Format is LogPretty or LogStructured.
 	Format string `koanf:"format" json:"format"`
 }
 
 // RateLimit holds the request throttling settings.
 type RateLimit struct {
-	// Driver is RateLimitDB or RateLimitValkey.
+	// Driver is RateLimitDB or RateLimitKV.
 	Driver string `koanf:"driver" json:"driver"`
 	// Limit is the number of requests allowed per Window.
 	Limit int `koanf:"limit" json:"limit"`
@@ -116,7 +114,7 @@ type Server struct {
 
 // Session holds the session store settings.
 type Session struct {
-	// Driver is SessionDB or SessionValkey.
+	// Driver is SessionDB or SessionKV.
 	Driver string `koanf:"driver" json:"driver"`
 	// TTL is how long an idle session stays valid.
 	TTL time.Duration `koanf:"ttl" json:"ttl"`
@@ -126,23 +124,28 @@ type Session struct {
 type Storage struct {
 	// Driver is StorageLocal or StorageS3.
 	Driver string `koanf:"driver" json:"driver"`
-	// LocalPath is the directory used by the local driver, resolved against
-	// App.DataDir when it is relative.
+	// LocalPath is the directory the local driver writes to, relative to the
+	// working directory or absolute. It is the one data directory of the
+	// process: the backup default and the storage health check both read it, so
+	// there is no second path to disagree with it.
 	LocalPath string `koanf:"local_path" json:"local_path"`
 }
 
-// Supported values for the driver fields. A driver is opt-in: the default is
-// always the dependency-free choice, so a fresh checkout runs on Postgres and
-// the local filesystem alone.
+// Supported values for the driver and format fields. A driver is opt-in: the
+// default is always the dependency-free choice, so a fresh checkout runs on
+// Postgres and the local filesystem alone.
+//
+// A key-value backend is named "kvstore" rather than after the product behind
+// it, so the configuration does not have to change if that choice does.
 const (
-	CacheMemory  = "memory"
-	CacheValkey  = "valkey"
-	LogText      = "text"
-	LogJSON      = "json"
-	RateLimitDB  = "db"
-	RateLimitVK  = "valkey"
-	SessionDB    = "db"
-	SessionVK    = "valkey"
-	StorageLocal = "local"
-	StorageS3    = "s3"
+	CacheMemory   = "memory"
+	CacheKV       = "kvstore"
+	LogPretty     = "pretty"
+	LogStructured = "structured"
+	RateLimitDB   = "database"
+	RateLimitKV   = "kvstore"
+	SessionDB     = "database"
+	SessionKV     = "kvstore"
+	StorageLocal  = "local"
+	StorageS3     = "s3"
 )
