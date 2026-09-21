@@ -139,8 +139,10 @@ func (p *Postgres) QueryRow(ctx context.Context, sql string, args ...any) pgx.Ro
 }
 
 // WithTx runs fn inside a transaction. The transaction is committed when fn
-// returns nil, and rolled back otherwise — including when fn panics.
-func (p *Postgres) WithTx(ctx context.Context, fn func(ctx context.Context, tx pgx.Tx) error) error {
+// returns nil, and rolled back otherwise — including on panic. The callback
+// receives the shared Querier surface, so it passes the transaction to any
+// repository, seeder, or store written against it.
+func (p *Postgres) WithTx(ctx context.Context, fn func(ctx context.Context, tx Querier) error) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("datastore: begin transaction: %w", err)

@@ -12,6 +12,7 @@ package registry
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -22,13 +23,15 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/health"
+	"github.com/riipandi/tango/internal/jobs"
+	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/transport"
 )
 
-// New registers the shared services of a serve run. The metrics handler comes
-// from the caller because the observer is built and closed by the command
-// lifecycle, not by the container.
-func New(ctx context.Context, cfg config.Config, metrics http.Handler) *do.RootScope {
+// New registers the shared services of a serve run. The metrics handler and
+// the logger come from the caller because both are built and closed by the
+// command lifecycle, not by the container.
+func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *slog.Logger) *do.RootScope {
 	injector := do.New()
 
 	do.ProvideValue(injector, &cfg)
@@ -93,6 +96,27 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler) *do.RootS
 			kv = do.MustInvoke[*datastore.Valkey](i)
 		}
 		return cache.New(*c, kv), nil
+	})
+
+	do.Provide(injector, func(i do.Injector) (*queue.Client, error) {
+		c := do.MustInvoke[*config.Config](i)
+		pool := do.MustInvoke[*datastore.Postgres](i)
+		client, err := queue.NewClient(queue.ClientConfig{
+			Store:        pool,
+			Logger:       logger,
+			NumWorkers:   c.Queue.NumWorkers,
+			ReleaseAfter: c.Queue.ReleaseAfter,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// The job list is registered beside the engine it runs on: a queue
+		// with no jobs is a worker pool with nothing to do.
+		if err := jobs.Register(ctx, client, c.Queue.CleanupInterval); err != nil {
+			return nil, err
+		}
+		return client, nil
 	})
 
 	do.Provide(injector, func(i do.Injector) (*http.Server, error) {

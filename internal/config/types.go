@@ -22,6 +22,7 @@ type Config struct {
 	Log       Log       `koanf:"log" json:"log"`
 	Mailer    Mailer    `koanf:"mailer" json:"mailer"`
 	OTEL      OTEL      `koanf:"otel" json:"otel"`
+	Queue     Queue     `koanf:"queue" json:"queue"`
 	RateLimit RateLimit `koanf:"rate_limit" json:"rate_limit"`
 	Server    Server    `koanf:"server" json:"server"`
 	Session   Session   `koanf:"session" json:"session"`
@@ -311,6 +312,23 @@ type Mailer struct {
 	SMTPPassword string `koanf:"smtp_password" json:"smtp_password"`
 	// SMTPSecure selects implicit TLS on connect instead of STARTTLS.
 	SMTPSecure bool `koanf:"smtp_secure" json:"smtp_secure"`
+}
+
+// Queue holds the background task queue settings. The queue runs on the same
+// Postgres the application already uses, so there is no backend to enable: a
+// serve run carries a worker pool, and the values here size it.
+type Queue struct {
+	// NumWorkers is the number of goroutines that execute queued tasks
+	// concurrently.
+	NumWorkers int `koanf:"num_workers" json:"num_workers"`
+	// ReleaseAfter is how long a claimed task may run before the queue
+	// considers its worker lost and hands the task to another one. It must
+	// exceed the longest execution a queue's Timeout allows, or a slow task
+	// would be run twice.
+	ReleaseAfter time.Duration `koanf:"release_after" json:"release_after"`
+	// CleanupInterval is how often the maintenance job deletes the completed
+	// records their retention has expired.
+	CleanupInterval time.Duration `koanf:"cleanup_interval" json:"cleanup_interval"`
 }
 
 // RateLimit holds the request throttling settings.

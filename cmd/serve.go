@@ -10,6 +10,7 @@ import (
 	"github.com/samber/do/v2"
 	"github.com/urfave/cli/v3"
 
+	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/registry"
 )
 
@@ -62,15 +63,23 @@ file decides.`,
 			return err
 		}
 
-		// The container wires the pool, the health checker, and the server, so
-		// the command only names what it blocks on. Resolving the server is
-		// what opens the pool: an unreachable database fails the run here,
-		// before the listener opens.
-		injector := registry.New(ctx, cfg, obs.MetricsHandler())
+		// The container wires the pool, the health checker, the queue, and the
+		// server, so the command only names what it blocks on. Resolving the
+		// server is what opens the pool: an unreachable database fails the run
+		// here, before the listener opens.
+		injector := registry.New(ctx, cfg, obs.MetricsHandler(), log.Slog())
 		server, err := do.Invoke[*http.Server](injector)
 		if err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}
+
+		// The queue starts with the server and stops with the injector: its
+		// Shutdown drains the in-flight tasks after the HTTP drain ends.
+		queueClient, err := do.Invoke[*queue.Client](injector)
+		if err != nil {
+			return fmt.Errorf("serve: %w", err)
+		}
+		queueClient.Start(ctx)
 
 		serveErr := make(chan error, 1)
 		go func() {
@@ -85,6 +94,7 @@ file decides.`,
 			"protocol", cfg.OTEL.Protocol,
 			"tracing", obs.Tracing(),
 			"metrics", obs.Metrics(),
+			"workers", cfg.Queue.NumWorkers,
 			"address", server.Addr)
 
 		select {

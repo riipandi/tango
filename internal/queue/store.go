@@ -1,1 +1,285 @@
 package queue
+
+import (
+	"context"
+	"errors"
+	"time"
+	"uuid"
+
+	"github.com/huandu/go-sqlbuilder"
+
+	"github.com/riipandi/tango/internal/datastore"
+)
+
+// The queue's own tables, created by database/migrations/00008. The engine
+// reads and writes them, and nothing else in the process names them.
+const (
+	tasksTable     = "public.queue_tasks"
+	completedTable = "public.queue_tasks_completed"
+)
+
+// Store is the database the queue runs on: the shared Postgres pool. The
+// transaction callback receives the shared Querier surface, so the engine
+// never opens a connection and never names a driver type.
+type Store interface {
+	datastore.Querier
+	WithTx(ctx context.Context, fn func(ctx context.Context, tx datastore.Querier) error) error
+}
+
+// taskRow is a row of the pending table: a task added to a queue, ready or
+// waiting, claimed or not.
+type taskRow struct {
+	ID             uuid.UUID
+	Queue          string
+	Payload        []byte
+	Attempts       int
+	WaitUntil      *time.Time
+	ClaimedAt      *time.Time
+	CreatedAt      time.Time
+	LastExecutedAt *time.Time
+}
+
+// completedRow is a row of the completed table: a task that exhausted its
+// attempts, or succeeded and was retained by its queue's policy.
+type completedRow struct {
+	ID             uuid.UUID
+	Queue          string
+	Payload        []byte
+	Attempts       int
+	Succeeded      bool
+	LastDuration   time.Duration
+	Error          *string
+	ExpiresAt      *time.Time
+	CreatedAt      time.Time
+	LastExecutedAt time.Time
+}
+
+// insertTasks inserts every task of one save operation. The caller owns the
+// transaction, so a batch is all-or-nothing with whatever else it runs beside.
+func insertTasks(ctx context.Context, q datastore.Querier, tasks []*taskRow) error {
+	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+	ib.InsertInto(tasksTable)
+	ib.Cols("id", "queue", "task", "wait_until", "created_at")
+	for _, t := range tasks {
+		ib.Values(t.ID, t.Queue, t.Payload, t.WaitUntil, t.CreatedAt)
+	}
+
+	query, args := ib.Build()
+	_, err := q.Exec(ctx, query, args...)
+	return err
+}
+
+// claimReady claims the earliest tasks a dispatcher may run right now: never
+// claimed, or claimed long enough ago that their worker is considered lost,
+// and past their wait. The claim is one statement, so two dispatchers — two
+// processes sharing the database — never execute the same task twice: a row
+// is locked while it is read and updated, and a competing dispatcher skips
+// the locked rows and takes the next ones.
+func claimReady(ctx context.Context, q datastore.Querier, at time.Time, reclaimBefore time.Time, limit int) ([]*taskRow, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("id")
+	sb.From(tasksTable)
+	sb.Where(
+		sb.Or(sb.IsNull("claimed_at"), sb.LT("claimed_at", reclaimBefore)),
+		sb.Or(sb.IsNull("wait_until"), sb.LE("wait_until", at)),
+	)
+	sb.OrderBy("wait_until ASC NULLS FIRST", "id ASC")
+	sb.Limit(limit)
+	sb.ForUpdate()
+	sb.SkipLocked()
+
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(tasksTable)
+	ub.Set(ub.Assign("claimed_at", at), ub.Incr("attempts"))
+	ub.Where(ub.In("id", sb))
+	ub.Returning("id", "queue", "task", "attempts", "wait_until", "created_at", "last_executed_at")
+
+	query, args := ub.Build()
+	rows, err := q.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []*taskRow
+	for rows.Next() {
+		t := &taskRow{}
+		if err := rows.Scan(&t.ID, &t.Queue, &t.Payload, &t.Attempts,
+			&t.WaitUntil, &t.CreatedAt, &t.LastExecutedAt); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
+}
+
+// peekNext reports the wait of the next task the dispatcher could act on,
+// whichever comes first among the ready and the delayed. exists is false
+// when nothing is claimable; a nil wait with exists true means a task is
+// ready now but was not claimed, which happens while every worker is busy.
+func peekNext(ctx context.Context, q datastore.Querier, deadline time.Time) (bool, *time.Time, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("wait_until")
+	sb.From(tasksTable)
+	sb.Where(sb.Or(sb.IsNull("claimed_at"), sb.LT("claimed_at", deadline)))
+	sb.OrderBy("wait_until ASC NULLS FIRST", "id ASC")
+	sb.Limit(1)
+
+	query, args := sb.Build()
+	var wait *time.Time
+	err := q.QueryRow(ctx, query, args...).Scan(&wait)
+	if errors.Is(err, datastore.ErrNoRows) {
+		return false, nil, nil
+	}
+	if err != nil {
+		return false, nil, err
+	}
+	return true, wait, nil
+}
+
+// requeueTask releases a claimed task back to the queue: a failed attempt
+// waits for its backoff, a task whose queue was never registered waits for
+// its next look.
+func requeueTask(ctx context.Context, q datastore.Querier, id uuid.UUID, waitUntil time.Time) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(tasksTable)
+	ub.Set(
+		ub.Assign("claimed_at", nil),
+		ub.Assign("wait_until", waitUntil),
+		ub.Assign("last_executed_at", time.Now()),
+	)
+	ub.Where(ub.Equal("id", id))
+
+	query, args := ub.Build()
+	_, err := q.Exec(ctx, query, args...)
+	return err
+}
+
+// deleteTask removes a task from the pending table.
+func deleteTask(ctx context.Context, q datastore.Querier, id uuid.UUID) error {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(tasksTable)
+	db.Where(db.Equal("id", id))
+
+	query, args := db.Build()
+	_, err := q.Exec(ctx, query, args...)
+	return err
+}
+
+// insertCompleted archives a finished task. The caller owns the transaction,
+// so a task never leaves the pending table without arriving in this one.
+func insertCompleted(ctx context.Context, q datastore.Querier, c *completedRow) error {
+	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+	ib.InsertInto(completedTable)
+	ib.Cols(
+		"id", "queue", "task", "attempts", "last_duration_micro", "succeeded",
+		"error", "expires_at", "last_executed_at", "created_at")
+	ib.Values(
+		c.ID, c.Queue, c.Payload, c.Attempts, c.LastDuration.Microseconds(), c.Succeeded,
+		c.Error, c.ExpiresAt, c.LastExecutedAt, c.CreatedAt,
+	)
+
+	query, args := ib.Build()
+	_, err := q.Exec(ctx, query, args...)
+	return err
+}
+
+// deleteExpiredCompleted removes the completed records their retention has
+// expired and reports how many went.
+func deleteExpiredCompleted(ctx context.Context, q datastore.Querier, now time.Time) (int64, error) {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(completedTable)
+	db.Where(db.IsNotNull("expires_at"), db.LE("expires_at", now))
+
+	query, args := db.Build()
+	tag, err := q.Exec(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// countPending reports how many unclaimed tasks a queue holds. The seeding of
+// a recurring job reads it, so a restart never adds a second periodic task.
+func countPending(ctx context.Context, q datastore.Querier, queue string) (int64, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("count(*)")
+	sb.From(tasksTable)
+	sb.Where(sb.Equal("queue", queue), sb.IsNull("claimed_at"))
+
+	query, args := sb.Build()
+	var count int64
+	err := q.QueryRow(ctx, query, args...).Scan(&count)
+	return count, err
+}
+
+// flushPending removes every unclaimed task and reports how many went.
+// Claimed tasks are in flight or awaiting release, so they finish their
+// lifecycle instead of vanishing under a worker.
+func flushPending(ctx context.Context, q datastore.Querier) (int64, error) {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(tasksTable)
+	db.Where(db.IsNull("claimed_at"))
+
+	query, args := db.Build()
+	tag, err := q.Exec(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// flushCompleted removes every completed record, retention notwithstanding.
+func flushCompleted(ctx context.Context, q datastore.Querier) (int64, error) {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(completedTable)
+
+	query, args := db.Build()
+	tag, err := q.Exec(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// taskStatus reports the state of one task across the two tables. The second
+// query only runs when the first found nothing, so a completed task costs two
+// lookups and everything else one.
+func taskStatus(ctx context.Context, q datastore.Querier, id uuid.UUID) (TaskStatus, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("claimed_at")
+	sb.From(tasksTable)
+	sb.Where(sb.Equal("id", id))
+
+	query, args := sb.Build()
+	var claimed *time.Time
+	err := q.QueryRow(ctx, query, args...).Scan(&claimed)
+	switch {
+	case err == nil:
+		if claimed != nil {
+			return TaskStatusRunning, nil
+		}
+		return TaskStatusPending, nil
+	case !errors.Is(err, datastore.ErrNoRows):
+		return TaskStatusNotFound, err
+	}
+
+	cb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	cb.Select("succeeded")
+	cb.From(completedTable)
+	cb.Where(cb.Equal("id", id))
+
+	query, args = cb.Build()
+	var succeeded bool
+	err = q.QueryRow(ctx, query, args...).Scan(&succeeded)
+	switch {
+	case err == nil:
+		if succeeded {
+			return TaskStatusSuccess, nil
+		}
+		return TaskStatusFailure, nil
+	case !errors.Is(err, datastore.ErrNoRows):
+		return TaskStatusNotFound, err
+	}
+	return TaskStatusNotFound, nil
+}

@@ -123,6 +123,15 @@ const (
 	DefaultLogMaxAge     = 30
 )
 
+// Defaults for the background task queue. The worker pool is sized for a
+// small deployment; ReleaseAfter must stay above the longest queue Timeout
+// any feature configures, or a slow task would be claimed twice.
+const (
+	DefaultQueueNumWorkers     = 5
+	DefaultQueueReleaseAfter   = 10 * time.Minute
+	DefaultQueueCleanupArchive = time.Hour
+)
+
 // Default returns the built-in configuration. These values are the lowest
 // precedence layer: every other source may replace them, but a key no source
 // mentions keeps the value set here.
@@ -224,6 +233,11 @@ func Default() Config {
 			Driver: RateLimitDB,
 			Limit:  60,
 			Window: time.Minute,
+		},
+		Queue: Queue{
+			NumWorkers:      DefaultQueueNumWorkers,
+			ReleaseAfter:    DefaultQueueReleaseAfter,
+			CleanupInterval: DefaultQueueCleanupArchive,
 		},
 		Server: Server{
 			Host:            "0.0.0.0",

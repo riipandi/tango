@@ -4,22 +4,23 @@ Queue is tango's built-in task queue, built on PostgreSQL. It provides type-safe
 task queues that run within the application — no external message broker required.
 
 > **Origin:** based on [Backlite](https://github.com/mikestefanello/backlite) (MIT, originally
-> SQLite-based), ported to PostgreSQL with `pgx/v5`, UUIDv7 primary keys, `TIMESTAMPTZ`
-> columns, `go-sqlbuilder` query construction, and `encoding/json/v2` payloads. Upstream is
-> no longer tracked: the engine is owned and evolved by tango.
+> SQLite-based), ported to PostgreSQL with the shared `datastore` pool, UUIDv7 primary keys,
+> `TIMESTAMPTZ` columns, `go-sqlbuilder` query construction, and `encoding/json/v2` payloads.
+> Upstream is no longer tracked: the engine is owned and evolved by tango.
 
 ## Features
 
 - **Embedded execution** — workers run as goroutines inside your process, no separate service needed
-- **Type-safe queues** — generic `Queue[T Task]` with compile-time type checking for payloads
+- **Type-safe queues** — generic `NewQueue[T Task]` with compile-time type checking for payloads
 - **Persistent** — tasks survive process restarts via PostgreSQL
-- **Automatic retries** — configurable max attempts with a fixed backoff delay
-- **Atomic claims** — tasks are claimed with a conditional `UPDATE ... RETURNING`; two dispatcher
+- **Automatic retries** — configurable max attempts with a per-queue backoff
+- **Atomic claims** — a single `UPDATE ... RETURNING` over `FOR UPDATE SKIP LOCKED`; two dispatcher
   instances never execute the same task twice
 - **Delayed execution** — schedule tasks for later or set a wait duration
 - **Graceful shutdown** — workers finish in-flight tasks before stopping
 - **Completed task retention** — configurable policies for retaining success/failure records
-- **Periodic cleanup** — automatic deletion of expired completed tasks
+- **Recurring maintenance as a job** — the completed-table cleanup is itself a queued job
+  (`internal/jobs`), self-scheduled through the queue it maintains
 - **Transaction-aware** — add tasks inside existing database transactions
 - **Status tracking** — query task status by ID (pending / running / success / failure / not found)
 
@@ -34,7 +35,6 @@ flowchart TB
     subgraph Dispatcher
         T[triggerer]
         F[fetcher]
-        CL[cleaner]
         CH[(tasks channel)]
         W1[worker 1]
         WN[worker N]
@@ -45,50 +45,60 @@ flowchart TB
         QTC[(queue_tasks_completed)]
     end
 
-    subgraph Processors
-        P1[Queue Processor]
+    subgraph Jobs
+        P1[Cleanup job]
+        P2[Feature job]
     end
 
-    C -->|Register queues| P1
+    C -->|Register queues| P2
     C -->|Add tasks| QT
     C -->|Start / Stop| T
-    C -->|Start / Stop| F
+    C -->|Seed recurring jobs| QT
 
     T -->|trigger| F
     F -->|claim & dispatch| CH
-    CL -->|delete expired| QTC
     CH --> W1
     CH --> WN
     W1 -->|process| P1
-    WN -->|process| P1
+    W1 -->|process| P2
     P1 -->|success| QTC
-    P1 -->|failed| QT
+    P2 -->|success / retry| QT
 ```
 
-**Goroutine model:** each `Start` runs one generation of goroutines; a restart waits for the
-previous generation to drain, so restarts never race a shutdown in progress.
+**Goroutine model:** each `Start` runs one generation of goroutines; the fetcher is the only
+place that touches the database for dispatching, and the workers only execute processors.
 
-| Goroutine     | Role                                                                   |
-| ------------- | ---------------------------------------------------------------------- |
-| `triggerer`   | Converts ready signals into single trigger events (debounce)           |
-| `fetcher`     | Claims tasks from DB and dispatches to workers; handles backoff timers |
-| `worker 1..N` | Executes task processor callbacks                                      |
-| `cleaner`     | Periodically deletes expired completed tasks                           |
+| Goroutine     | Role                                                                        |
+| ------------- | --------------------------------------------------------------------------- |
+| `triggerer`   | Converts ready signals into single trigger events (debounce)                 |
+| `fetcher`     | Claims tasks from the DB and dispatches to workers; schedules the next fetch |
+| `worker 1..N` | Executes task processors, recovering their panics                           |
+
+**No polling — one fallback clock.** The engine is event-driven: a save notifies it, and a
+delayed task arms the fetcher's ticker for its wait. When nothing is claimable the ticker
+falls back to one minute, which is what reclaims a task whose worker was lost (its claim
+expires after `queue.release_after`) without waiting for unrelated traffic. One cheap query
+a minute is what a quiet queue costs.
 
 ## Requirements
 
 - Go >= 1.27 (generics, stdlib `uuid` for UUIDv7 generation, `encoding/json/v2`)
 - PostgreSQL >= 18 (native `uuidv7()` default in the schema)
 
-## Installation
+## Wiring
 
-This package lives inside the `tango` module and is not published. The app wires it in
-`internal/registry`: the client is built from `deps.DB` (the shared `datastore.Store`) with
-`QUEUE_*` config, the kernel module in this package (`module.go`) starts/stops the dispatcher,
-and features register their queues via `deps.Queue.Register(...)`.
+The package lives inside the `tango` module and is not published. The composition root wires
+it in `internal/registry`: the client is built from the shared `datastore.Postgres` pool with
+the `queue` config section, and `internal/jobs.Register` lists the application's job queues
+and seeds the recurring ones.
 
-Schema is owned by the migrations (`database/migrations/00010_create_queue_tables.sql`) — run
+Schema is owned by the migrations (`database/migrations/00008_create_queue_tables.sql`) — run
 `task db:migrate`; the client never creates tables itself.
+
+The engine logs through `log/slog` — the same `*slog.Logger` the process built in
+`internal/logger`, handed over by `serve` — so queue lines reach every configured sink
+(console, file, OTLP) and carry the trace context of the run that logged them. Feature code
+never builds a logger for the queue.
 
 ## Quick Start
 
@@ -98,11 +108,9 @@ A task is any struct that implements the `Task` interface — just provide a `Co
 that returns queue settings:
 
 ```go
-package main
+package jobs
 
 import (
-    "context"
-    "fmt"
     "time"
 
     "github.com/riipandi/tango/internal/queue"
@@ -132,39 +140,30 @@ func (e EmailTask) Config() queue.QueueConfig {
 }
 ```
 
-### 2. Create the Client
+Job definitions live in `internal/jobs/*_job.go` — one job per file — and every queue the
+application runs is registered in `internal/jobs/register.go`.
+
+### 2. Register and Run
+
+The composition root does this; shown here for what it wires:
 
 ```go
-store, err := datastore.New(context.Background(), datastore.Options{DSN: "postgresql://user:pass@localhost:5432/mydb"})
-if err != nil {
-    panic(err)
-}
-defer store.Close()
-
 client, err := queue.NewClient(queue.ClientConfig{
-    Store:           store,
-    NumWorkers:      5,
-    ReleaseAfter:    5 * time.Minute,
-    CleanupInterval: 1 * time.Hour,
+    Store:        pool,          // the shared datastore.Postgres
+    Logger:       logger,        // the process *slog.Logger
+    NumWorkers:   cfg.Queue.NumWorkers,
+    ReleaseAfter: cfg.Queue.ReleaseAfter,
 })
-if err != nil {
-    panic(err)
-}
 
-// ... register queues, add tasks, start ...
+jobs.Register(ctx, client, cfg.Queue.CleanupInterval) // job queues + recurring seeds
+client.Start(ctx)
 ```
 
-### 3. Register Queues
+`serve` starts the client before the listener opens and stops it through the injector's
+shutdown walk (`Client` implements `do.ShutdownerWithContext`), so the in-flight tasks finish
+after the HTTP drain ends.
 
-```go
-client.Register(queue.NewQueue[EmailTask](func(ctx context.Context, task EmailTask) error {
-    fmt.Printf("Sending email to %s: %s\n", task.To, task.Subject)
-    // ... send email ...
-    return nil
-}))
-```
-
-### 4. Add Tasks
+### 3. Add Tasks
 
 ```go
 // Immediate
@@ -189,31 +188,38 @@ ids, err = client.Add(
 ).Save()
 ```
 
-### 5. Start the Dispatcher
+### 4. Process Tasks from Another Task
+
+The client rides the processor's context, so a task can enqueue the task that follows it:
 
 ```go
-ctx, cancel := context.WithCancel(context.Background())
-defer cancel()
-
-client.Start(ctx)
-
-// ... your application runs ...
-
-// Graceful shutdown — waits for in-flight tasks to complete
-client.Stop(context.Background())
+client.Register(queue.NewQueue[OrderTask](func(ctx context.Context, task OrderTask) error {
+    queue.FromContext(ctx).Add(EmailTask{To: task.Email}).Save()
+    return nil
+}))
 ```
 
-## Configuration Reference
+## Configuration
+
+### `queue` section
+
+| Key                    | Default | Description                                                                     |
+| ---------------------- | ------- | ------------------------------------------------------------------------------- |
+| `queue.num_workers`    | 5       | Worker goroutines that execute queued tasks concurrently                        |
+| `queue.release_after`  | 10m     | How long a claimed task may run before the queue considers its worker lost      |
+| `queue.cleanup_interval` | 1h    | How often the cleanup job purges the completed records retention has expired    |
+
+Durations are written as plain numbers of seconds in the config file. `release_after` must
+exceed the longest `Timeout` any queue configures, or a slow task would be claimed twice.
 
 ### `ClientConfig`
 
-| Field             | Type            | Required | Description                                                                                                               |
-| ----------------- | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `Store`           | `datastore.Store` | Yes    | PostgreSQL backend (Executor surface + WithTx); built once in the registry |
-| `Logger`          | `Logger`        | No       | Custom logger (defaults to no-op)                                                                                         |
-| `NumWorkers`      | `int`           | Yes      | Number of concurrent worker goroutines (must be >= 1)                                                                     |
-| `ReleaseAfter`    | `time.Duration` | Yes      | Duration after which a stuck task is released back to the queue (should exceed your longest expected task execution time) |
-| `CleanupInterval` | `time.Duration` | No       | How often to delete expired completed tasks (no cleanup if zero)                                                          |
+| Field          | Type            | Required | Description                                                  |
+| -------------- | --------------- | -------- | ------------------------------------------------------------ |
+| `Store`        | `queue.Store`   | Yes      | The shared Postgres pool (`Querier` + `WithTx`)               |
+| `Logger`       | `*slog.Logger`  | No       | The process logger; nil discards every line                  |
+| `NumWorkers`   | `int`           | Yes      | Worker goroutines (must be >= 1)                             |
+| `ReleaseAfter` | `time.Duration` | Yes      | Fail-safe release for tasks whose worker was lost (must be > 0) |
 
 ### `QueueConfig`
 
@@ -225,25 +231,21 @@ client.Stop(context.Background())
 | `Backoff`     | `time.Duration` | Yes      | Duration to wait before retrying a failed attempt               |
 | `Retention`   | `*Retention`    | No       | Policy for retaining completed tasks (discarded if nil)         |
 
-### `Retention`
+### `Retention` / `RetainData`
 
 | Field        | Type            | Description                                                     |
 | ------------ | --------------- | --------------------------------------------------------------- |
 | `Duration`   | `time.Duration` | How long to keep completed records. Zero = forever.             |
 | `OnlyFailed` | `bool`          | If true, only failed tasks are retained.                        |
 | `Data`       | `*RetainData`   | Policy for retaining task payload data. Nil = no data retained. |
-
-### `RetainData`
-
-| Field        | Type   | Description                                         |
-| ------------ | ------ | --------------------------------------------------- |
-| `OnlyFailed` | `bool` | If true, only retain payload data for failed tasks. |
+| `Data.OnlyFailed` | `bool`    | If true, only retain payload data for failed tasks.             |
 
 ## API Reference
 
 ### `NewClient(cfg ClientConfig) (*Client, error)`
 
-Creates a new queue client. Validates config and initializes the internal dispatcher.
+Creates a new client. Validates the config and builds the dispatcher; nothing touches the
+database until `Start` or the first `Save`.
 
 ### `(*Client).Register(queue Queue)`
 
@@ -259,25 +261,26 @@ Starts an operation to add one or more tasks. Returns a fluent builder:
 ids, err := client.Add(myTask).Save()
 
 // Delayed
-ids, err := client.Add(myTask).Wait(5 * time.Minute).Save()
+ids, err = client.Add(myTask).Wait(5 * time.Minute).Save()
 
 // Scheduled
-ids, err := client.Add(myTask).At(futureTime).Save()
+ids, err = client.Add(myTask).At(futureTime).Save()
 
 // With context
-ids, err := client.Add(myTask).Ctx(requestCtx).Save()
+ids, err = client.Add(myTask).Ctx(requestCtx).Save()
 
 // Inside a transaction
-tx, _ := pool.Begin(ctx)
-ids, err := client.Add(myTask).Executor(tx).Save()
-tx.Commit(ctx)
+tx, _ := pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+    _, err := client.Add(myTask).Ctx(ctx).Executor(tx).Save()
+    return err
+})
 client.Notify() // required when using Executor()
 ```
 
 ### `(*Client).Start(ctx context.Context)`
 
-Starts the dispatcher background goroutines. The provided context controls the main lifecycle —
-cancelling it triggers shutdown.
+Starts the dispatcher background goroutines. The provided context controls the main
+lifecycle — cancelling it triggers shutdown.
 
 ### `(*Client).Stop(ctx context.Context) bool`
 
@@ -288,11 +291,17 @@ finished their tasks, `false` if the context was cancelled first.
 stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
 defer stopCancel()
 if !client.Stop(stopCtx) {
-    log.Warn("some tasks did not finish gracefully")
+    slog.Warn("some tasks did not finish gracefully")
 }
 ```
 
-### `(*Client).Status(ctx context.Context, taskID string) (TaskStatus, error)`
+### `(*Client).Shutdown(ctx context.Context)`
+
+The `do.ShutdownerWithContext` form of `Stop`, called by the injector's shutdown walk. A
+worker that did not finish in time is logged, because the task comes back on release
+anyway.
+
+### `(*Client).Status(ctx context.Context, taskID uuid.UUID) (TaskStatus, error)`
 
 Returns the current status of a task by ID:
 
@@ -304,44 +313,43 @@ Returns the current status of a task by ID:
 | `TaskStatusFailure`  | Completed with failure       |
 | `TaskStatusNotFound` | No matching record found     |
 
+A completed task that its queue did not retain reads as `TaskStatusNotFound`: the record is
+gone, and the queue said that is the same as never having run.
+
 ### `(*Client).Notify()`
 
-Notifies the dispatcher that a new task was added. **Only required when adding tasks inside an
-external transaction** (via `TaskAddOp.Executor()`), because the dispatcher cannot observe transaction
-commits.
+Notifies the dispatcher that a new task was added. **Only required when adding tasks inside
+a transaction** (via `TaskAddOp.Executor()`), because the dispatcher cannot observe
+transaction commits.
+
+### `(*Client).Pending(ctx context.Context, queue string) (int64, error)`
+
+Reports how many unclaimed tasks a queue holds. A recurring job reads it before seeding
+itself, so a restart never adds a second schedule.
 
 ### `(*Client).Flush(ctx context.Context) (int64, error)`
 
-Deletes all pending (unclaimed) tasks and returns how many were removed. Claimed tasks — in
-flight or awaiting release — are untouched and will finish their lifecycle normally.
-
-```go
-removed, err := client.Flush(ctx)
-```
+Deletes all pending (unclaimed) tasks and returns how many were removed. Claimed tasks —
+in flight or awaiting release — are untouched and will finish their lifecycle normally.
 
 ### `(*Client).FlushCompleted(ctx context.Context) (int64, error)`
 
 Deletes all completed task records, bypassing retention expiry, and returns how many were
 removed.
 
-```go
-removed, err := client.FlushCompleted(ctx)
-```
+### `(*Client).DeleteExpiredCompleted(ctx context.Context) (int64, error)`
+
+Deletes the completed records whose retention has expired. This is the maintenance the
+cleanup job schedules; nothing else calls it.
 
 ### `FromContext(ctx context.Context) *Client`
 
-Retrieves the client from a processor context, allowing processors to enqueue follow-up tasks:
-
-```go
-client.Register(queue.NewQueue[OrderTask](func(ctx context.Context, task OrderTask) error {
-    queue.FromContext(ctx).Add(EmailTask{To: task.Email}).Save()
-    return nil
-}))
-```
+Retrieves the client from a processor context, allowing processors to enqueue follow-up
+tasks. See "Process Tasks from Another Task".
 
 ## Database Schema
 
-Two tables, created by migration `database/migrations/00010_create_queue_tables.sql`:
+Two tables, created by migration `database/migrations/00008_create_queue_tables.sql`:
 
 ### `queue_tasks`
 
@@ -375,55 +383,53 @@ Two tables, created by migration `database/migrations/00010_create_queue_tables.
 
 **Index:** `idx_queue_tasks_completed_expires` on `(expires_at)` WHERE `expires_at IS NOT NULL`
 
+The pending table is small by construction: completed tasks move out, and a backlog is
+bounded by what the application enqueues. The fetch queries are therefore allowed to scan
+it — no second index worth maintaining.
+
 ## Transaction Support
 
-Tasks can be added inside an existing database transaction. The task only becomes visible to the
-dispatcher after the transaction commits. **You must call `Notify()` after committing**:
+Tasks can be added inside an existing database transaction, and the callback receives the
+shared `datastore.Querier`, so the same surface every repository takes:
 
 ```go
-tx, err := pool.Begin(ctx)
-if err != nil {
-    return err
-}
+err := pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+    if _, err := tx.Exec(ctx, "INSERT INTO orders (...) VALUES (...)"); err != nil {
+        return err
+    }
 
-if _, err = tx.Exec(ctx, "INSERT INTO orders (...) VALUES (...)"); err != nil {
-    _ = tx.Rollback(ctx)
+    _, err := client.Add(EmailTask{
+        To:      "customer@example.com",
+        Subject: "Order confirmed",
+    }).Ctx(ctx).Executor(tx).Save()
     return err
-}
+})
 
-ids, err := client.Add(EmailTask{
-    To:      "customer@example.com",
-    Subject: "Order confirmed",
-}).Executor(tx).Save()
-if err != nil {
-    _ = tx.Rollback(ctx)
-    return err
-}
-
-if err := tx.Commit(ctx); err != nil {
-    return err
-}
+// The tasks only became visible when the transaction committed.
 client.Notify()
 ```
+
+The task is enqueued with the change that caused it or not at all, which is what makes the
+transaction worth the ceremony. Roll the transaction back and the tasks were never there.
 
 ## Graceful Shutdown
 
 ```go
-ctx, cancel := context.WithCancel(context.Background())
 client.Start(ctx)
 
 // ... application lifetime ...
 
-cancel() // signal shutdown
-
 stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
 defer stopCancel()
 if client.Stop(stopCtx) {
-    log.Println("All workers finished gracefully")
+    slog.Info("all workers finished gracefully")
 } else {
-    log.Warn("Shutdown timed out — some tasks may be re-queued")
+    slog.Warn("shutdown timed out — some tasks may be re-queued")
 }
 ```
+
+Hard-stop by cancelling the context passed to `Start`: in-flight tasks stop being waited
+for, and their claims expire through `release_after`.
 
 ## Error Handling
 
@@ -432,12 +438,17 @@ if client.Stop(stopCtx) {
 - **Backoff**: failed tasks are re-queued with `wait_until` set to `now + Backoff`
 - **Stuck tasks**: `ReleaseAfter` reclaims tasks whose `claimed_at` expired; the claim wins
   atomically, so a task is never executed twice across dispatcher instances
-- **Unregistered queue**: the task is discarded with an error log instead of crashing the worker
+- **Unregistered queue**: the task is re-queued on its own clock and logged; no attempt is
+  spent on it, and a deploy that registers the queue picks it up as-is
+- **Fetch failure**: the fetcher retries after a second rather than hammering the database
+- **Failed save**: tasks added without an executor roll back together, and a rolled-back
+  caller transaction leaves no task behind
 
 ## Testing
 
 Tests run against a real Postgres (testcontainers, Postgres 18) using the shared
-`pkg/testutils.StartPostgres` helper; helpers in `helpers_test.go` manage per-test cleanup.
+`pkg/testutils.StartPostgres` helper; each test migrates its own database
+(`NewDatabase`), so no state leaks between tests.
 
 ```bash
 go test ./internal/queue/
@@ -448,16 +459,19 @@ go test -race ./internal/queue/
 
 | Decision                              | Rationale                                                                                         |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| UUIDv7 primary keys                   | Time-sortable, globally unique, generated in the app so callers can reference the task pre-commit |
-| Atomic claim (`UPDATE ... RETURNING`) | Contended tasks are never executed twice across dispatcher instances                              |
+| UUIDv7 primary keys, generated in Go  | Time-sortable and referenceable before any commit; the DB default exists for rows inserted elsewhere |
+| Atomic claim (`UPDATE ... RETURNING`) | Contended tasks are never executed twice across dispatcher instances                               |
+| `FOR UPDATE SKIP LOCKED`              | A competing dispatcher skips locked rows instead of blocking or failing                            |
 | TIMESTAMPTZ everywhere                | Consistent timezone handling, no ambiguity                                                        |
-| go-sqlbuilder                         | Type-safe query construction, PostgreSQL flavor, no raw SQL strings                               |
-| Channel-based task distribution       | Low-latency dispatch, no polling overhead                                                         |
-| Non-blocking ready signal             | Prevents deadlock when triggerer exits before all producers                                       |
-| Schema owned by migrations            | One source of schema truth; the client never mutates the schema                                   |
-| No external dependencies for queuing  | Eliminates Redis/RabbitMQ as operational requirements                                             |
+| go-sqlbuilder                         | Type-safe query construction, PostgreSQL flavor, matching the seeders' idiom                       |
+| Channel-based task distribution       | Low-latency dispatch, no polling overhead beyond the one-minute fallback                            |
+| Non-blocking ready signal             | Prevents deadlock when the triggerer exits before all producers                                    |
+| Schema owned by migrations            | One source of schema truth; the client never mutates the schema                                    |
+| Cleanup as a job, not a goroutine     | Recurring maintenance belongs in `internal/jobs`, next to the other jobs                            |
+| No external dependencies for queuing  | Eliminates Redis/RabbitMQ as operational requirements                                              |
+| No web UI                             | Upstream's monitoring UI was not ported; the API surface is the contract                            |
 
 ## Credits
 
-Based on [Backlite](https://github.com/mikestefanello/backlite) by Mike Stefanello, adapted for
-PostgreSQL with `pgx/v5`.
+Based on [Backlite](https://github.com/mikestefanello/backlite) by Mike Stefanello, adapted
+for PostgreSQL and the tango architecture.

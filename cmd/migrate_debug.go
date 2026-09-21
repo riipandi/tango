@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/urfave/cli/v3"
 
 	"github.com/riipandi/tango/database"
@@ -170,7 +169,7 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 
 	started := time.Now()
 	var results []seeders.Result
-	err = pool.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+	err = pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
 		var seedErr error
 		results, seedErr = seeders.Run(ctx, tx, false, seeders.All()...)
 		return seedErr

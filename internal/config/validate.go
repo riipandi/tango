@@ -245,6 +245,10 @@ func (c Config) Validate() error {
 	check(c.RateLimit.Limit > 0, "rate_limit.limit: must be positive")
 	check(c.RateLimit.Window > 0, "rate_limit.window: must be positive")
 
+	check(c.Queue.NumWorkers >= 1, "queue.num_workers: %d must be at least 1", c.Queue.NumWorkers)
+	check(c.Queue.ReleaseAfter > 0, "queue.release_after: must be positive")
+	check(c.Queue.CleanupInterval > 0, "queue.cleanup_interval: must be positive")
+
 	check(c.Server.Host != "", "server.host: must not be empty")
 	check(c.Server.Port > 0 && c.Server.Port <= 65535, "server.port: %d must be between 1 and 65535", c.Server.Port)
 	check(c.Server.BaseURL == "" || isHTTPURL(c.Server.BaseURL),

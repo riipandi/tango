@@ -7,7 +7,6 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -74,7 +73,7 @@ func TestPostgresQueryAndTransaction(t *testing.T) {
 	table := scratchTable(t, pg, "id int PRIMARY KEY, name text NOT NULL")
 
 	// Committed work is visible outside the transaction.
-	err := pg.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+	err := pg.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
 		_, execErr := tx.Exec(ctx, "INSERT INTO "+table+" (id, name) VALUES ($1, $2)", 1, "kept")
 		return execErr
 	})
@@ -86,7 +85,7 @@ func TestPostgresQueryAndTransaction(t *testing.T) {
 
 	// A failing callback rolls the whole transaction back.
 	sentinel := errors.New("boom")
-	err = pg.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+	err = pg.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
 		_, execErr := tx.Exec(ctx, "INSERT INTO "+table+" (id, name) VALUES ($1, $2)", 2, "dropped")
 		if execErr != nil {
 			return execErr
@@ -101,7 +100,7 @@ func TestPostgresQueryAndTransaction(t *testing.T) {
 
 	// A panicking callback must not leak the transaction.
 	assert.Panics(t, func() {
-		_ = pg.WithTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_ = pg.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
 			_, _ = tx.Exec(ctx, "INSERT INTO "+table+" (id, name) VALUES ($1, $2)", 3, "panic")
 			panic("boom")
 		})

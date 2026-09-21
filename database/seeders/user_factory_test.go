@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -51,7 +50,7 @@ func runSeeders(t *testing.T, pool *datastore.Postgres, dryRun bool) []seeders.R
 	}
 
 	var results []seeders.Result
-	err := pool.WithTx(t.Context(), func(ctx context.Context, tx pgx.Tx) error {
+	err := pool.WithTx(t.Context(), func(ctx context.Context, tx datastore.Querier) error {
 		var seedErr error
 		results, seedErr = seeders.Run(ctx, tx, false, seeders.All()...)
 		return seedErr
@@ -249,7 +248,7 @@ func TestRunRollsBackWhenASeederFails(t *testing.T) {
 	pool := newSeededPool(t)
 	failure := assert.AnError
 
-	err := pool.WithTx(t.Context(), func(ctx context.Context, tx pgx.Tx) error {
+	err := pool.WithTx(t.Context(), func(ctx context.Context, tx datastore.Querier) error {
 		_, seedErr := seeders.Run(ctx, tx, false,
 			seeders.User(),
 			seeders.Seeder{
