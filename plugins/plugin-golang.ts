@@ -160,10 +160,19 @@ interface GoBuildResult {
   duration: number
 }
 
+// CGO_ENABLED=0 because the release link flags pass -extldflags -static,
+// which no platform links when cgo is on. It is also what .config/goreleaser.yaml
+// sets, so both build paths produce the same binary. A dependency that has a
+// cgo path and a pure-Go path picks the pure-Go one, which is what makes the
+// static link work rather than a reason to drop the flag.
 function runGoBuild(cmd: string, args: string[], cwd: string): Promise<GoBuildResult> {
   return new Promise((resolve) => {
     const startTime = Date.now()
-    const buildProcess = spawn(cmd, args, { stdio: 'pipe', cwd })
+    const buildProcess = spawn(cmd, args, {
+      stdio: 'pipe',
+      cwd,
+      env: { ...process.env, CGO_ENABLED: '0' }
+    })
     let output = ''
 
     buildProcess.stdout?.on('data', (data: Buffer) => {
