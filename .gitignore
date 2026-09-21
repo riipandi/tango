@@ -80,7 +80,7 @@ storybook-static/
 /web/output/
 /web/email/
 /web/storybook/
-app.config.json
+app.config.json*
 
 # Miscellaneous
 pnpm-exec-summary.json
