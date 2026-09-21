@@ -119,6 +119,55 @@ a migration last ran, not when its file changed. Times are UTC.
 Concurrent runs are safe: the migrator holds a Postgres session advisory lock, so a second process
 waits instead of applying the same migration twice.
 
+### Export and import
+
+`db:export` writes a plain SQL dump of the application schemas — the DDL first, then the rows as one
+`COPY` block per table. The file is text, so it can be read, diffed, and reviewed. `db:import` loads
+it back.
+
+```bash
+# Write to storage/backup/tango-<YYYYMMDD_hhmm>.sql.
+task db:export
+
+# Write somewhere else, or take only one half of the dump.
+task db:export -- --output=/tmp/dump.sql
+task db:export -- --schema-only
+task db:export -- --data-only
+
+# Load a dump. The file is a required argument.
+task db:import -- storage/backup/tango-20260921_0018.sql
+
+# Replace the contents of the tables in the dump instead of colliding with them.
+task db:import -- --truncate --force storage/backup/tango-20260921_0018.sql
+```
+
+The default output is `storage/backup/tango-<YYYYMMDD_hhmm>.sql`, in UTC. The name is readable to the
+minute, so a second export inside the same minute lands on the same path; rather than lose the first
+dump, the run stops and says so unless `--overwrite` is passed.
+
+Rows travel through the PostgreSQL `COPY` protocol, so the server does the escaping and a value
+holding a tab, a quote, a newline, or the `\.` terminator survives the round trip. Each table is
+ordered by its primary key, so two dumps of the same state produce the same file apart from the
+header timestamp.
+
+A schema dump is idempotent: applying it twice is safe. `CREATE TABLE`, `CREATE INDEX`,
+`CREATE SEQUENCE`, `CREATE SCHEMA`, and `CREATE EXTENSION` carry `IF NOT EXISTS`, and triggers use
+`CREATE OR REPLACE TRIGGER`. Postgres has no such form for `CREATE TYPE` or
+`ALTER TABLE ... ADD CONSTRAINT`, so those two are wrapped in a `DO` block that checks the catalog
+first. That makes the dump safe to replay over an existing schema.
+
+`db:import` loads the `COPY` blocks and ignores the DDL, because the target database gets its schema
+from `migrate:up`. That keeps the migrations the single source of truth: a dump cannot quietly
+disagree with them. Run `migrate:up` first. The whole load is one transaction, and the blocks are
+ordered by foreign key rather than by the order they appear in the file, so a table is never loaded
+before the table it references. A failure half way leaves the database untouched.
+
+`--truncate` empties the tables in the dump before loading them, which is what a restore into a
+populated database needs. It is destructive, so it asks for confirmation unless `--force` is passed.
+
+`public.app_migration` is never dumped: it is the migrator's bookkeeping, derived from the migration
+files by `migrate:up`, so carrying it would claim a schema state the target does not have.
+
 ### Health check
 
 `health` probes the application dependencies and reports one aggregated status. The same result is

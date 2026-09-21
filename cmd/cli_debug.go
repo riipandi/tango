@@ -8,7 +8,7 @@ import (
 )
 
 var rootCmd = &cli.Command{
-	Name:            config.AppName,
+	Name:            config.AppIdentifier,
 	Description:     config.Description,
 	Version:         config.AppVersion,
 	HideVersion:     true,

@@ -160,7 +160,8 @@ func TestHealthTextOutput(t *testing.T) {
 	out, err := runHealthCmd(t, "--env-file="+envFile)
 	require.NoError(t, err)
 
-	assert.Contains(t, out, "name: tango")
+	// The report carries the display name, which is not the CLI identifier.
+	assert.Contains(t, out, "name: "+config.AppName)
 	assert.Contains(t, out, "version: "+config.AppVersion)
 	assert.Contains(t, out, "status: healthy")
 	assert.Contains(t, out, "checks: 2 up, 0 down")

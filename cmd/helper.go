@@ -3,12 +3,83 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 	"time"
 
+	"github.com/briandowns/spinner"
 	"github.com/dustin/go-humanize"
-
 	"github.com/riipandi/tango/database"
+	"golang.org/x/term"
 )
+
+// spinnerDelay is how fast the indicator animates. The braille set has ten
+// frames, so a whole turn takes about a second: fast enough to read as activity,
+// slow enough not to flicker.
+const spinnerDelay = 100 * time.Millisecond
+
+// spinnerChars is the braille set. It is one column wide and never changes
+// width, so the suffix beside it cannot shift.
+var spinnerChars = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// tableSpinner shows that a dump or a restore is running, and which table it is
+// on. A spinner is used rather than a progress bar because the number of rows is
+// not known before a table has been read: a bar would have to be sized from a
+// second query, and it would still stall for the whole of a large table. What a
+// reader needs here is proof the command is alive and the name of the work in
+// flight.
+//
+// The spinner is only drawn on a terminal. Redirected to a file or a pipe it
+// would write carriage returns into the log, which is worse than nothing.
+type tableSpinner struct {
+	spinner *spinner.Spinner
+}
+
+// withSpinner returns the spinner a command should use, or one that draws
+// nothing when the output is not a terminal.
+func withSpinner(w io.Writer) *tableSpinner {
+	if !isTerminalWriter(w) {
+		return &tableSpinner{}
+	}
+	s := spinner.New(spinnerChars, spinnerDelay,
+		spinner.WithWriter(w),
+		spinner.WithHiddenCursor(true),
+	)
+	return &tableSpinner{spinner: s}
+}
+
+// step names the table now in flight. It starts the spinner on the first call,
+// because the table is the only progress worth reporting and it is not known
+// until the work starts.
+func (t *tableSpinner) step(progress database.TableProgress) {
+	if t == nil || t.spinner == nil {
+		return
+	}
+	t.spinner.Suffix = " " + progress.Table.String()
+	if !t.spinner.Active() {
+		t.spinner.Start()
+	}
+}
+
+// finish stops the spinner. Stopping erases the line and leaves the cursor at
+// column zero, so the report that follows overwrites it instead of leaving a
+// blank line behind. When the spinner never ran nothing was drawn and the blank
+// line above the report is already the only separation.
+func (t *tableSpinner) finish() {
+	if t == nil || t.spinner == nil {
+		return
+	}
+	t.spinner.Stop()
+}
+
+// isTerminalWriter reports whether w is a terminal, so progress output is only
+// drawn where it can be redrawn in place.
+func isTerminalWriter(w io.Writer) bool {
+	file, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	return term.IsTerminal(int(file.Fd()))
+}
 
 // progressIndent marks a line that reports one step inside a run, so a reader
 // can tell progress from the summary that closes it.
@@ -31,9 +102,9 @@ func humanDuration(d time.Duration) string {
 	return humanize.SIWithDigits(d.Seconds(), 3, "s")
 }
 
-// reportTarget announces the database a command works on. It is printed before
-// any work starts, so a run against the wrong server is visible immediately
-// instead of after the fact. The credentials are never printed.
+// reportTarget announces the database a command works on, followed by a blank
+// line. It is used where progress lines follow, so the target stays separate
+// from the run beneath it.
 func reportTarget(w io.Writer, dsn string) error {
 	target := postgresTarget(dsn)
 	if target == "" {

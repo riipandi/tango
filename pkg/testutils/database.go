@@ -3,8 +3,10 @@ package testutils
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,6 +18,9 @@ import (
 // returns its DSN. Tests that mutate schema state must use this instead of the
 // container DSN: StartPostgres hands out one database for the whole test binary,
 // so migrations applied by one test would leak into the next.
+//
+// A test may call this more than once, and each call gets its own database: a
+// test that compares a source against a target needs two.
 //
 // The database is dropped when the test finishes.
 func (p *Postgres) NewDatabase(t testing.TB) string {
@@ -45,8 +50,21 @@ func (p *Postgres) NewDatabase(t testing.TB) string {
 	return replaceDatabase(p.DSN, name)
 }
 
+// databaseCounters tracks how many databases a test has asked for, so the second
+// call does not collide with the first. A bare test name is used for the first
+// database, which keeps the name readable while debugging.
+var (
+	databaseCountersMu sync.Mutex
+	databaseCounters   = map[string]int{}
+)
+
 // testDatabaseName derives a valid, unique database name from the test name.
 func testDatabaseName(t testing.TB) string {
+	databaseCountersMu.Lock()
+	databaseCounters[t.Name()]++
+	ordinal := databaseCounters[t.Name()]
+	databaseCountersMu.Unlock()
+
 	sanitized := strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_':
@@ -58,9 +76,15 @@ func testDatabaseName(t testing.TB) string {
 		}
 	}, t.Name())
 
-	// Postgres identifiers are limited to 63 bytes.
-	if len(sanitized) > 50 {
-		sanitized = sanitized[:50]
+	if ordinal > 1 {
+		sanitized = fmt.Sprintf("%s_%d", sanitized, ordinal)
+	}
+
+	// Postgres identifiers are limited to 63 bytes. The prefix and the ordinal
+	// both have to fit, so the test name is trimmed last.
+	const maxName = 63 - len("tango_test_")
+	if len(sanitized) > maxName {
+		sanitized = sanitized[:maxName]
 	}
 	return "tango_test_" + sanitized
 }
