@@ -20,6 +20,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/otlp"
 )
 
 // Observer is the process's telemetry: the providers that are switched on, held
@@ -80,23 +81,6 @@ func newResource(cfg config.Config) *resource.Resource {
 	return resource.NewSchemaless(attributes...)
 }
 
-// signalPath returns the route a signal takes on the collector, or empty when
-// the endpoint already names one.
-//
-// The configured path is the explicit answer and wins. Without it, an endpoint
-// that carries a path keeps it — a collector mounted under a prefix, or a
-// backend whose route is not the protocol's — and a bare host gets the
-// protocol's own route.
-func signalPath(configured, endpointPath, fallback string) string {
-	if configured != "" {
-		return configured
-	}
-	if endpointPath != "" {
-		return ""
-	}
-	return fallback
-}
-
 // compression maps the configured name to the exporter's own value.
 func compression(cfg config.Config) otlptracehttp.Compression {
 	if cfg.OTEL.Compression == config.OTELCompressionNone {
@@ -142,13 +126,13 @@ func newTraceExporter(ctx context.Context, cfg config.Config) (sdktrace.SpanExpo
 		options := []otlptracegrpc.Option{
 			otlptracegrpc.WithEndpoint(cfg.CollectorEndpoint()),
 			otlptracegrpc.WithHeaders(cfg.OTEL.Headers),
-			otlptracegrpc.WithCompressor(grpcCompressor(cfg)),
+			otlptracegrpc.WithCompressor(otlp.Compressor(cfg.OTEL.Compression)),
 			otlptracegrpc.WithTimeout(cfg.OTEL.Tracing.ExportTimeout),
 			// Explicit credentials rather than WithInsecure: the two reach the
 			// same place, but credentials take priority over anything the
 			// environment contributed, so an OTEL_EXPORTER_OTLP_CERTIFICATE in
 			// the shell cannot turn a plaintext connection into a TLS one.
-			otlptracegrpc.WithTLSCredentials(grpcTransport(cfg.CollectorSecure())),
+			otlptracegrpc.WithTLSCredentials(otlp.GRPCTransport(cfg.CollectorSecure())),
 		}
 		exporter, err := otlptracegrpc.New(ctx, options...)
 		if err != nil {
@@ -176,14 +160,14 @@ func newTraceExporter(ctx context.Context, cfg config.Config) (sdktrace.SpanExpo
 	// A route is applied only when one is named or the endpoint carries none.
 	// An address that already names a route says where the traces go, and
 	// overriding it with the default would send them elsewhere.
-	if path := signalPath(cfg.OTEL.Tracing.Path, endpoint.Path, otlpTracesPath); path != "" {
+	if path := otlp.SignalPath(cfg.OTEL.Tracing.Path, endpoint.Path, otlpTracesPath); path != "" {
 		options = append(options, otlptracehttp.WithURLPath(path))
 	}
 	// A nil TLS configuration is not the same as leaving the option out: it is
 	// what stops the exporter from loading OTEL_EXPORTER_OTLP_CERTIFICATE and
 	// friends. An https endpoint gets the floor of TLS 1.2 and the system's root
 	// certificates, because the configuration names no certificate of its own.
-	options = append(options, otlptracehttp.WithTLSClientConfig(tlsConfig(cfg.CollectorSecure())))
+	options = append(options, otlptracehttp.WithTLSClientConfig(otlp.TLSConfig(cfg.CollectorSecure())))
 
 	exporter, err := otlptracehttp.New(ctx, options...)
 	if err != nil {
@@ -240,9 +224,9 @@ func newMetricExporter(ctx context.Context, cfg config.Config) (metric.Exporter,
 		options := []otlpmetricgrpc.Option{
 			otlpmetricgrpc.WithEndpoint(cfg.CollectorEndpoint()),
 			otlpmetricgrpc.WithHeaders(cfg.OTEL.Headers),
-			otlpmetricgrpc.WithCompressor(grpcCompressor(cfg)),
+			otlpmetricgrpc.WithCompressor(otlp.Compressor(cfg.OTEL.Compression)),
 			otlpmetricgrpc.WithTimeout(cfg.OTEL.Metrics.ExportTimeout),
-			otlpmetricgrpc.WithTLSCredentials(grpcTransport(cfg.CollectorSecure())),
+			otlpmetricgrpc.WithTLSCredentials(otlp.GRPCTransport(cfg.CollectorSecure())),
 		}
 		exporter, err := otlpmetricgrpc.New(ctx, options...)
 		if err != nil {
@@ -261,9 +245,9 @@ func newMetricExporter(ctx context.Context, cfg config.Config) (metric.Exporter,
 		otlpmetrichttp.WithHeaders(cfg.OTEL.Headers),
 		otlpmetrichttp.WithCompression(metricCompression(cfg)),
 		otlpmetrichttp.WithTimeout(cfg.OTEL.Metrics.ExportTimeout),
-		otlpmetrichttp.WithTLSClientConfig(tlsConfig(cfg.CollectorSecure())),
+		otlpmetrichttp.WithTLSClientConfig(otlp.TLSConfig(cfg.CollectorSecure())),
 	}
-	if path := signalPath(cfg.OTEL.Metrics.Path, endpoint.Path, otlpMetricsPath); path != "" {
+	if path := otlp.SignalPath(cfg.OTEL.Metrics.Path, endpoint.Path, otlpMetricsPath); path != "" {
 		options = append(options, otlpmetrichttp.WithURLPath(path))
 	}
 
