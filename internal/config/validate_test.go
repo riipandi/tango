@@ -648,6 +648,28 @@ func TestValidationRefusesJSONForTheSignalsTheSDKCannotEncode(t *testing.T) {
 	assert.Contains(t, err.Error(), "metrics")
 }
 
+func TestValidationRefusesAPathTheGRPCProtocolCannotFollow(t *testing.T) {
+	// A gRPC exporter is addressed by host and port alone, so a per-signal path
+	// would be a value nothing reads. The combination is refused by name rather
+	// than silently ignored, and only for the signals that are switched on.
+	err := resolveFile(t,
+		`"log": {"transport": ["otlp"]}, "otel": {"endpoint": "localhost:4317", "protocol": "grpc", `+
+			`"tracing": {"enable": true, "path": "/v1/traces"}}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "otel.tracing.path")
+	assert.Contains(t, err.Error(), "host and port")
+
+	// The same path is fine over HTTP, which is the protocol that follows it.
+	assert.NoError(t, resolveFile(t,
+		`"log": {"transport": ["otlp"]}, "otel": {"tracing": {"enable": true, "path": "/v1/traces"}}`))
+
+	// A path on a signal that is off is not flagged: it is a value nothing
+	// reads either way, and the grpc check only names paths a signal would use.
+	assert.NoError(t, resolveFile(t,
+		`"log": {"transport": ["otlp"]}, "otel": {"endpoint": "localhost:4317", "protocol": "grpc", `+
+			`"metrics": {"path": "/v1/metrics"}}`))
+}
+
 func TestValidationAcceptsHeadersInBothForms(t *testing.T) {
 	// A JSON object is what a config file writes, and the specification's own
 	// comma-separated string is what a directive resolves to. Both must reach

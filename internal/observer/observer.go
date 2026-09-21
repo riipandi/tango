@@ -29,7 +29,9 @@ package observer
 import (
 	"context"
 	"errors"
+	"log/slog"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
@@ -58,6 +60,16 @@ func New(ctx context.Context, cfg config.Config) (*Observer, error) {
 	if !cfg.OTEL.Tracing.Enable && !cfg.OTEL.Metrics.Enable {
 		return o, nil
 	}
+
+	// Exporter errors go through the same slog pipeline as everything else the
+	// process writes. The SDK's own handler prints to stderr through log.Print,
+	// which would leave a dead collector invisible to every configured
+	// transport — in a program whose whole thesis is one pipeline. Where no
+	// logger was installed, slog's default writes to stderr, which is still
+	// where a person looks first.
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		slog.Error("otel exporter", "error", err)
+	}))
 
 	res := newResource(cfg)
 

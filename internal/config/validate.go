@@ -181,6 +181,28 @@ func (c Config) Validate() error {
 			"otel.metrics.path: %q must be a path such as /v1/metrics", c.OTEL.Metrics.Path)
 	}
 
+	// A gRPC exporter is addressed by host and port alone, so a per-signal path
+	// is a setting the exporter never reads. The combination is refused by name
+	// rather than silently ignored: a path that says where a signal goes while
+	// nothing follows it is the trap a configuration check exists for.
+	if c.OTEL.Protocol == OTELProtocolGRPC {
+		paths := []struct{ key, value string }{}
+		if c.logTransport(LogTransportOTLP) {
+			paths = append(paths, struct{ key, value string }{"log.otlp.path", c.Log.OTLP.Path})
+		}
+		if c.OTEL.Tracing.Enable {
+			paths = append(paths, struct{ key, value string }{"otel.tracing.path", c.OTEL.Tracing.Path})
+		}
+		if c.OTEL.Metrics.Enable {
+			paths = append(paths, struct{ key, value string }{"otel.metrics.path", c.OTEL.Metrics.Path})
+		}
+		for _, p := range paths {
+			check(p.value == "",
+				"%s: %q has no effect with protocol %q; a gRPC exporter is addressed by host and port",
+				p.key, p.value, OTELProtocolGRPC)
+		}
+	}
+
 	// The key-value backend is opt-in. Its Enable flag and the per-feature driver
 	// fields are two different decisions, so they can disagree, and a driver
 	// pointing at a backend that is switched off is the one combination that

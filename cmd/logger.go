@@ -130,8 +130,9 @@ func closeObserver(ctx context.Context) error {
 }
 
 // observerShutdownTimeout bounds the final drain. The metric reader's own
-// timeout is a fraction of it, so the provider stops before the deadline the
-// caller is waiting on rather than after it.
+// timeout defaults to the same ten seconds, and PeriodicReader.Shutdown gives
+// the caller's context priority over its own, so this deadline is the one that
+// actually stops a drain that will not finish.
 const observerShutdownTimeout = 10 * time.Second
 
 // reportTelemetryLoss records a shutdown that could not drain a queue. It writes
