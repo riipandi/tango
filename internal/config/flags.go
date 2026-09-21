@@ -15,7 +15,6 @@ import (
 const (
 	FlagConfigFile = "config-file"
 	FlagEnvFile    = "env-file"
-	FlagDataDir    = "data-dir"
 )
 
 // flagBindings maps a command-line flag name to the config key it sets. Only a
@@ -25,11 +24,14 @@ const (
 //
 // The map is the single place a flag and a config key are tied together, so a
 // renamed key is a one-line change and the loader never guesses.
+//
+// app.data_dir is deliberately absent: the data directory is set through the
+// configuration (the config file or APP_DATA_DIR) and has no flag, so a run
+// cannot disagree with the configuration about where files live.
 var flagBindings = map[string]string{
-	FlagDataDir: "app.data_dir",
-	"host":      "server.host",
-	"port":      "server.port",
-	"base-url":  "server.base_url",
+	"host":     "server.host",
+	"port":     "server.port",
+	"base-url": "server.base_url",
 }
 
 // FromCommand builds the options Load merges from a parsed command, so a caller
@@ -68,7 +70,7 @@ func Resolve(cmd *cli.Command) (Config, error) {
 // chain, and maps them to config keys.
 //
 // Every level is read because a flag belongs to the command that declares it: the
-// root command owns --data-dir, and a subcommand owns its own flags such as
+// root command owns --config-file, and a subcommand owns its own flags such as
 // --host. A flag left at its default is not a decision the user made, so it is
 // absent from the layer and cannot override a config file with a value nobody
 // typed.

@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,12 +16,19 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/config"
 )
 
 // runDBExportCmd runs db:export with the given stdin and arguments.
 func runDBExportCmd(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	return runDBCmd(t, dbExportCmd, "", args...)
+}
+
+// runDBExportCmdIn runs db:export against an explicit data directory.
+func runDBExportCmdIn(t *testing.T, dataDir string, args ...string) (string, error) {
+	t.Helper()
+	return runDBCmdIn(t, dataDir, dbExportCmd, "", args...)
 }
 
 // runDBImportCmd runs db:import with the given stdin and arguments.
@@ -35,21 +41,25 @@ func runDBImportCmd(t *testing.T, stdin string, args ...string) (string, error) 
 // test never writes into the checkout.
 func runDBCmd(t *testing.T, command *cli.Command, stdin string, args ...string) (string, error) {
 	t.Helper()
+	return runDBCmdIn(t, t.TempDir(), command, stdin, args...)
+}
+
+// runDBCmdIn runs one database command with an explicit data directory, set
+// through the environment so it reaches the config layer. There is no --data-dir
+// flag: the directory comes from the configuration.
+func runDBCmdIn(
+	t *testing.T,
+	dataDir string,
+	command *cli.Command,
+	stdin string,
+	args ...string,
+) (string, error) {
+	t.Helper()
+
+	t.Setenv(config.EnvName("app.data_dir"), dataDir)
 
 	var out bytes.Buffer
-	root := &cli.Command{
-		Name:     "tango",
-		Writer:   &out,
-		Reader:   strings.NewReader(stdin),
-		Commands: []*cli.Command{dbExportCmd, dbImportCmd},
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "env-file"},
-			&cli.StringFlag{Name: "data-dir", Value: t.TempDir()},
-		},
-		// cli.Exit calls os.Exit, so the error is trapped instead.
-		ExitErrHandler: func(context.Context, *cli.Command, error) {},
-	}
-
+	root := testRoot(&out, stdin, dbExportCmd, dbImportCmd)
 	err := root.Run(t.Context(), append([]string{"tango", command.Name}, args...))
 	return out.String(), err
 }
@@ -68,7 +78,7 @@ func TestDBExportWritesToTheDataDirectory(t *testing.T) {
 	envFile := migratedDatabase(t)
 	dataDir := filepath.Join(t.TempDir(), "storage")
 
-	out, err := runDBExportCmd(t, "--env-file="+envFile, "--data-dir="+dataDir)
+	out, err := runDBExportCmdIn(t, dataDir, "--env-file="+envFile)
 	require.NoError(t, err)
 
 	// The report names the database it read and the file it wrote, as one
@@ -91,14 +101,14 @@ func TestDBExportRefusesToOverwriteAGeneratedDump(t *testing.T) {
 	envFile := migratedDatabase(t)
 	dataDir := filepath.Join(t.TempDir(), "storage")
 
-	_, err := runDBExportCmd(t, "--env-file="+envFile, "--data-dir="+dataDir)
+	_, err := runDBExportCmdIn(t, dataDir, "--env-file="+envFile)
 	require.NoError(t, err)
 
-	_, err = runDBExportCmd(t, "--env-file="+envFile, "--data-dir="+dataDir)
+	_, err = runDBExportCmdIn(t, dataDir, "--env-file="+envFile)
 	require.ErrorIs(t, err, ErrDumpFileExists)
 
 	// --overwrite is the way to ask for the replacement.
-	_, err = runDBExportCmd(t, "--env-file="+envFile, "--data-dir="+dataDir, "--overwrite")
+	_, err = runDBExportCmdIn(t, dataDir, "--env-file="+envFile, "--overwrite")
 	require.NoError(t, err)
 }
 
@@ -236,8 +246,8 @@ func TestDBExportCreatesTheBackupDirectory(t *testing.T) {
 		t.Run(strings.Join(extra, "+"), func(t *testing.T) {
 			dataDir := filepath.Join(t.TempDir(), "storage")
 
-			args := append([]string{"--env-file=" + envFile, "--data-only", "--data-dir=" + dataDir}, extra...)
-			_, err := runDBExportCmd(t, args...)
+			args := append([]string{"--env-file=" + envFile, "--data-only"}, extra...)
+			_, err := runDBExportCmdIn(t, dataDir, args...)
 			require.NoError(t, err)
 
 			entries, err := os.ReadDir(filepath.Join(dataDir, backupDir))
@@ -256,7 +266,7 @@ func TestDBExportReportsAnUnusableBackupDirectory(t *testing.T) {
 	dataDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, backupDir), []byte("not a directory"), 0o644))
 
-	_, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only", "--data-dir="+dataDir)
+	_, err := runDBExportCmdIn(t, dataDir, "--env-file="+envFile, "--data-only")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "backup directory")
 }
@@ -372,8 +382,8 @@ func TestDBExportGeneratedNameCarriesTheSuffixOnce(t *testing.T) {
 	envFile := migratedDatabase(t)
 	dataDir := filepath.Join(t.TempDir(), "storage")
 
-	out, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only",
-		"--compression=gzip", "--data-dir="+dataDir)
+	out, err := runDBExportCmdIn(t, dataDir, "--env-file="+envFile, "--data-only",
+		"--compression=gzip")
 	require.NoError(t, err)
 
 	entries, err := os.ReadDir(filepath.Join(dataDir, backupDir))
@@ -389,16 +399,16 @@ func TestDBExportRefusesToOverwriteACompressedGeneratedDump(t *testing.T) {
 	envFile := migratedDatabase(t)
 	dataDir := filepath.Join(t.TempDir(), "storage")
 
-	_, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only",
-		"--compression=gzip", "--data-dir="+dataDir)
+	_, err := runDBExportCmdIn(t, dataDir, "--env-file="+envFile, "--data-only",
+		"--compression=gzip")
 	require.NoError(t, err)
 
-	_, err = runDBExportCmd(t, "--env-file="+envFile, "--data-only",
-		"--compression=gzip", "--data-dir="+dataDir)
+	_, err = runDBExportCmdIn(t, dataDir, "--env-file="+envFile, "--data-only",
+		"--compression=gzip")
 	require.ErrorIs(t, err, ErrDumpFileExists)
 
-	_, err = runDBExportCmd(t, "--env-file="+envFile, "--data-only",
-		"--compression=gzip", "--data-dir="+dataDir, "--overwrite")
+	_, err = runDBExportCmdIn(t, dataDir, "--env-file="+envFile, "--data-only",
+		"--compression=gzip", "--overwrite")
 	require.NoError(t, err)
 
 	entries, err := os.ReadDir(filepath.Join(dataDir, backupDir))
@@ -413,8 +423,8 @@ func TestDBExportCompressionDoesNotCollideAcrossFormats(t *testing.T) {
 	dataDir := filepath.Join(t.TempDir(), "storage")
 
 	for _, format := range []string{"gzip", "zlib"} {
-		_, err := runDBExportCmd(t, "--env-file="+envFile, "--data-only",
-			"--compression="+format, "--data-dir="+dataDir)
+		_, err := runDBExportCmdIn(t, dataDir, "--env-file="+envFile, "--data-only",
+			"--compression="+format)
 		require.NoError(t, err, "format %s must not collide with the other", format)
 	}
 

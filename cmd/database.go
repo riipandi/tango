@@ -12,7 +12,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/riipandi/tango/database"
-	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/pkg/printext"
 	"github.com/urfave/cli/v3"
 )
@@ -120,23 +120,9 @@ untouched.`,
 }
 
 // defaultExportPath is where a dump is written when --output is not given.
-func defaultExportPath(cmd *cli.Command) string {
+func defaultExportPath(cfg config.Config) string {
 	stamp := time.Now().UTC().Format(backupFilePattern)
-	return filepath.Join(cmd.String("data-dir"), backupDir, stamp)
-}
-
-// openStore opens the pool a dump or a restore works through. The caller owns
-// the handle and must close it.
-func openStore(ctx context.Context, cmd *cli.Command) (*datastore.Postgres, string, error) {
-	dsn, err := databaseURL(cmd)
-	if err != nil {
-		return nil, "", err
-	}
-	store, err := datastore.NewPostgres(ctx, datastore.PostgresOptions{DSN: dsn})
-	if err != nil {
-		return nil, "", err
-	}
-	return store, dsn, nil
+	return filepath.Join(dataDir(cfg), backupDir, stamp)
 }
 
 // runDBExport writes a SQL dump of the application schemas.
@@ -145,6 +131,11 @@ func openStore(ctx context.Context, cmd *cli.Command) (*datastore.Postgres, stri
 // meant to be read, diffed, and reviewed, which is why the format is not a
 // binary archive.
 func runDBExport(ctx context.Context, cmd *cli.Command) error {
+	cfg, err := configFrom(ctx)
+	if err != nil {
+		return err
+	}
+
 	p := printext.NewPalette(cmd.Root().Writer)
 
 	opts := database.DumpOptions{
@@ -160,7 +151,12 @@ func runDBExport(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	store, dsn, err := openStore(ctx, cmd)
+	dsn, err := requireDatabaseURL(cfg)
+	if err != nil {
+		return err
+	}
+
+	store, err := openStore(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -172,7 +168,7 @@ func runDBExport(ctx context.Context, cmd *cli.Command) error {
 
 	path, generated := cmd.String("output"), false
 	if path == "" {
-		path, generated = defaultExportPath(cmd), true
+		path, generated = defaultExportPath(cfg), true
 	}
 	// The dump is written plain and compressed after it is complete, so the file
 	// that finally exists is the compressed one. The overwrite guard and the
@@ -395,7 +391,7 @@ func printFields(p printext.Palette, fields []field) error {
 // visible immediately instead of after the fact. The credentials are never
 // printed, and a DSN that cannot be parsed prints no line at all.
 func printDatabase(p printext.Palette, dsn string) error {
-	target := postgresTarget(dsn)
+	target := config.RedactDSN(dsn)
 	if target == "" {
 		return nil
 	}
@@ -418,6 +414,11 @@ func runDBImport(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer func() { _ = reader.Close() }()
 
+	cfg, err := configFrom(ctx)
+	if err != nil {
+		return err
+	}
+
 	dryRun := cmd.Bool("dry-run")
 	truncate := cmd.Bool("truncate")
 
@@ -425,7 +426,7 @@ func runDBImport(ctx context.Context, cmd *cli.Command) error {
 	// change one, and it is the way to see the size of a restore before
 	// agreeing to it.
 	if dryRun {
-		if err = printDatabaseHeader(p, cmd, format); err != nil {
+		if err = printDatabaseHeader(p, cfg, format); err != nil {
 			return err
 		}
 		var stats database.DumpStats
@@ -436,7 +437,12 @@ func runDBImport(ctx context.Context, cmd *cli.Command) error {
 		return printDryRunSummary(p, path, stats, truncate)
 	}
 
-	store, dsn, err := openStore(ctx, cmd)
+	dsn, err := requireDatabaseURL(cfg)
+	if err != nil {
+		return err
+	}
+
+	store, err := openStore(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -482,8 +488,8 @@ func runDBImport(ctx context.Context, cmd *cli.Command) error {
 // printDatabaseHeader writes the target line for a dry run, which never opens a
 // connection. The database name comes from the configuration, so the run still
 // says where a real restore would land.
-func printDatabaseHeader(p printext.Palette, cmd *cli.Command, format database.Compression) error {
-	dsn, err := databaseURL(cmd)
+func printDatabaseHeader(p printext.Palette, cfg config.Config, format database.Compression) error {
+	dsn, err := requireDatabaseURL(cfg)
 	if err != nil {
 		return err
 	}

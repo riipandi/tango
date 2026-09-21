@@ -32,7 +32,6 @@ func runCommand(t *testing.T, args []string) config.Options {
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: config.FlagConfigFile},
 			&cli.StringFlag{Name: config.FlagEnvFile},
-			&cli.StringFlag{Name: config.FlagDataDir, Value: config.DefaultDataDir},
 		},
 		Commands: []*cli.Command{{
 			Name: "serve",
@@ -48,13 +47,12 @@ func runCommand(t *testing.T, args []string) config.Options {
 	return captured
 }
 
-func TestFromCommandReadsTheRootFlagFromASubcommand(t *testing.T) {
-	// --data-dir is declared on the root command but the action runs on the
-	// subcommand. The flag must still reach the config layer.
-	opts := runCommand(t, []string{"--data-dir=/tmp/data", "serve"})
+func TestFromCommandReadsARootFlagFromASubcommand(t *testing.T) {
+	// --config-file is declared on the root command but the action runs on the
+	// subcommand, so a root flag must still be readable from there.
+	opts := runCommand(t, []string{"--config-file=/tmp/app.json", "serve"})
 
-	require.Contains(t, opts.Flags, "app.data_dir")
-	assert.Equal(t, "/tmp/data", opts.Flags["app.data_dir"])
+	assert.Equal(t, "/tmp/app.json", opts.ConfigFile)
 }
 
 func TestFromCommandReadsSubcommandFlags(t *testing.T) {
@@ -73,7 +71,6 @@ func TestFromCommandOmitsUnsetFlags(t *testing.T) {
 	assert.NotContains(t, opts.Flags, "server.port")
 	assert.NotContains(t, opts.Flags, "server.host")
 	assert.NotContains(t, opts.Flags, "server.base_url")
-	assert.NotContains(t, opts.Flags, "app.data_dir")
 }
 
 func TestFromCommandReadsConfigFileFlag(t *testing.T) {
@@ -109,7 +106,6 @@ func TestResolveAppliesFlagOverEverything(t *testing.T) {
 		Name: "tango",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: config.FlagConfigFile},
-			&cli.StringFlag{Name: config.FlagDataDir, Value: config.DefaultDataDir},
 		},
 		Commands: []*cli.Command{{
 			Name:  "serve",

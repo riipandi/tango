@@ -9,6 +9,7 @@ import (
 	"github.com/briandowns/spinner"
 
 	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/pkg/printext"
 )
 
@@ -88,7 +89,7 @@ const progressIndent = "  "
 // line. It is used where progress lines follow, so the target stays separate
 // from the run beneath it.
 func reportTarget(p printext.Palette, dsn string) error {
-	target := postgresTarget(dsn)
+	target := config.RedactDSN(dsn)
 	if target == "" {
 		return nil
 	}

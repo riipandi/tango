@@ -26,35 +26,25 @@ func passing(context.Context) error { return nil }
 
 // runHealthCmd executes the health command with args and returns stdout.
 //
-// The harness passes --data-dir pointing at a fresh temp directory: the test
-// working directory is cmd/, which has no storage/ next to it, and the storage
-// check would otherwise fail for a reason the test does not care about.
-//
-// The root command installs a no-op ExitErrHandler: without it cli.HandleExitCoder
-// calls os.Exit, which would end the test binary instead of returning the error
-// this test asserts on.
+// The test working directory is cmd/, which has no storage/ next to it, so the
+// data directory is pointed at a fresh temp directory through the configuration:
+// the storage check would otherwise fail for a reason the test does not care
+// about.
 func runHealthCmd(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	return runHealthCmdIn(t, t.TempDir(), args...)
 }
 
-// runHealthCmdIn runs the health command with an explicit data directory.
+// runHealthCmdIn runs the health command with an explicit data directory, set
+// through the environment so it reaches the config layer.
 func runHealthCmdIn(t *testing.T, dataDir string, args ...string) (string, error) {
 	t.Helper()
 
+	t.Setenv(config.EnvName("app.data_dir"), dataDir)
+
 	var out bytes.Buffer
-	root := &cli.Command{
-		Name:     "tango",
-		Writer:   &out,
-		Commands: []*cli.Command{healthCheckCmd},
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "env-file", Usage: "Load environment variables from a file"},
-			&cli.StringFlag{Name: "data-dir", Usage: "Set the Application data directory"},
-		},
-		ExitErrHandler: func(context.Context, *cli.Command, error) {},
-	}
-	args = append([]string{"tango", healthCheckCmd.Name, "--data-dir=" + dataDir}, args...)
-	err := root.Run(context.Background(), args)
+	root := testRoot(&out, "", healthCheckCmd)
+	err := root.Run(context.Background(), append([]string{"tango", healthCheckCmd.Name}, args...))
 	return out.String(), err
 }
 
@@ -272,8 +262,9 @@ func TestHealthNoCacheFlagExists(t *testing.T) {
 }
 
 // The report names the database that was reached, and never its password: an
-// operator pastes this output into a ticket.
-func TestPostgresTargetOmitsCredentials(t *testing.T) {
+// operator pastes this output into a ticket. The rendering lives in the config
+// layer, so the CLI, the health report, and the dump report cannot disagree.
+func TestRedactDSNOmitsCredentials(t *testing.T) {
 	tests := []struct {
 		name string
 		dsn  string
@@ -290,15 +281,15 @@ func TestPostgresTargetOmitsCredentials(t *testing.T) {
 			want: "db.internal:5432/tango",
 		},
 		{
-			name: "unparsable dsn reports nothing",
+			name: "unparsable dsn reports a placeholder",
 			dsn:  "://not-a-dsn",
-			want: "",
+			want: "[redacted]",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			target := postgresTarget(tt.dsn)
+			target := config.RedactDSN(tt.dsn)
 
 			assert.Equal(t, tt.want, target)
 			assert.NotContains(t, target, "supersecret")

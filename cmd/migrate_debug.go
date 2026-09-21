@@ -113,7 +113,12 @@ The database must be migrated first; run migrate:up.`,
 
 // runMigrateSeed applies every seeder and reports what each one created.
 func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
-	dsn, err := databaseURL(cmd)
+	cfg, err := configFrom(ctx)
+	if err != nil {
+		return err
+	}
+
+	dsn, err := requireDatabaseURL(cfg)
 	if err != nil {
 		return err
 	}
@@ -122,7 +127,7 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	pool, err := datastore.NewPostgres(ctx, datastore.PostgresOptions{DSN: dsn})
+	pool, err := openStore(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -292,10 +297,15 @@ func (r *reporter) restart(stateWidth int) {
 // migrations, so resetting a fresh database still builds the schema.
 // --dry-run lists both halves without touching the database.
 func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
+	cfg, err := configFrom(ctx)
+	if err != nil {
+		return err
+	}
+
 	p := printext.NewPalette(cmd.Root().Writer)
 	report := newReporter(p, migrationStateWidth(string(database.ProgressRolledBack)))
 
-	migrator, dsn, closeDB, err := openMigrator(ctx, cmd,
+	migrator, dsn, closeDB, err := openMigrator(ctx, cfg,
 		database.MigratorOptions{Progress: report.progress})
 	if err != nil {
 		return err

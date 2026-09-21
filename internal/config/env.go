@@ -71,7 +71,7 @@ func pickEnv(environ []string, accept func(string) (string, bool)) map[string]an
 // envKeyMap maps an environment variable name to its config key. It is built
 // from the struct, so it cannot drift from the fields.
 func envKeyMap() map[string]string {
-	keys := knownKeys()
+	keys := DefaultsMap()
 	out := make(map[string]string, len(keys))
 	for key := range keys {
 		out[EnvName(key)] = key

@@ -12,31 +12,10 @@ import (
 	"golang.org/x/term"
 
 	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/pkg/envfile"
 	"github.com/riipandi/tango/pkg/printext"
 )
-
-// ErrDatabaseURLUnset is returned when no DSN is available.
-var ErrDatabaseURLUnset = fmt.Errorf("%s is not set; pass --env-file or export it", envfile.DatabaseURL)
-
-// databaseURL resolves the DSN. The file named by the root --env-file wins over
-// the process environment, matching the documented precedence.
-func databaseURL(cmd *cli.Command) (string, error) {
-	if path := cmd.String("env-file"); path != "" {
-		file, err := envfile.Load(path)
-		if err != nil {
-			return "", err
-		}
-		if dsn, ok := file.Get(envfile.DatabaseURL); ok && dsn != "" {
-			return dsn, nil
-		}
-	}
-	if dsn := os.Getenv(envfile.DatabaseURL); dsn != "" {
-		return dsn, nil
-	}
-	return "", ErrDatabaseURLUnset
-}
 
 // openMigrator opens the single-connection migration handle and loads the
 // migrations embedded in the binary. The returned close function releases the
@@ -44,10 +23,10 @@ func databaseURL(cmd *cli.Command) (string, error) {
 // name the database it is about to change.
 func openMigrator(
 	ctx context.Context,
-	cmd *cli.Command,
+	cfg config.Config,
 	opts database.MigratorOptions,
 ) (*database.Migrator, string, func(), error) {
-	dsn, err := databaseURL(cmd)
+	dsn, err := requireDatabaseURL(cfg)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -219,10 +198,15 @@ func confirm(p printext.Palette, cmd *cli.Command, interactive bool, question st
 // runMigrateUp applies the pending migrations. --dry-run lists them instead and
 // changes nothing.
 func runMigrateUp(ctx context.Context, cmd *cli.Command) error {
+	cfg, err := configFrom(ctx)
+	if err != nil {
+		return err
+	}
+
 	p := printext.NewPalette(cmd.Root().Writer)
 	report := newReporter(p, migrationStateWidth(string(database.ProgressApplied)))
 
-	migrator, dsn, closeDB, err := openMigrator(ctx, cmd,
+	migrator, dsn, closeDB, err := openMigrator(ctx, cfg,
 		database.MigratorOptions{Progress: report.progress})
 	if err != nil {
 		return err
@@ -287,10 +271,15 @@ func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("database: --count must be greater than zero, got %d", count)
 	}
 
+	cfg, err := configFrom(ctx)
+	if err != nil {
+		return err
+	}
+
 	p := printext.NewPalette(cmd.Root().Writer)
 	report := newReporter(p, migrationStateWidth(string(database.ProgressRolledBack)))
 
-	migrator, dsn, closeDB, err := openMigrator(ctx, cmd,
+	migrator, dsn, closeDB, err := openMigrator(ctx, cfg,
 		database.MigratorOptions{Progress: report.progress})
 	if err != nil {
 		return err
@@ -348,7 +337,12 @@ func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
 // runMigrateStatus lists every embedded migration and whether the database has
 // it.
 func runMigrateStatus(ctx context.Context, cmd *cli.Command) error {
-	migrator, dsn, closeDB, err := openMigrator(ctx, cmd, database.MigratorOptions{})
+	cfg, err := configFrom(ctx)
+	if err != nil {
+		return err
+	}
+
+	migrator, dsn, closeDB, err := openMigrator(ctx, cfg, database.MigratorOptions{})
 	if err != nil {
 		return err
 	}
@@ -377,7 +371,12 @@ func runMigrateStatus(ctx context.Context, cmd *cli.Command) error {
 // directly, so a target header would break `VERSION=$(tango migrate:version)`.
 // Every other migrate:* command announces the database it works on.
 func runMigrateVersion(ctx context.Context, cmd *cli.Command) error {
-	migrator, _, closeDB, err := openMigrator(ctx, cmd, database.MigratorOptions{})
+	cfg, err := configFrom(ctx)
+	if err != nil {
+		return err
+	}
+
+	migrator, _, closeDB, err := openMigrator(ctx, cfg, database.MigratorOptions{})
 	if err != nil {
 		return err
 	}

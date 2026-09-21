@@ -3,27 +3,16 @@ package config
 import (
 	"maps"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 )
-
-// knownKeys is the set of every config key, derived from the struct so it cannot
-// drift from the fields. It is the schema DefaultsMap publishes, used to decide
-// whether a key from a source is real.
-func knownKeys() map[string]any {
-	return DefaultsMap()
-}
 
 // Keys returns every config key, sorted. It is the list a `config:dump` prints
 // and the list a test asserts against, so it is derived from the struct rather
 // than written out by hand.
 func Keys() []string {
-	known := knownKeys()
-	keys := make([]string, 0, len(known))
-	for key := range known {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	known := DefaultsMap()
+	keys := slices.Sorted(maps.Keys(known))
 	return keys
 }
 
@@ -31,7 +20,7 @@ func Keys() []string {
 // variable, an env-file line, or a flag that names no config key is ignored
 // rather than allowed to create a stray entry or replace a whole section.
 func filterKnown(layer map[string]any) map[string]any {
-	known := knownKeys()
+	known := DefaultsMap()
 	out := make(map[string]any, len(layer))
 	for key, value := range layer {
 		if _, ok := known[key]; ok {

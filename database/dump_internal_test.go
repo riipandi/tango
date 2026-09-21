@@ -28,11 +28,11 @@ func TestDumpGuards(t *testing.T) {
 
 	// pg_indexes never writes the clause, so it is inserted after CREATE INDEX.
 	assert.Equal(t,
-		"CREATE INDEX IF NOT EXISTS ix_users ON public.users USING btree (id)",
-		indexIfNotExists("CREATE INDEX ix_users ON public.users USING btree (id)"))
+		"CREATE INDEX IF NOT EXISTS idx_users ON public.users USING btree (id)",
+		indexIfNotExists("CREATE INDEX idx_users ON public.users USING btree (id)"))
 	assert.Equal(t,
-		"CREATE UNIQUE INDEX IF NOT EXISTS ix_users ON public.users USING btree (id)",
-		indexIfNotExists("CREATE UNIQUE INDEX ix_users ON public.users USING btree (id)"))
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_users ON public.users USING btree (id)",
+		indexIfNotExists("CREATE UNIQUE INDEX idx_users ON public.users USING btree (id)"))
 	// Anything else is returned untouched rather than mangled.
 	assert.Equal(t, "SELECT 1", indexIfNotExists("SELECT 1"))
 

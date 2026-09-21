@@ -40,12 +40,6 @@ var rootCmd = &cli.Command{
 			Usage:    "Load configuration from a JSON file",
 			Required: false,
 		},
-		&cli.StringFlag{
-			Name:     config.FlagDataDir,
-			Usage:    "Set the Application data directory",
-			Required: false,
-			Value:    config.DefaultDataDir,
-		},
 		&cli.BoolFlag{
 			Name:    "version",
 			Usage:   "Show the application version",

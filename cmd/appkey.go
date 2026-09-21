@@ -172,7 +172,9 @@ func writeSecretKeys(out io.Writer, path, keyPair, secret string, keys crypto.Ge
 	return nil
 }
 
-// pluralize returns singular for a count of one and plural otherwise.
+// pluralize returns singular for a count of one and plural otherwise. It is used
+// for the "key"/"keys" wording, which printext.Plural cannot express because the
+// plural is not the singular plus an "s".
 func pluralize(singular, plural string, count int) string {
 	if count == 1 {
 		return singular

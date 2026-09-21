@@ -13,12 +13,13 @@ import (
 // DefaultMode is the permission of a newly created secrets file.
 const DefaultMode fs.FileMode = 0o600
 
-// DatabaseURL names the variable holding the Postgres connection string. It is
-// the one key shared by the CLI, the config layer, and deployment tooling, so
-// it lives here instead of being spelled out at each call site.
+// DatabaseURL names the environment variable holding the Postgres connection
+// string.
 //
-// TODO: read this from the config layer once internal/config lands, instead of
-// resolving it from the env file and the process environment directly.
+// It is spelled out here because pkg/ cannot import internal/: the config layer
+// owns the key (database.url) and derives the same name through EnvName. A test
+// in internal/config asserts the two agree, so the duplication cannot drift
+// silently.
 const DatabaseURL = "DATABASE_URL"
 
 // File is an in-memory dotenv file.

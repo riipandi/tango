@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/pkg/envfile"
 )
 
 func TestEnvFileAndEnvironmentUseTheSameNames(t *testing.T) {
@@ -39,6 +40,12 @@ func TestEnvNameRoundTripsEveryKey(t *testing.T) {
 	assert.Equal(t, "DATABASE_URL", config.EnvName("database.url"))
 	assert.Equal(t, "AUTH_SECRET_KEY", config.EnvName("auth.secret_key"))
 	assert.Equal(t, "SERVER_READ_TIMEOUT", config.EnvName("server.read_timeout"))
+}
+
+func TestEnvNameAgreesWithEnvfile(t *testing.T) {
+	// pkg/envfile spells DATABASE_URL out because pkg/ cannot import internal/.
+	// The config layer derives the same name, so the two must agree.
+	assert.Equal(t, envfile.DatabaseURL, config.EnvName("database.url"))
 }
 
 func TestUnknownEnvironmentVariableIsIgnored(t *testing.T) {

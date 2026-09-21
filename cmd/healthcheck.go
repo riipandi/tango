@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/urfave/cli/v3"
 
 	"github.com/riipandi/tango/internal/config"
@@ -33,8 +31,8 @@ availability status. The same result is published by the REST handler,
 so the CLI and the API always agree.
 
 It checks that Postgres answers and that the application data directory
-(storage by default, or --data-dir) exists, is writable, and is not
-world-writable.
+(storage by default, or app.data_dir from the configuration) exists,
+is writable, and is not world-writable.
 
 Output is text by default; pass --json for a machine-readable result or
 --short for the aggregated status alone.
@@ -66,21 +64,6 @@ The check needs DATABASE_URL; pass --env-file or export it.`,
 	Action: runHealthCheck,
 }
 
-// dataDir resolves the application data directory from the configuration. The
-// config layer already applied the precedence, including the --data-dir flag, so
-// reading it here cannot disagree with what the layer resolved.
-func dataDir(ctx context.Context, cmd *cli.Command) string {
-	if cfg, err := configFrom(ctx); err == nil && cfg.App.DataDir != "" {
-		return cfg.App.DataDir
-	}
-	// No configuration in the context (a direct call in a test): fall back to
-	// the flag, then to the built-in default.
-	if dir := cmd.String(config.FlagDataDir); dir != "" {
-		return dir
-	}
-	return config.DefaultDataDir
-}
-
 // runHealthCheck opens the database pool, runs the checks, and prints the
 // result. The pool is opened here and closed on return: the CLI owns it for the
 // duration of the command and nothing else uses it.
@@ -89,12 +72,17 @@ func dataDir(ctx context.Context, cmd *cli.Command) string {
 // command exists to report that state, so it prints the report and exits 3
 // instead of failing to start.
 func runHealthCheck(ctx context.Context, cmd *cli.Command) error {
-	dsn, err := databaseURL(cmd)
+	cfg, err := configFrom(ctx)
 	if err != nil {
 		return err
 	}
 
-	result := checkHealth(ctx, cmd, dsn)
+	dsn, err := requireDatabaseURL(cfg)
+	if err != nil {
+		return err
+	}
+
+	result := checkHealth(ctx, cmd, cfg, dsn)
 
 	p := printext.NewPalette(cmd.Root().Writer)
 	if err := printHealth(p, cmd.Bool("short"), cmd.Bool("json"), result); err != nil {
@@ -109,7 +97,7 @@ func runHealthCheck(ctx context.Context, cmd *cli.Command) error {
 // checkHealth opens the pool and runs the checks. A pool that cannot be opened
 // becomes an unhealthy result for the database, because the reason it failed is
 // exactly what the caller wants to read.
-func checkHealth(ctx context.Context, cmd *cli.Command, dsn string) health.Result {
+func checkHealth(ctx context.Context, cmd *cli.Command, cfg config.Config, dsn string) health.Result {
 	info := map[string]string{
 		"name":    config.AppName,
 		"version": config.AppVersion,
@@ -131,8 +119,8 @@ func checkHealth(ctx context.Context, cmd *cli.Command, dsn string) health.Resul
 	options := []health.Option{
 		health.WithTimeout(cmd.Duration("timeout")),
 		health.WithChecks(
-			health.PostgresCheck(pool, postgresTarget(dsn)),
-			health.StorageCheck(dataDir(ctx, cmd)),
+			health.PostgresCheck(pool, config.RedactDSN(dsn)),
+			health.StorageCheck(dataDir(cfg)),
 		),
 		health.WithInfo(info),
 		health.WithInfoFunc(uptime),
@@ -156,25 +144,6 @@ func mergeInfo(static, computed map[string]string) map[string]string {
 // uptime measures the process it runs in and reads as a fraction of a second;
 // the value becomes useful when the same checker is wired into the server.
 var processStarted = time.Now()
-
-// postgresTarget names the database the check reached, without its credentials.
-// The DSN holds a password, which must not appear in a report an operator
-// pastes into a ticket.
-func postgresTarget(dsn string) string {
-	parsed, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		return ""
-	}
-
-	target := parsed.Host
-	if parsed.Port != 0 {
-		target += ":" + strconv.FormatUint(uint64(parsed.Port), 10)
-	}
-	if parsed.Database != "" {
-		target += "/" + parsed.Database
-	}
-	return target
-}
 
 // printHealth writes the result in the requested format. --short wins over
 // --json: a caller that asks for one word must get one word, not a document.

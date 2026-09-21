@@ -110,11 +110,15 @@ func TestPrintDatabaseAlignsWithTheSummary(t *testing.T) {
 	assert.NotContains(t, out.String(), "secret")
 }
 
-// A DSN that cannot be parsed prints no target line rather than a broken one.
-func TestPrintDatabaseSkipsUnparsableDSN(t *testing.T) {
+// A DSN that cannot be parsed still prints a target line, with the value
+// replaced rather than echoed: an unparsable DSN may carry a password in a form
+// the parser did not recognise, and a report must never print it.
+func TestPrintDatabaseRedactsUnparsableDSN(t *testing.T) {
 	var out bytes.Buffer
 	require.NoError(t, printDatabase(plain(&out), "not a dsn"))
-	assert.Empty(t, out.String())
+
+	assert.Contains(t, out.String(), "[redacted]")
+	assert.NotContains(t, out.String(), "not a dsn")
 }
 
 // The target line names the database without its credentials, so a report can
@@ -128,13 +132,14 @@ func TestReportTargetOmitsCredentials(t *testing.T) {
 	assert.NotContains(t, out.String(), "secret")
 }
 
-// A DSN that cannot be parsed must not stop the command; the report simply has
-// no target line.
-func TestReportTargetSkipsUnparsableDSN(t *testing.T) {
+// A DSN that cannot be parsed must not stop the command, and its value must not
+// reach the report.
+func TestReportTargetRedactsUnparsableDSN(t *testing.T) {
 	var out bytes.Buffer
 	require.NoError(t, reportTarget(plain(&out), "not a dsn"))
 
-	assert.Empty(t, out.String())
+	assert.Contains(t, out.String(), "[redacted]")
+	assert.NotContains(t, out.String(), "not a dsn")
 }
 
 // Progress lines are indented and summaries are not, so a summary can be grepped

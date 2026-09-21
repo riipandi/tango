@@ -15,6 +15,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/envfile"
 	"github.com/riipandi/tango/pkg/printext"
@@ -35,15 +36,7 @@ func runMigrateCmd(t *testing.T, cmd *cli.Command, stdin string, args ...string)
 	t.Helper()
 	var out bytes.Buffer
 
-	root := &cli.Command{
-		Name:     "tango",
-		Writer:   &out,
-		Reader:   strings.NewReader(stdin),
-		Commands: []*cli.Command{cmd},
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "env-file", Usage: "Load environment variables from a file"},
-		},
-	}
+	root := testRoot(&out, stdin, cmd)
 	err := root.Run(context.Background(), append([]string{"tango", cmd.Name}, args...))
 	return out.String(), err
 }
@@ -77,17 +70,22 @@ func TestDatabaseURLMissing(t *testing.T) {
 	require.ErrorIs(t, err, ErrDatabaseURLUnset)
 }
 
-// resolveDatabaseURL runs databaseURL inside a command so the root --env-file
-// flag is populated the way the CLI populates it.
+// resolveDatabaseURL resolves the DSN the way a command does: through the config
+// layer, so the env-file flag wins over the environment.
 func resolveDatabaseURL(t *testing.T, envFile string) (string, error) {
 	t.Helper()
 
 	var resolved string
 	cmd := &cli.Command{
-		Flags: []cli.Flag{&cli.StringFlag{Name: "env-file"}},
-		Action: func(_ context.Context, cmd *cli.Command) error {
-			var err error
-			resolved, err = databaseURL(cmd)
+		Name:   "tango",
+		Flags:  []cli.Flag{&cli.StringFlag{Name: config.FlagEnvFile}},
+		Before: initConfig,
+		Action: func(ctx context.Context, _ *cli.Command) error {
+			cfg, err := configFrom(ctx)
+			if err != nil {
+				return err
+			}
+			resolved, err = requireDatabaseURL(cfg)
 			return err
 		},
 	}

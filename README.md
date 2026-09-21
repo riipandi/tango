@@ -255,8 +255,8 @@ byte-identical for the same state, so it diffs cleanly.
 
 Two checks run by default: **postgres** (the pool answers) and **storage** (the application data
 directory exists, is writable, and is not world-writable). The data directory is `storage` relative
-to the working directory, or whatever `--data-dir` sets; the report shows it resolved to an absolute
-path.
+to the working directory unless the configuration sets `app.data_dir`; the report shows it resolved
+to an absolute path.
 
 The vocabulary is deliberate: a component is `up` or `down`, the system is `healthy` or `unhealthy`.
 A component marked optional is reported but does not affect the aggregate, so a missing optional

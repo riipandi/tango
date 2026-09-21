@@ -29,6 +29,12 @@ var serveCmd = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
+		// serve is the one command that uses most of the configuration, so it is
+		// where the whole configuration is checked: a server that starts on a
+		// half-configured setup fails later, in a place far from the mistake.
+		if _, err := fullConfigFrom(ctx); err != nil {
+			return err
+		}
 		fmt.Println("not yet implemented")
 		return nil
 	},
