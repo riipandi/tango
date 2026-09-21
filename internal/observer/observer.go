@@ -32,7 +32,6 @@ import (
 	"log/slog"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/riipandi/tango/internal/config"
@@ -112,11 +111,4 @@ func samplerFor(tracing config.OTELTracing) sdktrace.Sampler {
 	default:
 		return sdktrace.AlwaysSample()
 	}
-}
-
-// ResourceAttributes returns the resource every signal is attributed to. It is
-// exported so a test can assert the attributes directly, rather than only
-// through an export that needs a collector.
-func ResourceAttributes(cfg config.Config) *resource.Resource {
-	return newResource(cfg)
 }

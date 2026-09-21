@@ -13,10 +13,8 @@
 // slog is a standard interface, so a dependency that accepts a *slog.Logger can
 // be handed this one and lands in the same pipeline; a handler written against
 // slog keeps working. LogLayer's own API is the same information said twice, and
-// using both would leave a codebase with two logging idioms where the second one
-// skips the handler everything else is wired through. The core stays reachable
-// through Log for the few things slog cannot express — a plugin, a
-// LogLayer-only setting — not as a second way to write a log line.
+// exposing it would leave a codebase with two logging idioms where the second
+// one skips the handler everything else is wired through.
 package logger
 
 import (
@@ -40,7 +38,6 @@ import (
 // and nowhere else. The console is the default, which is what a fresh checkout
 // and a container that logs to stdout both want.
 type Logger struct {
-	core *loglayer.LogLayer
 	slog *slog.Logger
 
 	// file and otlp are held so Shutdown can release them: the file sink owns a
@@ -128,7 +125,6 @@ func New(cfg config.Config, opts ...Option) (*Logger, error) {
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("logger: %w", err), l.release())
 	}
-	l.core = core
 	l.slog = slog.New(sloghandler.New(core))
 	return l, nil
 }
@@ -157,17 +153,6 @@ func New(cfg config.Config, opts ...Option) (*Logger, error) {
 // every later record and a group nests what follows. That is the idiom to use
 // for request-scoped fields — see TestSlogChainCarriesFieldsThroughThePipeline.
 func (l *Logger) Slog() *slog.Logger { return l.slog }
-
-// Log returns the LogLayer core, for the few places that need a LogLayer-only
-// feature.
-//
-// Application code does not use it. LogLayer's own API (log.Info(...),
-// log.WithMetadata(...).Info(...), log.WithFields(...)) is a second way to say
-// what slog already says, and reaching for it would split the codebase into two
-// logging idioms — one of which skips the slog handler the rest of the stack is
-// wired through. The core is exposed for what slog cannot express: a plugin, a
-// LogLayer-only transport setting, or a hook that inspects the logger itself.
-func (l *Logger) Log() *loglayer.LogLayer { return l.core }
 
 // SetDefault installs the logger as the process default, so a package that logs
 // through slog without being handed one lands in the same pipeline.

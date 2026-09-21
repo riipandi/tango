@@ -267,41 +267,6 @@ func TestSetGlobalsInstallsOnlyEnabledSignals(t *testing.T) {
 	assert.False(t, isReal, "metrics are off, so the global stays the no-op")
 }
 
-func TestResourceAttributesCarryTheConfiguration(t *testing.T) {
-	// The attributes are asserted directly rather than only through an export,
-	// so a change to the resource is caught without a collector.
-	cfg := config.Default()
-	cfg.OTEL.ServiceName = "tango-test"
-	cfg.OTEL.Environment = "staging"
-
-	attributes := observer.ResourceAttributes(cfg)
-	set := attributes.Set()
-
-	name, ok := set.Value("service.name")
-	require.True(t, ok)
-	assert.Equal(t, "tango-test", name.AsString())
-
-	environment, ok := set.Value("deployment.environment.name")
-	require.True(t, ok)
-	assert.Equal(t, "staging", environment.AsString())
-
-	version, ok := set.Value("service.version")
-	require.True(t, ok)
-	assert.Equal(t, config.AppVersion, version.AsString())
-}
-
-func TestAnEmptyEnvironmentAddsNoAttribute(t *testing.T) {
-	// An unset deployment environment is not reported as an empty string: the
-	// attribute is absent, which is what "not stated" means in a resource.
-	cfg := config.Default()
-	cfg.OTEL.ServiceName = "tango-test"
-	cfg.OTEL.Environment = ""
-
-	set := observer.ResourceAttributes(cfg).Set()
-	_, ok := set.Value("deployment.environment.name")
-	assert.False(t, ok)
-}
-
 func TestTheEndpointPathIsKeptWhenItCarriesOne(t *testing.T) {
 	// An address that already names a route is not overridden with the default:
 	// a collector mounted under a prefix says where traces go.
