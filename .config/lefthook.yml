@@ -3,7 +3,7 @@
 pre-commit:
   commands:
     format-js:
-      glob: "*.{ts,tsx,js,jsx,css,md,json,yml,yaml}"
+      glob: "*.{ts,tsx,js,jsx,css,json}"
       run: pnpm exec oxfmt --write {staged_files}
       stage_fixed: true
     format-go:
