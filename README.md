@@ -285,7 +285,30 @@ stored data during rotation.
 
 ## Available Tasks
 
-Run `task` to list every target.
+Run `task` to list every target. Most targets live in `tasks/`, one file per group; the root
+`Taskfile.yml` declares the shared variables, includes them, and keeps the `compose:*` targets
+itself, next to the `compose.yaml` they drive.
+
+```text
+Taskfile.yml       shared variables, includes, default, compose:*
+tasks/
+  build.yml        build, start, release, publish
+  cert.yml         cert:generate, cert:trust
+  cleanup.yml      cleanup, cleanup:dist, cleanup:deps
+  database.yml     db:migrate, db:rollback, db:status, db:version, db:validate, db:reset,
+                   db:create, db:seed, db:export, db:import, health, key:generate
+  deps.yml         deps, update-deps
+  dev.yml          dev, run, email:dev, email:build
+  docker.yml       docker:build, docker:run, docker:shell, docker:push, docker:prune,
+                   docker:images, docker:check
+  lint.yml         format, check, lint, typecheck
+  rpc.yml          rpc:generate, rpc:lint, rpc:breaking, rpc:stamp, rpc:stale
+  test.yml         test, test:go, test:go:debug, test:ui, test:sdk, coverage
+```
+
+Each include is flattened, so a task keeps the name it had before the split: `task db:migrate`, not
+`task database:db:migrate`. Flattening also keeps one flat namespace, so a task in one file can
+depend on a task in another by its plain name.
 
 | Command             | Description                                         |
 | ------------------- | --------------------------------------------------- |

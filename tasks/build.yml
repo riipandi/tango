@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+tasks:
+  build:
+    desc: Build frontend + Go binary (single file)
+    deps: [rpc:generate]
+    cmds:
+      - BUILD_MODE=release pnpm exec vite build
+      - BUILD_MODE=debug pnpm exec vite build
+
+  start:
+    desc: Run the release binary on :3000
+    cmds:
+      - pnpm exec kill-port 3000
+      - ./build/release/{{.APP_NAME}} serve --port 3000 {{.CLI_ARGS}}
+
+  release:
+    desc: Build release binaries via goreleaser
+    deps: [rpc:generate]
+    cmd: goreleaser build --clean --auto-snapshot
+
+  publish:
+    desc: Publish a release via goreleaser
+    deps: [rpc:generate]
+    cmd: goreleaser release --clean --auto-snapshot

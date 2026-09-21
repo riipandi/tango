@@ -12,319 +12,45 @@ vars:
   IMAGE:
     sh: jq -r .config.image package.json 2>/dev/null || echo ghcr.io/riipandi/tango
 
+# Every group lives in tasks/. Each include is flattened, so a task keeps
+# the name it had when this file held it. That also keeps one flat namespace,
+# so a task in one file can depend on a task in another by its plain name.
+includes:
+  dev:
+    taskfile: ./tasks/dev.yml
+    flatten: true
+  build:
+    taskfile: ./tasks/build.yml
+    flatten: true
+  database:
+    taskfile: ./tasks/database.yml
+    flatten: true
+  cert:
+    taskfile: ./tasks/cert.yml
+    flatten: true
+  test:
+    taskfile: ./tasks/test.yml
+    flatten: true
+  lint:
+    taskfile: ./tasks/lint.yml
+    flatten: true
+  rpc:
+    taskfile: ./tasks/rpc.yml
+    flatten: true
+  deps:
+    taskfile: ./tasks/deps.yml
+    flatten: true
+  cleanup:
+    taskfile: ./tasks/cleanup.yml
+    flatten: true
+  docker:
+    taskfile: ./tasks/docker.yml
+    flatten: true
+
 tasks:
   default:
     desc: List all available tasks
-    cmd: task --list --sort none
-
-  # ----------------------------------------------------------------------------
-  # Development
-  # ----------------------------------------------------------------------------
-  dev:
-    desc: Run Vite dev server (frontend :3000 + Go API :3080)
-    deps: [rpc:generate]
-    cmd: pnpm exec vite dev {{.CLI_ARGS}}
-
-  run:
-    desc: Run the Go backend directly (debug build)
-    cmd: go run -tags debug ./cmd {{.CLI_ARGS}}
-
-  email:dev:
-    desc: Run React Email dev UI (:3030)
-    cmd: pnpm exec email dev --dir ./email/templates --port 3030
-
-  email:build:
-    desc: Compile email templates only (no Go binary, no SPA bundle)
-    cmd: TANGO_SKIP_GO=1 pnpm exec vite build
-
-  # ----------------------------------------------------------------------------
-  # Build & release
-  # ----------------------------------------------------------------------------
-  build:
-    desc: Build frontend + Go binary (single file)
-    deps: [rpc:generate]
-    cmds:
-      - BUILD_MODE=release pnpm exec vite build
-      - BUILD_MODE=debug pnpm exec vite build
-
-  start:
-    desc: Run the release binary on :3000
-    cmds:
-      - pnpm exec kill-port 3000
-      - ./build/release/{{.APP_NAME}} serve --port 3000 {{.CLI_ARGS}}
-
-  release:
-    desc: Build release binaries via goreleaser
-    deps: [rpc:generate]
-    cmd: goreleaser build --clean --auto-snapshot
-
-  publish:
-    desc: Publish a release via goreleaser
-    deps: [rpc:generate]
-    cmd: goreleaser release --clean --auto-snapshot
-
-  # ----------------------------------------------------------------------------
-  # Database & keys
-  # ----------------------------------------------------------------------------
-  db:migrate:
-    desc: Run database migrations
-    cmd: go run -tags debug ./cmd migrate:up --env-file=.env.local {{.CLI_ARGS}}
-
-  db:rollback:
-    desc: Roll back the most recent migration
-    cmd: go run -tags debug ./cmd migrate:down --env-file=.env.local {{.CLI_ARGS}}
-
-  db:status:
-    desc: Show database migration status
-    cmd: go run -tags debug ./cmd migrate:status --env-file=.env.local {{.CLI_ARGS}}
-
-  db:version:
-    desc: Print the current migration version
-    cmd: go run -tags debug ./cmd migrate:version --env-file=.env.local {{.CLI_ARGS}}
-
-  db:validate:
-    desc: Check the embedded migration files
-    cmd: go run -tags debug ./cmd migrate:validate
-
-  db:reset:
-    desc: Roll back every migration (add -- --up to re-apply)
-    cmd: go run -tags debug ./cmd migrate:reset --env-file=.env.local {{.CLI_ARGS}}
-
-  db:create:
-    desc: Create a new migration file (task db:create -- add_widgets)
-    cmd: go run -tags debug ./cmd migrate:create {{.CLI_ARGS}}
-
-  db:seed:
-    desc: Seed the database with default records (add -- --dry-run)
-    cmd: go run -tags debug ./cmd migrate:seed --env-file=.env.local {{.CLI_ARGS}}
-
-  db:export:
-    desc: Export the database to a SQL file (add -- --output=path)
-    cmd: go run -tags debug ./cmd db:export --env-file=.env.local {{.CLI_ARGS}}
-
-  db:import:
-    desc: Import a backup file (task db:import -- storage/backup/file.sql)
-    cmd: go run -tags debug ./cmd db:import --env-file=.env.local {{.CLI_ARGS}}
-
-  health:
-    desc: Check application health (add -- --json or -- --short)
-    cmd: go run -tags debug ./cmd health --env-file=.env.local {{.CLI_ARGS}}
-
-  key:generate:
-    desc: Generate application secret keys
-    cmd: go run -tags debug ./cmd key:generate {{.CLI_ARGS}}
-
-  # ----------------------------------------------------------------------------
-  # Local HTTPS
-  # ----------------------------------------------------------------------------
-  cert:generate:
-    desc: Generate local HTTPS certificates into storage/certs
-    vars:
-      CERT_DIR: storage/certs
-    cmds:
-      - mkdir -p {{.CERT_DIR}}
-      - |
-        if command -v mkcert >/dev/null 2>&1; then
-          mkcert -key-file {{.CERT_DIR}}/localhost_key.pem \
-            -cert-file {{.CERT_DIR}}/localhost_crt.pem \
-            localhost 127.0.0.1 ::1 host.docker.internal "*.localhost.test"
-        else
-          openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
-            -keyout {{.CERT_DIR}}/localhost_key.pem \
-            -out {{.CERT_DIR}}/localhost_crt.pem \
-            -subj "/CN=localhost" \
-            -addext "subjectAltName=DNS:localhost,DNS:host.docker.internal,DNS:*.localhost.test,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1"
-        fi
-      - openssl x509 -in {{.CERT_DIR}}/localhost_crt.pem -noout -subject -ext subjectAltName
-
-  cert:trust:
-    desc: Trust the local CA so browsers accept the generated certificates
-    cmds:
-      - |
-        if ! command -v mkcert >/dev/null 2>&1; then
-          echo "mkcert is not installed — add storage/certs/localhost_crt.pem to your trust store manually"
-          exit 0
-        fi
-        mkcert -install
-
-  # ----------------------------------------------------------------------------
-  # Test
-  # ----------------------------------------------------------------------------
-  test:
-    desc: Run all tests (Go + frontend)
-    deps: [rpc:generate]
-    cmds:
-      - task: test:go
-      - task: test:ui
-
-  test:go:
-    desc: Run Go unit tests (pass packages or flags after `--`)
-    cmd: gotestsum --format testname {{.CLI_ARGS | default "./..."}}
-
-  test:go:debug:
-    desc: Run Go unit tests for the debug build (migrate create/fix/validate included)
-    cmd: gotestsum --format testname -- -tags debug {{.CLI_ARGS | default "./cmd/... ./database/..."}}
-
-  test:ui:
-    desc: Run frontend unit tests
-    cmd: pnpm exec vitest run {{.CLI_ARGS}}
-
-  test:sdk:
-    desc: Run unit tests for API Client
-    cmd: pnpm exec vitest run --project api-client {{.CLI_ARGS}}
-
-  coverage:
-    desc: Run Go tests with coverage report
-    cmds:
-      - gotestsum --format testname -- -coverprofile=.output/coverage.out ./...
-      - go tool cover -func=.output/coverage.out | tail -1
-
-  # ----------------------------------------------------------------------------
-  # Format, check, lint
-  # ----------------------------------------------------------------------------
-  format:
-    desc: Format all files (Go + JS)
-    cmds:
-      - gofmt -w .
-      - pnpm exec oxfmt --write .
-
-  check:
-    desc: Run all checks (go vet + migration files + JS formatting)
-    cmds:
-      - go vet ./...
-      - go run -tags debug ./cmd migrate:validate
-      - pnpm exec oxfmt --check
-      - pnpm exec oxlint
-
-  lint:
-    desc: Run all linters (Go + JS)
-    cmds:
-      - pnpm exec oxlint --fix .
-      - golangci-lint run -c .golangci.yml ./...
-
-  typecheck:
-    desc: Run TypeScript type checking
-    deps: [rpc:generate]
-    cmd: pnpm exec tsc -b --noEmit
-
-  # ----------------------------------------------------------------------------
-  # ConnectRPC contracts
-  # ----------------------------------------------------------------------------
-  rpc:generate:
-    desc: Generate Go + TypeScript from api/connect/*.proto
-    cmds:
-      - go tool buf generate
-      - gofmt -w codegen/proto/go
-      - task: rpc:stamp
-
-  rpc:lint:
-    desc: Lint protobuf contracts
-    cmd: go tool buf lint
-
-  rpc:breaking:
-    desc: Check protobuf contracts for breaking changes
-    cmd: go tool buf breaking --against '.git#ref=HEAD~1,subdir=api/connect'
-
-  rpc:stamp:
-    desc: Refresh the contract stamp used by stale detection
-    cmd: sh -c 'find api/connect buf.yaml buf.gen.yaml -type f | LC_ALL=C sort | xargs shasum -a 256 > .rpc-gen.stamp'
-
-  rpc:stale:
-    desc: Fail when generated code is out of date with the contracts
-    cmds:
-      - sh -c 'find api/connect buf.yaml buf.gen.yaml -type f | LC_ALL=C sort | xargs shasum -a 256 > /tmp/rpc-stamp.now'
-      - sh -c 'test -f .rpc-gen.stamp || (echo "no contract stamp yet — run task rpc:generate" && exit 1)'
-      - sh -c 'diff .rpc-gen.stamp /tmp/rpc-stamp.now || (echo "contracts changed — run task rpc:generate" && exit 1)'
-
-  # ----------------------------------------------------------------------------
-  # Dependencies
-  # ----------------------------------------------------------------------------
-  deps:
-    desc: Install Go toolchain binaries (golangci-lint, goose, etc)
-    cmds:
-      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-      - go install github.com/pressly/goose/v3/cmd/goose@latest
-      - go install github.com/goreleaser/goreleaser/v2@latest
-      - go install github.com/anchore/grype/cmd/grype@latest
-      - go install github.com/swaggo/swag/cmd/swag@latest
-      - go get -tool github.com/bufbuild/buf/cmd/buf@latest
-      - go get -tool google.golang.org/protobuf/cmd/protoc-gen-go@latest
-      - go get -tool connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
-
-  # ----------------------------------------------------------------------------
-  # Cleanup
-  # ----------------------------------------------------------------------------
-  cleanup:
-    desc: Remove build artifacts and dependencies
-    cmds:
-      - task: cleanup:dist
-      - task: cleanup:deps
-
-  cleanup:dist:
-    desc: Remove build artifacts
-    cmd: pnpm dlx del-cli .{output,tanstack} build web/output codegen storage
-
-  cleanup:deps:
-    desc: Remove dependencies
-    cmd: pnpm dlx del-cli pnpm-lock.yaml pnpm-workspace.yaml node_modules vendor
-
-  update-deps:
-    desc: Update dependencies
-    deps: [rpc:generate]
-    cmds:
-      - pnpm exec npm-check-updates --configFileName .ncurc.json
-      - go mod download && go mod tidy
-
-  # ----------------------------------------------------------------------------
-  # Docker
-  # ----------------------------------------------------------------------------
-  docker:build:
-    desc: Build the Docker image
-    vars:
-      BUILD_HASH:
-        sh: git rev-parse --short HEAD 2>/dev/null || echo dev
-      BUILD_DATE:
-        sh: date -u +%Y-%m-%dT%H:%M:%SZ
-    cmds:
-      - |
-          docker build -f ./deploy/Dockerfile . \
-          --build-arg DISTROLESS_TAG=debug-nonroot \
-          --build-arg BUILD_VERSION={{.APP_VERSION}} \
-          --build-arg BUILD_HASH={{.BUILD_HASH}} \
-          --build-arg BUILD_DATE={{.BUILD_DATE}} \
-          -t {{.IMAGE}}:{{.APP_VERSION}}-dev \
-          -t {{.IMAGE}}:latest-dev {{.CLI_ARGS}}
-      - docker image list --filter reference={{.IMAGE}}:*
-
-  docker:run:
-    desc: Run the Docker image
-    cmd: |
-      docker run --network=host --rm -it \
-      --env-file=.env.local -v $(pwd)/storage:/srv/storage \
-      {{.CLI_ARGS}} {{.IMAGE}}:latest-dev
-
-  docker:shell:
-    desc: Open a shell in the Docker image
-    cmds:
-      - task: docker:run
-        vars:
-          CLI_ARGS: --entrypoint /busybox/sh
-
-  docker:push:
-    desc: Push the Docker image
-    cmd: docker push {{.IMAGE}}:latest-dev && docker push {{.IMAGE}}:{{.APP_VERSION}}-dev
-
-  docker:prune:
-    desc: Remove the Docker image
-    cmd: docker image rm --force $(docker image list --filter reference={{.IMAGE}}:* -q)
-
-  docker:images:
-    desc: List project Docker images
-    cmd: docker image list --filter reference={{.IMAGE}}:*
-
-  docker:check:
-    desc: Scan the Docker image for vulnerabilities
-    cmd: grype --scope all-layers {{.IMAGE}}:latest-dev
+    cmd: task --list
 
   # ----------------------------------------------------------------------------
   # Docker compose

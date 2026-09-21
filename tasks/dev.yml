@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+tasks:
+  dev:
+    desc: Run Vite dev server (frontend :3000 + Go API :3080)
+    deps: [rpc:generate]
+    cmd: pnpm exec vite dev {{.CLI_ARGS}}
+
+  run:
+    desc: Run the Go backend directly (debug build)
+    cmd: go run -tags debug ./cmd {{.CLI_ARGS}}
+
+  email:dev:
+    desc: Run React Email dev UI (:3030)
+    cmd: pnpm exec email dev --dir ./email/templates --port 3030
+
+  email:build:
+    desc: Compile email templates only (no Go binary, no SPA bundle)
+    cmd: TANGO_SKIP_GO=1 pnpm exec vite build

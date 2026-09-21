@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+tasks:
+  cleanup:
+    desc: Remove build artifacts and dependencies
+    cmds:
+      - task: cleanup:dist
+      - task: cleanup:deps
+
+  cleanup:dist:
+    desc: Remove build artifacts
+    cmd: pnpm dlx del-cli .{output,tanstack} build web/output codegen storage
+
+  cleanup:deps:
+    desc: Remove dependencies
+    cmd: pnpm dlx del-cli pnpm-lock.yaml pnpm-workspace.yaml node_modules vendor

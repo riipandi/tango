@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+tasks:
+  test:
+    desc: Run all tests (Go + frontend)
+    deps: [rpc:generate]
+    cmds:
+      - task: test:go
+      - task: test:ui
+
+  test:go:
+    desc: Run Go unit tests (pass packages or flags after `--`)
+    cmd: gotestsum --format testname {{.CLI_ARGS | default "./..."}}
+
+  test:go:debug:
+    desc: Run Go unit tests for the debug build
+    cmd: gotestsum --format testname -- -tags debug {{.CLI_ARGS | default "./cmd/... ./database/..."}}
+
+  test:ui:
+    desc: Run frontend unit tests
+    cmd: pnpm exec vitest run {{.CLI_ARGS}}
+
+  test:sdk:
+    desc: Run unit tests for API Client
+    cmd: pnpm exec vitest run --project api-client {{.CLI_ARGS}}
+
+  coverage:
+    desc: Run Go tests with coverage report
+    cmds:
+      - gotestsum --format testname -- -coverprofile=.output/coverage.out ./...
+      - go tool cover -func=.output/coverage.out | tail -1
