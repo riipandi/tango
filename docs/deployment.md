@@ -32,6 +32,14 @@ pnpm --silent generate:key
 sed -e '/^[[:space:]]*#/d' -e '/^$/d' .env.production | fly secrets import
 fly secrets list
 
+# Check the config file before deploying it. The file is the single source of
+# truth and is required at runtime, so validate it against the same environment
+# the app will see.
+go run ./cmd config:validate --config-file=app.config.json
+
+# Ship the config file with the app. It holds env: directives, never a secret,
+# so it can live in the image or in the repository.
+
 # Initialize deployment
 fly deploy --remote-only --no-public-ips --now --skip-release-command
 

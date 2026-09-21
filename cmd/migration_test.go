@@ -32,10 +32,28 @@ func writeEnvFile(t *testing.T, dsn string) string {
 }
 
 // runMigrateCmd executes a migration command with args and returns stdout.
+//
+// Every migration command needs a DSN, so the config file names one and the test
+// supplies it through DATABASE_URL. A test that needs a data directory passes it
+// to runMigrateCmdIn.
 func runMigrateCmd(t *testing.T, cmd *cli.Command, stdin string, args ...string) (string, error) {
 	t.Helper()
-	var out bytes.Buffer
+	return runMigrateCmdIn(t, "", cmd, stdin, args...)
+}
 
+// runMigrateCmdIn runs a migration command with an explicit data directory.
+func runMigrateCmdIn(
+	t *testing.T,
+	dataDir string,
+	cmd *cli.Command,
+	stdin string,
+	args ...string,
+) (string, error) {
+	t.Helper()
+
+	configFor(t, dataDir)
+
+	var out bytes.Buffer
 	root := testRoot(&out, stdin, cmd)
 	err := root.Run(context.Background(), append([]string{"tango", cmd.Name}, args...))
 	return out.String(), err
@@ -66,6 +84,20 @@ func TestDatabaseURLFallsBackToEnvironment(t *testing.T) {
 }
 
 func TestDatabaseURLMissing(t *testing.T) {
+	// The file references env:DATABASE_URL, so an unset variable leaves the key
+	// empty. The command reports the variable by name, which is the message a
+	// user needs; the unresolved directive is Validate's to report.
+	_, err := resolveDatabaseURL(t, "")
+	require.ErrorIs(t, err, ErrDatabaseURLUnset)
+	assert.Contains(t, err.Error(), "DATABASE_URL")
+}
+
+func TestDatabaseURLKeyOmittedFromTheFile(t *testing.T) {
+	// A file that says nothing about database.url leaves the key at its empty
+	// default, which is the case ErrDatabaseURLUnset reports.
+	useConfig(t, `{"log": {"level": "info"}}`)
+	t.Setenv(envfile.DatabaseURL, "")
+
 	_, err := resolveDatabaseURL(t, "")
 	require.ErrorIs(t, err, ErrDatabaseURLUnset)
 }
@@ -74,6 +106,8 @@ func TestDatabaseURLMissing(t *testing.T) {
 // layer, so the env-file flag wins over the environment.
 func resolveDatabaseURL(t *testing.T, envFile string) (string, error) {
 	t.Helper()
+
+	configFor(t, "")
 
 	var resolved string
 	cmd := &cli.Command{

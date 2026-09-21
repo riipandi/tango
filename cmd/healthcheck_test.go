@@ -35,17 +35,35 @@ func runHealthCmd(t *testing.T, args ...string) (string, error) {
 	return runHealthCmdIn(t, t.TempDir(), args...)
 }
 
-// runHealthCmdIn runs the health command with an explicit data directory, set
-// through the environment so it reaches the config layer.
+// runHealthCmdIn runs the health command with an explicit data directory. The
+// directory is written into the config file, because the data directory has no
+// flag and no variable of its own: the file is the only place it is set.
 func runHealthCmdIn(t *testing.T, dataDir string, args ...string) (string, error) {
 	t.Helper()
 
-	t.Setenv(config.EnvName("app.data_dir"), dataDir)
+	configFor(t, dataDir)
+
+	// A container that starts under load answers slower than the default probe
+	// budget, which would fail a healthy check for a reason the test is not
+	// about. A test that exercises the timeout passes its own --timeout.
+	if !hasFlag(args, "timeout") {
+		args = append([]string{"--timeout=30s"}, args...)
+	}
 
 	var out bytes.Buffer
 	root := testRoot(&out, "", healthCheckCmd)
 	err := root.Run(context.Background(), append([]string{"tango", healthCheckCmd.Name}, args...))
 	return out.String(), err
+}
+
+// hasFlag reports whether args names the flag, with either = or a space.
+func hasFlag(args []string, name string) bool {
+	for _, arg := range args {
+		if arg == "--"+name || strings.HasPrefix(arg, "--"+name+"=") {
+			return true
+		}
+	}
+	return false
 }
 
 // healthEnvFile writes an env file pointing at dsn.

@@ -3,7 +3,9 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -24,6 +26,13 @@ func (c Config) Validate() error {
 		if !ok {
 			problems = append(problems, fmt.Errorf(format, args...))
 		}
+	}
+
+	// An unresolved directive is reported first: the key it names kept its
+	// default, so every rule about that key would otherwise fire as well and
+	// bury the one problem the user has to fix.
+	for _, key := range slices.Sorted(maps.Keys(c.unresolved)) {
+		problems = append(problems, fmt.Errorf("%s: %s is not set", key, c.unresolved[key]))
 	}
 
 	check(isOneOf(c.App.Env, EnvDevelopment, EnvStaging, EnvProduction, EnvTest),
@@ -91,7 +100,18 @@ func (c Config) Validate() error {
 	if len(problems) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%w:\n  %s", ErrInvalid, errors.Join(problems...))
+	return fmt.Errorf("%w:\n%s", ErrInvalid, indentProblems(problems))
+}
+
+// indentProblems renders one problem per line, each indented under the header.
+// Every line is indented, not just the first: errors.Join separates them with a
+// newline, so a single indent would leave the rest at column zero.
+func indentProblems(problems []error) string {
+	lines := make([]string, 0, len(problems))
+	for _, problem := range problems {
+		lines = append(lines, "  "+problem.Error())
+	}
+	return strings.Join(lines, "\n")
 }
 
 // isOneOf reports whether value matches one of the accepted values.
@@ -160,6 +180,7 @@ func (c Config) Redacted() Config {
 	out.Auth.SecretKey = redacted
 	out.Database.URL = RedactDSN(c.Database.URL)
 	out.origin = nil
+	out.unresolved = nil
 	return out
 }
 

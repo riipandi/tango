@@ -21,10 +21,23 @@ func resolveAndValidate(t *testing.T, opts config.Options) (config.Config, error
 	return cfg, cfg.Validate()
 }
 
-func TestValidationReportsEveryProblem(t *testing.T) {
-	// No DATABASE_URL and an impossible port: both must be reported at once.
+// resolveFile validates the configuration a file body resolves to.
+func resolveFile(t *testing.T, extra string) error {
+	t.Helper()
+
 	_, err := resolveAndValidate(t, config.Options{
-		Environ: []string{"AUTH_SECRET_KEY=" + secret, "SERVER_PORT=0"},
+		ConfigFile: configFile(t, extra),
+		Environ:    baseEnv(),
+	})
+	return err
+}
+
+func TestValidationReportsEveryProblem(t *testing.T) {
+	// A missing DSN and an impossible port: both must be reported at once, so a
+	// file with several mistakes is fixed in one pass.
+	_, err := resolveAndValidate(t, config.Options{
+		ConfigFile: writeConfig(t, `{"auth": {"secret_key": "env:AUTH_SECRET_KEY"}, "server": {"port": 0}}`),
+		Environ:    []string{"AUTH_SECRET_KEY=" + secret},
 	})
 	require.ErrorIs(t, err, config.ErrInvalid)
 	assert.Contains(t, err.Error(), "database.url")
@@ -32,9 +45,7 @@ func TestValidationReportsEveryProblem(t *testing.T) {
 }
 
 func TestValidationRejectsBadDriver(t *testing.T) {
-	_, err := resolveAndValidate(t, config.Options{
-		Environ: append(baseEnv(), "CACHE_DRIVER=bogus"),
-	})
+	err := resolveFile(t, `"cache": {"driver": "bogus"}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
 	assert.Contains(t, err.Error(), "cache.driver")
 }
@@ -42,34 +53,41 @@ func TestValidationRejectsBadDriver(t *testing.T) {
 func TestValidationRequiresASigningKey(t *testing.T) {
 	// The key pair and the HMAC secret are alternatives; neither present means
 	// no token could be signed.
-	_, err := resolveAndValidate(t, config.Options{Environ: []string{"DATABASE_URL=" + dsn}})
+	_, err := resolveAndValidate(t, config.Options{
+		ConfigFile: writeConfig(t, `{"database": {"url": "env:DATABASE_URL"}}`),
+		Environ:    []string{"DATABASE_URL=" + dsn},
+	})
 	require.ErrorIs(t, err, config.ErrInvalid)
 	assert.Contains(t, err.Error(), "auth.private_key or auth.secret_key")
 }
 
 func TestValidationRequiresPublicKeyWithPrivateKey(t *testing.T) {
-	_, err := resolveAndValidate(t, config.Options{
-		Environ: append(baseEnv(), "AUTH_PRIVATE_KEY=abc"),
-	})
+	err := resolveFile(t, `"auth": {"private_key": "abc"}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
 	assert.Contains(t, err.Error(), "auth.public_key")
 }
 
 func TestValidationRejectsMinAboveMax(t *testing.T) {
-	_, err := resolveAndValidate(t, config.Options{
-		Environ: append(baseEnv(), "DATABASE_MIN_CONNS=20", "DATABASE_MAX_CONNS=5"),
-	})
+	err := resolveFile(t, `"database": {"min_conns": 20, "max_conns": 5}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
 	assert.Contains(t, err.Error(), "database.min_conns")
 }
 
 func TestValidationAcceptsAValidConfiguration(t *testing.T) {
-	_, err := resolveAndValidate(t, config.Options{Environ: baseEnv()})
-	require.NoError(t, err)
+	require.NoError(t, resolveFile(t, ""))
+}
+
+func TestValidationRejectsAnInvalidEnvironmentName(t *testing.T) {
+	err := resolveFile(t, `"app": {"env": "prod"}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "app.env")
 }
 
 func TestRedactedHidesSecrets(t *testing.T) {
-	cfg, err := resolveAndValidate(t, config.Options{Environ: baseEnv()})
+	cfg, err := resolveAndValidate(t, config.Options{
+		ConfigFile: configFile(t, ""),
+		Environ:    baseEnv(),
+	})
 	require.NoError(t, err)
 
 	redacted := cfg.Redacted()
@@ -82,14 +100,15 @@ func TestRedactedHidesSecrets(t *testing.T) {
 
 func TestRedactedLeavesNothingBehind(t *testing.T) {
 	cfg, err := resolveAndValidate(t, config.Options{
-		Environ: append(baseEnv(), "APP_SECRET_KEY="+secret, "AUTH_PRIVATE_KEY=pk", "AUTH_PUBLIC_KEY=pub"),
+		ConfigFile: configFile(t, `"app": {"secret_key": "env:APP_SECRET_KEY"}`),
+		Environ:    append(baseEnv(), "APP_SECRET_KEY="+secret),
 	})
 	require.NoError(t, err)
 
 	redacted := cfg.Redacted()
 
 	assert.Empty(t, redacted.Origin("database.url"), "Origins must be dropped with the secrets")
-	for _, secret := range []string{cfg.App.SecretKey, cfg.Auth.SecretKey, cfg.Auth.PrivateKey, "pass"} {
+	for _, secret := range []string{cfg.App.SecretKey, cfg.Auth.SecretKey, cfg.Database.URL} {
 		assert.NotContains(t, redacted.String(), secret)
 	}
 }

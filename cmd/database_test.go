@@ -16,7 +16,6 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/riipandi/tango/database"
-	"github.com/riipandi/tango/internal/config"
 )
 
 // runDBExportCmd runs db:export with the given stdin and arguments.
@@ -44,9 +43,9 @@ func runDBCmd(t *testing.T, command *cli.Command, stdin string, args ...string) 
 	return runDBCmdIn(t, t.TempDir(), command, stdin, args...)
 }
 
-// runDBCmdIn runs one database command with an explicit data directory, set
-// through the environment so it reaches the config layer. There is no --data-dir
-// flag: the directory comes from the configuration.
+// runDBCmdIn runs one database command with an explicit data directory, written
+// into the config file. There is no --data-dir flag: the file is the only place
+// the directory is set.
 func runDBCmdIn(
 	t *testing.T,
 	dataDir string,
@@ -56,7 +55,7 @@ func runDBCmdIn(
 ) (string, error) {
 	t.Helper()
 
-	t.Setenv(config.EnvName("app.data_dir"), dataDir)
+	configFor(t, dataDir)
 
 	var out bytes.Buffer
 	root := testRoot(&out, stdin, dbExportCmd, dbImportCmd)

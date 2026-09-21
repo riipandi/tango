@@ -25,14 +25,57 @@ pnpm dlx tiged riipandi/tango myapp-name
 1. Install the Go toolchain binaries: `task deps`
 2. Find and replace `tango`, `Tango`, and `MyApplication` across the source files.
 3. Install the frontend dependencies: `pnpm install`
-4. Create your development env file: `cp .env.example .env.local`
-5. Start the local Postgres: `docker compose up -d pgsql`
-6. Set `DATABASE_URL` in `.env.local` (see `.env.example`)
-7. Run the database migrations: `task db:migrate`
-8. Start the development servers: `task dev`
+4. Write a starter config file: `task config:generate`
+5. Generate the secret keys into your env file: `task key:generate`
+6. Start the local Postgres: `docker compose up -d pgsql`
+7. Set `DATABASE_URL` in `.env.local` (see `.env.example`)
+8. Run the database migrations: `task db:migrate`
+9. Start the development servers: `task dev`
 
 Vite serves the frontend on `:3000` and proxies `/api`, `/rpc`, `/.well-known`, `/metrics`, and `/static` to Go on `:3080`.
 Go files are watched and rebuilt automatically.
+
+### Configuration
+
+`app.config.json` is the single source of truth. `internal/config` merges three layers, lowest to
+highest: the built-in defaults, the config file, then the command-line flags. A flag set for one run
+wins over the file, which is what makes `serve --port=9000` work without editing anything.
+
+The file is required, so `config:generate` is the first command a fresh checkout runs. It writes
+every key with its default and never writes a secret literally: each secret is an `env:` directive
+naming the variable that holds it, so the file is safe to keep.
+
+```bash
+# Write app.config.json, or a file somewhere else.
+task config:generate
+go run -tags debug ./cmd config:generate --output=/tmp/app.config.json
+
+# Check the file and the variables it references. Nothing is written.
+task config:validate
+go run -tags debug ./cmd config:validate --config-file=/tmp/app.config.json
+```
+
+The environment is not a layer. A variable reaches a config key only where the file references it,
+with `env:NAME` as a whole value or `${NAME}` inline:
+
+```json
+{
+  "database": { "url": "env:MY_DSN" },
+  "server": { "base_url": "http://${MY_HOST}:3080" }
+}
+```
+
+Name the variable whatever you like; the file decides which key it fills. A variable nobody
+referenced cannot change a value, so an unrelated export in a shell can never alter a run.
+
+A directive naming a variable that is not set does not stop a command that does not read that key:
+the key keeps its default and only the command that needs it reports the problem. `config:validate`
+reports every unresolved variable at once.
+
+The variable names the generated file uses are the conventional ones (`DATABASE_URL`,
+`AUTH_SECRET_KEY`), which is also how `key:generate` writes them and how `.env.example` lists them.
+`--env-file` adds a dotenv file to the table the directives resolve from, and wins over the system
+environment for a name both set.
 
 ### Database
 

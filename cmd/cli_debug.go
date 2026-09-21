@@ -28,6 +28,8 @@ var rootCmd = &cli.Command{
 		keyGenerateCmd,
 		keyRotateCmd,
 		healthCheckCmd,
+		configGenerateCmd,
+		configValidateCmd,
 	},
 	Flags: []cli.Flag{
 		&cli.StringFlag{

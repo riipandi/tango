@@ -10,18 +10,20 @@ import (
 var serveCmd = &cli.Command{
 	Name:  "serve",
 	Usage: "Start the application server",
+	Description: `Starts the application HTTP server.
+--host, --port, and --base-url override the config file for this run,
+so a value can be tried without editing the file. Without them the
+file decides.`,
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:        "host",
 			Usage:       "Host to bind to",
 			DefaultText: "0.0.0.0",
-			Value:       "0.0.0.0",
 		},
 		&cli.UintFlag{
 			Name:        "port",
 			Usage:       "Port to bind to",
 			DefaultText: "3080",
-			Value:       3080,
 		},
 		&cli.StringFlag{
 			Name:  "base-url",

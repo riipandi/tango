@@ -92,7 +92,6 @@ sbom-*
 # Generated files
 routeTree.gen.ts
 routes.gen.ts
-.rpc-gen.stamp
 /codegen/
 *.gen.ts
 *.gen.go

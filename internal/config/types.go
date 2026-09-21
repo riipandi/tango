@@ -23,6 +23,9 @@ type Config struct {
 	// origin records which source last set each key, for conflict resolution.
 	// It is unexported so it never reaches JSON or a log line.
 	origin map[string]string
+	// unresolved records the keys whose directive named a missing variable,
+	// mapped to the variable name. It is state about the sources, not config.
+	unresolved map[string]string
 }
 
 // App holds process-level settings.

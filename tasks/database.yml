@@ -3,6 +3,14 @@
 version: "3"
 
 tasks:
+  config:generate:
+    desc: Write a starter app.config.json
+    cmd: go run -tags debug ./cmd config:generate {{.CLI_ARGS}}
+
+  config:validate:
+    desc: Check app.config.json and the variables it references
+    cmd: go run -tags debug ./cmd config:validate {{.CLI_ARGS}}
+
   db:migrate:
     desc: Run database migrations
     cmd: go run -tags debug ./cmd migrate:up --env-file=.env.local {{.CLI_ARGS}}

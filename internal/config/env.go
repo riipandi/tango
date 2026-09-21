@@ -1,82 +1,50 @@
 package config
 
 import (
+	"maps"
+	"slices"
 	"strings"
 )
 
 // Delim is the key separator used throughout the config layer. It is the same
-// delimiter the JSON file uses for nesting, so a file key and an environment
-// variable name resolve to the same config key.
+// delimiter the JSON file uses for nesting, so a file key and a config key are
+// the same string.
 const Delim = "."
 
 // Layer names, lowest precedence first. Load applies them in this order, so a
-// later layer wins: the JSON config file replaces a built-in default, the env
-// file replaces the system environment, and a command-line flag replaces both.
+// later layer wins: the JSON config file replaces a built-in default, and a
+// command-line flag replaces both.
+//
+// The environment is deliberately not a layer. A variable reaches a config key
+// only where the config file references it, with env: or ${...}, so the file
+// stays the single source of truth: a variable nobody referenced cannot change a
+// value, and no key needs a fixed variable name.
 const (
 	LayerDefault    = "default"
 	LayerConfigFile = "config-file"
-	LayerSystemEnv  = "system-env"
-	LayerEnvFile    = "env-file"
 	LayerFlag       = "flag"
 )
 
-// EnvName returns the environment variable name that sets a config key:
-// database.url becomes DATABASE_URL. The mapping is total, so a key is always
-// reachable from the environment under exactly one name.
+// EnvName returns the conventional environment variable name for a config key:
+// database.url becomes DATABASE_URL.
+//
+// It is a naming convention, not a mapping the loader applies: nothing reaches a
+// config key by this name alone. It exists so the variable names this package
+// writes into a generated config file are the ones key:generate writes and
+// .env.example lists.
 func EnvName(key string) string {
 	return strings.ToUpper(strings.ReplaceAll(key, Delim, "_"))
 }
 
-// envLayer builds a flat config map from the system environment, keeping only
-// the variables that name a known config key.
-func envLayer(environ []string) map[string]any {
-	return pickEnv(environ, func(name string) (string, bool) { return name, true })
-}
-
-// envFileLayer maps the variables of a dotenv file to config keys. A name that
-// does not match a key is dropped, the same rule the system environment follows.
-func envFileLayer(values map[string]string) map[string]any {
-	entries := make([]string, 0, len(values))
-	for name, value := range values {
-		entries = append(entries, name+"="+value)
+// interpolateEnv builds the table the config file's directives resolve from. The
+// values of --env-file come first, because lookup returns the first match and a
+// user who named an env file meant it to be the one that answers.
+func interpolateEnv(environ []string, values map[string]string) []string {
+	table := make([]string, 0, len(environ)+len(values))
+	for _, name := range slices.Sorted(maps.Keys(values)) {
+		table = append(table, name+"="+values[name])
 	}
-	return pickEnv(entries, func(name string) (string, bool) { return name, true })
-}
-
-// pickEnv keeps the variables that name a known config key. The mapping is
-// explicit rather than derived from the variable name, because a config key may
-// contain an underscore: deriving it would turn AUTH_SECRET_KEY into
-// auth.secret.key, which is not a key at all.
-func pickEnv(environ []string, accept func(string) (string, bool)) map[string]any {
-	known := envKeyMap()
-	out := make(map[string]any)
-	for _, entry := range environ {
-		name, value, found := strings.Cut(entry, "=")
-		if !found || name == "" {
-			continue
-		}
-		name, ok := accept(name)
-		if !ok {
-			continue
-		}
-		key, ok := known[name]
-		if !ok {
-			continue
-		}
-		out[key] = value
-	}
-	return out
-}
-
-// envKeyMap maps an environment variable name to its config key. It is built
-// from the struct, so it cannot drift from the fields.
-func envKeyMap() map[string]string {
-	keys := DefaultsMap()
-	out := make(map[string]string, len(keys))
-	for key := range keys {
-		out[EnvName(key)] = key
-	}
-	return out
+	return append(table, environ...)
 }
 
 // lookup reads a variable from an environment slice.

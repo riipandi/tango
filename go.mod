@@ -14,7 +14,6 @@ require (
 	github.com/huandu/go-sqlbuilder v1.43.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/klauspost/compress v1.20.0
-	github.com/knadh/koanf/providers/cliflagv3 v1.1.1
 	github.com/knadh/koanf/providers/confmap v1.0.1
 	github.com/knadh/koanf/v2 v2.3.6
 	github.com/lestrrat-go/jwx/v3 v3.3.0
@@ -92,6 +91,7 @@ require (
 	github.com/jdx/go-netrc v1.0.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/knadh/koanf/maps v0.1.3 // indirect
+	github.com/knadh/koanf/providers/cliflagv3 v1.1.1 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
 	github.com/lestrrat-go/dsig v1.4.0 // indirect
 	github.com/lestrrat-go/dsig-secp256k1 v1.0.0 // indirect

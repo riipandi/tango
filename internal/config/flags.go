@@ -18,16 +18,15 @@ const (
 )
 
 // flagBindings maps a command-line flag name to the config key it sets. Only a
-// flag listed here reaches the configuration: a flag that exists for the
-// command's own behavior, such as --dry-run, is not a config key and must not
-// become one.
+// flag listed here reaches the configuration, and a flag left unset is absent
+// from the layer, so it cannot override the config file with a value nobody
+// typed.
 //
-// The map is the single place a flag and a config key are tied together, so a
-// renamed key is a one-line change and the loader never guesses.
-//
-// app.data_dir is deliberately absent: the data directory is set through the
-// configuration (the config file or APP_DATA_DIR) and has no flag, so a run
-// cannot disagree with the configuration about where files live.
+// A flag belongs here when it names a setting the config file also holds and the
+// user is expected to try a value for one run: `serve --port=9000` overrides
+// server.port without editing the file. A flag that changes what a command does,
+// such as --dry-run or --force, is not listed: it is behavior, not
+// configuration, and must never become a key.
 var flagBindings = map[string]string{
 	"host":     "server.host",
 	"port":     "server.port",
@@ -71,9 +70,7 @@ func Resolve(cmd *cli.Command) (Config, error) {
 //
 // Every level is read because a flag belongs to the command that declares it: the
 // root command owns --config-file, and a subcommand owns its own flags such as
-// --host. A flag left at its default is not a decision the user made, so it is
-// absent from the layer and cannot override a config file with a value nobody
-// typed.
+// --host.
 func flagLayer(cmd *cli.Command) map[string]any {
 	out := make(map[string]any)
 	for _, level := range lineage(cmd) {
