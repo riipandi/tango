@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+tasks:
+  # ----------------------------------------------------------------------------
+  # Observability stack
+  #
+  # The services live in docker/compose.yaml, which includes compose-metrics.yaml.
+  # The tasks here are the shortcuts a developer needs while wiring the
+  # application to the stack: start it, check it, and read back what the
+  # application shipped.
+  # ----------------------------------------------------------------------------
+
+  metrics:up:
+    desc: Start the observability stack (VictoriaMetrics, VictoriaLogs, VictoriaTraces, Perses)
+    cmd: docker compose -f docker/compose.yaml up --detach --remove-orphans victoria-metrics victoria-logs victoria-traces perses
+
+  metrics:endpoints:
+    desc: Print the stack endpoints and the LOG_* variables that reach them
+    cmds:
+      - echo "VictoriaLogs OTLP  http://localhost:9428/insert/opentelemetry/v1/logs"
+      - echo "VictoriaLogs query http://localhost:9428/select/logsql/query"
+      - echo "VictoriaMetrics    http://localhost:8428"
+      - echo "VictoriaTraces     http://localhost:10428/select/jaeger"
+      - echo "Perses UI          http://localhost:3380"
+      - echo ""
+      - echo "Set these in .env.local to ship from the application:"
+      - echo "  LOG_OTLP_ENDPOINT=http://localhost:9428/insert/opentelemetry/v1/logs"
+      - echo "  LOG_TRANSPORT=console,otlp"
+
+  metrics:query:
+    desc: Run a LogsQL query against the local log store (pass the query after --)
+    vars:
+      QUERY: '{{.CLI_ARGS | default "*"}}'
+    cmd: |
+      # The query is written unquoted in the command on purpose: Task substitutes
+      # a variable into the shell line and quotes it, and wrapping it again here
+      # would nest the quotes and lose them. A LogsQL query contains spaces and
+      # quotes, so `query={{.QUERY}}` is what keeps `a:"b" c:"d"` one value.
+      curl -sS --get --data-urlencode query={{.QUERY}} --data-urlencode 'limit=20' \
+      http://localhost:9428/select/logsql/query
+
+  metrics:targets:
+    desc: Show the scrape targets VictoriaMetrics is collecting
+    cmd: curl -sS 'http://localhost:8428/api/v1/targets?state=active' | jq -r '.data.activeTargets[] | "\(.labels.job)\t\(.scrapeUrl)\t\(.health)"'
+
+  metrics:smoke:
+    desc: Ship one line through every configured transport and read it back
+    cmd: go run -tags debug ./cmd logger:smoke --env-file=.env.local {{.CLI_ARGS}}
+
+  metrics:down:
+    desc: Stop the observability stack
+    cmd: docker compose -f docker/compose.yaml stop victoria-metrics victoria-logs victoria-traces perses

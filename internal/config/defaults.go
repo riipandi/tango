@@ -7,6 +7,15 @@ import "time"
 // health check, and it matches the compose volume (./storage:/srv/storage).
 const DefaultDataDir = "storage"
 
+// LogDir is the subdirectory of Storage.LocalPath the file sink writes to. It is
+// a subdirectory rather than the data directory itself so the rotating files sit
+// beside the backups and the certificates instead of among them.
+const LogDir = "logs"
+
+// LogFileName is the name of the active log file, inside LogDir. The rotated
+// files take a timestamp suffix from it.
+const LogFileName = "tango.log"
+
 // DefaultS3Region is the signing region a deployment that never sets one gets.
 //
 // A region cannot be empty: the S3 client refuses to resolve an endpoint without
@@ -36,8 +45,8 @@ const (
 	LogError = "error"
 )
 
-// Defaults for the rotating file sink. A file is opt-in, so these apply only
-// once log.file.filename names one.
+// Defaults for the rotating file sink. The sink is opt-in, so these apply only
+// once log.transport names it.
 const (
 	// DefaultLogMaxSizeMB is the size at which the active file is rotated. It
 	// matches the sink's own default, so leaving the key out and writing 100
@@ -87,17 +96,18 @@ func Default() Config {
 		Log: Log{
 			Level:  LogInfo,
 			Format: LogPretty,
+			// The console alone: a fresh checkout writes to the terminal and
+			// nothing else, so no run needs a volume or a collector to start.
+			Transport: []string{LogTransportConsole},
 			File: LogFile{
-				// No filename: the console is the only sink until one is named.
 				MaxSize:    DefaultLogMaxSizeMB,
 				MaxBackups: DefaultLogMaxBackups,
 				MaxAge:     DefaultLogMaxAge,
 				Compress:   true,
 			},
 			OTLP: LogOTLP{
-				// Off, and pointing at the collector a local OTLP receiver
-				// listens on, so switching Enable on is the only step needed.
-				Enable:   false,
+				// The collector a local OTLP receiver listens on, so naming the
+				// transport is the only step needed.
 				Endpoint: DefaultOTLPEndpoint,
 			},
 		},

@@ -19,7 +19,7 @@ func TestACollectorThatIsDownDoesNotStopConstruction(t *testing.T) {
 	// recover when the collector comes back. A constructor that dialled would
 	// turn an observability outage into an application outage.
 	cfg := config.Default()
-	cfg.Log.OTLP.Enable = true
+	cfg.Log.Transport = []string{config.LogTransportConsole, config.LogTransportOTLP}
 	cfg.Log.OTLP.Endpoint = "http://127.0.0.1:1"
 
 	buf := &bytes.Buffer{}

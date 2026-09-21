@@ -73,9 +73,15 @@ func fullConfigFrom(ctx context.Context) (config.Config, error) {
 //
 // A failure is stored, not returned. The command that needs the configuration
 // reports it; a command that bootstraps the file runs without it.
+//
+// The logger state is installed here too, so a command can log through
+// loggerFrom without resolving the configuration again. It is only *state*: the
+// logger itself is built on first use, because the bootstrap commands have no
+// configuration to build one from.
 func initConfig(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 	cfg, err := config.Resolve(cmd)
-	return context.WithValue(ctx, configKey{}, configState{cfg: cfg, err: err}), nil
+	ctx = context.WithValue(ctx, configKey{}, configState{cfg: cfg, err: err})
+	return installLogger(ctx, cmd), nil
 }
 
 // openStore opens the pool a command works through. The caller owns the handle

@@ -3,6 +3,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/riipandi/tango/internal/config"
 	"github.com/urfave/cli/v3"
 )
@@ -27,6 +29,7 @@ var rootCmd = &cli.Command{
 		configGenerateCmd,
 		configValidateCmd,
 		configPrintCmd,
+		loggerSmokeCmd,
 	},
 	Flags: []cli.Flag{
 		&cli.StringFlag{
@@ -46,4 +49,10 @@ var rootCmd = &cli.Command{
 		},
 	},
 	Before: initConfig,
+	// The logger is installed after the configuration is resolved, and closed
+	// after the command returns, so a run flushes what it queued. Both are
+	// attached to the root command because every subcommand inherits them.
+	After: func(ctx context.Context, cmd *cli.Command) error {
+		return closeLogger(ctx)
+	},
 }

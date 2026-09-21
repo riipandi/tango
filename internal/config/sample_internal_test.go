@@ -132,20 +132,28 @@ func TestDurationKeysMatchTheStruct(t *testing.T) {
 }
 
 func TestSampleWritesTheLogKeys(t *testing.T) {
-	// The file sink is off until a filename names one, so the generated file
-	// writes null rather than an empty string: the same resolution, read as what
-	// it means. The collector is the other way round: whether a deployment has
-	// one, and where it listens, are the deployment's to know, so both keys are
-	// directives.
+	// The transport list is a directive, because a deployment is the one that
+	// decides whether it keeps the terminal, ships to a collector, or both. The
+	// collector address is a directive for the same reason.
 	flat := sampleDoc(t)
 
-	assert.Nil(t, flat["log.file.filename"], "no file sink is written as null, not as an empty path")
-	assert.Equal(t, "env:LOG_OTLP_ENABLE", flat["log.otlp.enable"])
+	assert.Equal(t, "env:LOG_TRANSPORT", flat["log.transport"])
 	assert.Equal(t, "env:LOG_OTLP_ENDPOINT", flat["log.otlp.endpoint"])
 	assert.Equal(t, float64(100), flat["log.file.max_size"])
 	assert.Equal(t, float64(7), flat["log.file.max_backups"])
 	assert.Equal(t, float64(30), flat["log.file.max_age"])
 	assert.Equal(t, true, flat["log.file.compress"])
+}
+
+func TestSampleWritesTheTransportListAsOneDirective(t *testing.T) {
+	// A list is written as a single env: directive rather than as an array of
+	// directives: an environment variable can only carry one string, and the
+	// file layer splits it (see listKeys).
+	flat := sampleDoc(t)
+
+	value, ok := flat["log.transport"].(string)
+	require.True(t, ok, "the list must resolve to one directive, not to an array")
+	assert.Equal(t, "env:LOG_TRANSPORT", value)
 }
 
 func TestSampleRoundTripsThroughLoad(t *testing.T) {

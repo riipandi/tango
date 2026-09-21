@@ -30,13 +30,11 @@ var secretKeys = []string{
 
 // nullKeys are the keys a generated file writes as null rather than as an empty
 // string, because empty has no meaning for them: an empty prefix is "no prefix",
-// and an empty filename is "no file sink", which the key being absent says more
-// directly.
+// which the key being absent says more directly.
 //
 // The two forms resolve alike — a null in the file leaves the key at its default
 // — so this is about what the file reads like, not about what it does.
 var nullKeys = []string{
-	"log.file.filename",
 	"storage.s3.path_prefix",
 }
 
@@ -50,15 +48,21 @@ var nullKeys = []string{
 // PUBLIC_BASE_URL, the name the origin is known by outside this file, not
 // SERVER_BASE_URL.
 //
-// A path is deliberately not here. log.file.filename comes from the file alone,
-// like storage.local_path: where an instance writes its files is a property of
-// the deployment image, and a variable would let a run disagree with the
-// configuration about it.
+// A path is deliberately not here. storage.local_path comes from the file alone:
+// where an instance writes its files is a property of the deployment image, and a
+// variable would let a run disagree with the configuration about it. The file
+// sink has no path key at all for the same reason; it writes under that
+// directory.
 //
 // The collector is the other way round, and reads like the kvstore section: a
 // deployment is the one that knows whether it has a collector and where it
-// listens, so both its keys are directives. The names happen to be what EnvName
-// derives; they are written out for the reason the key is a directive at all.
+// listens, so its endpoint is a directive. The name happens to be what EnvName
+// derives; it is written out for the reason the key is a directive at all.
+//
+// The transport list is a directive for a third reason: it is the one logging
+// key a deployment changes per environment, keeping the terminal locally and
+// shipping to a collector in production, and a comma-separated value is exactly
+// what an environment variable can carry (see listKeys).
 //
 // A key may also appear in secretKeys, which runs first: secretKeys says the
 // value is a secret, and this map says what the variable is called. kvstore.url
@@ -75,8 +79,8 @@ var envKeys = map[string]string{
 	"kvstore.db":              "VALKEY_DB",
 	"kvstore.enable":          "VALKEY_ENABLE",
 	"kvstore.url":             "VALKEY_URL",
-	"log.otlp.enable":         "LOG_OTLP_ENABLE",
 	"log.otlp.endpoint":       "LOG_OTLP_ENDPOINT",
+	"log.transport":           "LOG_TRANSPORT",
 	"mailer.smtp_host":        "MAILER_SMTP_HOST",
 	"mailer.smtp_port":        "MAILER_SMTP_PORT",
 	"mailer.smtp_secure":      "MAILER_SMTP_SECURE",

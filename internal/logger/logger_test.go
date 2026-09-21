@@ -36,6 +36,32 @@ func newLogger(t *testing.T, adjust func(*config.Config)) (*logger.Logger, *byte
 	return log, buf
 }
 
+// newFileLogger builds a logger that writes to a rotating file under a temporary
+// data directory, and returns the path it writes to.
+//
+// The path comes from logger.LogFilePath, not from a second guess here: the sink
+// derives it from storage.local_path, so a test that spelled it out again would
+// pass while the two disagreed.
+func newFileLogger(t *testing.T, adjust func(*config.Config)) (*logger.Logger, *bytes.Buffer, string) {
+	t.Helper()
+
+	dir := t.TempDir()
+	buf := &bytes.Buffer{}
+
+	cfg := config.Default()
+	cfg.Storage.LocalPath = dir
+	cfg.Log.Transport = []string{config.LogTransportConsole, config.LogTransportFile}
+	if adjust != nil {
+		adjust(&cfg)
+	}
+
+	log, err := logger.New(cfg, logger.WithWriter(buf))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, log.Shutdown(context.Background())) })
+
+	return log, buf, logger.LogFilePath(cfg)
+}
+
 func TestConsoleRendersEveryLevelTheConfigurationAllows(t *testing.T) {
 	log, buf := newLogger(t, func(cfg *config.Config) { cfg.Log.Level = config.LogDebug })
 
@@ -92,12 +118,32 @@ func TestConsoleStaysPlainTextOffATerminal(t *testing.T) {
 	assert.NotContains(t, buf.String(), "\x1b[")
 }
 
-func TestFileSinkWritesTheEntryToTheConfiguredPath(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "logs", "tango.log")
+func TestTheDefaultConfigurationWritesOnlyToTheConsole(t *testing.T) {
+	// A fresh checkout writes no files and dials nothing, so nothing has to be
+	// installed before the application runs. This is the default the docs
+	// promise, and the one a container that logs to stdout relies on.
+	assert.Equal(t, []string{config.LogTransportConsole}, config.Default().Log.Transport)
 
-	log, _ := newLogger(t, func(cfg *config.Config) {
-		cfg.Log.File.Filename = path
-	})
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.Storage.LocalPath = dir
+
+	buf := &bytes.Buffer{}
+	log, err := logger.New(cfg, logger.WithWriter(buf))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, log.Shutdown(context.Background())) })
+
+	log.Slog().Info("console only")
+
+	assert.Contains(t, buf.String(), "console only")
+	assert.NoDirExists(t, filepath.Join(dir, config.LogDir),
+		"a run that did not name the file transport must not create its directory")
+}
+
+func TestFileTransportWritesUnderTheDataDirectory(t *testing.T) {
+	// The sink's path is storage.local_path + /logs, so the configuration has one
+	// answer for where this process keeps its files.
+	log, _, path := newFileLogger(t, nil)
 
 	log.Slog().Info("written to disk", "n", 42)
 	require.NoError(t, log.Shutdown(context.Background()))
@@ -115,12 +161,7 @@ func TestFileSinkKeepsItsOwnJSONForm(t *testing.T) {
 	// The console format is what a person reads; a file is read by a machine, so
 	// asking for a pretty console must not put escape codes and column padding
 	// in the file.
-	path := filepath.Join(t.TempDir(), "tango.log")
-
-	log, buf := newLogger(t, func(cfg *config.Config) {
-		cfg.Log.Format = config.LogPretty
-		cfg.Log.File.Filename = path
-	})
+	log, buf, path := newFileLogger(t, func(cfg *config.Config) { cfg.Log.Format = config.LogPretty })
 
 	log.Slog().Info("both sinks")
 	require.NoError(t, log.Shutdown(context.Background()))
@@ -135,8 +176,7 @@ func TestFileSinkKeepsItsOwnJSONForm(t *testing.T) {
 func TestShutdownIsIdempotent(t *testing.T) {
 	// A shutdown path runs once on the happy path and again from a deferred
 	// cleanup, so a second call must not fail or write to a closed file.
-	path := filepath.Join(t.TempDir(), "tango.log")
-	log, _ := newLogger(t, func(cfg *config.Config) { cfg.Log.File.Filename = path })
+	log, _, _ := newFileLogger(t, nil)
 
 	require.NoError(t, log.Shutdown(context.Background()))
 	require.NoError(t, log.Shutdown(context.Background()))
@@ -156,6 +196,28 @@ func TestSetDefaultInstallsTheProcessLogger(t *testing.T) {
 	assert.Contains(t, buf.String(), "from the package default")
 }
 
+func TestUnknownTransportFailsConstruction(t *testing.T) {
+	// Validate refuses a name no sink matches, so this is only reachable from a
+	// configuration nobody checked. It still fails rather than skipping the
+	// entry: a sink that was asked for and quietly not built is the failure the
+	// transport list exists to prevent.
+	cfg := config.Default()
+	cfg.Log.Transport = []string{"syslog"}
+
+	_, err := logger.New(cfg, logger.WithWriter(&bytes.Buffer{}))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "syslog")
+}
+
+func TestNoTransportFailsConstruction(t *testing.T) {
+	cfg := config.Default()
+	cfg.Log.Transport = nil
+
+	_, err := logger.New(cfg, logger.WithWriter(&bytes.Buffer{}))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "log.transport")
+}
+
 func TestUnsetOTLPVariableDoesNotReachTheSink(t *testing.T) {
 	// The configuration is the only source of the endpoint. The exporter reads
 	// OTEL_EXPORTER_OTLP_* on its own, so a stray variable in the environment
@@ -166,7 +228,7 @@ func TestUnsetOTLPVariableDoesNotReachTheSink(t *testing.T) {
 
 	server := newOTLPTestServer(t)
 	cfg := config.Default()
-	cfg.Log.OTLP.Enable = true
+	cfg.Log.Transport = []string{config.LogTransportConsole, config.LogTransportOTLP}
 	cfg.Log.OTLP.Endpoint = server.URL
 
 	log, err := logger.New(cfg, logger.WithWriter(&bytes.Buffer{}))
@@ -190,7 +252,7 @@ func TestOTLPSinkShipsToTheConfiguredEndpoint(t *testing.T) {
 	server := newOTLPTestServer(t)
 
 	cfg := config.Default()
-	cfg.Log.OTLP.Enable = true
+	cfg.Log.Transport = []string{config.LogTransportOTLP}
 	cfg.Log.OTLP.Endpoint = server.URL
 
 	log, err := logger.New(cfg, logger.WithWriter(&bytes.Buffer{}))
@@ -208,7 +270,7 @@ func TestOTLPEndpointPathIsUsedWhenTheConfigurationNamesOne(t *testing.T) {
 	server := newOTLPTestServer(t)
 
 	cfg := config.Default()
-	cfg.Log.OTLP.Enable = true
+	cfg.Log.Transport = []string{config.LogTransportOTLP}
 	cfg.Log.OTLP.Endpoint = server.URL + "/collector/v1/logs"
 
 	log, err := logger.New(cfg, logger.WithWriter(&bytes.Buffer{}))
@@ -223,17 +285,48 @@ func TestOTLPEndpointPathIsUsedWhenTheConfigurationNamesOne(t *testing.T) {
 	assert.Equal(t, "/collector/v1/logs", received[0].path)
 }
 
-func TestDisabledOTLPSinkDialsNothing(t *testing.T) {
+func TestAConfigurationThatOmitsOTLPDialsNothing(t *testing.T) {
 	// The default configuration ships nowhere: a local checkout must run with no
-	// collector, and a disabled backend is never dialled.
+	// collector, and a sink the list does not name is never dialled — not even
+	// when its endpoint is set, which is what keeps a stale address in the file
+	// harmless.
 	server := newOTLPTestServer(t)
 
 	log, _ := newLogger(t, func(cfg *config.Config) {
-		cfg.Log.OTLP.Enable = false
+		cfg.Log.Transport = []string{config.LogTransportConsole}
 		cfg.Log.OTLP.Endpoint = server.URL
 	})
 	log.Slog().Info("local only")
 	require.NoError(t, log.Shutdown(context.Background()))
 
 	assert.Empty(t, server.requests())
+}
+
+func TestEveryNamedSinkReceivesTheEntry(t *testing.T) {
+	// Naming several sinks is the point of the list: one entry reaches all of
+	// them, which is what lets a run keep a readable terminal and ship the same
+	// lines to a collector.
+	server := newOTLPTestServer(t)
+
+	log, buf, path := newFileLogger(t, func(cfg *config.Config) {
+		cfg.Log.Transport = []string{
+			config.LogTransportConsole,
+			config.LogTransportFile,
+			config.LogTransportOTLP,
+		}
+		cfg.Log.OTLP.Endpoint = server.URL
+	})
+
+	log.Slog().Info("everywhere", "n", 7)
+	require.NoError(t, log.Shutdown(context.Background()))
+
+	assert.Contains(t, buf.String(), "everywhere", "the console must receive it")
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err, "the file must receive it")
+	assert.Contains(t, string(raw), "everywhere")
+
+	received := server.requests()
+	require.Len(t, received, 1, "the collector must receive it")
+	assert.NotEmpty(t, received[0].body)
 }

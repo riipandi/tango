@@ -57,11 +57,21 @@ func (c Config) Validate() error {
 		"log.level: %q is not one of %s", c.Log.Level, joinValues(LogDebug, LogInfo, LogWarn, LogError))
 	check(isOneOf(c.Log.Format, LogPretty, LogStructured),
 		"log.format: %q is not one of %s", c.Log.Format, joinValues(LogPretty, LogStructured))
+	check(len(c.Log.Transport) > 0, "log.transport: at least one transport is required")
+	// Every name is checked, not just the first: a list with one good name and
+	// one typo would otherwise start with a sink silently missing, which is the
+	// failure the list exists to prevent.
+	for _, transport := range c.Log.Transport {
+		check(isOneOf(transport, LogTransports()...),
+			"log.transport: %q is not one of %s", transport, joinValues(LogTransports()...))
+	}
+	check(noDuplicates(c.Log.Transport),
+		"log.transport: %s must not repeat a transport", strings.Join(c.Log.Transport, ", "))
 
-	// The file sink is off until a filename names one, so the rotation settings
-	// are read only when it is on: holding them to anything would report a
-	// problem in a part of the file that is switched off.
-	if c.Log.File.Filename != "" {
+	// The file sink is built only when it is named, so the rotation settings are
+	// read only then: holding them to anything would report a problem in a part
+	// of the file that is switched off.
+	if c.logTransport(LogTransportFile) {
 		check(c.Log.File.MaxSize > 0, "log.file.max_size: must be positive")
 		check(c.Log.File.MaxBackups >= 0, "log.file.max_backups: must not be negative")
 		check(c.Log.File.MaxAge >= 0, "log.file.max_age: must not be negative")
@@ -71,11 +81,11 @@ func (c Config) Validate() error {
 			"log.file: set max_backups or max_age; zero on both keeps every rotated file")
 	}
 
-	// The collector is dialled only when it is enabled, so its endpoint is held
-	// to a URL only then.
-	if c.Log.OTLP.Enable {
+	// The collector is dialled only when it is named, so its endpoint is held to
+	// a URL only then.
+	if c.logTransport(LogTransportOTLP) {
 		check(c.Log.OTLP.Endpoint != "", "log.otlp.endpoint: %s",
-			c.unsetNote("log.otlp.endpoint", "must not be empty when log.otlp.enable is true"))
+			c.unsetNote("log.otlp.endpoint", "must not be empty when log.transport names otlp"))
 		check(c.Log.OTLP.Endpoint == "" || isHTTPURL(c.Log.OTLP.Endpoint),
 			"log.otlp.endpoint: %q must be an absolute http or https URL", c.Log.OTLP.Endpoint)
 	}
@@ -208,6 +218,20 @@ func isOneOf[T comparable](value T, accepted ...T) bool {
 	return slices.Contains(accepted, value)
 }
 
+// noDuplicates reports whether every value appears once. A repeated value is a
+// mistake worth naming: the list is read as "which sinks", and naming one twice
+// says nothing a reader can act on.
+func noDuplicates(values []string) bool {
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			return false
+		}
+		seen[value] = struct{}{}
+	}
+	return true
+}
+
 // joinValues renders a value list for a validation message.
 func joinValues(values ...string) string {
 	return strings.Join(values, ", ")
@@ -225,6 +249,12 @@ func isHexKey(value string) bool {
 	}
 	_, err = strconv.ParseUint(value[48:], 16, 64)
 	return err == nil
+}
+
+// logTransport reports whether the configured transport list names one sink.
+// It is how a section is read only when the sink that owns it is switched on.
+func (c Config) logTransport(name string) bool {
+	return slices.Contains(c.Log.Transport, name)
 }
 
 // kvStoreDrivers returns the feature keys whose driver is the key-value backend.

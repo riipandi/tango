@@ -117,8 +117,11 @@ func Load(opts Options) (Config, error) {
 	}
 	for _, layer := range layers {
 		// A duration key is read as seconds before the layer is merged, so the
-		// unit is decided by the key rather than guessed by the decoder.
+		// unit is decided by the key rather than guessed by the decoder, and a
+		// list key written as one comma-separated string becomes the list the
+		// field wants.
 		normalizeDurations(layer.keys)
+		normalizeLists(layer.keys)
 		if err := merge(k, cfg.origin, layer.name, layer.keys); err != nil {
 			return Config{}, err
 		}

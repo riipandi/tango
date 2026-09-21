@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/perses/perses/main/schemas/globaldatasource.json
+#
+# The metrics store this application is scraped into. A global datasource rather
+# than a project one: this stack has no projects, and the perses config switches
+# project-scoped datasources off, so a datasource defined inside a project would
+# be provisioned into nothing.
+kind: "GlobalDatasource"
+metadata:
+  name: "victoria-metrics"
+spec:
+  display:
+    name: "VictoriaMetrics"
+  default: true
+  plugin:
+    kind: "PrometheusDatasource"
+    spec:
+      # directUrl keeps the query on the browser side, so a developer can read
+      # the store without routing every request through the Perses proxy.
+      directUrl: "http://localhost:8428"
+      scrapeInterval: "15s"

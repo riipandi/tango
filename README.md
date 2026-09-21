@@ -27,7 +27,7 @@ pnpm dlx tiged riipandi/tango myapp-name
 3. Install the frontend dependencies: `pnpm install`
 4. Write a starter config file: `task config:generate`
 5. Generate the secret keys into your env file: `task key:generate`
-6. Start the local Postgres: `docker compose up -f docker/compose.yaml -d pgsql`
+6. Start the local Postgres: `docker compose -f docker/compose.yaml up -d pgsql`
 7. Set `DATABASE_URL` in `.env.local` (see `.env.example`)
 8. Run the database migrations: `task db:migrate`
 9. Start the development servers: `task dev`
@@ -137,7 +137,7 @@ default, so a fresh checkout runs on Postgres and in-process memory alone:
 
 ```json
 "kvstore": {
-  "db": "env:VALKEY_DB",
+  "db": 0,
   "enable": "env:VALKEY_ENABLE",
   "url": "env:VALKEY_URL"
 }
@@ -420,6 +420,49 @@ An existing env file is never rewritten without consent: the command asks `repla
 and leaves the file untouched on anything other than `y`/`yes`. Updating keeps the comments, blank lines,
 and order, replaces the existing key values, and appends the ones that are missing.
 
+### Logging
+
+`log.transport` names the sinks the logger writes to, in order. Name one or several:
+
+| Transport | Writes to                                                |
+| --------- | -------------------------------------------------------- |
+| `console` | The terminal. `log.format` selects `pretty` or `structured`. |
+| `file`    | One JSON object per line, under `<storage.local_path>/logs/tango.log`, rotated. |
+| `otlp`    | An OpenTelemetry collector at `log.otlp.endpoint`.        |
+
+The default is `console` alone, so a fresh checkout needs no volume and no collector. In a JSON config
+file the list is an array; in the environment it is one comma-separated value, because that is what a
+variable can carry:
+
+```json
+"log": { "transport": ["console", "file", "otlp"], "level": "info" }
+```
+
+```bash
+LOG_TRANSPORT=console,otlp
+LOG_OTLP_ENDPOINT=http://localhost:9428/insert/opentelemetry/v1/logs
+```
+
+Application code logs through `log/slog`; the transports are wired behind it, so `slog.Info(...)` — and
+any dependency that logs through slog — reaches every configured sink.
+
+To prove the path against the local observability stack:
+
+```bash
+# Start VictoriaMetrics, VictoriaLogs, VictoriaTraces, and Perses.
+task metrics:up
+
+# Emit one line per level through every configured transport.
+task metrics:smoke
+
+# Read it back from VictoriaLogs (LogsQL). The store is shared, so query the marker.
+task metrics:query -- 'marker:"tango-logger-smoke"'
+```
+
+`task metrics:endpoints` prints every stack address, and `task metrics:targets` shows what
+VictoriaMetrics is scraping. Perses is provisioned with the three datasources, so
+<http://localhost:3380> reads the stack without any setup.
+
 Changing `APP_SECRET_KEY` makes data encrypted with the previous key unreadable, and replacing a signing
 key invalidates the tokens signed with it. `key:rotate` (not implemented yet) is intended to re-encrypt
 stored data during rotation.
@@ -443,6 +486,8 @@ tasks/
   docker.yml       docker:build, docker:run, docker:shell, docker:push, docker:prune,
                    docker:images, docker:check
   lint.yml         format, check, lint, typecheck
+  metrics.yml      metrics:up, metrics:down, metrics:endpoints, metrics:query,
+                   metrics:targets, metrics:smoke
   rpc.yml          rpc:generate, rpc:lint, rpc:breaking, rpc:stamp, rpc:stale
   test.yml         test, test:go, test:go:debug, test:ui, test:sdk, coverage
 ```
@@ -467,6 +512,9 @@ depend on a task in another by its plain name.
 | `task cert:trust`   | Trust the local CA in the system trust store        |
 | `task rpc:generate` | Generate Go and TypeScript from the proto contracts |
 | `task rpc:stale`    | Fail when generated code is out of date             |
+| `task metrics:up`   | Start the observability stack (VictoriaMetrics/Logs/Traces, Perses) |
+| `task metrics:query`| Run a LogsQL query against the local log store      |
+| `task metrics:smoke`| Emit one line through every configured log transport |
 | `task compose:up`   | Start the docker compose services                   |
 | `task compose:down` | Stop the docker compose services                    |
 

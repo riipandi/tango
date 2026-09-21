@@ -46,6 +46,9 @@ includes:
   docker:
     taskfile: ./tasks/docker.yml
     flatten: true
+  metrics:
+    taskfile: ./tasks/metrics.yml
+    flatten: true
 
 tasks:
   default:

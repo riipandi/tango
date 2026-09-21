@@ -108,22 +108,30 @@ type Log struct {
 	// Format is LogPretty or LogStructured. It selects the console rendering,
 	// the sink a human reads; the other sinks keep their own form.
 	Format string `koanf:"format" json:"format"`
-	// File is the rotating file sink, off until it is named.
+	// Transport names the sinks to write to, in the order given. More than one
+	// may be named, so a run can keep the terminal and ship to a collector at
+	// once. The default is the console alone, which is what a fresh checkout
+	// needs and what a container that logs to stdout wants.
+	//
+	// It is a list rather than a set of switches because the sinks are not
+	// alternatives: naming one is what turns it on, and there is no second flag
+	// that could disagree with the list.
+	Transport []string `koanf:"transport" json:"transport"`
+	// File holds the rotating file sink settings, read when Transport names
+	// LogTransportFile.
 	File LogFile `koanf:"file" json:"file"`
-	// OTLP ships entries to an OpenTelemetry collector.
+	// OTLP holds the collector settings, read when Transport names
+	// LogTransportOTLP.
 	OTLP LogOTLP `koanf:"otlp" json:"otlp"`
 }
 
 // LogFile holds the rotating file sink settings.
 //
-// The sink is opt-in: with no Filename the console is the only destination, so a
-// fresh checkout writes no files and a container that logs to stdout needs no
-// volume. The rotation settings are read only once a file is named, the way the
-// S3 section is read only on the s3 driver.
+// There is no filename key: the sink writes under the one data directory of the
+// process, storage.local_path + /logs, so a run cannot disagree with the
+// configuration about where its files live. The rotation settings are read only
+// when the file transport is named.
 type LogFile struct {
-	// Filename is the file entries are appended to, rotated by the sink. Empty
-	// means no file sink; a relative path is relative to the working directory.
-	Filename string `koanf:"filename" json:"filename"`
 	// MaxSize is the size in megabytes the active file reaches before it is
 	// rotated.
 	MaxSize int `koanf:"max_size" json:"max_size"`
@@ -138,11 +146,9 @@ type LogFile struct {
 
 // LogOTLP holds the OpenTelemetry log export settings.
 //
-// It is opt-in and never required, like every other external backend: with
-// Enable false nothing is dialled and the local path needs no collector.
+// It is opt-in and never required, like every other external backend: a run that
+// does not name the transport dials nothing and needs no collector.
 type LogOTLP struct {
-	// Enable ships entries to the collector at Endpoint.
-	Enable bool `koanf:"enable" json:"enable"`
 	// Endpoint is the collector's OTLP/HTTP address, such as
 	// http://localhost:4318 or https://collector.example.com:4318. The scheme
 	// decides whether the connection is TLS, so it is not a separate setting.
@@ -267,3 +273,23 @@ const (
 	StorageLocal  = "local"
 	StorageS3     = "s3"
 )
+
+// Log transport names, the values Log.Transport accepts. Each one is a sink the
+// logger builds; naming it in the list is what switches it on.
+const (
+	// LogTransportConsole writes to the terminal. It is the default and the
+	// only sink a fresh checkout needs.
+	LogTransportConsole = "console"
+	// LogTransportFile writes one JSON object per line to a rotating file under
+	// storage.local_path + /logs.
+	LogTransportFile = "file"
+	// LogTransportOTLP ships entries to an OpenTelemetry collector.
+	LogTransportOTLP = "otlp"
+)
+
+// LogTransports returns every accepted transport name, in the order the
+// documentation lists them. It is what a validation message names, so a rejected
+// value is answered with the list rather than with one example.
+func LogTransports() []string {
+	return []string{LogTransportConsole, LogTransportFile, LogTransportOTLP}
+}

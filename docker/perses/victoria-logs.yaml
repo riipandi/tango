@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/perses/perses/main/schemas/globaldatasource.json
+#
+# The log store the application ships to over OTLP. VictoriaLogs serves its own
+# query API, so this is the VictoriaLogs plugin rather than the Loki one: the
+# query language is LogsQL, and pointing a Loki datasource at it would only work
+# for the subset the two share.
+kind: "GlobalDatasource"
+metadata:
+  name: "victoria-logs"
+spec:
+  display:
+    name: "VictoriaLogs"
+  default: true
+  plugin:
+    kind: "VictoriaLogsDatasource"
+    spec:
+      directUrl: "http://localhost:9428"

@@ -12,7 +12,11 @@ services:
     image: docker.io/persesdev/perses:${PERSES_VERSION:-latest}
     hostname: perses
     ports: ['3380:3380']
-    volumes: ['../.storage/perses_data:/perses:rw']
+    volumes:
+      - '../.storage/perses_data:/perses:rw'
+      # Provisioned resources are read from this folder on every start, so the
+      # datasources a developer needs are there without clicking through the UI.
+      - './perses:/etc/perses/provisioning:ro'
     configs: [{ source: perses_config, target: /etc/perses/config.yaml }]
     command: '-web.listen-address=0.0.0.0:3380 -log.level=error --config=/etc/perses/config.yaml'
     security_opt: ['no-new-privileges:true']
@@ -30,7 +34,7 @@ services:
 
   victoria-metrics:
     <<: *common
-    image: docker.io/victoriametrics/victoria-metrics:${VICTORIA_METRICS_VERSION:-v1.143.0}
+    image: docker.io/victoriametrics/victoria-metrics:${VICTORIA_METRICS_VERSION:-v1.152.0}
     hostname: victoria-metrics
     ports: ['8428:8428']
     volumes: ['../.storage/victoria_metrics_data:/victoria_metrics_data']
@@ -49,11 +53,17 @@ services:
 
   victoria-logs:
     <<: *common
-    image: docker.io/victoriametrics/victoria-logs:${VICTORIA_LOGS_VERSION:-v1.50.0}
+    image: docker.io/victoriametrics/victoria-logs:${VICTORIA_LOGS_VERSION:-v1.52.0}
     hostname: victoria-logs
     ports: ['9428:9428']
     volumes: ['../.storage/victoria_logs_data:/victoria_logs_data']
-    command: '-storageDataPath=/victoria_logs_data'
+    # The OTLP endpoint is on by default, so the application can ship straight
+    # here with no collector in between. Retention is kept short because this is
+    # a development store that shares a disk with the database.
+    command: >-
+      -storageDataPath=/victoria_logs_data
+      -retentionPeriod=14d
+      -opentelemetry.maxRequestSize=16777216
     security_opt: ['no-new-privileges:true']
     shm_size: 128m # set shared memory limit
     mem_limit: 256m # set memory limit
@@ -65,7 +75,7 @@ services:
 
   victoria-traces:
     <<: *common
-    image: docker.io/victoriametrics/victoria-traces:${VICTORIA_TRACES_VERSION:-v0.8.2}
+    image: docker.io/victoriametrics/victoria-traces:${VICTORIA_TRACES_VERSION:-v0.11.1}
     hostname: victoria-traces
     ports: ['10428:10428']
     volumes: ['../.storage/victoria_traces_data:/victoria_traces_data']
@@ -144,6 +154,9 @@ configs:
         project:
           disable: true
         disable_local: true
+      provisioning:
+        folders:
+          - '/etc/perses/provisioning'
 
   victoria_metrics_config:
     content: |
@@ -172,9 +185,13 @@ configs:
         - job_name: redis-exporter
           static_configs:
             - targets: ['redis-exporter:9121']
+        # The Go server publishes its own metrics on the port it serves; the
+        # target is the host running `task dev`, reached through the extra_hosts
+        # entry every service in this stack carries.
         - job_name: tango
           static_configs:
-            - targets: ['host.docker.internal:3030']
+            - targets: ['host.docker.internal:3080']
+          metrics_path: /metrics
 
 volumes:
   victoria_metrics_data:

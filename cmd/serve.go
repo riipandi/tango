@@ -34,9 +34,24 @@ file decides.`,
 		// serve is the one command that uses most of the configuration, so it is
 		// where the whole configuration is checked: a server that starts on a
 		// half-configured setup fails later, in a place far from the mistake.
-		if _, err := fullConfigFrom(ctx); err != nil {
+		cfg, err := fullConfigFrom(ctx)
+		if err != nil {
 			return err
 		}
+
+		// The process logger is built here, before anything else runs, so every
+		// line the server emits from now on goes through the configured
+		// transports. It is closed by the root After, which flushes whatever is
+		// still queued.
+		log, err := loggerFrom(ctx)
+		if err != nil {
+			return err
+		}
+		log.Slog().Info("starting",
+			"mode", cfg.App.Mode,
+			"transport", cfg.Log.Transport,
+			"address", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port))
+
 		fmt.Println("not yet implemented")
 		return nil
 	},

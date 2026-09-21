@@ -2,10 +2,10 @@
 //
 // One LogLayer core sits behind a *slog.Logger, so application code — and every
 // dependency that logs through log/slog — emits into the same pipeline. The
-// sinks are chosen by the configuration: a console renderer, an optional
-// rotating file, and an optional OpenTelemetry exporter. Feature code never
-// touches LogLayer directly; it calls slog, and this package decides where the
-// entry goes.
+// sinks are the ones the configuration names in log.transport: the console, a
+// rotating file, and an OpenTelemetry exporter, in any combination. Feature code
+// never touches LogLayer directly; it calls slog, and this package decides where
+// the entry goes.
 package logger
 
 import (
@@ -25,9 +25,9 @@ import (
 // Logger is the application logger: the LogLayer core behind it, the sinks it
 // writes to, and the slog frontend the rest of the program calls.
 //
-// Every sink is opt-in except the console, so the default configuration writes to
-// the terminal alone and a deployment adds a file or a collector by setting the
-// key that names it.
+// Every sink is one the configuration named, so a run writes where the file says
+// and nowhere else. The console is the default, which is what a fresh checkout
+// and a container that logs to stdout both want.
 type Logger struct {
 	core *loglayer.LogLayer
 	slog *slog.Logger
@@ -67,24 +67,42 @@ func New(cfg config.Config, opts ...Option) (*Logger, error) {
 	}
 
 	l := &Logger{}
-	transports := []loglayer.Transport{consoleTransport(cfg, options.Writer)}
+	transports := make([]loglayer.Transport, 0, len(cfg.Log.Transport))
 
-	if cfg.Log.File.Filename != "" {
-		file, err := newFileSink(cfg.Log.File)
-		if err != nil {
-			return nil, errors.Join(err, l.release())
+	// The list is walked in order, so the configuration says both which sinks
+	// exist and in what order they are written. Duplicates are refused by
+	// Validate, so each one appears at most once here.
+	for _, name := range cfg.Log.Transport {
+		switch name {
+		case config.LogTransportConsole:
+			transports = append(transports, consoleTransport(cfg, options.Writer))
+
+		case config.LogTransportFile:
+			file, err := newFileSink(cfg)
+			if err != nil {
+				return nil, errors.Join(err, l.release())
+			}
+			l.file = file
+			transports = append(transports, file.transport)
+
+		case config.LogTransportOTLP:
+			otlp, err := newOTLPSink(cfg)
+			if err != nil {
+				return nil, errors.Join(err, l.release())
+			}
+			l.otlp = otlp
+			transports = append(transports, otlp.transport)
+
+		default:
+			// Validate refuses an unknown name, so this is only reachable from a
+			// configuration nobody checked. It fails rather than skipping the
+			// entry: a sink that was asked for and quietly not built is the
+			// failure the transport list exists to prevent.
+			return nil, fmt.Errorf("logger: log.transport: unknown transport %q", name)
 		}
-		l.file = file
-		transports = append(transports, file.transport)
 	}
-
-	if cfg.Log.OTLP.Enable {
-		otlp, err := newOTLPSink(cfg)
-		if err != nil {
-			return nil, errors.Join(err, l.release())
-		}
-		l.otlp = otlp
-		transports = append(transports, otlp.transport)
+	if len(transports) == 0 {
+		return nil, errors.New("logger: log.transport: no transport configured")
 	}
 
 	core, err := loglayer.Build(loglayer.Config{

@@ -448,7 +448,7 @@ func TestValidationHoldsTheSignedURLLifetimeInsideSevenDays(t *testing.T) {
 	}
 }
 
-func TestValidationLeavesTheFileSinkAloneUntilAFilenameNamesOne(t *testing.T) {
+func TestValidationLeavesTheFileSinkAloneUntilTheTransportNamesIt(t *testing.T) {
 	// The console is the only sink by default, so the rotation settings are not
 	// read: a container that logs to stdout must not be told to configure a
 	// rotation it never uses.
@@ -457,29 +457,96 @@ func TestValidationLeavesTheFileSinkAloneUntilAFilenameNamesOne(t *testing.T) {
 
 func TestValidationRefusesARotationThatNeverDeletes(t *testing.T) {
 	// A file sink that keeps every rotated file fills a disk quietly, so the one
-	// combination that does that is refused where the file is named.
-	err := resolveFile(t, `"log": {"file": {"filename": "/var/log/app.log",
-		"max_backups": 0, "max_age": 0}}`)
+	// combination that does that is refused where the sink is named.
+	err := resolveFile(t, `"log": {"transport": ["console", "file"],
+		"file": {"max_backups": 0, "max_age": 0}}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
 	assert.Contains(t, err.Error(), "log.file")
 
 	// Either limit on its own is a retention policy.
-	assert.NoError(t, resolveFile(t, `"log": {"file": {"filename": "/var/log/app.log", "max_backups": 3, "max_age": 0}}`))
-	assert.NoError(t, resolveFile(t, `"log": {"file": {"filename": "/var/log/app.log", "max_backups": 0, "max_age": 7}}`))
+	assert.NoError(t, resolveFile(t, `"log": {"transport": ["file"], "file": {"max_backups": 3, "max_age": 0}}`))
+	assert.NoError(t, resolveFile(t, `"log": {"transport": ["file"], "file": {"max_backups": 0, "max_age": 7}}`))
 }
 
 func TestValidationRejectsANonPositiveFileSize(t *testing.T) {
-	err := resolveFile(t, `"log": {"file": {"filename": "/var/log/app.log", "max_size": 0}}`)
+	err := resolveFile(t, `"log": {"transport": ["file"], "file": {"max_size": 0}}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
 	assert.Contains(t, err.Error(), "log.file.max_size")
 }
 
-func TestValidationChecksTheOTLPEndpointOnlyWhenEnabled(t *testing.T) {
-	// A switched-off collector is never dialled, so its endpoint is not held to
-	// anything.
-	require.NoError(t, resolveFile(t, `"log": {"otlp": {"enable": false, "endpoint": "not-a-url"}}`))
+func TestValidationRejectsATransportThatIsNotASink(t *testing.T) {
+	// A name no sink matches would leave the run with fewer destinations than
+	// the file asks for, which is the failure the list exists to prevent.
+	err := resolveFile(t, `"log": {"transport": ["console", "syslog"]}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "log.transport")
+	assert.Contains(t, err.Error(), "syslog")
+}
 
-	err := resolveFile(t, `"log": {"otlp": {"enable": true, "endpoint": "not-a-url"}}`)
+func TestValidationRejectsARepeatedTransport(t *testing.T) {
+	// Naming one twice says nothing a reader can act on, and the second entry
+	// would build a second sink writing the same lines.
+	err := resolveFile(t, `"log": {"transport": ["console", "console"]}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "log.transport")
+}
+
+func TestValidationRequiresATransport(t *testing.T) {
+	// An empty list is a logger that writes nowhere, which is never what a
+	// deployment meant.
+	err := resolveFile(t, `"log": {"transport": []}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "log.transport")
+}
+
+func TestValidationAcceptsEveryTransportTogether(t *testing.T) {
+	// Naming several is the point of the list: the terminal stays readable while
+	// the same entries go to a file and to a collector.
+	err := resolveFile(t, `"log": {"transport": ["console", "file", "otlp"],
+		"otlp": {"endpoint": "http://localhost:4318"}}`)
+	assert.NoError(t, err)
+}
+
+func TestAListDirectiveResolvesToTheTransportsItNames(t *testing.T) {
+	// The whole path: a comma-separated variable reaches the slice field as the
+	// entries it names, which is what lets a deployment switch a sink on without
+	// editing the file. `LOG_TRANSPORT=console,file,otlp` is the form an
+	// environment variable can carry, and the one the docs advertise.
+	cfg, err := resolveAndValidate(t, config.Options{
+		ConfigFile: writeConfig(t, `{
+			"database": {"url": "env:DATABASE_URL"},
+			"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
+			"log": {"transport": "env:LOG_TRANSPORT"}
+		}`),
+		Environ: append(baseEnv(), "LOG_TRANSPORT=console,file,otlp"),
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"console", "file", "otlp"}, cfg.Log.Transport)
+}
+
+func TestASpaceSeparatedDirectiveIsNotAList(t *testing.T) {
+	// Space is not the separator: a value with spaces in it is one name, which
+	// validation then refuses by name rather than silently reading one sink out
+	// of a string that named three.
+	_, err := resolveAndValidate(t, config.Options{
+		ConfigFile: writeConfig(t, `{
+			"database": {"url": "env:DATABASE_URL"},
+			"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
+			"log": {"transport": "env:LOG_TRANSPORT"}
+		}`),
+		Environ: append(baseEnv(), "LOG_TRANSPORT=console file otlp"),
+	})
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "console file otlp")
+}
+
+func TestValidationChecksTheOTLPEndpointOnlyWhenNamed(t *testing.T) {
+	// A collector the run does not name is never dialled, so its endpoint is not
+	// held to anything.
+	require.NoError(t, resolveFile(t, `"log": {"transport": ["console"], "otlp": {"endpoint": "not-a-url"}}`))
+
+	err := resolveFile(t, `"log": {"transport": ["otlp"], "otlp": {"endpoint": "not-a-url"}}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
 	assert.Contains(t, err.Error(), "log.otlp.endpoint")
 }
@@ -492,7 +559,7 @@ func TestValidationFallsBackToAnEndpointTheExporterWillDial(t *testing.T) {
 		ConfigFile: writeConfig(t, `{
 			"database": {"url": "env:DATABASE_URL"},
 			"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
-			"log": {"otlp": {"enable": true, "endpoint": "env:LOG_OTLP_ENDPOINT"}}
+			"log": {"transport": ["otlp"], "otlp": {"endpoint": "env:LOG_OTLP_ENDPOINT"}}
 		}`),
 		Environ: baseEnv(),
 	})
@@ -504,21 +571,21 @@ func TestValidationAcceptsAnOTLPDeployment(t *testing.T) {
 	// Both schemes are valid: the endpoint's scheme is what decides whether the
 	// connection is TLS, so there is no second setting to keep in step with it.
 	for _, endpoint := range []string{"http://localhost:4318", "https://collector.example.com:4318"} {
-		body := `"log": {"otlp": {"enable": true, "endpoint": ` + strconv.Quote(endpoint) + `}}`
+		body := `"log": {"transport": ["otlp"], "otlp": {"endpoint": ` + strconv.Quote(endpoint) + `}}`
 		assert.NoError(t, resolveFile(t, body), endpoint)
 	}
 }
 
 func TestRedactedLeavesTheLogTargetsAlone(t *testing.T) {
-	// Neither the file path nor the collector address is a credential, and a
-	// report that hid them could not say where the logs go.
+	// Neither the transport list nor the collector address is a credential, and
+	// a report that hid them could not say where the logs go.
 	cfg := config.Default()
-	cfg.Log.File.Filename = "/var/log/tango.log"
+	cfg.Log.Transport = []string{"console", "otlp"}
 	cfg.Log.OTLP.Endpoint = "https://collector.example.com:4318"
 
 	redacted := cfg.Redacted()
 
-	assert.Equal(t, cfg.Log.File.Filename, redacted.Log.File.Filename)
+	assert.Equal(t, cfg.Log.Transport, redacted.Log.Transport)
 	assert.Equal(t, cfg.Log.OTLP.Endpoint, redacted.Log.OTLP.Endpoint)
 }
 
