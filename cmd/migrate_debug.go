@@ -416,6 +416,10 @@ func applyResetUp(
 			len(pending), printext.Plural(len(pending), "migration"))
 	}
 
+	// This half only applies, so it needs the apply column width, not the
+	// rollback width the reporter was built with for the reset half.
+	report.restart(migrationStateWidth(string(database.ProgressApplied)))
+
 	results, err := migrator.Up(ctx)
 	if err != nil {
 		if writeErr := report.failed(); writeErr != nil {

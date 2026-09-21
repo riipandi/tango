@@ -105,7 +105,7 @@ func TestMigrateResetDryRunChangesNothing(t *testing.T) {
 
 	out, err := runMigrateResetCmd(t, "", "--env-file="+envFile, "--dry-run")
 	require.NoError(t, err)
-	assert.Contains(t, out, "00003_create_multifactor_tables.sql")
+	assert.Contains(t, out, "create_multifactor_tables")
 	assert.Contains(t, out, "3 migrations to roll back")
 	assert.Equal(t, int64(3), currentVersion(t, dsn))
 
@@ -137,6 +137,10 @@ func TestMigrateResetWithUpOnFreshDatabaseApplies(t *testing.T) {
 	assert.NotContains(t, out, "no applied migrations")
 	assert.Contains(t, out, "9 migrations applied")
 	assert.Equal(t, int64(9), currentVersion(t, dsn))
+
+	// This path applies without rolling back first, so the rows must use the
+	// apply column width, not the rollback width the reporter was built with.
+	assertMigrationRow(t, out, 1, "applied")
 }
 
 // A fresh database has nothing to roll back, so only the up half is asked

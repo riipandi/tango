@@ -156,7 +156,7 @@ func TestReporterIndentsProgressOnly(t *testing.T) {
 	// A finished migration is reported in the same shape migrate:status uses:
 	// version, state, time, name, and duration.
 	assert.Regexp(t,
-		`^  00002 applied \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} 00002_create_identity_tables\.sql \(37 ms\)\n$`,
+		`^  00002 applied \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} create_identity_tables \(37 ms\)\n$`,
 		out.String())
 
 	out.Reset()
@@ -183,7 +183,7 @@ func TestReporterReportsRollbackRows(t *testing.T) {
 	require.NoError(t, report.failed())
 
 	assert.Regexp(t,
-		`^  00009 rolled back \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} 00009_add_session_remember\.sql \(3 ms\)\n$`,
+		`^  00009 rolled back \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} add_session_remember \(3 ms\)\n$`,
 		out.String())
 }
 
@@ -203,7 +203,7 @@ func TestReporterReportsEmptyMigration(t *testing.T) {
 	require.NoError(t, report.failed())
 
 	assert.Contains(t, out.String(), "  00010 empty ")
-	assert.Contains(t, out.String(), "00010_noop.sql (0 s)")
+	assert.Contains(t, out.String(), "noop (0 s)")
 }
 
 // A dry run lists work that has not happened, so the state column reads
@@ -216,8 +216,8 @@ func TestPrintPendingUsesTheSharedRowShape(t *testing.T) {
 	}))
 
 	assert.Equal(t,
-		expectedRow(1, "pending", 7, "-", "00001_initialize_schema.sql")+
-			expectedRow(2, "pending", 7, "-", "00002_create_identity_tables.sql")+
+		expectedRow(1, "pending", 7, "-", "initialize_schema")+
+			expectedRow(2, "pending", 7, "-", "create_identity_tables")+
 			"\n2 migrations pending\n", out.String())
 }
 
@@ -229,7 +229,7 @@ func TestPrintRollbackUsesTheSharedRowShape(t *testing.T) {
 	}))
 
 	assert.Equal(t,
-		expectedRow(9, "rollback", 8, "-", "00009_add_session_remember.sql")+
+		expectedRow(9, "rollback", 8, "-", "add_session_remember")+
 			"\n1 migration to roll back\n", out.String())
 }
 
@@ -239,6 +239,27 @@ func TestPrintRollbackUsesTheSharedRowShape(t *testing.T) {
 func expectedRow(version int64, state string, stateWidth int, at, name string) string {
 	return fmt.Sprintf("  %05d %-*s %-*s %s\n",
 		version, stateWidth, state, migrationTimestampWidth, at, name)
+}
+
+// A row names a migration by its short label: the version has its own column and
+// ".sql" says nothing. The full file name is still what the row is built from.
+func TestMigrationLabel(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{name: "00009_add_session_remember.sql", want: "add_session_remember"},
+		{name: "00001_initialize_schema.sql", want: "initialize_schema"},
+		{name: "add_widgets.sql", want: "add_widgets"},
+		{name: "no_extension", want: "no_extension"},
+		{name: "00010.sql", want: "00010"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, migrationLabel(tt.name))
+		})
+	}
 }
 
 // A started event starts the spinner and draws no line of its own: a line for a

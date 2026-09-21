@@ -85,11 +85,11 @@ wrong server is visible before anything changes. Credentials are never printed:
 $ task db:migrate
 database: localhost:5432/tango
 
-  00001 applied 2026-09-21 01:10:37 00001_initialize_schema.sql (30.816 ms)
-  00002 applied 2026-09-21 01:10:37 00002_create_identity_tables.sql (39.898 ms)
+  00001 applied 2026-09-21 01:15:32 initialize_schema (23.412 ms)
+  00002 applied 2026-09-21 01:15:32 create_identity_tables (35.029 ms)
   ...
 
-9 migrations applied in 1.404 s
+9 migrations applied in 146.256 ms
 ```
 
 A run reports each migration as it finishes, not in one block at the end, so a slow migration leaves
@@ -97,9 +97,12 @@ the ones before it visible. The line shape is the same one `migrate:status` prin
 time, name, and duration — so applying, rolling back, and listing all read alike:
 
 ```text
-  00009 rolled back 2026-09-21 01:03:07 00009_add_session_remember.sql (3.674 ms)
-  00008 rolled back 2026-09-21 01:03:07 00008_create_queue_tables.sql (4.359 ms)
+  00009 rolled back 2026-09-21 01:15:32 add_session_remember (7.349 ms)
+  00008 rolled back 2026-09-21 01:15:32 create_queue_tables (5.626 ms)
 ```
+
+The name is shortened because the version already has its own column and `.sql` says nothing, so
+`00009_add_session_remember.sql` prints as `add_session_remember`.
 
 `migrate:status` omits the duration, because the recorded time says when a migration ran, not how
 long it took, and that command runs nothing to find out. A `--dry-run` lists rows too, with the time

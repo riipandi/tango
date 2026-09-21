@@ -108,7 +108,7 @@ func TestMigrateUpDryRunListsPendingWithoutApplying(t *testing.T) {
 
 	out, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--dry-run")
 	require.NoError(t, err)
-	assert.Contains(t, out, "00001_initialize_schema.sql")
+	assert.Contains(t, out, "initialize_schema")
 	assert.Contains(t, out, "9 migrations pending")
 	assert.NotContains(t, out, "applied")
 
@@ -245,7 +245,7 @@ func TestMigrateDownCountAndDryRun(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--dry-run")
 	require.NoError(t, err)
-	assert.Contains(t, out, "00009_add_session_remember.sql")
+	assert.Contains(t, out, "add_session_remember")
 	assert.Contains(t, out, "1 migration to roll back")
 
 	// --dry-run must not have rolled anything back.
@@ -352,8 +352,8 @@ func assertMigrationRow(t *testing.T, out string, version int64, state string) {
 	_, err := time.Parse(migrationTimestamp, stamp)
 	require.NoError(t, err, "the timestamp column must hold a timestamp, got %q", stamp)
 
-	assert.Regexp(t, `^\d{5}_[a-z0-9_]+\.sql \(\d+(\.\d+)? (µs|ms|s)\)$`, tail,
-		"the row must end with the file name and a humanized duration: %q", line)
+	assert.Regexp(t, `^[a-z0-9_]+ \(\d+(\.\d+)? (µs|ms|s)\)$`, tail,
+		"the row must end with the short name and a humanized duration: %q", line)
 }
 
 // rowStartingWith returns the row that begins with prefix, up to the end of its
@@ -381,7 +381,7 @@ func TestMigrateStatus(t *testing.T) {
 
 	out, err := runMigrateStatusCmd(t, "--env-file="+envFile)
 	require.NoError(t, err)
-	assert.Contains(t, out, "00001 pending -                   00001_initialize_schema.sql")
+	assert.Contains(t, out, "00001 pending -                   initialize_schema")
 	assert.Contains(t, out, "version 00000; 0 of 9 applied")
 	assert.Contains(t, out, "no migrations applied yet")
 
@@ -391,7 +391,7 @@ func TestMigrateStatus(t *testing.T) {
 	out, err = runMigrateStatusCmd(t, "--env-file="+envFile)
 	require.NoError(t, err)
 	assert.Contains(t, out, "00001 applied")
-	assert.Contains(t, out, "00001_initialize_schema.sql")
+	assert.Contains(t, out, "initialize_schema")
 	assert.Contains(t, out, "version 00009; 9 of 9 applied")
 	assert.Contains(t, out, "last run ")
 	assert.Contains(t, out, " UTC (00009_add_session_remember.sql)")
@@ -427,7 +427,7 @@ func TestMigrateStatusShowsAppliedTime(t *testing.T) {
 	out, err := runMigrateStatusCmd(t, "--env-file="+envFile)
 	require.NoError(t, err)
 
-	// 00001 applied 2026-09-21 04:31:07 00001_initialize_schema.sql
+	// 00001 applied 2026-09-21 04:31:07 initialize_schema
 	// The list is indented under the database line, so the marker is not at the
 	// start of the line.
 	line := ""

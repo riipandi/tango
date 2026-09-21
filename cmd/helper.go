@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -134,6 +135,37 @@ func migrationStateWidth(states ...string) int {
 	return width
 }
 
+// migrationFileExt is the extension a migration file carries.
+const migrationFileExt = ".sql"
+
+// migrationLabel shortens a migration file name for a report row.
+//
+// The version already has its own column and the ".sql" says nothing a reader
+// does not know, so both are dropped: "00009_add_session_remember.sql" reads as
+// "add_session_remember". The prefix is only removed when it really is a version,
+// so a file named "add_widgets.sql" keeps its name.
+func migrationLabel(name string) string {
+	label := strings.TrimSuffix(name, migrationFileExt)
+	prefix, rest, ok := strings.Cut(label, "_")
+	if ok && isDigits(prefix) {
+		return rest
+	}
+	return label
+}
+
+// isDigits reports whether s is non-empty and holds only ASCII digits.
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // printMigrationRows renders one line per migration with the columns every
 // migrate:* command shares: version, state, time, name, and duration. One
 // renderer is what makes `migrate:up`, `migrate:down`, and `migrate:status` read
@@ -153,7 +185,7 @@ func printMigrationRows(p printext.Palette, stateWidth int, rows []migrationRow)
 			row.Version,
 			p.Paint(stateColour(row.State), printext.PadRight(row.State, stateWidth)),
 			p.Dim(printext.PadRight(at, migrationTimestampWidth)),
-			row.Name)
+			migrationLabel(row.Name))
 		if row.Measured {
 			line += " " + p.Dim("("+printext.Duration(row.Duration)+")")
 		}
