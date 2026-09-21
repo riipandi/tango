@@ -227,3 +227,24 @@ func TestNewMemoryScalesTheShardsWithTheBudget(t *testing.T) {
 	assert.Equal(t, 2, len(NewMemory(2*memoryChunkSize, time.Minute).shards))
 	assert.Equal(t, memoryShardCount, len(NewMemory(0, time.Minute).shards))
 }
+
+func TestMemoryResetDropsEveryEntry(t *testing.T) {
+	c := NewMemory(0, 5*time.Minute)
+	for i := 0; i < 10; i++ {
+		c.Set(fmt.Sprintf("k%d", i), []byte("v"), 0)
+	}
+
+	c.Reset()
+
+	for i := 0; i < 10; i++ {
+		_, ok := c.Get(nil, fmt.Sprintf("k%d", i))
+		assert.False(t, ok, "reset must drop every entry")
+	}
+
+	// The rings were wound back, not abandoned: the cache keeps working
+	// and reusing the memory it grew.
+	c.Set("after", []byte("kept"), 0)
+	value, ok := c.Get(nil, "after")
+	require.True(t, ok)
+	assert.Equal(t, "kept", string(value))
+}

@@ -137,6 +137,9 @@ func Default() Config {
 			RefreshTTL: 30 * 24 * time.Hour,
 		},
 		Cache: Cache{
+			// Off by default: a feature that wants caching switches it on
+			// in the file, so a fresh checkout carries no cache at all.
+			Enable: false,
 			Driver: CacheMemory,
 			TTL:    5 * time.Minute,
 			// A budget the deployment can reason about: most of a small

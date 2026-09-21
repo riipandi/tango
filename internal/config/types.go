@@ -60,7 +60,12 @@ type Auth struct {
 
 // Cache holds the key-value cache settings.
 type Cache struct {
-	// Driver is CacheMemory or CacheKV.
+	// Enable switches the cache on. Disabled by default, so a feature that
+	// has not decided to be cacheable cannot grow one by accident; a driver
+	// that is configured while the cache is off is never read.
+	Enable bool `koanf:"enable" json:"enable"`
+	// Driver is CacheMemory or CacheKV. It is read only while Enable is
+	// true, the way a signal section is read only while the signal is on.
 	Driver string `koanf:"driver" json:"driver"`
 	// TTL is the default lifetime of a cached entry.
 	TTL time.Duration `koanf:"ttl" json:"ttl"`

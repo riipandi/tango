@@ -46,7 +46,7 @@ func TestValidationReportsEveryProblem(t *testing.T) {
 }
 
 func TestValidationRejectsBadDriver(t *testing.T) {
-	err := resolveFile(t, `"cache": {"driver": "bogus"}`)
+	err := resolveFile(t, `"cache": {"driver": "bogus", "enable": true}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
 	assert.Contains(t, err.Error(), "cache.driver")
 }
@@ -226,8 +226,10 @@ func TestMaskedAndRedactedAreDifferent(t *testing.T) {
 func TestValidationRejectsAKVDriverWithTheBackendOff(t *testing.T) {
 	// The two settings are separate decisions, so they can disagree. A driver
 	// pointing at a switched-off backend is the one combination that cannot
-	// work, and it must be reported rather than fail at start-up.
-	err := resolveFile(t, `"cache": {"driver": "kvstore"}`)
+	// work, and it must be reported rather than fail at start-up. The
+	// driver is only read while the cache is enabled, so the file turns the
+	// cache on to be held to the driver.
+	err := resolveFile(t, `"cache": {"driver": "kvstore", "enable": true}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
 	assert.Contains(t, err.Error(), "kvstore.enable")
 	assert.Contains(t, err.Error(), "cache.driver")
@@ -235,7 +237,7 @@ func TestValidationRejectsAKVDriverWithTheBackendOff(t *testing.T) {
 
 func TestValidationNamesEveryKVDriverThatDisagrees(t *testing.T) {
 	err := resolveFile(t,
-		`"cache": {"driver": "kvstore"}, `+
+		`"cache": {"driver": "kvstore", "enable": true}, `+
 			`"rate_limit": {"driver": "kvstore"}, `+
 			`"session": {"driver": "kvstore"}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
@@ -247,8 +249,14 @@ func TestValidationNamesEveryKVDriverThatDisagrees(t *testing.T) {
 }
 
 func TestValidationAcceptsAKVDriverWithTheBackendOn(t *testing.T) {
-	err := resolveFile(t, `"cache": {"driver": "kvstore"}, "kvstore": {"enable": true}`)
+	err := resolveFile(t, `"cache": {"driver": "kvstore", "enable": true}, "kvstore": {"enable": true}`)
 	assert.NoError(t, err)
+}
+
+func TestValidationSkipsTheCacheSectionWhileDisabled(t *testing.T) {
+	// The default state: the cache is off, so a driver that would be dead
+	// weight is not reported and no budget is held to anything.
+	require.NoError(t, resolveFile(t, `"cache": {"driver": "kvstore", "ttl": 0}`))
 }
 
 func TestValidationAcceptsADisabledKVStore(t *testing.T) {

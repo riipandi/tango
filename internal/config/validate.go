@@ -36,10 +36,15 @@ func (c Config) Validate() error {
 	check(c.App.SecretKey == "" || isHexKey(c.App.SecretKey),
 		"app.secret_key: must be 64 hex characters")
 
-	check(isOneOf(c.Cache.Driver, CacheMemory, CacheKV),
-		"cache.driver: %q is not one of %s", c.Cache.Driver, joinValues(CacheMemory, CacheKV))
-	check(c.Cache.TTL > 0, "cache.ttl: must be positive")
-	check(c.Cache.MaxMemory > 0, "cache.max_memory: must be positive")
+	// The cache is off by default, so a file that has not switched it on is
+	// not held to a driver or a budget it never runs — the way a signal
+	// section is read only while the signal is on.
+	if c.Cache.Enable {
+		check(isOneOf(c.Cache.Driver, CacheMemory, CacheKV),
+			"cache.driver: %q is not one of %s", c.Cache.Driver, joinValues(CacheMemory, CacheKV))
+		check(c.Cache.TTL > 0, "cache.ttl: must be positive")
+		check(c.Cache.MaxMemory > 0, "cache.max_memory: must be positive")
+	}
 
 	check(c.Database.URL != "", "database.url: %s",
 		c.unsetNote("database.url", "must not be empty (set DATABASE_URL)"))
@@ -423,10 +428,11 @@ func (c Config) jsonUnsupportedSignals() []string {
 
 // kvStoreDrivers returns the feature keys whose driver is the key-value backend.
 // It is what turns "a driver points at a switched-off backend" into a message
-// that names the key, rather than a failure at start-up.
+// that names the key, rather than a failure at start-up. A feature that is
+// itself switched off reads no driver, so it is not reported.
 func (c Config) kvStoreDrivers() []string {
 	var keys []string
-	if c.Cache.Driver == CacheKV {
+	if c.Cache.Enable && c.Cache.Driver == CacheKV {
 		keys = append(keys, "cache.driver")
 	}
 	if c.RateLimit.Driver == RateLimitKV {

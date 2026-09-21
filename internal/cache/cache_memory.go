@@ -171,6 +171,23 @@ func (c *Memory) Del(key string) {
 	}
 }
 
+// Reset drops every entry and winds the rings back, keeping the memory the
+// shards already grew. It is what an operator or a test runs to reclaim
+// space before the ring would have reached it on its own — the only drain
+// the driver needs, since the budget, the TTLs, and the ring's own reset
+// already bound what a running cache holds.
+func (c *Memory) Reset() {
+	for i := range c.shards {
+		shard := &c.shards[i]
+		shard.mu.Lock()
+		clear(shard.m)
+		clear(shard.collisions)
+		shard.curr = 0
+		shard.off = 0
+		shard.mu.Unlock()
+	}
+}
+
 // delete is the locked re-entry of Get's expiry path.
 func (c *Memory) delete(h uint64, key string) {
 	shard := &c.shards[h&c.mask]

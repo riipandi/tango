@@ -85,6 +85,7 @@ var nullKeys = []string{
 // purpose.
 var envKeys = map[string]string{
 	"app.mode":                    "APP_MODE",
+	"cache.enable":                "CACHE_ENABLE",
 	"kvstore.db":                  "VALKEY_DB",
 	"kvstore.enable":              "VALKEY_ENABLE",
 	"kvstore.url":                 "VALKEY_URL",
