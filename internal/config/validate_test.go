@@ -83,6 +83,48 @@ func TestValidationRejectsAnInvalidModeName(t *testing.T) {
 	assert.Contains(t, err.Error(), "app.mode")
 }
 
+// The mailer is optional, so a configuration that names no SMTP host is valid:
+// that is what lets a local checkout run without a mail server.
+func TestValidationAcceptsAnUnconfiguredMailer(t *testing.T) {
+	cfg, err := resolveAndValidate(t, config.Options{
+		ConfigFile: configFile(t, ""),
+		Environ:    baseEnv(),
+	})
+	require.NoError(t, err)
+
+	assert.Empty(t, cfg.Mailer.SMTPHost)
+	assert.Equal(t, "mailer@example.com", cfg.Mailer.FromEmail)
+	assert.Equal(t, "Tango Mailer", cfg.Mailer.FromName)
+	assert.Equal(t, 587, cfg.Mailer.SMTPPort)
+}
+
+func TestValidationRejectsAnInvalidSenderAddress(t *testing.T) {
+	err := resolveFile(t, `"mailer": {"from_email": "not-an-address"}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "mailer.from_email")
+}
+
+func TestValidationRejectsAPasswordWithoutAUsername(t *testing.T) {
+	// A password that authenticates nothing is a mistake, not a setting.
+	err := resolveFile(t, `"mailer": {"smtp_password": "hunter2"}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "mailer.smtp_username")
+}
+
+func TestRedactedHidesTheSMTPPassword(t *testing.T) {
+	cfg, err := resolveAndValidate(t, config.Options{
+		ConfigFile: configFile(t, `"mailer": {"smtp_username": "bot", "smtp_password": "hunter2"}`),
+		Environ:    baseEnv(),
+	})
+	require.NoError(t, err)
+
+	redacted := cfg.Redacted()
+
+	assert.Equal(t, "[redacted]", redacted.Mailer.SMTPPassword)
+	assert.Equal(t, "bot", redacted.Mailer.SMTPUsername, "a username is not a secret")
+	assert.NotContains(t, redacted.String(), "hunter2")
+}
+
 func TestRedactedHidesSecrets(t *testing.T) {
 	cfg, err := resolveAndValidate(t, config.Options{
 		ConfigFile: configFile(t, ""),

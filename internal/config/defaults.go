@@ -53,6 +53,11 @@ func Default() Config {
 			Level:  LogInfo,
 			Format: LogPretty,
 		},
+		Mailer: Mailer{
+			FromEmail: "mailer@example.com",
+			FromName:  "Tango Mailer",
+			SMTPPort:  587,
+		},
 		RateLimit: RateLimit{
 			Driver: RateLimitDB,
 			Limit:  60,

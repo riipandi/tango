@@ -123,6 +123,8 @@ func TestSampleRoundTripsThroughLoad(t *testing.T) {
 			"APP_SECRET_KEY=" + probeSecret,
 			"AUTH_PRIVATE_KEY=" + probeSecret,
 			"AUTH_PUBLIC_KEY=" + probeSecret,
+			"MAILER_SMTP_USERNAME=bot",
+			"MAILER_SMTP_PASSWORD=" + probeSecret,
 		},
 	})
 	require.NoError(t, err)
@@ -133,6 +135,42 @@ func TestSampleRoundTripsThroughLoad(t *testing.T) {
 	assert.Equal(t, defaults.Auth.AccessTTL, cfg.Auth.AccessTTL)
 	assert.Equal(t, probeDSN, cfg.Database.URL)
 	assert.Equal(t, probeSecret, cfg.Auth.SecretKey)
+	assert.Equal(t, probeSecret, cfg.Mailer.SMTPPassword)
+	assert.NoError(t, cfg.Validate())
+}
+
+func TestSampleMailerDirectivesResolveFromTheEnvironment(t *testing.T) {
+	// The mailer keys are written as directives naming the conventional
+	// variables, so a deployment fills them without editing the file. The port
+	// and the TLS flag arrive as strings and must decode to int and bool.
+	raw, err := Sample()
+	require.NoError(t, err)
+
+	path := filepath.Join(t.TempDir(), "app.config.json")
+	require.NoError(t, os.WriteFile(path, raw, 0o600))
+
+	cfg, err := Load(Options{
+		ConfigFile: path,
+		Environ: []string{
+			"DATABASE_URL=" + probeDSN,
+			"AUTH_SECRET_KEY=" + probeSecret,
+			"APP_SECRET_KEY=" + probeSecret,
+			"AUTH_PRIVATE_KEY=" + probeSecret,
+			"AUTH_PUBLIC_KEY=" + probeSecret,
+			"MAILER_SMTP_HOST=smtp.example.com",
+			"MAILER_SMTP_PORT=465",
+			"MAILER_SMTP_USERNAME=bot",
+			"MAILER_SMTP_PASSWORD=" + probeSecret,
+			"MAILER_SMTP_SECURE=true",
+		},
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "smtp.example.com", cfg.Mailer.SMTPHost)
+	assert.Equal(t, 465, cfg.Mailer.SMTPPort)
+	assert.Equal(t, "bot", cfg.Mailer.SMTPUsername)
+	assert.Equal(t, probeSecret, cfg.Mailer.SMTPPassword)
+	assert.True(t, cfg.Mailer.SMTPSecure)
 	assert.NoError(t, cfg.Validate())
 }
 
@@ -146,6 +184,7 @@ func TestEverySampleSecretIsRedacted(t *testing.T) {
 	cfg.Auth.PublicKey = probeSecret
 	cfg.Auth.SecretKey = probeSecret
 	cfg.Database.URL = probeDSN
+	cfg.Mailer.SMTPPassword = probeSecret
 
 	redacted := cfg.Redacted()
 	for _, key := range secretKeys {
@@ -168,6 +207,8 @@ func valueAt(cfg Config, key string) string {
 		return cfg.Auth.SecretKey
 	case "database.url":
 		return cfg.Database.URL
+	case "mailer.smtp_password":
+		return cfg.Mailer.SMTPPassword
 	default:
 		return ""
 	}

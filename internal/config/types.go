@@ -16,6 +16,7 @@ type Config struct {
 	Cache     Cache     `koanf:"cache" json:"cache"`
 	Database  Database  `koanf:"database" json:"database"`
 	Log       Log       `koanf:"log" json:"log"`
+	Mailer    Mailer    `koanf:"mailer" json:"mailer"`
 	RateLimit RateLimit `koanf:"rate_limit" json:"rate_limit"`
 	Server    Server    `koanf:"server" json:"server"`
 	Session   Session   `koanf:"session" json:"session"`
@@ -85,6 +86,26 @@ type Log struct {
 	Level string `koanf:"level" json:"level"`
 	// Format is LogPretty or LogStructured.
 	Format string `koanf:"format" json:"format"`
+}
+
+// Mailer holds the outbound email settings. The mailer is optional: with no SMTP
+// host the application still runs, it just cannot send mail. That is what keeps
+// a local checkout from needing a mail server.
+type Mailer struct {
+	// FromEmail and FromName are the sender every message is sent as.
+	FromEmail string `koanf:"from_email" json:"from_email"`
+	FromName  string `koanf:"from_name" json:"from_name"`
+	// SMTPHost is the mail server. An empty host means the mailer is not
+	// configured, and it is not a configuration error.
+	SMTPHost string `koanf:"smtp_host" json:"smtp_host"`
+	// SMTPPort is the submission port: 587 for STARTTLS, 465 for implicit TLS.
+	SMTPPort int `koanf:"smtp_port" json:"smtp_port"`
+	// SMTPUsername and SMTPPassword authenticate the session. The password is a
+	// secret, so Redacted hides it and Sample writes it as a directive.
+	SMTPUsername string `koanf:"smtp_username" json:"smtp_username"`
+	SMTPPassword string `koanf:"smtp_password" json:"smtp_password"`
+	// SMTPSecure selects implicit TLS on connect instead of STARTTLS.
+	SMTPSecure bool `koanf:"smtp_secure" json:"smtp_secure"`
 }
 
 // RateLimit holds the request throttling settings.

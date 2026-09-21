@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"strconv"
 	"strings"
@@ -54,6 +55,17 @@ func (c Config) Validate() error {
 		"log.level: %q is not one of %s", c.Log.Level, joinValues(LogDebug, LogInfo, LogWarn, LogError))
 	check(isOneOf(c.Log.Format, LogPretty, LogStructured),
 		"log.format: %q is not one of %s", c.Log.Format, joinValues(LogPretty, LogStructured))
+
+	// The mailer is optional: with no SMTP host the application runs, it just
+	// cannot send mail, so an empty host is not a problem. What is checked is
+	// that a host which is set has a usable port, and that a password is not
+	// given without the username it authenticates.
+	check(isEmail(c.Mailer.FromEmail), "mailer.from_email: %q must be an email address", c.Mailer.FromEmail)
+	check(c.Mailer.FromName != "", "mailer.from_name: must not be empty")
+	check(c.Mailer.SMTPPort > 0 && c.Mailer.SMTPPort <= 65535,
+		"mailer.smtp_port: %d must be between 1 and 65535", c.Mailer.SMTPPort)
+	check(c.Mailer.SMTPPassword == "" || c.Mailer.SMTPUsername != "",
+		"mailer.smtp_username: required when mailer.smtp_password is set")
 
 	check(isOneOf(c.RateLimit.Driver, RateLimitDB, RateLimitKV),
 		"rate_limit.driver: %q is not one of %s", c.RateLimit.Driver, joinValues(RateLimitDB, RateLimitKV))
@@ -171,6 +183,17 @@ func isHTTPURL(value string) bool {
 	return parsed.Host != ""
 }
 
+// isEmail reports whether value is an email address. net/mail accepts a bare
+// local part and a display name, so the address form is what is checked here:
+// the config holds the address alone, and a display name belongs in FromName.
+func isEmail(value string) bool {
+	address, err := mail.ParseAddress(value)
+	if err != nil {
+		return false
+	}
+	return address.Address == value && strings.Contains(value, "@")
+}
+
 // A caller validates a Config it did not write, and renders one safely when it
 // prints it. Both act on a resolved Config, so both live here.
 
@@ -187,6 +210,7 @@ func (c Config) Redacted() Config {
 	out.Auth.PublicKey = redacted
 	out.Auth.SecretKey = redacted
 	out.Database.URL = RedactDSN(c.Database.URL)
+	out.Mailer.SMTPPassword = redacted
 	out.origin = nil
 	out.unresolved = nil
 	return out

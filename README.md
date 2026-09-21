@@ -78,6 +78,12 @@ reports every unresolved variable at once.
 
 The variable names the generated file uses are the conventional ones (`DATABASE_URL`,
 `AUTH_SECRET_KEY`), which is also how `key:generate` writes them and how `.env.example` lists them.
+A deployment variable is written the same way: `app.mode` asks for `APP_MODE`, `server.base_url` for
+`PUBLIC_BASE_URL`, and each `mailer.smtp_*` key for the matching `MAILER_SMTP_*`.
+
+The `mailer` section is optional. With no `mailer.smtp_host` the application runs without sending
+mail, so a local checkout needs no mail server; set the `MAILER_SMTP_*` variables to enable it.
+`mailer.smtp_secure` selects implicit TLS on connect instead of STARTTLS.
 `--env-file` adds a dotenv file to the table the directives resolve from, and wins over the system
 environment for a name both set.
 

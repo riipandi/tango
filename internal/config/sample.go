@@ -21,6 +21,7 @@ var secretKeys = []string{
 	"auth.public_key",
 	"auth.secret_key",
 	"database.url",
+	"mailer.smtp_password",
 }
 
 // envKeys are the keys a generated file writes as an env: directive even though
@@ -37,8 +38,12 @@ var secretKeys = []string{
 // neither is an error on its own: naming them would report a choice the user made
 // on purpose.
 var envKeys = map[string]string{
-	"app.mode":        "APP_MODE",
-	"server.base_url": "PUBLIC_BASE_URL",
+	"app.mode":             "APP_MODE",
+	"mailer.smtp_host":     "MAILER_SMTP_HOST",
+	"mailer.smtp_port":     "MAILER_SMTP_PORT",
+	"mailer.smtp_secure":   "MAILER_SMTP_SECURE",
+	"mailer.smtp_username": "MAILER_SMTP_USERNAME",
+	"server.base_url":      "PUBLIC_BASE_URL",
 }
 
 // Sample renders the config file a fresh checkout starts from: every key with its
