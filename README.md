@@ -68,6 +68,10 @@ with `env:NAME` as a whole value or `${NAME}` inline:
 Name the variable whatever you like; the file decides which key it fills. A variable nobody
 referenced cannot change a value, so an unrelated export in a shell can never alter a run.
 
+A key that holds a length of time is written as a plain number of seconds, so the file says `900`
+rather than `"15m0s"`. A duration string is still accepted, which is what a hand-written file or a
+`${...}` directive may carry.
+
 A directive naming a variable that is not set does not stop a command that does not read that key:
 the key keeps its default and only the command that needs it reports the problem. `config:validate`
 reports every unresolved variable at once.

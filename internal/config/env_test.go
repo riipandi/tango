@@ -90,18 +90,29 @@ func TestEmptyValueIsKept(t *testing.T) {
 }
 
 func TestDurationAndNumericFromFile(t *testing.T) {
-	// JSON has no duration type, so a duration is written as a string and read
-	// back by the decoder. This is the form config:generate writes.
+	// A duration key is written as a plain number of seconds, which is the form
+	// config:generate writes. A duration string is still accepted, because a
+	// hand-written file may carry the unit explicitly.
 	cfg := load(t, `{
-		"database": {"url": "env:DATABASE_URL", "max_conns": 25, "connect_timeout": "3s"},
-		"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
-		"server": {"port": 9000, "read_timeout": "45s"}
+		"database": {"url": "env:DATABASE_URL", "max_conns": 25, "connect_timeout": 3},
+		"auth": {"secret_key": "env:AUTH_SECRET_KEY", "access_ttl": "15m"},
+		"server": {"port": 9000, "read_timeout": 45, "idle_timeout": 90}
 	}`)
 
 	assert.Equal(t, int32(25), cfg.Database.MaxConns)
 	assert.Equal(t, 9000, cfg.Server.Port)
 	assert.Equal(t, 45*time.Second, cfg.Server.ReadTimeout)
+	assert.Equal(t, 90*time.Second, cfg.Server.IdleTimeout)
 	assert.Equal(t, 3*time.Second, cfg.Database.ConnectTimeout)
+	assert.Equal(t, 15*time.Minute, cfg.Auth.AccessTTL)
+}
+
+func TestNumberOutsideADurationKeyIsNotReadAsSeconds(t *testing.T) {
+	// The conversion is keyed, not typed: only a named duration key turns a bare
+	// number into seconds. A number under any other key keeps its own meaning.
+	cfg := load(t, `{"database": {"url": "env:DATABASE_URL", "max_conns": 25}}`)
+
+	assert.Equal(t, int32(25), cfg.Database.MaxConns)
 }
 
 func TestEnvFileFeedsInterpolation(t *testing.T) {

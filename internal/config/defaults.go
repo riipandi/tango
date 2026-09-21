@@ -7,12 +7,12 @@ import "time"
 // check, and it matches the compose volume (./storage:/srv/storage).
 const DefaultDataDir = "storage"
 
-// Env names of the supported runtime environments.
+// Mode names of the supported runtime modes.
 const (
-	EnvDevelopment = "development"
-	EnvStaging     = "staging"
-	EnvProduction  = "production"
-	EnvTest        = "test"
+	ModeDevelopment = "development"
+	ModeStaging     = "staging"
+	ModeProduction  = "production"
+	ModeTest        = "test"
 )
 
 // Log levels accepted by Log.Level.
@@ -29,7 +29,7 @@ const (
 func Default() Config {
 	return Config{
 		App: App{
-			Env:     EnvDevelopment,
+			Mode:    ModeDevelopment,
 			DataDir: DefaultDataDir,
 		},
 		Auth: Auth{

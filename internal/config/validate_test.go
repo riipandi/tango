@@ -77,10 +77,10 @@ func TestValidationAcceptsAValidConfiguration(t *testing.T) {
 	require.NoError(t, resolveFile(t, ""))
 }
 
-func TestValidationRejectsAnInvalidEnvironmentName(t *testing.T) {
-	err := resolveFile(t, `"app": {"env": "prod"}`)
+func TestValidationRejectsAnInvalidModeName(t *testing.T) {
+	err := resolveFile(t, `"app": {"mode": "prod"}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
-	assert.Contains(t, err.Error(), "app.env")
+	assert.Contains(t, err.Error(), "app.mode")
 }
 
 func TestRedactedHidesSecrets(t *testing.T) {
@@ -118,6 +118,7 @@ func TestKeysMatchTheStruct(t *testing.T) {
 	require.NotEmpty(t, keys)
 
 	assert.Contains(t, keys, "app.data_dir")
+	assert.Contains(t, keys, "app.mode")
 	assert.Contains(t, keys, "database.url")
 	assert.Contains(t, keys, "server.port")
 	assert.Contains(t, keys, "auth.access_ttl")

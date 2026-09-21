@@ -30,8 +30,8 @@ type Config struct {
 
 // App holds process-level settings.
 type App struct {
-	// Env names the runtime environment, such as development or production.
-	Env string `koanf:"env" json:"env"`
+	// Mode names the runtime mode: development, staging, production, or test.
+	Mode string `koanf:"mode" json:"mode"`
 	// DataDir is the application data directory, relative to the working
 	// directory or absolute. It matches DefaultDataDir.
 	DataDir string `koanf:"data_dir" json:"data_dir"`

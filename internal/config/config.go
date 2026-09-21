@@ -30,6 +30,10 @@
 // name the generated file and .env.example use for it (see EnvName). That name
 // is a convention for what the file writes, not a mapping the loader applies.
 //
+// A key that holds a length of time is written as a plain number of seconds, so
+// the file says 900 rather than "15m0s". A duration string is still accepted; see
+// durationKeys.
+//
 // # The struct is the schema
 //
 // Config and its sections define every key, its default (Default), and its rule
@@ -112,6 +116,9 @@ func Load(opts Options) (Config, error) {
 		{LayerFlag, filterKnown(opts.Flags)},
 	}
 	for _, layer := range layers {
+		// A duration key is read as seconds before the layer is merged, so the
+		// unit is decided by the key rather than guessed by the decoder.
+		normalizeDurations(layer.keys)
 		if err := merge(k, cfg.origin, layer.name, layer.keys); err != nil {
 			return Config{}, err
 		}

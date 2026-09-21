@@ -47,8 +47,8 @@ func Sample() ([]byte, error) {
 }
 
 // nest turns flat dotted keys back into the tree the file is written as. A
-// duration is written as its string form, because the parser reads it back and
-// JSON has no duration type.
+// duration is written as a number of seconds, which is the unit the file uses
+// everywhere: "15m0s" reads as a Go expression, and 900 reads as a duration.
 func nest(flat map[string]any) map[string]any {
 	out := make(map[string]any)
 	for key, value := range flat {
@@ -67,10 +67,17 @@ func nest(flat map[string]any) map[string]any {
 	return out
 }
 
-// renderable converts a default into a value JSON can hold.
+// renderable converts a default into a value JSON can hold. A duration becomes a
+// number of seconds, so the file says 900 rather than "15m0s". An exact division
+// stays an integer: 900 seconds is written 900, not 900.0.
 func renderable(value any) any {
-	if duration, ok := value.(time.Duration); ok {
-		return duration.String()
+	duration, ok := value.(time.Duration)
+	if !ok {
+		return value
 	}
-	return value
+	seconds := duration.Seconds()
+	if seconds == float64(int64(seconds)) {
+		return int64(seconds)
+	}
+	return seconds
 }

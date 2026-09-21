@@ -179,7 +179,7 @@ func runConfigGenerate(_ context.Context, cmd *cli.Command) error {
 	if err := os.WriteFile(path, sample, configFileMode); err != nil {
 		return fmt.Errorf("config: write %s: %w", path, err)
 	}
-	return printConfigWritten(p, path, sample)
+	return printConfigWritten(p, path)
 }
 
 // mayWriteConfig refuses to replace an existing file unless --overwrite was
@@ -199,16 +199,17 @@ func mayWriteConfig(path string, overwrite bool) error {
 	}
 }
 
-// printConfigWritten reports the file and the two steps that follow it.
-func printConfigWritten(p printext.Palette, path string, sample []byte) error {
-	if err := p.Printf("%s %s\n", path, p.Green("created")); err != nil {
+// printConfigWritten reports the file and the step that follows it, as the same
+// labelled block every other command prints.
+//
+// The key count and the size are left out: a generated file always carries every
+// key, so both numbers are the same on every run and say nothing about this one.
+func printConfigWritten(p printext.Palette, path string) error {
+	if err := printFields(p, []field{{"written", path}}); err != nil {
 		return err
 	}
-	if err := p.Printf("%s\n", p.Dim(fmt.Sprintf("%d keys, %d bytes", len(config.Keys()), len(sample)))); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(p.Writer(), "\nnext: run %s, then set %s in the environment\n",
-		p.Dim("key:generate"), p.Dim(config.EnvName("database.url"))); err != nil {
+	if _, err := fmt.Fprintf(p.Writer(), "\nnext: run %s, then set %s\n",
+		p.Dim("key:generate --env-file=.env.local"), p.Dim(config.EnvName("database.url"))); err != nil {
 		return err
 	}
 	return printStatusLine(p, "config file ready")

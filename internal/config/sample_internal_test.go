@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,13 +61,28 @@ func TestSampleIsDeterministic(t *testing.T) {
 	assert.True(t, jsontext.Value(first).IsValid(), "the sample must be valid JSON")
 }
 
-func TestSampleDurationIsAString(t *testing.T) {
-	// JSON has no duration type, so a duration is written as its string form.
-	// The decoder reads it back, which is what lets a generated file round-trip.
+func TestSampleWritesDurationsAsSeconds(t *testing.T) {
+	// A duration is written as a plain number of seconds, never as a Go duration
+	// string: 900 reads as a duration, "15m0s" reads as an expression.
 	flat := sampleDoc(t)
 
-	assert.Equal(t, "15m0s", flat["auth.access_ttl"])
-	assert.Equal(t, "1h0m0s", flat["database.max_conn_lifetime"])
+	assert.Equal(t, float64(900), flat["auth.access_ttl"])
+	assert.Equal(t, float64(3600), flat["database.max_conn_lifetime"])
+	assert.Equal(t, float64(2592000), flat["auth.refresh_ttl"])
+}
+
+func TestDurationKeysMatchTheStruct(t *testing.T) {
+	// The list is what makes a bare number mean seconds, so a new duration field
+	// must be listed or it would silently be read as nanoseconds.
+	var found []string
+	for _, key := range Keys() {
+		if _, ok := DefaultsMap()[key].(time.Duration); ok {
+			found = append(found, key)
+		}
+	}
+
+	assert.Equal(t, durationKeys, found,
+		"durationKeys must list exactly the time.Duration fields on Config")
 }
 
 func TestSampleRoundTripsThroughLoad(t *testing.T) {

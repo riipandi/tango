@@ -35,8 +35,9 @@ func (c Config) Validate() error {
 		problems = append(problems, fmt.Errorf("%s: %s is not set", key, c.unresolved[key]))
 	}
 
-	check(isOneOf(c.App.Env, EnvDevelopment, EnvStaging, EnvProduction, EnvTest),
-		"app.env: %q is not one of %s", c.App.Env, joinValues(EnvDevelopment, EnvStaging, EnvProduction, EnvTest))
+	check(isOneOf(c.App.Mode, ModeDevelopment, ModeStaging, ModeProduction, ModeTest),
+		"app.mode: %q is not one of %s", c.App.Mode,
+		joinValues(ModeDevelopment, ModeStaging, ModeProduction, ModeTest))
 	check(c.App.DataDir != "", "app.data_dir: must not be empty")
 	check(c.App.SecretKey == "" || isHexKey(c.App.SecretKey),
 		"app.secret_key: must be 64 hex characters")
@@ -203,6 +204,6 @@ func RedactDSN(dsn string) string {
 func (c Config) String() string {
 	redacted := c.Redacted()
 	return fmt.Sprintf("app=%s database=%s server=%s:%d log=%s/%s",
-		redacted.App.Env, RedactDSN(redacted.Database.URL), redacted.Server.Host,
+		redacted.App.Mode, RedactDSN(redacted.Database.URL), redacted.Server.Host,
 		redacted.Server.Port, redacted.Log.Level, redacted.Log.Format)
 }
