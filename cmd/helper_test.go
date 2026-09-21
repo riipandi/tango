@@ -164,7 +164,7 @@ func TestReporterIndentsProgressOnly(t *testing.T) {
 
 	line := strings.TrimSuffix(out.String(), "\n")
 	line = strings.TrimPrefix(line, "\n")
-	assert.True(t, strings.HasPrefix(line, "1 migration applied in "), "summary must start at column zero: %q", line)
+	assert.True(t, strings.HasPrefix(line, "status: 1 migration applied in "), "summary must start at column zero: %q", line)
 }
 
 // A rollback must be reported the same way an apply is, with its own state word
@@ -218,7 +218,7 @@ func TestPrintPendingUsesTheSharedRowShape(t *testing.T) {
 	assert.Equal(t,
 		expectedRow(1, "pending", 7, "-", "initialize_schema")+
 			expectedRow(2, "pending", 7, "-", "create_identity_tables")+
-			"\n2 migrations pending\n", out.String())
+			"\nstatus: 2 migrations pending\n", out.String())
 }
 
 // A rollback plan says "rollback", not "rolled back": nothing has run yet.
@@ -230,7 +230,61 @@ func TestPrintRollbackUsesTheSharedRowShape(t *testing.T) {
 
 	assert.Equal(t,
 		expectedRow(9, "rollback", 8, "-", "add_session_remember")+
-			"\n1 migration to roll back\n", out.String())
+			"\nstatus: 1 migration to roll back\n", out.String())
+}
+
+// Every outcome line carries the same "status:" label at column zero, so one
+// grep finds the result of any migrate:* command instead of one pattern per
+// command.
+func TestPrintSummaryLabelsEveryOutcome(t *testing.T) {
+	tests := []struct {
+		name string
+		verb string
+	}{
+		{name: "applied", verb: "applied"},
+		{name: "rolled back", verb: "rolled back"},
+		{name: "pending", verb: "pending"},
+		{name: "to roll back", verb: "to roll back"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			require.NoError(t, printSummary(plain(&out), 3, tt.verb, "migration", 5*time.Millisecond))
+
+			line := strings.TrimPrefix(out.String(), "\n")
+			assert.True(t, strings.HasPrefix(line, "status: "), "summary must carry the label: %q", line)
+			assert.Contains(t, line, tt.verb)
+			assert.Contains(t, line, "in 5 ms")
+		})
+	}
+}
+
+// A report that measured nothing still labels its outcome, so the label is on
+// every result and not only the timed ones.
+func TestPrintSummaryLabelsAnUntimedOutcome(t *testing.T) {
+	var out bytes.Buffer
+	require.NoError(t, printSummary(plain(&out), 1, "pending", "migration", 0))
+
+	assert.Equal(t, "\nstatus: 1 migration pending\n", out.String())
+}
+
+// The lines that report "nothing happened" are outcomes too, so they carry the
+// same label.
+func TestPrintStatusLineCarriesTheLabel(t *testing.T) {
+	var out bytes.Buffer
+	require.NoError(t, printStatusLine(plain(&out), "no pending migrations"))
+
+	assert.Equal(t, "status: no pending migrations\n", out.String())
+}
+
+// The label is formatted like the field labels, so a reader cannot tell an
+// outcome line from the rest of the block.
+func TestPrintStatusLineFormatsItsArguments(t *testing.T) {
+	var out bytes.Buffer
+	require.NoError(t, printStatusLine(plain(&out), "%d %s left applied", 2, "migrations"))
+
+	assert.Equal(t, "status: 2 migrations left applied\n", out.String())
 }
 
 // expectedRow builds one row of the shared report shape, with the widths written

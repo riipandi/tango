@@ -289,15 +289,30 @@ func (r *reporter) failed() error {
 // elapsed is how long the command has been running.
 func (r *reporter) elapsed() time.Duration { return time.Since(r.started) }
 
-// printSummary closes a report with what happened and how long it took. The
-// duration is omitted when nothing was measured.
+// statusLabel is the prefix on every outcome line a migration command prints, so
+// the result of any of them greps at column zero with one pattern:
+//
+//	grep '^status:'
+func statusLabel(p printext.Palette) string { return p.Dim("status:") }
+
+// printStatusLine writes one outcome line: a labelled statement of what the
+// command did, or did not do.
+func printStatusLine(p printext.Palette, format string, args ...any) error {
+	return p.Printf("%s %s\n", statusLabel(p), fmt.Sprintf(format, args...))
+}
+
+// printSummary closes a report with what happened and how long it took.
+//
+// The line carries the same "status:" label as every other outcome line, so the
+// result of a run greps at column zero. The duration is omitted when nothing was
+// measured.
 func printSummary(p printext.Palette, count int, verb, noun string, elapsed time.Duration) error {
 	head := fmt.Sprintf("%d %s ", count, printext.Plural(count, noun))
 	if elapsed > 0 {
-		return p.Printf("\n%s%s %s\n", head, p.Paint(verbAttribute(verb), verb),
+		return p.Printf("\n%s %s%s %s\n", statusLabel(p), head, p.Paint(verbAttribute(verb), verb),
 			p.Dim("in "+printext.Duration(elapsed)))
 	}
-	return p.Printf("\n%s%s\n", head, p.Paint(verbAttribute(verb), verb))
+	return p.Printf("\n%s %s%s\n", statusLabel(p), head, p.Paint(verbAttribute(verb), verb))
 }
 
 // verbAttribute maps the verb that closes a report to its colour: work that

@@ -151,7 +151,7 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if !proceed {
-		return p.Printf("\nnothing seeded\n")
+		return printStatusLine(p, "nothing seeded")
 	}
 
 	// The seeder reports nothing until it finishes, so the spinner is the only
@@ -243,12 +243,12 @@ func printSeedResults(p printext.Palette, results []seeders.Result, dryRun bool,
 		}
 	}
 	if dryRun {
-		return p.Printf("%s, %s %s\n",
+		return printStatusLine(p, "%s, %s %s",
 			p.Yellow(fmt.Sprintf("%d to create", created)),
 			p.Yellow(fmt.Sprintf("%d to skip", skipped)),
 			p.Dim("in "+printext.Duration(elapsed)))
 	}
-	return p.Printf("%s, %s %s\n",
+	return printStatusLine(p, "%s, %s %s",
 		p.Green(fmt.Sprintf("%d created", created)),
 		p.Green(fmt.Sprintf("%d skipped", skipped)),
 		p.Dim("in "+printext.Duration(elapsed)))
@@ -312,7 +312,7 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 	// Nothing to roll back. Without --up that is the whole answer, because
 	// there is no up half to run either.
 	if len(applied) == 0 && !reapply {
-		return p.Printf("no applied migrations\n")
+		return printStatusLine(p, "no applied migrations")
 	}
 
 	if cmd.Bool("dry-run") {
@@ -340,7 +340,7 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if !proceed {
-		return p.Printf("\n%d %s left applied\n",
+		return printStatusLine(p, "%d %s left applied",
 			len(applied), printext.Plural(len(applied), "migration"))
 	}
 
@@ -358,6 +358,14 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 	if err := report.failed(); err != nil {
 		return err
 	}
+
+	// The rollback emptied the version table down to its sentinel but left the
+	// identity sequence where it was, so rewind it before the re-apply records
+	// anything. Without this every reset pushes the next id further away.
+	if err := migrator.ResetIdentity(ctx); err != nil {
+		return err
+	}
+
 	if err := printSummary(p, len(rolled), "rolled back", "migration", report.elapsed()); err != nil {
 		return err
 	}
@@ -403,7 +411,7 @@ func applyResetUp(
 		return err
 	}
 	if len(pending) == 0 {
-		return p.Printf("no pending migrations\n")
+		return printStatusLine(p, "no pending migrations")
 	}
 
 	proceed, err := confirm(p, cmd, terminalCheck(cmd),
@@ -412,7 +420,7 @@ func applyResetUp(
 		return err
 	}
 	if !proceed {
-		return p.Printf("\n%d pending %s left unapplied\n",
+		return printStatusLine(p, "%d pending %s left unapplied",
 			len(pending), printext.Plural(len(pending), "migration"))
 	}
 
@@ -488,7 +496,7 @@ func printValidation(p printext.Palette, report database.ValidationReport, elaps
 			report.Checked, printext.Plural(report.Checked, "migration file"))
 	}
 
-	return p.Printf("%s %s\n",
+	return printStatusLine(p, "%s %s",
 		p.Green(fmt.Sprintf("%d %s", report.Checked, printext.Plural(report.Checked, "migration file"))),
 		p.Dim("valid in "+printext.Duration(elapsed)))
 }

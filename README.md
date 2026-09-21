@@ -89,7 +89,7 @@ database: localhost:5432/tango
   00002 applied 2026-09-21 01:15:32 create_identity_tables (35.029 ms)
   ...
 
-9 migrations applied in 146.256 ms
+status: 9 migrations applied in 146.256 ms
 ```
 
 A run reports each migration as it finishes, not in one block at the end, so a slow migration leaves
@@ -103,6 +103,17 @@ time, name, and duration — so applying, rolling back, and listing all read ali
 
 The name is shortened because the version already has its own column and `.sql` says nothing, so
 `00009_add_session_remember.sql` prints as `add_session_remember`.
+
+Every outcome line carries a `status:` label, so one pattern finds the result of any command:
+
+```bash
+go run -tags debug ./cmd migrate:reset --env-file=.env.local --force --up | grep '^status:'
+```
+
+```text
+status: 9 migrations rolled back in 176.226 ms
+status: 9 migrations applied in 131.927 ms
+```
 
 `migrate:status` omits the duration, because the recorded time says when a migration ran, not how
 long it took, and that command runs nothing to find out. A `--dry-run` lists rows too, with the time

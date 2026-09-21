@@ -266,3 +266,91 @@ func TestMigratorAllowsOutOfOrderWhenEnabled(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, applied, migrationCount)
 }
+
+// versionTableIDs reads the recorded ids of the version table, lowest first.
+func versionTableIDs(t *testing.T, db *sql.DB) []int64 {
+	t.Helper()
+
+	rows, err := db.QueryContext(t.Context(),
+		"SELECT id FROM app_migration ORDER BY id")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, rows.Close()) }()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		require.NoError(t, rows.Scan(&id))
+		ids = append(ids, id)
+	}
+	require.NoError(t, rows.Err())
+	return ids
+}
+
+// ResetIdentity must rewind the sequence so the next recorded migration continues
+// after the highest id left in the table. goose never moves a sequence
+// backwards, so without this the ids grow by one cycle each time and stop
+// meaning anything.
+func TestMigratorResetIdentityRewindsAfterRollback(t *testing.T) {
+	migrator, db := newMigrator(t)
+
+	_, err := migrator.Up(t.Context())
+	require.NoError(t, err)
+
+	// A full rollback leaves only the sentinel goose requires.
+	_, err = migrator.Down(t.Context(), migrationCount)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{1}, versionTableIDs(t, db), "only the sentinel row must remain")
+
+	require.NoError(t, migrator.ResetIdentity(t.Context()))
+
+	_, err = migrator.Up(t.Context())
+	require.NoError(t, err)
+
+	ids := versionTableIDs(t, db)
+	require.Len(t, ids, migrationCount+1)
+	assert.Equal(t, int64(1), ids[0], "the sentinel keeps id 1")
+	assert.Equal(t, int64(migrationCount+1), ids[len(ids)-1],
+		"the ids must be dense again, not pushed past the previous cycle")
+}
+
+// The sentinel row must survive: goose refuses every command without it.
+func TestMigratorResetIdentityKeepsTheZeroVersionRow(t *testing.T) {
+	migrator, db := newMigrator(t)
+
+	_, err := migrator.Up(t.Context())
+	require.NoError(t, err)
+	_, err = migrator.Down(t.Context(), migrationCount)
+	require.NoError(t, err)
+
+	require.NoError(t, migrator.ResetIdentity(t.Context()))
+
+	var sentinel int64
+	require.NoError(t, db.QueryRowContext(t.Context(),
+		"SELECT count(*) FROM app_migration WHERE version_id = 0").Scan(&sentinel))
+	assert.Equal(t, int64(1), sentinel, "goose requires a row for version 0")
+
+	// goose must still be usable, which is what the sentinel buys.
+	_, err = migrator.Status(t.Context())
+	require.NoError(t, err)
+}
+
+// A rollback that stops part way must leave the sequence at the highest id that
+// is still recorded, so the next apply continues from there.
+func TestMigratorResetIdentityAfterPartialRollback(t *testing.T) {
+	migrator, db := newMigrator(t)
+
+	_, err := migrator.Up(t.Context())
+	require.NoError(t, err)
+	_, err = migrator.Down(t.Context(), 2)
+	require.NoError(t, err)
+
+	require.NoError(t, migrator.ResetIdentity(t.Context()))
+
+	_, err = migrator.Up(t.Context())
+	require.NoError(t, err)
+
+	ids := versionTableIDs(t, db)
+	require.Len(t, ids, migrationCount+1)
+	assert.Equal(t, int64(migrationCount+1), ids[len(ids)-1],
+		"the ids must stay dense after a partial rollback too")
+}

@@ -501,3 +501,38 @@ func currentVersion(t *testing.T, dsn string) int64 {
 	require.NoError(t, err)
 	return version
 }
+
+// maxMigrationID reads the highest id recorded in the version table.
+func maxMigrationID(t *testing.T, dsn string) int64 {
+	t.Helper()
+
+	db, err := datastore.OpenMigrationDB(t.Context(), datastore.PostgresOptions{DSN: dsn})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
+	var id int64
+	require.NoError(t, db.QueryRowContext(t.Context(),
+		"SELECT coalesce(max(id), 0) FROM app_migration").Scan(&id))
+	return id
+}
+
+// A full rollback must rewind the version table's identity sequence, so applying
+// again records the same ids instead of starting past the previous cycle.
+func TestMigrateDownRewindsTheVersionTableIdentity(t *testing.T) {
+	container := testutils.StartPostgres(t.Context(), t)
+	dsn := container.NewDatabase(t)
+	envFile := writeEnvFile(t, dsn)
+
+	_, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
+	require.NoError(t, err)
+	afterUp := maxMigrationID(t, dsn)
+
+	_, err = runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=9")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), maxMigrationID(t, dsn), "only the sentinel must remain")
+
+	_, err = runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
+	require.NoError(t, err)
+	assert.Equal(t, afterUp, maxMigrationID(t, dsn),
+		"a second full apply must record the same ids as the first")
+}

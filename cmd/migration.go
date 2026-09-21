@@ -69,7 +69,7 @@ func openMigrator(
 // line carries a "-" in the time column and no duration, because nothing has run.
 func printPending(p printext.Palette, pending []database.MigrationStatus) error {
 	if len(pending) == 0 {
-		return p.Printf("no pending migrations\n")
+		return printStatusLine(p, "no pending migrations")
 	}
 	rows := make([]migrationRow, 0, len(pending))
 	for _, status := range pending {
@@ -149,7 +149,7 @@ func printStatus(p printext.Palette, statuses []database.MigrationStatus, versio
 
 	last, ok := lastRun(statuses)
 	if !ok {
-		return p.Printf("no migrations applied yet\n")
+		return printStatusLine(p, "no migrations applied yet")
 	}
 	return p.Printf("last run %s UTC (%s)\n",
 		p.Dim(last.AppliedAt.UTC().Format(migrationTimestamp)), last.Name)
@@ -262,7 +262,7 @@ func runMigrateUp(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if !apply {
-		return p.Printf("\n%d pending %s left unapplied\n",
+		return printStatusLine(p, "%d pending %s left unapplied",
 			len(selected), printext.Plural(len(selected), "migration"))
 	}
 
@@ -306,7 +306,7 @@ func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if len(applied) == 0 {
-		return p.Printf("no applied migrations\n")
+		return printStatusLine(p, "no applied migrations")
 	}
 
 	// A count above what the database has rolls back everything, which is the
@@ -322,7 +322,7 @@ func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if !proceed {
-		return p.Printf("\n%d %s left applied\n", count, printext.Plural(count, "migration"))
+		return printStatusLine(p, "%d %s left applied", count, printext.Plural(count, "migration"))
 	}
 
 	results, err := migrator.Down(ctx, count)
@@ -333,6 +333,13 @@ func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if err := report.failed(); err != nil {
+		return err
+	}
+
+	// A rollback deleted rows from the version table but left its identity
+	// sequence where it was. Rewinding it after every rollback keeps the recorded
+	// ids dense instead of leaving a widening gap behind each cycle.
+	if err := migrator.ResetIdentity(ctx); err != nil {
 		return err
 	}
 	return printSummary(p, len(results), "rolled back", "migration", report.elapsed())
@@ -400,9 +407,9 @@ func pendingUpTo(pending []database.MigrationStatus, version int64) []database.M
 // migrations" then would be wrong.
 func printNothingToApply(p printext.Palette, pending []database.MigrationStatus, target int64) error {
 	if len(pending) == 0 {
-		return p.Printf("no pending migrations\n")
+		return printStatusLine(p, "no pending migrations")
 	}
-	return p.Printf("nothing to apply up to version %05d; %s\n",
+	return printStatusLine(p, "nothing to apply up to version %05d; %s",
 		target, p.Yellow(fmt.Sprintf("%d %s pending above it", len(pending), printext.Plural(len(pending), "migration"))))
 }
 

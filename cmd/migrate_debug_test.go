@@ -24,14 +24,14 @@ func TestMigrateValidateNeedsNoDatabase(t *testing.T) {
 
 	out, err := runMigrateValidateCmd(t)
 	require.NoError(t, err)
-	assert.Contains(t, out, "9 migration files valid")
+	assert.Contains(t, out, "status: 9 migration files valid")
 }
 
 func TestMigrateValidateReportsNoIssues(t *testing.T) {
 	out, err := runMigrateValidateCmd(t)
 	require.NoError(t, err)
 	assert.NotContains(t, out, "goose will skip")
-	assert.Contains(t, out, "9 migration files valid")
+	assert.Contains(t, out, "status: 9 migration files valid")
 }
 
 // A broken file must fail the command, so `task check` fails with it.
@@ -289,4 +289,22 @@ func runMigrateCreateCmd(t *testing.T, dir, name string) (string, error) {
 func runMigrateValidateCmd(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	return runMigrateCmd(t, migrateValidateCmd, "", args...)
+}
+
+// migrate:reset --up rolls back and re-applies in one run, so its ids must stay
+// dense across the two halves.
+func TestMigrateResetWithUpKeepsIDsDense(t *testing.T) {
+	container := testutils.StartPostgres(t.Context(), t)
+	dsn := container.NewDatabase(t)
+	envFile := writeEnvFile(t, dsn)
+
+	_, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
+	require.NoError(t, err)
+	afterUp := maxMigrationID(t, dsn)
+
+	_, err = runMigrateResetCmd(t, "", "--env-file="+envFile, "--force", "--up")
+	require.NoError(t, err)
+	assert.Equal(t, afterUp, maxMigrationID(t, dsn),
+		"the re-apply must reuse the ids, not continue past them")
+	assert.Equal(t, int64(9), currentVersion(t, dsn))
 }
