@@ -1,4 +1,9 @@
 {
+    "file_types": {
+        "JSON": ["*.json.example"],
+        "TOML": ["*.toml.example"],
+        "YAML": ["*.yaml.example", "*.yml.example"]
+    },
     "languages": {
         "Go": {
             "inlay_hints": {

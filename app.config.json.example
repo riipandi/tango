@@ -1,0 +1,55 @@
+{
+  "app": {
+    "env": "development",
+    "data_dir": "storage",
+    "secret_key": ""
+  },
+  "log": {
+    "level": "info",
+    "format": "text"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 3080,
+    "base_url": "",
+    "read_timeout": "15s",
+    "write_timeout": "30s",
+    "idle_timeout": "1m0s",
+    "shutdown_timeout": "15s"
+  },
+  "database": {
+    "url": "",
+    "max_conns": 10,
+    "min_conns": 2,
+    "max_conn_lifetime": "1h0m0s",
+    "max_conn_idle_time": "30m0s",
+    "connect_timeout": "5s",
+    "search_path": "public,internal,reference",
+    "timezone": "UTC"
+  },
+  "auth": {
+    "private_key": "",
+    "public_key": "",
+    "secret_key": "",
+    "issuer": "tango",
+    "access_ttl": "15m0s",
+    "refresh_ttl": "720h0m0s"
+  },
+  "cache": {
+    "driver": "memory",
+    "ttl": "5m0s"
+  },
+  "session": {
+    "driver": "db",
+    "ttl": "168h0m0s"
+  },
+  "rate_limit": {
+    "driver": "db",
+    "limit": 60,
+    "window": "1m0s"
+  },
+  "storage": {
+    "driver": "local",
+    "local_path": "storage"
+  }
+}

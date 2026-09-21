@@ -66,10 +66,16 @@ The check needs DATABASE_URL; pass --env-file or export it.`,
 	Action: runHealthCheck,
 }
 
-// dataDir resolves the application data directory. The root --data-dir flag
-// sets it; config.DefaultDataDir is the default.
-func dataDir(cmd *cli.Command) string {
-	if dir := cmd.String("data-dir"); dir != "" {
+// dataDir resolves the application data directory from the configuration. The
+// config layer already applied the precedence, including the --data-dir flag, so
+// reading it here cannot disagree with what the layer resolved.
+func dataDir(ctx context.Context, cmd *cli.Command) string {
+	if cfg, err := configFrom(ctx); err == nil && cfg.App.DataDir != "" {
+		return cfg.App.DataDir
+	}
+	// No configuration in the context (a direct call in a test): fall back to
+	// the flag, then to the built-in default.
+	if dir := cmd.String(config.FlagDataDir); dir != "" {
 		return dir
 	}
 	return config.DefaultDataDir
@@ -126,7 +132,7 @@ func checkHealth(ctx context.Context, cmd *cli.Command, dsn string) health.Resul
 		health.WithTimeout(cmd.Duration("timeout")),
 		health.WithChecks(
 			health.PostgresCheck(pool, postgresTarget(dsn)),
-			health.StorageCheck(dataDir(cmd)),
+			health.StorageCheck(dataDir(ctx, cmd)),
 		),
 		health.WithInfo(info),
 		health.WithInfoFunc(uptime),

@@ -27,12 +27,17 @@ var rootCmd = &cli.Command{
 	},
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:     "env-file",
+			Name:     config.FlagEnvFile,
 			Usage:    "Load environment variables from a file",
 			Required: false,
 		},
 		&cli.StringFlag{
-			Name:     "data-dir",
+			Name:     config.FlagConfigFile,
+			Usage:    "Load configuration from a JSON file",
+			Required: false,
+		},
+		&cli.StringFlag{
+			Name:     config.FlagDataDir,
 			Usage:    "Set the Application data directory",
 			Required: false,
 			Value:    config.DefaultDataDir,
@@ -43,4 +48,5 @@ var rootCmd = &cli.Command{
 			Aliases: []string{"V"},
 		},
 	},
+	Before: initConfig,
 }
