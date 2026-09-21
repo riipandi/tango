@@ -57,6 +57,25 @@ func (c Config) Validate() error {
 	check(isOneOf(c.Log.Format, LogPretty, LogStructured),
 		"log.format: %q is not one of %s", c.Log.Format, joinValues(LogPretty, LogStructured))
 
+	// The key-value backend is opt-in. Its Enable flag and the per-feature driver
+	// fields are two different decisions, so they can disagree, and a driver
+	// pointing at a backend that is switched off is the one combination that
+	// cannot work: report it by name rather than leaving it to fail at start-up.
+	check(c.KVStore.DB >= 0, "kvstore.db: %d must not be negative", c.KVStore.DB)
+	if c.KVStore.Enable {
+		// An unset variable is reported by name, which is the message a user
+		// needs; a URL that is present is held to the grammar the client accepts.
+		check(c.KVStore.URL != "", "kvstore.url: %s",
+			c.unsetNote("kvstore.url", "must not be empty when kvstore.enable is true"))
+		check(c.KVStore.URL == "" || isKVURL(c.KVStore.URL),
+			"kvstore.url: %q must be a redis://, rediss://, or unix:// connection string", c.KVStore.URL)
+	}
+	if drivers := c.kvStoreDrivers(); len(drivers) > 0 && !c.KVStore.Enable {
+		problems = append(problems, fmt.Errorf(
+			"kvstore.enable: false, but %s set to %q; enable the kvstore or choose another driver",
+			strings.Join(drivers, ", "), CacheKV))
+	}
+
 	// The mailer is optional: with no SMTP host the application runs, it just
 	// cannot send mail, so an empty host is not a problem. What is checked is
 	// that a host which is set has a usable port, and that a password is not
@@ -159,6 +178,67 @@ func isHexKey(value string) bool {
 	return err == nil
 }
 
+// kvStoreDrivers returns the feature keys whose driver is the key-value backend.
+// It is what turns "a driver points at a switched-off backend" into a message
+// that names the key, rather than a failure at start-up.
+func (c Config) kvStoreDrivers() []string {
+	var keys []string
+	if c.Cache.Driver == CacheKV {
+		keys = append(keys, "cache.driver")
+	}
+	if c.RateLimit.Driver == RateLimitKV {
+		keys = append(keys, "rate_limit.driver")
+	}
+	if c.Session.Driver == SessionKV {
+		keys = append(keys, "session.driver")
+	}
+	return keys
+}
+
+// isKVURL reports whether value is a key-value connection string.
+//
+// The rules mirror the URL grammar the Valkey and Redis clients accept
+// (redis.ParseURL in github.com/redis/go-redis/v9), because validation that is
+// stricter than the client rejects a URL that would have connected:
+//
+//   - redis, rediss (TLS), and unix (a unix socket) are the accepted schemes
+//   - a missing host is not an error: the client defaults it to localhost:6379
+//   - the path is the database index, and is empty or one integer segment
+//   - a unix socket carries its path instead of a host
+//
+// A query parameter is left to the client, which rejects an unexpected one when
+// it connects. Mirroring that list here would be a second copy of it to keep in
+// step, and it does not decide whether the URL names a server.
+func isKVURL(value string) bool {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	switch parsed.Scheme {
+	case "redis", "rediss":
+		return isKVDBPath(parsed.Path)
+	case "unix":
+		return parsed.Path != ""
+	default:
+		return false
+	}
+}
+
+// isKVDBPath reports whether a key-value URL path is the database index: empty,
+// or a single integer segment. The client rejects anything else.
+func isKVDBPath(path string) bool {
+	segments := strings.FieldsFunc(path, func(r rune) bool { return r == '/' })
+	switch len(segments) {
+	case 0:
+		return true
+	case 1:
+		_, err := strconv.Atoi(segments[0])
+		return err == nil
+	default:
+		return false
+	}
+}
+
 // isPostgresDSN reports whether value parses as a Postgres connection string.
 // The parse is pgx's, so a DSN that passes here connects the same way the
 // datastore will read it.
@@ -233,7 +313,7 @@ type secretRenderer func(string) string
 
 // withSecrets returns a copy with every secret passed through render.
 //
-// The connection string is always reduced to host:port/database rather than
+// A connection string is always reduced to host:port/database rather than
 // rendered: it is a composite value, so revealing part of the string says
 // nothing, while the host is the part a reader needs.
 func (c Config) withSecrets(render secretRenderer) Config {
@@ -243,6 +323,7 @@ func (c Config) withSecrets(render secretRenderer) Config {
 	out.Auth.PublicKey = render(c.Auth.PublicKey)
 	out.Auth.SecretKey = render(c.Auth.SecretKey)
 	out.Database.URL = RedactDSN(c.Database.URL)
+	out.KVStore.URL = RedactKVURL(c.KVStore.URL)
 	out.Mailer.SMTPPassword = render(c.Mailer.SMTPPassword)
 	out.origin = nil
 	out.unresolved = nil
@@ -282,6 +363,37 @@ func RedactDSN(dsn string) string {
 		return redacted
 	}
 	return fmt.Sprintf("%s:%d/%s", parsed.Host, parsed.Port, parsed.Database)
+}
+
+// RedactKVURL reduces a key-value connection string to host:port/database, the
+// same rendering RedactDSN gives a Postgres one.
+//
+// It does not reuse RedactDSN: that parse is pgx's, and a redis:// URL is not a
+// Postgres connection string, so pgx rejects it and the whole value would be
+// replaced by the placeholder. The point of the rendering is to name the server
+// a command talks to, which a placeholder cannot do.
+//
+// A missing host is not a failure here either: the client would default it to
+// localhost:6379, so the target says the same rather than hiding the URL.
+func RedactKVURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return redacted
+	}
+	if parsed.Scheme == "unix" {
+		return parsed.Path
+	}
+	target := parsed.Host
+	if target == "" {
+		target = "localhost:6379"
+	}
+	if db := strings.TrimPrefix(parsed.Path, "/"); db != "" {
+		target += "/" + db
+	}
+	return target
 }
 
 // String renders the configuration with every secret redacted, so an accidental

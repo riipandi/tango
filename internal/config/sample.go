@@ -21,6 +21,7 @@ var secretKeys = []string{
 	"auth.public_key",
 	"auth.secret_key",
 	"database.url",
+	"kvstore.url",
 	"mailer.smtp_password",
 }
 
@@ -33,12 +34,19 @@ var secretKeys = []string{
 // two do not always agree: server.base_url is PUBLIC_BASE_URL, the name the
 // origin is known by outside this file, not SERVER_BASE_URL.
 //
+// A key may also appear in secretKeys, which runs first: secretKeys says the
+// value is a secret, and this map says what the variable is called. kvstore.url
+// is the case where the two disagree, being VALKEY_URL rather than KVSTORE_URL.
+//
 // Validate reports a key here only when the variable leaves it unusable. An unset
 // APP_MODE falls back to development and an empty base_url is a valid value, so
 // neither is an error on its own: naming them would report a choice the user made
 // on purpose.
 var envKeys = map[string]string{
 	"app.mode":             "APP_MODE",
+	"kvstore.db":           "VALKEY_DB",
+	"kvstore.enable":       "VALKEY_ENABLE",
+	"kvstore.url":          "VALKEY_URL",
 	"mailer.smtp_host":     "MAILER_SMTP_HOST",
 	"mailer.smtp_port":     "MAILER_SMTP_PORT",
 	"mailer.smtp_secure":   "MAILER_SMTP_SECURE",

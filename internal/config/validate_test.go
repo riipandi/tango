@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -220,4 +221,102 @@ func TestMaskedAndRedactedAreDifferent(t *testing.T) {
 	assert.NotEqual(t, cfg.Masked().App.SecretKey, cfg.Redacted().App.SecretKey)
 	assert.Equal(t, "[redacted]", cfg.Redacted().App.SecretKey)
 	assert.NotContains(t, cfg.String(), secret[:4], "a log line must not show part of a key")
+}
+
+func TestValidationRejectsAKVDriverWithTheBackendOff(t *testing.T) {
+	// The two settings are separate decisions, so they can disagree. A driver
+	// pointing at a switched-off backend is the one combination that cannot
+	// work, and it must be reported rather than fail at start-up.
+	err := resolveFile(t, `"cache": {"driver": "kvstore"}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "kvstore.enable")
+	assert.Contains(t, err.Error(), "cache.driver")
+}
+
+func TestValidationNamesEveryKVDriverThatDisagrees(t *testing.T) {
+	err := resolveFile(t,
+		`"cache": {"driver": "kvstore"}, `+
+			`"rate_limit": {"driver": "kvstore"}, `+
+			`"session": {"driver": "kvstore"}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+
+	// One message naming all three beats three messages naming one each.
+	for _, key := range []string{"cache.driver", "rate_limit.driver", "session.driver"} {
+		assert.Contains(t, err.Error(), key)
+	}
+}
+
+func TestValidationAcceptsAKVDriverWithTheBackendOn(t *testing.T) {
+	err := resolveFile(t, `"cache": {"driver": "kvstore"}, "kvstore": {"enable": true}`)
+	assert.NoError(t, err)
+}
+
+func TestValidationAcceptsADisabledKVStore(t *testing.T) {
+	// The default state: nothing points at the backend and it is switched off.
+	require.NoError(t, resolveFile(t, ""))
+}
+
+func TestValidationChecksTheKVURLOnlyWhenEnabled(t *testing.T) {
+	// A disabled backend is never dialled, so its URL is not held to anything.
+	// Holding it would report a problem in a part of the file that is off.
+	require.NoError(t, resolveFile(t, `"kvstore": {"enable": false, "url": "not-a-url"}`))
+
+	err := resolveFile(t, `"kvstore": {"enable": true, "url": "not-a-url"}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "kvstore.url")
+}
+
+func TestValidationAcceptsTheURLGrammarTheClientAccepts(t *testing.T) {
+	// Validation must not be stricter than the client, or it rejects a URL that
+	// would have connected. These are the forms redis.ParseURL accepts: the
+	// default port, an explicit port, TLS, a database index, a missing host
+	// (defaulted to localhost:6379), and a unix socket.
+	for _, rawURL := range []string{
+		"redis://localhost",
+		"redis://localhost:6379",
+		"redis://default:securedb@localhost:6379",
+		"rediss://cache.example.com:6380",
+		"redis://localhost:6379/3",
+		"redis://localhost:6379/0?dial_timeout=3&max_retries=2",
+		"redis://",
+		"unix:///var/run/valkey.sock",
+	} {
+		body := `"kvstore": {"enable": true, "url": ` + strconv.Quote(rawURL) + `}`
+		assert.NoError(t, resolveFile(t, body), rawURL)
+	}
+}
+
+func TestValidationRejectsAURLTheClientWouldReject(t *testing.T) {
+	for _, rawURL := range []string{
+		"http://localhost:6379",      // not a key-value scheme
+		"redis://localhost:6379/a",   // the path must be a database number
+		"redis://localhost:6379/1/2", // at most one segment
+		"unix://",                    // a unix socket needs its path
+		"redis://localhost:6379/%20", // an empty database number
+	} {
+		body := `"kvstore": {"enable": true, "url": ` + strconv.Quote(rawURL) + `}`
+		assert.Error(t, resolveFile(t, body), rawURL)
+	}
+}
+
+func TestRedactKVURLNamesTheServerWithoutThePassword(t *testing.T) {
+	assert.Equal(t, "localhost:6379", config.RedactKVURL("redis://default:securedb@localhost:6379"))
+	assert.Equal(t, "cache.example.com:6380/1", config.RedactKVURL("rediss://u:p@cache.example.com:6380/1"))
+	assert.Equal(t, "localhost:6379", config.RedactKVURL("redis://"),
+		"a missing host is what the client defaults, not a hidden URL")
+	assert.Equal(t, "", config.RedactKVURL(""))
+}
+
+func TestRedactedHidesTheKVPassword(t *testing.T) {
+	cfg := config.Default()
+	cfg.KVStore.URL = "redis://default:sup3rs3cret@localhost:6379"
+
+	for name, rendered := range map[string]config.Config{
+		"Redacted": cfg.Redacted(),
+		"Masked":   cfg.Masked(),
+	} {
+		assert.NotContains(t, rendered.KVStore.URL, "sup3rs3cret", name)
+		assert.Contains(t, rendered.KVStore.URL, "localhost:6379", name)
+	}
+	assert.NotContains(t, cfg.String(), "sup3rs3cret")
 }

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -32,10 +33,16 @@ func sampleDoc(t *testing.T) map[string]any {
 }
 
 func TestSampleWritesEverySecretAsADirective(t *testing.T) {
+	// A secret is never written literally. Its variable name comes from envKeys
+	// when one names it, and from EnvName otherwise.
 	flat := sampleDoc(t)
 
 	for _, key := range secretKeys {
-		assert.Equal(t, "env:"+EnvName(key), flat[key],
+		name, named := envKeys[key]
+		if !named {
+			name = EnvName(key)
+		}
+		assert.Equal(t, "env:"+name, flat[key],
 			"%s must be written as a directive, never as a literal", key)
 	}
 }
@@ -51,14 +58,26 @@ func TestSampleWritesDeploymentKeysAsDirectives(t *testing.T) {
 	}
 	assert.Equal(t, "env:PUBLIC_BASE_URL", flat["server.base_url"],
 		"the public origin is PUBLIC_BASE_URL, not SERVER_BASE_URL")
+	assert.Equal(t, "env:VALKEY_URL", flat["kvstore.url"],
+		"the key-value URL is VALKEY_URL, not KVSTORE_URL")
 }
 
-func TestDeploymentKeysAreNotSecrets(t *testing.T) {
-	// Redacted hides secrets, and a runtime mode is not one: hiding it would
-	// make a report harder to read for no gain.
+func TestDeploymentKeysThatAreNotSecrets(t *testing.T) {
+	// A key in envKeys is not automatically a secret, and the reverse holds too.
+	// Redacted hides secrets, and hiding a runtime mode would make a report
+	// harder to read for no gain.
+	//
+	// kvstore.url is deliberately in both lists: it is a secret, so it is hidden,
+	// and its variable is VALKEY_URL, so envKeys names it. This asserts the
+	// overlap is exactly that one key, so a second one is a decision rather than
+	// an accident.
+	var both []string
 	for key := range envKeys {
-		assert.NotContains(t, secretKeys, key, "%s is not a secret", key)
+		if slices.Contains(secretKeys, key) {
+			both = append(both, key)
+		}
 	}
+	assert.Equal(t, []string{"kvstore.url"}, both)
 }
 
 func TestSampleCoversEveryKey(t *testing.T) {

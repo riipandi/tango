@@ -106,6 +106,23 @@ The variable names the generated file uses are the conventional ones (`DATABASE_
 A deployment variable is written the same way: `app.mode` asks for `APP_MODE`, `server.base_url` for
 `PUBLIC_BASE_URL`, and each `mailer.smtp_*` key for the matching `MAILER_SMTP_*`.
 
+The `kvstore` section configures the optional Valkey (or Redis compatible) backend. It is off by
+default, so a fresh checkout runs on Postgres and in-process memory alone:
+
+```json
+"kvstore": {
+  "db": "env:VALKEY_DB",
+  "enable": "env:VALKEY_ENABLE",
+  "url": "env:VALKEY_URL"
+}
+```
+
+`kvstore.enable` gates whether the backend is available; the `driver` field on `cache`, `session`,
+and `rate_limit` still chooses what each one uses, so switching the backend on does not move
+anything by itself. Pointing a driver at `kvstore` while it is disabled is reported rather than left
+to fail at start-up. `kvstore.url` accepts what the client accepts: `redis://`, `rediss://` (TLS), or
+`unix://`, with an optional database index in the path.
+
 The `mailer` section is optional. With no `mailer.smtp_host` the application runs without sending
 mail, so a local checkout needs no mail server; set the `MAILER_SMTP_*` variables to enable it.
 `mailer.smtp_secure` selects implicit TLS on connect instead of STARTTLS.

@@ -15,6 +15,7 @@ type Config struct {
 	Auth      Auth      `koanf:"auth" json:"auth"`
 	Cache     Cache     `koanf:"cache" json:"cache"`
 	Database  Database  `koanf:"database" json:"database"`
+	KVStore   KVStore   `koanf:"kvstore" json:"kvstore"`
 	Log       Log       `koanf:"log" json:"log"`
 	Mailer    Mailer    `koanf:"mailer" json:"mailer"`
 	RateLimit RateLimit `koanf:"rate_limit" json:"rate_limit"`
@@ -78,6 +79,26 @@ type Database struct {
 	// SearchPath and Timezone are applied to every pooled connection.
 	SearchPath string `koanf:"search_path" json:"search_path"`
 	Timezone   string `koanf:"timezone" json:"timezone"`
+}
+
+// KVStore holds the optional key-value backend settings, for a Valkey or Redis
+// compatible server.
+//
+// It is opt-in and never required: with Enable false the application runs on
+// Postgres and in-process memory alone, which is what keeps a local checkout
+// from needing a second server. Enable gates availability; the driver fields on
+// Cache, Session, and RateLimit still choose which backend each one uses, so
+// switching the kvstore on does not silently move anything.
+type KVStore struct {
+	// Enable reports whether the key-value backend is available. A driver set to
+	// kvstore while this is false is a contradiction Validate reports.
+	Enable bool `koanf:"enable" json:"enable"`
+	// URL is the connection string, such as
+	// redis://default:password@localhost:6379. It carries a password, so Redacted
+	// hides it and a report reduces it to host:port/database.
+	URL string `koanf:"url" json:"url"`
+	// DB is the logical database index to select.
+	DB int `koanf:"db" json:"db"`
 }
 
 // Log holds the logging settings.

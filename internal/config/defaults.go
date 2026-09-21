@@ -49,6 +49,14 @@ func Default() Config {
 			SearchPath:      "public,internal,reference",
 			Timezone:        "UTC",
 		},
+		KVStore: KVStore{
+			// Disabled by default, so a fresh checkout runs on Postgres and
+			// in-process memory alone. The URL points at the server compose
+			// starts, so switching Enable on is the only step needed.
+			Enable: false,
+			URL:    "redis://default:securedb@localhost:6379",
+			DB:     0,
+		},
 		Log: Log{
 			Level:  LogInfo,
 			Format: LogPretty,
