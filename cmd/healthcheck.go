@@ -16,6 +16,7 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/health"
+	"github.com/riipandi/tango/pkg/printext"
 )
 
 // exitUnhealthy is the exit code of a failed health check. It is distinct from
@@ -89,8 +90,8 @@ func runHealthCheck(ctx context.Context, cmd *cli.Command) error {
 
 	result := checkHealth(ctx, cmd, dsn)
 
-	out := cmd.Root().Writer
-	if err := printHealth(out, cmd.Bool("short"), cmd.Bool("json"), result); err != nil {
+	p := printext.NewPalette(cmd.Root().Writer)
+	if err := printHealth(p, cmd.Bool("short"), cmd.Bool("json"), result); err != nil {
 		return err
 	}
 	if !result.Healthy() {
@@ -173,14 +174,16 @@ func postgresTarget(dsn string) string {
 // --json: a caller that asks for one word must get one word, not a document.
 // Every format comes from the health package, so the CLI does not define a
 // second rendering that could drift from the one the API publishes.
-func printHealth(w io.Writer, short, asJSON bool, result health.Result) error {
+//
+// --json is a machine format, so it is never coloured, even on a terminal.
+func printHealth(p printext.Palette, short, asJSON bool, result health.Result) error {
 	switch {
 	case short:
-		return health.WriteShort(w, result)
+		return health.WriteShort(p.Writer(), result)
 	case asJSON:
-		return printHealthJSON(w, result)
+		return printHealthJSON(p.Writer(), result)
 	default:
-		return health.WriteText(w, result)
+		return health.WriteText(p.Writer(), result, p)
 	}
 }
 

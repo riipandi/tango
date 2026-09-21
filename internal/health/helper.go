@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+
+	"github.com/riipandi/tango/pkg/printext"
 )
 
 // InfoUptime is the key Uptime reports under.
@@ -210,6 +212,34 @@ func (s *state) recordStatus(status GlobalStatus) (changed bool) {
 	return changed
 }
 
+// statusStyle maps a status word to its meaning. Both vocabularies are covered,
+// so the aggregate line and a component line are marked by the same rule. A word
+// this build does not know is a warning rather than a failure: an unknown state
+// is not the same as a broken one.
+//
+// The mapping lives here rather than in the rendering package because it is this
+// package that decides what "up" and "healthy" mean. printext only decides how a
+// meaning is painted.
+func statusStyle(status string) printext.Style {
+	switch status {
+	case string(StatusUp), string(GlobalHealthy):
+		return printext.StyleOK
+	case string(StatusDown), string(GlobalUnhealthy):
+		return printext.StyleFail
+	default:
+		return printext.StyleWarn
+	}
+}
+
+// countStyle marks a "N down" count: no failures is a pass, any other count is a
+// failure.
+func countStyle(down int) printext.Style {
+	if down == 0 {
+		return printext.StyleOK
+	}
+	return printext.StyleFail
+}
+
 // WriteText writes a human-readable report of a result.
 //
 // The shape is a flat list, one fact per line, so it greps and pipes without
@@ -230,43 +260,50 @@ func (s *state) recordStatus(status GlobalStatus) (changed bool) {
 // `grep ': down'` finds every problem. Every failing check is reported, not just
 // the first.
 //
+// The styler marks each part; pass nil for plain text, which is what a
+// redirected run and a test both want. The meaning of a part is decided here,
+// next to the status vocabulary, and only its rendering is the caller's.
+//
 // Per-check durations and timestamps are deliberately absent: they are per-run
 // numbers that answer no question a reader has. The JSON form keeps them for a
 // machine that measures them.
-func WriteText(w io.Writer, result Result) error {
-	if err := writeSummary(w, result); err != nil {
+func WriteText(w io.Writer, result Result, styler printext.Styler) error {
+	if err := writeSummary(w, result, styler); err != nil {
 		return err
 	}
 	if len(result.Details) == 0 {
 		return nil
 	}
-	return writeDetails(w, result)
+	return writeDetails(w, result, styler)
 }
 
 // writeSummary writes the identity and aggregate lines.
-func writeSummary(w io.Writer, result Result) error {
-	if err := writeInfo(w, result.Info); err != nil {
+func writeSummary(w io.Writer, result Result, styler printext.Styler) error {
+	if err := writeInfo(w, result.Info, styler); err != nil {
 		return err
 	}
 
-	lines := [][2]string{
-		{"status", string(result.Status)},
-		{"duration", duration(result.Duration)},
-		{"checks", checkCounts(result.Details)},
+	if _, err := fmt.Fprintf(w, "%s: %s\n",
+		printext.Mark(styler, printext.StyleLabel, "status"),
+		printext.Mark(styler, statusStyle(string(result.Status)), string(result.Status))); err != nil {
+		return err
 	}
-	for _, line := range lines {
-		if _, err := fmt.Fprintf(w, "%s: %s\n", line[0], line[1]); err != nil {
-			return err
-		}
+	if _, err := fmt.Fprintf(w, "%s: %s\n",
+		printext.Mark(styler, printext.StyleLabel, "duration"),
+		printext.Mark(styler, printext.StyleMuted, printext.Duration(result.Duration))); err != nil {
+		return err
 	}
-	return nil
+	_, err := fmt.Fprintf(w, "%s: %s\n",
+		printext.Mark(styler, printext.StyleLabel, "checks"), checkCounts(result.Details, styler))
+	return err
 }
 
 // writeInfo writes the info map as one "key: value" line per entry, in key
 // order, so the output does not depend on map iteration order.
-func writeInfo(w io.Writer, info map[string]string) error {
+func writeInfo(w io.Writer, info map[string]string, styler printext.Styler) error {
 	for _, key := range sortedKeys(info) {
-		if _, err := fmt.Fprintf(w, "%s: %s\n", key, info[key]); err != nil {
+		if _, err := fmt.Fprintf(w, "%s: %s\n",
+			printext.Mark(styler, printext.StyleLabel, key), info[key]); err != nil {
 			return err
 		}
 	}
@@ -274,9 +311,9 @@ func writeInfo(w io.Writer, info map[string]string) error {
 }
 
 // writeDetails writes one line per check, in check-name order.
-func writeDetails(w io.Writer, result Result) error {
+func writeDetails(w io.Writer, result Result, styler printext.Styler) error {
 	for _, name := range sortedNames(result.Details) {
-		if _, err := fmt.Fprintln(w, checkLine(result.Details[name])); err != nil {
+		if _, err := fmt.Fprintln(w, checkLine(result.Details[name], styler)); err != nil {
 			return err
 		}
 	}
@@ -286,22 +323,22 @@ func writeDetails(w io.Writer, result Result) error {
 // checkLine renders one check as a single line. Optional parts are omitted
 // rather than left blank, so a healthy check stays short and a failure keeps
 // everything needed to act on it.
-func checkLine(detail CheckResult) string {
+func checkLine(detail CheckResult, styler printext.Styler) string {
 	var line strings.Builder
-	line.WriteString(detail.Name)
+	line.WriteString(printext.Mark(styler, printext.StyleLabel, detail.Name))
 	line.WriteString(": ")
-	line.WriteString(string(detail.Status))
+	line.WriteString(printext.Mark(styler, statusStyle(string(detail.Status)), string(detail.Status)))
 	if detail.Optional {
-		line.WriteString(" optional")
+		line.WriteString(printext.Mark(styler, printext.StyleWarn, " optional"))
 	}
 	if detail.Target != "" {
 		line.WriteString(" (")
-		line.WriteString(detail.Target)
+		line.WriteString(printext.Mark(styler, printext.StyleMuted, detail.Target))
 		line.WriteString(")")
 	}
 	if detail.Error != "" {
 		line.WriteString(": ")
-		line.WriteString(detail.Error)
+		line.WriteString(printext.Mark(styler, printext.StyleFail, detail.Error))
 	}
 	return line.String()
 }
@@ -309,7 +346,10 @@ func checkLine(detail CheckResult) string {
 // checkCounts summarizes the details as "1 up, 0 down", appending the optional
 // count when there is one. Counts go through go-humanize so a large number stays
 // readable.
-func checkCounts(details map[string]CheckResult) string {
+//
+// Only the "N down" count is marked: it is the number a reader acts on, and
+// marking every number would leave nothing to stand out.
+func checkCounts(details map[string]CheckResult, styler printext.Styler) string {
 	var up, down, optional int
 	for _, detail := range details {
 		if detail.Optional {
@@ -322,20 +362,13 @@ func checkCounts(details map[string]CheckResult) string {
 		up++
 	}
 
-	summary := fmt.Sprintf("%s up, %s down", humanize.Comma(int64(up)), humanize.Comma(int64(down)))
+	summary := fmt.Sprintf("%s up, %s down",
+		humanize.Comma(int64(up)),
+		printext.Mark(styler, countStyle(down), humanize.Comma(int64(down))))
 	if optional > 0 {
 		summary += fmt.Sprintf(", %s optional", humanize.Comma(int64(optional)))
 	}
 	return summary
-}
-
-// duration renders a duration for a human. go-humanize scales the unit, so a
-// fast check reads as "235 µs" rather than "0s".
-// duration renders a duration for a human. Three decimals is the precision a
-// reader can act on; the raw nanoseconds humanize would otherwise print are
-// noise.
-func duration(d time.Duration) string {
-	return humanize.SIWithDigits(d.Seconds(), 3, "s")
 }
 
 // WriteShort writes only the aggregated status, one word on one line, so a
@@ -354,7 +387,7 @@ func WriteShort(w io.Writer, result Result) error {
 func Message(result Result) string {
 	failed := result.Failed()
 	if len(failed) == 0 {
-		return fmt.Sprintf("%s (%s)", result.Status, duration(result.Duration))
+		return fmt.Sprintf("%s (%s)", result.Status, printext.Duration(result.Duration))
 	}
 	return fmt.Sprintf("%s: %s is down", result.Status, strings.Join(failed, ", "))
 }

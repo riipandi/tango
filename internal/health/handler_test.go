@@ -255,7 +255,7 @@ func TestWriteTextHealthyReport(t *testing.T) {
 	}
 
 	var out strings.Builder
-	require.NoError(t, health.WriteText(&out, result))
+	require.NoError(t, health.WriteText(&out, result, nil))
 
 	assert.Equal(t, `name: tango
 uptime: 3 hours
@@ -286,7 +286,7 @@ func TestWriteTextFailingReport(t *testing.T) {
 	}
 
 	var out strings.Builder
-	require.NoError(t, health.WriteText(&out, result))
+	require.NoError(t, health.WriteText(&out, result, nil))
 
 	assert.Contains(t, out.String(), "status: unhealthy")
 	assert.Contains(t, out.String(), "checks: 1 up, 1 down, 1 optional")
@@ -307,7 +307,7 @@ func TestWriteTextCheckLinesAreParseable(t *testing.T) {
 	}
 
 	var out strings.Builder
-	require.NoError(t, health.WriteText(&out, result))
+	require.NoError(t, health.WriteText(&out, result, nil))
 
 	for _, line := range checkLines(t, out.String()) {
 		name, rest, found := strings.Cut(line, ": ")
@@ -347,7 +347,7 @@ func TestWriteTextHasNoTrailingWhitespace(t *testing.T) {
 	}
 
 	var out strings.Builder
-	require.NoError(t, health.WriteText(&out, result))
+	require.NoError(t, health.WriteText(&out, result, nil))
 
 	for _, line := range strings.Split(out.String(), "\n") {
 		assert.Equal(t, strings.TrimRight(line, " \t"), line, "line has trailing whitespace: %q", line)
@@ -358,7 +358,7 @@ func TestWriteTextHasNoTrailingWhitespace(t *testing.T) {
 // not produce an empty report or a dangling blank line.
 func TestWriteTextWithoutChecks(t *testing.T) {
 	var out strings.Builder
-	require.NoError(t, health.WriteText(&out, health.Result{Status: health.GlobalHealthy}))
+	require.NoError(t, health.WriteText(&out, health.Result{Status: health.GlobalHealthy}, nil))
 
 	assert.Equal(t, "status: healthy\nduration: 0 s\nchecks: 0 up, 0 down\n", out.String())
 }
@@ -374,7 +374,7 @@ func TestWriteTextHasNoBlankLineBeforeChecks(t *testing.T) {
 	}
 
 	var out strings.Builder
-	require.NoError(t, health.WriteText(&out, result))
+	require.NoError(t, health.WriteText(&out, result, nil))
 
 	assert.Equal(t, "status: healthy\nduration: 0 s\nchecks: 1 up, 0 down\npostgres: up\n", out.String())
 	assert.NotContains(t, out.String(), "\n\n")
@@ -389,7 +389,7 @@ func TestWriteTextHumanizesDurations(t *testing.T) {
 	}
 
 	var out strings.Builder
-	require.NoError(t, health.WriteText(&out, result))
+	require.NoError(t, health.WriteText(&out, result, nil))
 
 	assert.Contains(t, out.String(), "duration: 1.5 s")
 }
@@ -410,7 +410,7 @@ func TestWriteTextOmitsPerCheckTiming(t *testing.T) {
 	}
 
 	var out strings.Builder
-	require.NoError(t, health.WriteText(&out, result))
+	require.NoError(t, health.WriteText(&out, result, nil))
 
 	assert.NotContains(t, out.String(), "235 µs")
 	assert.NotContains(t, out.String(), "hours ago")

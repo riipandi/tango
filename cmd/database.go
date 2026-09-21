@@ -11,6 +11,7 @@ import (
 
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/pkg/printext"
 	"github.com/urfave/cli/v3"
 )
 
@@ -117,7 +118,7 @@ func openStore(ctx context.Context, cmd *cli.Command) (*datastore.Postgres, stri
 // meant to be read, diffed, and reviewed, which is why the format is not a
 // binary archive.
 func runDBExport(ctx context.Context, cmd *cli.Command) error {
-	out := cmd.Root().Writer
+	p := printext.NewPalette(cmd.Root().Writer)
 
 	opts := database.DumpOptions{
 		SchemaOnly: cmd.Bool("schema-only"),
@@ -133,7 +134,7 @@ func runDBExport(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer store.Close()
 
-	if err = printDatabase(out, dsn); err != nil {
+	if err = printDatabase(p, dsn); err != nil {
 		return err
 	}
 
@@ -149,7 +150,7 @@ func runDBExport(ctx context.Context, cmd *cli.Command) error {
 	defer func() { _ = file.Close() }()
 
 	started := time.Now()
-	progress := withSpinner(out)
+	progress := withSpinner(p.Writer())
 	stats, err := database.NewExporter(store, opts).Dump(ctx, file, progress.step)
 	progress.finish()
 	if err != nil {
@@ -159,7 +160,7 @@ func runDBExport(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("database: write dump: %w", err)
 	}
 
-	return printExportSummary(out, path, stats, time.Since(started))
+	return printExportSummary(p, path, stats, time.Since(started))
 }
 
 // ErrDumpFileExists is returned when a dump would overwrite an existing file.
@@ -201,29 +202,32 @@ func createExportFile(path string, generated, force bool) (*os.File, error) {
 // printExportSummary reports what was written and where, as a small aligned
 // block. One labelled line per fact beats a sentence: a reader scans the labels
 // instead of parsing prose, and a value can be read without the words around it.
-func printExportSummary(out writer, path string, stats database.DumpStats, elapsed time.Duration) error {
+//
+// The path is the answer the reader is looking for, so it is left in the default
+// colour against its dim label.
+func printExportSummary(p printext.Palette, path string, stats database.DumpStats, elapsed time.Duration) error {
 	fields := []field{{"written", path}}
 	if stats.Statements > 0 {
-		fields = append(fields, field{"schema", fmt.Sprintf("%d %s",
-			stats.Statements, plural(stats.Statements, "statement"))})
+		fields = append(fields, field{"schema", p.Green(fmt.Sprintf("%d %s",
+			stats.Statements, printext.Plural(stats.Statements, "statement")))})
 	}
 	if stats.Tables > 0 {
-		fields = append(fields, field{"data", fmt.Sprintf("%d %s, %d %s",
-			stats.Tables, plural(stats.Tables, "table"),
-			stats.Rows, plural(int(stats.Rows), "row"))})
+		fields = append(fields, field{"data", p.Green(fmt.Sprintf("%d %s, %d %s",
+			stats.Tables, printext.Plural(stats.Tables, "table"),
+			stats.Rows, printext.Plural(int(stats.Rows), "row")))})
 	}
-	fields = append(fields, field{"duration", humanDuration(elapsed)})
-	return printFields(out, fields)
+	fields = append(fields, field{"duration", p.Dim(printext.Duration(elapsed))})
+	return printFields(p, fields)
 }
 
 // printImportSummary reports what was loaded and from where.
-func printImportSummary(out writer, path string, stats database.DumpStats, elapsed time.Duration) error {
-	return printFields(out, []field{
+func printImportSummary(p printext.Palette, path string, stats database.DumpStats, elapsed time.Duration) error {
+	return printFields(p, []field{
 		{"loaded", path},
-		{"data", fmt.Sprintf("%d %s, %d %s",
-			stats.Tables, plural(stats.Tables, "table"),
-			stats.Rows, plural(int(stats.Rows), "row"))},
-		{"duration", humanDuration(elapsed)},
+		{"data", p.Green(fmt.Sprintf("%d %s, %d %s",
+			stats.Tables, printext.Plural(stats.Tables, "table"),
+			stats.Rows, printext.Plural(int(stats.Rows), "row")))},
+		{"duration", p.Dim(printext.Duration(elapsed))},
 	})
 }
 
@@ -241,13 +245,17 @@ const reportLabelWidth = len("database")
 
 // printFields writes labelled values with their labels padded to one width, so
 // the values line up in a column and the block scans vertically.
-func printFields(out writer, fields []field) error {
+//
+// The label is padded before it is coloured: an escape code is invisible but not
+// zero-width to fmt, so padding a painted string would break the column.
+func printFields(p printext.Palette, fields []field) error {
 	width := reportLabelWidth
 	for _, f := range fields {
 		width = max(width, len(f.label))
 	}
 	for _, f := range fields {
-		if _, err := fmt.Fprintf(out, "%-*s  %s\n", width+1, f.label+":", f.value); err != nil {
+		label := printext.PadRight(f.label+":", width+1)
+		if err := p.Printf("%s  %s\n", p.Dim(label), f.value); err != nil {
 			return err
 		}
 	}
@@ -260,17 +268,12 @@ func printFields(out writer, fields []field) error {
 // It is printed before any work starts, so a run against the wrong server is
 // visible immediately instead of after the fact. The credentials are never
 // printed, and a DSN that cannot be parsed prints no line at all.
-func printDatabase(out writer, dsn string) error {
+func printDatabase(p printext.Palette, dsn string) error {
 	target := postgresTarget(dsn)
 	if target == "" {
 		return nil
 	}
-	return printFields(out, []field{{label: "database", value: target}})
-}
-
-// writer is the output surface a report needs, satisfied by the command writer.
-type writer interface {
-	Write(p []byte) (int, error)
+	return printFields(p, []field{{label: "database", value: p.Dim(target)}})
 }
 
 // runDBImport loads a dump into the application database.
@@ -278,7 +281,7 @@ type writer interface {
 // The file is a required positional argument rather than a flag: a restore always
 // has a source, and naming it on the command line is what a reader expects.
 func runDBImport(ctx context.Context, cmd *cli.Command) error {
-	out := cmd.Root().Writer
+	p := printext.NewPalette(cmd.Root().Writer)
 	path := cmd.StringArg("file")
 
 	file, err := os.Open(path)
@@ -293,7 +296,7 @@ func runDBImport(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer store.Close()
 
-	if err = printDatabase(out, dsn); err != nil {
+	if err = printDatabase(p, dsn); err != nil {
 		return err
 	}
 
@@ -302,24 +305,23 @@ func runDBImport(ctx context.Context, cmd *cli.Command) error {
 	// wants.
 	truncate := cmd.Bool("truncate")
 	if truncate && !cmd.Bool("force") {
-		proceed, promptErr := confirm(cmd, terminalCheck(cmd),
+		proceed, promptErr := confirm(p, cmd, terminalCheck(cmd),
 			"empty every table in the dump before loading it?")
 		if promptErr != nil {
 			return promptErr
 		}
 		if !proceed {
-			_, writeErr := fmt.Fprintln(out, "import cancelled")
-			return writeErr
+			return p.Printf("import cancelled\n")
 		}
 	}
 
 	started := time.Now()
-	progress := withSpinner(out)
+	progress := withSpinner(p.Writer())
 	stats, err := database.NewRestorer(store, truncate).Restore(ctx, file, progress.step)
 	progress.finish()
 	if err != nil {
 		return err
 	}
 
-	return printImportSummary(out, path, stats, time.Since(started))
+	return printImportSummary(p, path, stats, time.Since(started))
 }

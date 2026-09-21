@@ -8,16 +8,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/riipandi/tango/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/pkg/printext"
 )
+
+// plain is the palette a test uses. A bytes.Buffer is never a terminal, so the
+// palette adds no colour and the expected strings stay readable.
+func plain(w *bytes.Buffer) printext.Palette { return printext.NewPalette(w) }
 
 // A summary is a labelled block, so the values line up in a column and a reader
 // scans labels instead of parsing a sentence.
 func TestPrintFieldsAlignsValues(t *testing.T) {
 	var out bytes.Buffer
-	require.NoError(t, printFields(&out, []field{
+	require.NoError(t, printFields(plain(&out), []field{
 		{label: "written", value: "/tmp/dump.sql"},
 		{label: "schema", value: "324 statements"},
 		{label: "duration", value: "84 ms"},
@@ -32,7 +38,7 @@ func TestPrintFieldsAlignsValues(t *testing.T) {
 // did not produce rather than printing a zero.
 func TestPrintExportSummary(t *testing.T) {
 	var out bytes.Buffer
-	err := printExportSummary(&out, "/tmp/dump.sql", database.DumpStats{
+	err := printExportSummary(plain(&out), "/tmp/dump.sql", database.DumpStats{
 		Statements: 12,
 		Tables:     3,
 		Rows:       7,
@@ -49,13 +55,13 @@ func TestPrintExportSummary(t *testing.T) {
 // section. Neither may report a zero.
 func TestPrintExportSummaryOmitsAbsentSections(t *testing.T) {
 	var dataOnly bytes.Buffer
-	require.NoError(t, printExportSummary(&dataOnly, "dump.sql",
+	require.NoError(t, printExportSummary(plain(&dataOnly), "dump.sql",
 		database.DumpStats{Tables: 1, Rows: 2}, time.Second))
 	assert.NotContains(t, dataOnly.String(), "schema:")
 	assert.Contains(t, dataOnly.String(), "data:")
 
 	var schemaOnly bytes.Buffer
-	require.NoError(t, printExportSummary(&schemaOnly, "dump.sql",
+	require.NoError(t, printExportSummary(plain(&schemaOnly), "dump.sql",
 		database.DumpStats{Statements: 5}, time.Second))
 	assert.Contains(t, schemaOnly.String(), "schema:")
 	assert.NotContains(t, schemaOnly.String(), "data:")
@@ -64,7 +70,7 @@ func TestPrintExportSummaryOmitsAbsentSections(t *testing.T) {
 // The import summary names the file it read.
 func TestPrintImportSummary(t *testing.T) {
 	var out bytes.Buffer
-	err := printImportSummary(&out, "dump.sql",
+	err := printImportSummary(plain(&out), "dump.sql",
 		database.DumpStats{Tables: 40, Rows: 2}, 20*time.Millisecond)
 	require.NoError(t, err)
 
@@ -90,8 +96,9 @@ func TestSpinnerStaysSilentOffTerminal(t *testing.T) {
 // writes and the credentials never appear.
 func TestPrintDatabaseAlignsWithTheSummary(t *testing.T) {
 	var out bytes.Buffer
-	require.NoError(t, printDatabase(&out, "postgres://user:secret@db.example.com:5432/app"))
-	require.NoError(t, printExportSummary(&out, "dump.sql", database.DumpStats{
+	p := plain(&out)
+	require.NoError(t, printDatabase(p, "postgres://user:secret@db.example.com:5432/app"))
+	require.NoError(t, printExportSummary(p, "dump.sql", database.DumpStats{
 		Statements: 3,
 	}, time.Second))
 
@@ -105,57 +112,16 @@ func TestPrintDatabaseAlignsWithTheSummary(t *testing.T) {
 // A DSN that cannot be parsed prints no target line rather than a broken one.
 func TestPrintDatabaseSkipsUnparsableDSN(t *testing.T) {
 	var out bytes.Buffer
-	require.NoError(t, printDatabase(&out, "not a dsn"))
+	require.NoError(t, printDatabase(plain(&out), "not a dsn"))
 	assert.Empty(t, out.String())
-}
-
-// A report never says "1 migrations", so the singular form must be chosen by
-// the count.
-func TestPlural(t *testing.T) {
-	tests := []struct {
-		count int
-		want  string
-	}{
-		{count: 0, want: "migrations"},
-		{count: 1, want: "migration"},
-		{count: 2, want: "migrations"},
-		{count: 9, want: "migrations"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			assert.Equal(t, tt.want, plural(tt.count, "migration"))
-		})
-	}
-}
-
-// Durations must be humanized, not raw nanoseconds, and capped at a precision a
-// reader can act on.
-func TestHumanDuration(t *testing.T) {
-	tests := []struct {
-		name string
-		in   time.Duration
-		want string
-	}{
-		{name: "microseconds", in: 250 * time.Microsecond, want: "250 µs"},
-		{name: "milliseconds", in: 27608625 * time.Nanosecond, want: "27.608 ms"},
-		{name: "fractional second", in: 1500 * time.Millisecond, want: "1.5 s"},
-		{name: "seconds", in: 12 * time.Second, want: "12 s"},
-		{name: "zero", in: 0, want: "0 s"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, humanDuration(tt.in))
-		})
-	}
 }
 
 // The target line names the database without its credentials, so a report can
 // be pasted into a ticket.
 func TestReportTargetOmitsCredentials(t *testing.T) {
 	var out bytes.Buffer
-	require.NoError(t, reportTarget(&out, "postgres://user:secret@db.example.com:5432/tango?sslmode=disable"))
+	require.NoError(t, reportTarget(plain(&out),
+		"postgres://user:secret@db.example.com:5432/tango?sslmode=disable"))
 
 	assert.Equal(t, "database: db.example.com:5432/tango\n\n", out.String())
 	assert.NotContains(t, out.String(), "secret")
@@ -165,7 +131,7 @@ func TestReportTargetOmitsCredentials(t *testing.T) {
 // no target line.
 func TestReportTargetSkipsUnparsableDSN(t *testing.T) {
 	var out bytes.Buffer
-	require.NoError(t, reportTarget(&out, "not a dsn"))
+	require.NoError(t, reportTarget(plain(&out), "not a dsn"))
 
 	assert.Empty(t, out.String())
 }
@@ -174,7 +140,8 @@ func TestReportTargetSkipsUnparsableDSN(t *testing.T) {
 // at the start of a line.
 func TestReporterIndentsProgressOnly(t *testing.T) {
 	var out bytes.Buffer
-	report := newReporter(&out)
+	p := plain(&out)
+	report := newReporter(p)
 
 	report.progress(database.ProgressEvent{
 		Version:   2,
@@ -188,18 +155,19 @@ func TestReporterIndentsProgressOnly(t *testing.T) {
 	assert.Equal(t, "  00002_create_identity_tables.sql applied (37 ms)\n", out.String())
 
 	out.Reset()
-	require.NoError(t, printSummary(&out, 1, "applied", "migration", 100*time.Millisecond))
+	require.NoError(t, printSummary(p, 1, "applied", "migration", 100*time.Millisecond))
 
 	line := strings.TrimSuffix(out.String(), "\n")
 	line = strings.TrimPrefix(line, "\n")
 	assert.True(t, strings.HasPrefix(line, "1 migration applied in "), "summary must start at column zero: %q", line)
 }
 
-// A started event draws nothing: the line for a migration that is still running
-// would be overwritten on a terminal and lost in a log.
+// A started event starts the spinner and draws no line of its own: a line for a
+// migration that is still running would be overwritten on a terminal and lost in
+// a log.
 func TestReporterIgnoresStartedEvents(t *testing.T) {
 	var out bytes.Buffer
-	report := newReporter(&out)
+	report := newReporter(plain(&out))
 
 	report.progress(database.ProgressEvent{
 		Version:   1,
@@ -209,13 +177,13 @@ func TestReporterIgnoresStartedEvents(t *testing.T) {
 	})
 
 	require.NoError(t, report.failed())
-	assert.Empty(t, out.String())
+	assert.Empty(t, out.String(), "a redirected run must not draw the spinner")
 }
 
 // A write failure cannot be returned from the progress callback, so it must be
 // held and surfaced when the command can report it.
 func TestReporterHoldsWriteFailure(t *testing.T) {
-	report := newReporter(failingWriter{})
+	report := newReporter(printext.NewPalette(failingWriter{}))
 
 	report.progress(database.ProgressEvent{
 		Version:   1,

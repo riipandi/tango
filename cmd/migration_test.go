@@ -16,6 +16,7 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/envfile"
+	"github.com/riipandi/tango/pkg/printext"
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
@@ -193,7 +194,8 @@ func TestConfirm(t *testing.T) {
 			var got bool
 			var promptErr error
 			cmd.Action = func(_ context.Context, cmd *cli.Command) error {
-				got, promptErr = confirm(cmd, tt.interactive, "apply 3 pending migrations?")
+				got, promptErr = confirm(printext.NewPalette(cmd.Root().Writer), cmd,
+					tt.interactive, "apply 3 pending migrations?")
 				return nil
 			}
 			require.NoError(t, cmd.Run(t.Context(), append([]string{"tango"}, tt.args...)))

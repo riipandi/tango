@@ -188,7 +188,7 @@ Text output is a flat list, one fact per line, so it greps and pipes without col
 strip. Durations go through `go-humanize`, so a reader sees `235 µs` instead of nanoseconds:
 
 ```text
-name: tango
+name: Tango
 uptime: <1 minute
 version: 0.0.0
 status: healthy
@@ -197,6 +197,11 @@ checks: 2 up, 0 down
 postgres: up (localhost:5432/postgres)
 storage: up (/srv/tango/storage)
 ```
+
+Colour is added when the output is a terminal, and is dropped when it is redirected, so a log stays
+plain text. `NO_COLOR` is honoured. The meaning is fixed across every command: dim for labels and
+secondary detail, green for work that succeeded, red for a failure, yellow for a state that is
+neither. `--json` is never coloured.
 
 Every check line is `name: status[ optional][ (target)][: error]`, so `grep ': down'` finds every
 problem. The target is a full path for storage and a password-free `host:port/database` for Postgres.

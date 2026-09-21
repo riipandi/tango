@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -14,6 +13,7 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/database/seeders"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/pkg/printext"
 )
 
 var migrateCreateCmd = &cli.Command{
@@ -55,9 +55,11 @@ func runMigrateCreate(_ context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	_, err = fmt.Fprintf(cmd.Root().Writer, "%s created (version %0*d)\n",
-		created.Path, database.MigrationPrefixWidth, created.Version)
-	return err
+	p := printext.NewPalette(cmd.Root().Writer)
+	return p.Printf("%s %s (version %s)\n",
+		created.Path,
+		p.Green("created"),
+		p.Dim(fmt.Sprintf("%0*d", database.MigrationPrefixWidth, created.Version)))
 }
 
 var migrateResetCmd = &cli.Command{
@@ -126,8 +128,8 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer pool.Close()
 
-	out := cmd.Root().Writer
-	if err := reportTarget(out, dsn); err != nil {
+	p := printext.NewPalette(cmd.Root().Writer)
+	if err := reportTarget(p, dsn); err != nil {
 		return err
 	}
 
@@ -141,16 +143,24 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 		if err != nil {
 			return err
 		}
-		return printSeedResults(out, results, true, time.Since(started))
+		return printSeedResults(p, results, true, time.Since(started))
 	}
 
-	proceed, err := confirm(cmd, terminalCheck(cmd), "seed the database?")
+	proceed, err := confirm(p, cmd, terminalCheck(cmd), "seed the database?")
 	if err != nil {
 		return err
 	}
 	if !proceed {
-		_, writeErr := fmt.Fprintln(out, "\nnothing seeded")
-		return writeErr
+		return p.Printf("\nnothing seeded\n")
+	}
+
+	// The seeder reports nothing until it finishes, so the spinner is the only
+	// sign the command is alive. It starts after the prompt, so it never
+	// animates while the command waits for an answer.
+	spin := newSpinner(p.Writer())
+	if spin != nil {
+		spin.Suffix = " seeding"
+		spin.Start()
 	}
 
 	started := time.Now()
@@ -160,10 +170,17 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 		results, seedErr = seeders.Run(ctx, tx, false, seeders.All()...)
 		return seedErr
 	})
+
+	// The spinner must be stopped before the first result line is written.
+	// Otherwise its next frame lands at the start of that line and the two run
+	// together on the terminal.
+	if spin != nil {
+		spin.Stop()
+	}
 	if err != nil {
 		return err
 	}
-	return printSeedResults(out, results, false, time.Since(started))
+	return printSeedResults(p, results, false, time.Since(started))
 }
 
 // requireMigrated refuses to seed a database whose schema is not current.
@@ -196,54 +213,62 @@ func requireMigrated(ctx context.Context, dsn string) error {
 	}
 	if len(pending) > 0 {
 		return fmt.Errorf("database: %d %s pending; run migrate:up first",
-			len(pending), plural(len(pending), "migration"))
+			len(pending), printext.Plural(len(pending), "migration"))
 	}
 	return nil
 }
 
 // printSeedResults reports one line per record and a summary. A dry run uses
 // future tense, so its output cannot be mistaken for a report of work done.
-func printSeedResults(w io.Writer, results []seeders.Result, dryRun bool, elapsed time.Duration) error {
+func printSeedResults(p printext.Palette, results []seeders.Result, dryRun bool, elapsed time.Duration) error {
 	var created, skipped int
 	for _, result := range results {
 		for _, key := range result.Created {
 			created++
-			if err := printSeedLine(w, result.Name, key, "created", "would create", dryRun); err != nil {
+			if err := printSeedLine(p, result.Name, key, "created", "would create", dryRun); err != nil {
 				return err
 			}
 		}
 		for _, key := range result.Skipped {
 			skipped++
-			if err := printSeedLine(w, result.Name, key, "skipped", "would skip", dryRun); err != nil {
+			if err := printSeedLine(p, result.Name, key, "skipped", "would skip", dryRun); err != nil {
 				return err
 			}
 		}
 	}
 
 	if created+skipped > 0 {
-		if _, err := fmt.Fprintln(w); err != nil {
+		if err := p.Printf("\n"); err != nil {
 			return err
 		}
 	}
 	if dryRun {
-		_, err := fmt.Fprintf(w, "%d to create, %d to skip in %s\n",
-			created, skipped, humanDuration(elapsed))
-		return err
+		return p.Printf("%s, %s %s\n",
+			p.Yellow(fmt.Sprintf("%d to create", created)),
+			p.Yellow(fmt.Sprintf("%d to skip", skipped)),
+			p.Dim("in "+printext.Duration(elapsed)))
 	}
-	_, err := fmt.Fprintf(w, "%d created, %d skipped in %s\n",
-		created, skipped, humanDuration(elapsed))
-	return err
+	return p.Printf("%s, %s %s\n",
+		p.Green(fmt.Sprintf("%d created", created)),
+		p.Green(fmt.Sprintf("%d skipped", skipped)),
+		p.Dim("in "+printext.Duration(elapsed)))
 }
 
 // printSeedLine writes one record. The seeder name comes first so the output
 // sorts and greps by what was seeded. Both wordings are passed in rather than
 // derived: "create" and "skip" do not share a past-tense rule.
-func printSeedLine(w io.Writer, seeder, key, verb, dryRunVerb string, dryRun bool) error {
+//
+// A record that was created is a success and one that was skipped already
+// existed, so the two are told apart by colour.
+func printSeedLine(p printext.Palette, seeder, key, verb, dryRunVerb string, dryRun bool) error {
 	if dryRun {
-		verb = dryRunVerb
+		return p.Printf("%s%s %s %s\n", progressIndent, seeder, key, p.Yellow(dryRunVerb))
 	}
-	_, err := fmt.Fprintf(w, "%s%s %s %s\n", progressIndent, seeder, key, verb)
-	return err
+	style := printext.Yellow
+	if verb == "created" {
+		style = printext.Green
+	}
+	return p.Printf("%s%s %s %s\n", progressIndent, seeder, key, p.Paint(style, verb))
 }
 
 // runMigrateReset rolls back every applied migration and, with --up, applies
@@ -251,8 +276,8 @@ func printSeedLine(w io.Writer, seeder, key, verb, dryRunVerb string, dryRun boo
 // migrations, so resetting a fresh database still builds the schema.
 // --dry-run lists both halves without touching the database.
 func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
-	out := cmd.Root().Writer
-	report := newReporter(out)
+	p := printext.NewPalette(cmd.Root().Writer)
+	report := newReporter(p)
 
 	migrator, dsn, closeDB, err := openMigrator(ctx, cmd,
 		database.MigratorOptions{Progress: report.progress})
@@ -271,41 +296,39 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 	// Nothing to roll back. Without --up that is the whole answer, because
 	// there is no up half to run either.
 	if len(applied) == 0 && !reapply {
-		_, writeErr := fmt.Fprintln(out, "no applied migrations")
-		return writeErr
+		return p.Printf("no applied migrations\n")
 	}
 
 	if cmd.Bool("dry-run") {
-		if err = reportTarget(out, dsn); err != nil {
+		if err = reportTarget(p, dsn); err != nil {
 			return err
 		}
-		return planReset(ctx, migrator, out, applied, reapply)
+		return planReset(ctx, migrator, p, applied, reapply)
 	}
 
 	// A fresh database has no rollback to do, so --up is a plain apply.
 	if len(applied) == 0 {
-		if err = reportTarget(out, dsn); err != nil {
+		if err = reportTarget(p, dsn); err != nil {
 			return err
 		}
-		return applyResetUp(ctx, cmd, migrator, out, report)
+		return applyResetUp(ctx, cmd, migrator, p, report)
 	}
 
-	question := fmt.Sprintf("roll back all %d %s?", len(applied), plural(len(applied), "migration"))
+	question := fmt.Sprintf("roll back all %d %s?", len(applied), printext.Plural(len(applied), "migration"))
 	if reapply {
 		question = fmt.Sprintf("roll back all %d %s and re-apply them?",
-			len(applied), plural(len(applied), "migration"))
+			len(applied), printext.Plural(len(applied), "migration"))
 	}
-	proceed, err := confirm(cmd, terminalCheck(cmd), question)
+	proceed, err := confirm(p, cmd, terminalCheck(cmd), question)
 	if err != nil {
 		return err
 	}
 	if !proceed {
-		_, writeErr := fmt.Fprintf(out, "\n%d %s left applied\n",
-			len(applied), plural(len(applied), "migration"))
-		return writeErr
+		return p.Printf("\n%d %s left applied\n",
+			len(applied), printext.Plural(len(applied), "migration"))
 	}
 
-	if err = reportTarget(out, dsn); err != nil {
+	if err = reportTarget(p, dsn); err != nil {
 		return err
 	}
 
@@ -319,7 +342,7 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 	if err := report.failed(); err != nil {
 		return err
 	}
-	if err := printSummary(out, len(rolled), "rolled back", "migration", report.elapsed()); err != nil {
+	if err := printSummary(p, len(rolled), "rolled back", "migration", report.elapsed()); err != nil {
 		return err
 	}
 
@@ -329,13 +352,13 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 
 	// A blank line separates the two halves, so the rollback report and the
 	// re-apply report do not read as one run.
-	if _, err := fmt.Fprintln(out); err != nil {
+	if err := p.Printf("\n"); err != nil {
 		return err
 	}
 
 	// The re-apply is timed on its own, so its summary reports the up half
 	// rather than the whole reset.
-	report = newReporter(out)
+	report = newReporter(p)
 	reapplied, err := migrator.Up(ctx)
 	if err != nil {
 		if writeErr := report.failed(); writeErr != nil {
@@ -346,7 +369,7 @@ func runMigrateReset(ctx context.Context, cmd *cli.Command) error {
 	if err := report.failed(); err != nil {
 		return err
 	}
-	return printSummary(out, len(reapplied), "applied", "migration", report.elapsed())
+	return printSummary(p, len(reapplied), "applied", "migration", report.elapsed())
 }
 
 // applyResetUp runs the --up half on a database with nothing applied. It asks
@@ -355,7 +378,7 @@ func applyResetUp(
 	ctx context.Context,
 	cmd *cli.Command,
 	migrator *database.Migrator,
-	out io.Writer,
+	p printext.Palette,
 	report *reporter,
 ) error {
 	pending, err := migrator.Pending(ctx)
@@ -363,19 +386,17 @@ func applyResetUp(
 		return err
 	}
 	if len(pending) == 0 {
-		_, writeErr := fmt.Fprintln(out, "no pending migrations")
-		return writeErr
+		return p.Printf("no pending migrations\n")
 	}
 
-	proceed, err := confirm(cmd, terminalCheck(cmd),
-		fmt.Sprintf("apply all %d pending %s?", len(pending), plural(len(pending), "migration")))
+	proceed, err := confirm(p, cmd, terminalCheck(cmd),
+		fmt.Sprintf("apply all %d pending %s?", len(pending), printext.Plural(len(pending), "migration")))
 	if err != nil {
 		return err
 	}
 	if !proceed {
-		_, writeErr := fmt.Fprintf(out, "\n%d pending %s left unapplied\n",
-			len(pending), plural(len(pending), "migration"))
-		return writeErr
+		return p.Printf("\n%d pending %s left unapplied\n",
+			len(pending), printext.Plural(len(pending), "migration"))
 	}
 
 	results, err := migrator.Up(ctx)
@@ -388,7 +409,7 @@ func applyResetUp(
 	if err := report.failed(); err != nil {
 		return err
 	}
-	return printSummary(out, len(results), "applied", "migration", report.elapsed())
+	return printSummary(p, len(results), "applied", "migration", report.elapsed())
 }
 
 // planReset prints both halves of a reset without touching the database. The
@@ -396,12 +417,12 @@ func applyResetUp(
 func planReset(
 	ctx context.Context,
 	migrator *database.Migrator,
-	out io.Writer,
+	p printext.Palette,
 	applied []database.MigrationStatus,
 	reapply bool,
 ) error {
 	if len(applied) > 0 {
-		if err := printRollback(out, applied); err != nil {
+		if err := printRollback(p, applied); err != nil {
 			return err
 		}
 	}
@@ -409,7 +430,7 @@ func planReset(
 		return nil
 	}
 	if len(applied) > 0 {
-		if _, err := fmt.Fprintln(out); err != nil {
+		if err := p.Printf("\n"); err != nil {
 			return err
 		}
 	}
@@ -418,14 +439,14 @@ func planReset(
 	if err != nil {
 		return err
 	}
-	return printPending(out, pending)
+	return printPending(p, pending)
 }
 
 // runMigrateValidate checks the embedded migrations and reports every problem.
 // It never connects to a database, so it works on a machine without Postgres.
 func runMigrateValidate(_ context.Context, cmd *cli.Command) error {
 	started := time.Now()
-	return printValidation(cmd.Root().Writer, migrationCheck(), time.Since(started))
+	return printValidation(printext.NewPalette(cmd.Root().Writer), migrationCheck(), time.Since(started))
 }
 
 // migrationCheck is the seam the tests replace to exercise the failing path,
@@ -434,21 +455,21 @@ var migrationCheck = database.Validate
 
 // printValidation reports the outcome and returns an error when the migrations
 // are not valid, so the process exits non-zero in CI.
-func printValidation(w io.Writer, report database.ValidationReport, elapsed time.Duration) error {
+func printValidation(p printext.Palette, report database.ValidationReport, elapsed time.Duration) error {
 	for _, issue := range report.Issues {
-		if _, err := fmt.Fprintf(w, "%s\n", issue); err != nil {
+		if err := p.Printf("%s\n", p.Red(issue.String())); err != nil {
 			return err
 		}
 	}
 	if !report.OK() {
 		return fmt.Errorf("database: %d %s in %d %s",
-			len(report.Issues), plural(len(report.Issues), "problem"),
-			report.Checked, plural(report.Checked, "migration file"))
+			len(report.Issues), printext.Plural(len(report.Issues), "problem"),
+			report.Checked, printext.Plural(report.Checked, "migration file"))
 	}
 
-	_, err := fmt.Fprintf(w, "%d %s valid in %s\n",
-		report.Checked, plural(report.Checked, "migration file"), humanDuration(elapsed))
-	return err
+	return p.Printf("%s %s\n",
+		p.Green(fmt.Sprintf("%d %s", report.Checked, printext.Plural(report.Checked, "migration file"))),
+		p.Dim("valid in "+printext.Duration(elapsed)))
 }
 
 var migrateValidateCmd = &cli.Command{

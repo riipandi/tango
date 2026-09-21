@@ -217,7 +217,7 @@ func TestHealthTextReportsEveryFailure(t *testing.T) {
 	}
 
 	var out strings.Builder
-	require.NoError(t, health.WriteText(&out, result))
+	require.NoError(t, health.WriteText(&out, result, nil))
 	assert.Contains(t, out.String(), "postgres")
 	assert.Contains(t, out.String(), "valkey")
 }

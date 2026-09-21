@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"math"
 	"os"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/envfile"
+	"github.com/riipandi/tango/pkg/printext"
 )
 
 // ErrDatabaseURLUnset is returned when no DSN is available.
@@ -66,67 +66,88 @@ func openMigrator(
 }
 
 // printPending reports the migrations the database has not applied yet.
-func printPending(w io.Writer, pending []database.MigrationStatus) error {
+func printPending(p printext.Palette, pending []database.MigrationStatus) error {
 	if len(pending) == 0 {
-		_, err := fmt.Fprintln(w, "no pending migrations")
-		return err
+		return p.Printf("no pending migrations\n")
 	}
 	for _, status := range pending {
-		if _, err := fmt.Fprintf(w, "%s%05d %s\n", progressIndent, status.Version, status.Name); err != nil {
+		if err := p.Printf("%s%05d %s %s\n", progressIndent,
+			status.Version, status.Name, p.Yellow("pending")); err != nil {
 			return err
 		}
 	}
-	return printSummary(w, len(pending), "pending", "migration", 0)
+	return printSummary(p, len(pending), "pending", "migration", 0)
 }
 
 // printRollback reports the migrations a rollback would consume, newest first.
-func printRollback(w io.Writer, selected []database.MigrationStatus) error {
+func printRollback(p printext.Palette, selected []database.MigrationStatus) error {
 	for _, status := range selected {
-		if _, err := fmt.Fprintf(w, "%s%05d %s\n", progressIndent, status.Version, status.Name); err != nil {
+		if err := p.Printf("%s%05d %s %s\n", progressIndent,
+			status.Version, status.Name, p.Yellow("rollback")); err != nil {
 			return err
 		}
 	}
-	return printSummary(w, len(selected), "to roll back", "migration", 0)
+	return printSummary(p, len(selected), "to roll back", "migration", 0)
 }
 
 // migrationTimestamp is how applied times are rendered. The migration handle
 // pins the session to UTC, so the values carry no zone.
 const migrationTimestamp = "2006-01-02 15:04:05"
 
+// migrationTimestampWidth is the width that layout always occupies, so a column
+// stays aligned whether or not a migration has run.
+const migrationTimestampWidth = len(migrationTimestamp)
+
 // printStatus reports every embedded migration, the database version, and when
 // the migrations last ran. A time comes from the tstamp column goose writes
 // when it records a migration, so it is the moment that migration last ran,
 // not when its file changed.
-func printStatus(w io.Writer, statuses []database.MigrationStatus, version int64) error {
+func printStatus(p printext.Palette, statuses []database.MigrationStatus, version int64) error {
 	applied := 0
 	for _, status := range statuses {
-		state := "pending"
+		state := p.Yellow("pending")
 		at := "-"
 		if status.Applied {
-			state = "applied"
+			state = p.Green("applied")
 			at = status.AppliedAt.UTC().Format(migrationTimestamp)
 			applied++
 		}
-		if _, err := fmt.Fprintf(w, "%s%05d %-7s %-19s %s\n",
-			progressIndent, status.Version, state, at, status.Name); err != nil {
+		// The state and the timestamp are padded before they are coloured: a
+		// colour code is invisible but not zero-width to fmt, so padding a
+		// painted string would break the column.
+		if err := p.Printf("%s%05d %s %s %s\n", progressIndent,
+			status.Version,
+			printext.PadRight(state, len("applied")),
+			p.Dim(printext.PadRight(at, migrationTimestampWidth)),
+			status.Name); err != nil {
 			return err
 		}
 	}
 
-	if _, err := fmt.Fprintf(w, "\nversion %05d; %d of %d applied\n",
-		version, applied, len(statuses)); err != nil {
+	if err := p.Printf("\nversion %05d; %s\n",
+		version, p.Paint(versionCountStyle(applied, len(statuses)),
+			fmt.Sprintf("%d of %d applied", applied, len(statuses)))); err != nil {
 		return err
 	}
 
 	last, ok := lastRun(statuses)
 	if !ok {
-		_, err := fmt.Fprintln(w, "no migrations applied yet")
-		return err
+		return p.Printf("no migrations applied yet\n")
 	}
-	_, err := fmt.Fprintf(w, "last run %s UTC (%s)\n",
-		last.AppliedAt.UTC().Format(migrationTimestamp), last.Name)
-	return err
+	return p.Printf("last run %s UTC (%s)\n",
+		p.Dim(last.AppliedAt.UTC().Format(migrationTimestamp)), last.Name)
 }
+
+// versionCountStyle marks how much of the schema is in place: everything applied
+// is a pass, anything less is a state to notice.
+func versionCountStyle(applied, total int) printext.Colour {
+	if applied == total {
+		return printext.Green
+	}
+	return printext.Yellow
+}
+
+// lastRun returns the migration that ran most recently. Comparing timestamps
 
 // lastRun returns the migration that ran most recently. Comparing timestamps
 // rather than taking the highest version keeps the answer right when
@@ -150,13 +171,12 @@ func lastRun(statuses []database.MigrationStatus) (database.MigrationStatus, boo
 // confirm asks the question and reports whether the user agreed. A
 // non-interactive run agrees without asking so that CI and `task db:migrate`
 // never block; an interactive run asks unless --force is passed.
-func confirm(cmd *cli.Command, interactive bool, question string) (bool, error) {
+func confirm(p printext.Palette, cmd *cli.Command, interactive bool, question string) (bool, error) {
 	if cmd.Bool("force") || !interactive {
 		return true, nil
 	}
 
-	out := cmd.Root().Writer
-	if _, err := fmt.Fprintf(out, "%s [y/N] ", question); err != nil {
+	if err := p.Printf("%s [y/N] ", p.Yellow(question)); err != nil {
 		return false, err
 	}
 
@@ -166,7 +186,7 @@ func confirm(cmd *cli.Command, interactive bool, question string) (bool, error) 
 	}
 	answer, err := bufio.NewReader(in).ReadString('\n')
 	if err != nil && answer == "" {
-		if _, writeErr := fmt.Fprintln(out); writeErr != nil {
+		if _, writeErr := fmt.Fprintln(p.Writer()); writeErr != nil {
 			return false, writeErr
 		}
 		return false, nil
@@ -182,8 +202,8 @@ func confirm(cmd *cli.Command, interactive bool, question string) (bool, error) 
 // runMigrateUp applies the pending migrations. --dry-run lists them instead and
 // changes nothing.
 func runMigrateUp(ctx context.Context, cmd *cli.Command) error {
-	out := cmd.Root().Writer
-	report := newReporter(out)
+	p := printext.NewPalette(cmd.Root().Writer)
+	report := newReporter(p)
 
 	migrator, dsn, closeDB, err := openMigrator(ctx, cmd,
 		database.MigratorOptions{Progress: report.progress})
@@ -192,7 +212,7 @@ func runMigrateUp(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer closeDB()
 
-	if err = reportTarget(out, dsn); err != nil {
+	if err = reportTarget(p, dsn); err != nil {
 		return err
 	}
 
@@ -201,7 +221,7 @@ func runMigrateUp(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if cmd.Bool("dry-run") {
-		return printPending(out, pending)
+		return printPending(p, pending)
 	}
 
 	// --to caps what this run applies; migration version 0 is goose's sentinel,
@@ -216,28 +236,30 @@ func runMigrateUp(ctx context.Context, cmd *cli.Command) error {
 	selected := pendingUpTo(pending, target)
 
 	if len(selected) == 0 {
-		return printNothingToApply(out, pending, target)
+		return printNothingToApply(p, pending, target)
 	}
 
-	apply, err := confirm(cmd, terminalCheck(cmd),
-		fmt.Sprintf("apply %d pending %s?", len(selected), plural(len(selected), "migration")))
+	apply, err := confirm(p, cmd, terminalCheck(cmd),
+		fmt.Sprintf("apply %d pending %s?", len(selected), printext.Plural(len(selected), "migration")))
 	if err != nil {
 		return err
 	}
 	if !apply {
-		_, writeErr := fmt.Fprintf(out, "\n%d pending %s left unapplied\n",
-			len(selected), plural(len(selected), "migration"))
-		return writeErr
+		return p.Printf("\n%d pending %s left unapplied\n",
+			len(selected), printext.Plural(len(selected), "migration"))
 	}
 
 	results, err := migrator.UpTo(ctx, target)
 	if err != nil {
+		if writeErr := report.failed(); writeErr != nil {
+			return writeErr
+		}
 		return err
 	}
 	if err := report.failed(); err != nil {
 		return err
 	}
-	return printSummary(out, len(results), "applied", "migration", report.elapsed())
+	return printSummary(p, len(results), "applied", "migration", report.elapsed())
 }
 
 // runMigrateDown rolls back the most recent migrations. --dry-run lists them
@@ -248,8 +270,8 @@ func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("database: --count must be greater than zero, got %d", count)
 	}
 
-	out := cmd.Root().Writer
-	report := newReporter(out)
+	p := printext.NewPalette(cmd.Root().Writer)
+	report := newReporter(p)
 
 	migrator, dsn, closeDB, err := openMigrator(ctx, cmd,
 		database.MigratorOptions{Progress: report.progress})
@@ -258,7 +280,7 @@ func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer closeDB()
 
-	if err = reportTarget(out, dsn); err != nil {
+	if err = reportTarget(p, dsn); err != nil {
 		return err
 	}
 
@@ -267,25 +289,23 @@ func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	if len(applied) == 0 {
-		_, writeErr := fmt.Fprintln(out, "no applied migrations")
-		return writeErr
+		return p.Printf("no applied migrations\n")
 	}
 
 	// A count above what the database has rolls back everything, which is the
 	// only sensible reading.
 	count = min(count, len(applied))
 	if cmd.Bool("dry-run") {
-		return printRollback(out, applied[:count])
+		return printRollback(p, applied[:count])
 	}
 
-	proceed, err := confirm(cmd, terminalCheck(cmd),
-		fmt.Sprintf("roll back %d %s?", count, plural(count, "migration")))
+	proceed, err := confirm(p, cmd, terminalCheck(cmd),
+		fmt.Sprintf("roll back %d %s?", count, printext.Plural(count, "migration")))
 	if err != nil {
 		return err
 	}
 	if !proceed {
-		_, writeErr := fmt.Fprintf(out, "\n%d %s left applied\n", count, plural(count, "migration"))
-		return writeErr
+		return p.Printf("\n%d %s left applied\n", count, printext.Plural(count, "migration"))
 	}
 
 	results, err := migrator.Down(ctx, count)
@@ -298,7 +318,7 @@ func runMigrateDown(ctx context.Context, cmd *cli.Command) error {
 	if err := report.failed(); err != nil {
 		return err
 	}
-	return printSummary(out, len(results), "rolled back", "migration", report.elapsed())
+	return printSummary(p, len(results), "rolled back", "migration", report.elapsed())
 }
 
 // runMigrateStatus lists every embedded migration and whether the database has
@@ -310,8 +330,8 @@ func runMigrateStatus(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer closeDB()
 
-	out := cmd.Root().Writer
-	if err = reportTarget(out, dsn); err != nil {
+	p := printext.NewPalette(cmd.Root().Writer)
+	if err = reportTarget(p, dsn); err != nil {
 		return err
 	}
 
@@ -323,7 +343,7 @@ func runMigrateStatus(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	return printStatus(out, statuses, version)
+	return printStatus(p, statuses, version)
 }
 
 // runMigrateVersion prints the version the database sits on, which is the
@@ -361,15 +381,12 @@ func pendingUpTo(pending []database.MigrationStatus, version int64) []database.M
 // printNothingToApply explains why a run applied nothing. An empty result under
 // --to is not the same as an up-to-date database, and saying "no pending
 // migrations" then would be wrong.
-func printNothingToApply(w io.Writer, pending []database.MigrationStatus, target int64) error {
+func printNothingToApply(p printext.Palette, pending []database.MigrationStatus, target int64) error {
 	if len(pending) == 0 {
-		_, err := fmt.Fprintln(w, "no pending migrations")
-		return err
+		return p.Printf("no pending migrations\n")
 	}
-	_, err := fmt.Fprintf(w,
-		"nothing to apply up to version %05d; %d %s pending above it\n",
-		target, len(pending), plural(len(pending), "migration"))
-	return err
+	return p.Printf("nothing to apply up to version %05d; %s\n",
+		target, p.Yellow(fmt.Sprintf("%d %s pending above it", len(pending), printext.Plural(len(pending), "migration"))))
 }
 
 // isTerminal reports whether the confirmation prompt has a user behind it.
