@@ -58,6 +58,28 @@ func (c Config) Validate() error {
 	check(isOneOf(c.Log.Format, LogPretty, LogStructured),
 		"log.format: %q is not one of %s", c.Log.Format, joinValues(LogPretty, LogStructured))
 
+	// The file sink is off until a filename names one, so the rotation settings
+	// are read only when it is on: holding them to anything would report a
+	// problem in a part of the file that is switched off.
+	if c.Log.File.Filename != "" {
+		check(c.Log.File.MaxSize > 0, "log.file.max_size: must be positive")
+		check(c.Log.File.MaxBackups >= 0, "log.file.max_backups: must not be negative")
+		check(c.Log.File.MaxAge >= 0, "log.file.max_age: must not be negative")
+		// Zero on both is the one combination that never deletes a rotated
+		// file, so it is refused here rather than filling a disk later.
+		check(c.Log.File.MaxBackups > 0 || c.Log.File.MaxAge > 0,
+			"log.file: set max_backups or max_age; zero on both keeps every rotated file")
+	}
+
+	// The collector is dialled only when it is enabled, so its endpoint is held
+	// to a URL only then.
+	if c.Log.OTLP.Enable {
+		check(c.Log.OTLP.Endpoint != "", "log.otlp.endpoint: %s",
+			c.unsetNote("log.otlp.endpoint", "must not be empty when log.otlp.enable is true"))
+		check(c.Log.OTLP.Endpoint == "" || isHTTPURL(c.Log.OTLP.Endpoint),
+			"log.otlp.endpoint: %q must be an absolute http or https URL", c.Log.OTLP.Endpoint)
+	}
+
 	// The key-value backend is opt-in. Its Enable flag and the per-feature driver
 	// fields are two different decisions, so they can disagree, and a driver
 	// pointing at a backend that is switched off is the one combination that

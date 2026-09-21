@@ -105,8 +105,49 @@ type KVStore struct {
 type Log struct {
 	// Level is one of debug, info, warn, or error.
 	Level string `koanf:"level" json:"level"`
-	// Format is LogPretty or LogStructured.
+	// Format is LogPretty or LogStructured. It selects the console rendering,
+	// the sink a human reads; the other sinks keep their own form.
 	Format string `koanf:"format" json:"format"`
+	// File is the rotating file sink, off until it is named.
+	File LogFile `koanf:"file" json:"file"`
+	// OTLP ships entries to an OpenTelemetry collector.
+	OTLP LogOTLP `koanf:"otlp" json:"otlp"`
+}
+
+// LogFile holds the rotating file sink settings.
+//
+// The sink is opt-in: with no Filename the console is the only destination, so a
+// fresh checkout writes no files and a container that logs to stdout needs no
+// volume. The rotation settings are read only once a file is named, the way the
+// S3 section is read only on the s3 driver.
+type LogFile struct {
+	// Filename is the file entries are appended to, rotated by the sink. Empty
+	// means no file sink; a relative path is relative to the working directory.
+	Filename string `koanf:"filename" json:"filename"`
+	// MaxSize is the size in megabytes the active file reaches before it is
+	// rotated.
+	MaxSize int `koanf:"max_size" json:"max_size"`
+	// MaxBackups is how many rotated files are kept, and MaxAge how many days
+	// one is kept for. They are independent: a file is deleted when either
+	// limit is exceeded, so zero on both keeps every rotated file forever.
+	MaxBackups int `koanf:"max_backups" json:"max_backups"`
+	MaxAge     int `koanf:"max_age" json:"max_age"`
+	// Compress gzips a rotated file.
+	Compress bool `koanf:"compress" json:"compress"`
+}
+
+// LogOTLP holds the OpenTelemetry log export settings.
+//
+// It is opt-in and never required, like every other external backend: with
+// Enable false nothing is dialled and the local path needs no collector.
+type LogOTLP struct {
+	// Enable ships entries to the collector at Endpoint.
+	Enable bool `koanf:"enable" json:"enable"`
+	// Endpoint is the collector's OTLP/HTTP address, such as
+	// http://localhost:4318 or https://collector.example.com:4318. The scheme
+	// decides whether the connection is TLS, so it is not a separate setting.
+	// An empty path means the protocol's own /v1/logs.
+	Endpoint string `koanf:"endpoint" json:"endpoint"`
 }
 
 // Mailer holds the outbound email settings. The mailer is optional: with no SMTP

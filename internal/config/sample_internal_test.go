@@ -131,6 +131,23 @@ func TestDurationKeysMatchTheStruct(t *testing.T) {
 		"durationKeys must list exactly the time.Duration fields on Config")
 }
 
+func TestSampleWritesTheLogKeys(t *testing.T) {
+	// The file sink is off until a filename names one, so the generated file
+	// writes null rather than an empty string: the same resolution, read as what
+	// it means. The collector is the other way round: whether a deployment has
+	// one, and where it listens, are the deployment's to know, so both keys are
+	// directives.
+	flat := sampleDoc(t)
+
+	assert.Nil(t, flat["log.file.filename"], "no file sink is written as null, not as an empty path")
+	assert.Equal(t, "env:LOG_OTLP_ENABLE", flat["log.otlp.enable"])
+	assert.Equal(t, "env:LOG_OTLP_ENDPOINT", flat["log.otlp.endpoint"])
+	assert.Equal(t, float64(100), flat["log.file.max_size"])
+	assert.Equal(t, float64(7), flat["log.file.max_backups"])
+	assert.Equal(t, float64(30), flat["log.file.max_age"])
+	assert.Equal(t, true, flat["log.file.compress"])
+}
+
 func TestSampleRoundTripsThroughLoad(t *testing.T) {
 	// The strongest statement about the generated file: loading it back yields
 	// the built-in defaults, with the directives resolved.

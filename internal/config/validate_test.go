@@ -448,6 +448,80 @@ func TestValidationHoldsTheSignedURLLifetimeInsideSevenDays(t *testing.T) {
 	}
 }
 
+func TestValidationLeavesTheFileSinkAloneUntilAFilenameNamesOne(t *testing.T) {
+	// The console is the only sink by default, so the rotation settings are not
+	// read: a container that logs to stdout must not be told to configure a
+	// rotation it never uses.
+	require.NoError(t, resolveFile(t, `"log": {"file": {"max_size": 0, "max_backups": 0, "max_age": 0}}`))
+}
+
+func TestValidationRefusesARotationThatNeverDeletes(t *testing.T) {
+	// A file sink that keeps every rotated file fills a disk quietly, so the one
+	// combination that does that is refused where the file is named.
+	err := resolveFile(t, `"log": {"file": {"filename": "/var/log/app.log",
+		"max_backups": 0, "max_age": 0}}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "log.file")
+
+	// Either limit on its own is a retention policy.
+	assert.NoError(t, resolveFile(t, `"log": {"file": {"filename": "/var/log/app.log", "max_backups": 3, "max_age": 0}}`))
+	assert.NoError(t, resolveFile(t, `"log": {"file": {"filename": "/var/log/app.log", "max_backups": 0, "max_age": 7}}`))
+}
+
+func TestValidationRejectsANonPositiveFileSize(t *testing.T) {
+	err := resolveFile(t, `"log": {"file": {"filename": "/var/log/app.log", "max_size": 0}}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "log.file.max_size")
+}
+
+func TestValidationChecksTheOTLPEndpointOnlyWhenEnabled(t *testing.T) {
+	// A switched-off collector is never dialled, so its endpoint is not held to
+	// anything.
+	require.NoError(t, resolveFile(t, `"log": {"otlp": {"enable": false, "endpoint": "not-a-url"}}`))
+
+	err := resolveFile(t, `"log": {"otlp": {"enable": true, "endpoint": "not-a-url"}}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "log.otlp.endpoint")
+}
+
+func TestValidationFallsBackToAnEndpointTheExporterWillDial(t *testing.T) {
+	// The endpoint has a concrete default, so an unset variable leaves a usable
+	// value rather than an empty one: an unset LOG_OTLP_ENDPOINT must not stop a
+	// deployment whose collector is on the default port.
+	cfg, err := resolveAndValidate(t, config.Options{
+		ConfigFile: writeConfig(t, `{
+			"database": {"url": "env:DATABASE_URL"},
+			"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
+			"log": {"otlp": {"enable": true, "endpoint": "env:LOG_OTLP_ENDPOINT"}}
+		}`),
+		Environ: baseEnv(),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, config.DefaultOTLPEndpoint, cfg.Log.OTLP.Endpoint)
+}
+
+func TestValidationAcceptsAnOTLPDeployment(t *testing.T) {
+	// Both schemes are valid: the endpoint's scheme is what decides whether the
+	// connection is TLS, so there is no second setting to keep in step with it.
+	for _, endpoint := range []string{"http://localhost:4318", "https://collector.example.com:4318"} {
+		body := `"log": {"otlp": {"enable": true, "endpoint": ` + strconv.Quote(endpoint) + `}}`
+		assert.NoError(t, resolveFile(t, body), endpoint)
+	}
+}
+
+func TestRedactedLeavesTheLogTargetsAlone(t *testing.T) {
+	// Neither the file path nor the collector address is a credential, and a
+	// report that hid them could not say where the logs go.
+	cfg := config.Default()
+	cfg.Log.File.Filename = "/var/log/tango.log"
+	cfg.Log.OTLP.Endpoint = "https://collector.example.com:4318"
+
+	redacted := cfg.Redacted()
+
+	assert.Equal(t, cfg.Log.File.Filename, redacted.Log.File.Filename)
+	assert.Equal(t, cfg.Log.OTLP.Endpoint, redacted.Log.OTLP.Endpoint)
+}
+
 func TestRedactedHidesTheS3Credentials(t *testing.T) {
 	cfg := config.Default()
 	cfg.Storage.S3.AccessKeyID = "AKIAIOSFODNN7EXAMPLE"

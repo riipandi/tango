@@ -15,6 +15,11 @@ const DefaultDataDir = "storage"
 // and a deployment with a real region replaces it.
 const DefaultS3Region = "us-east-1"
 
+// DefaultOTLPEndpoint is the address a local OpenTelemetry collector listens on.
+// It is the protocol's own default port, so an enable flag alone reaches a
+// collector started on the same host.
+const DefaultOTLPEndpoint = "http://localhost:4318"
+
 // Mode names of the supported runtime modes.
 const (
 	ModeDevelopment = "development"
@@ -29,6 +34,20 @@ const (
 	LogInfo  = "info"
 	LogWarn  = "warn"
 	LogError = "error"
+)
+
+// Defaults for the rotating file sink. A file is opt-in, so these apply only
+// once log.file.filename names one.
+const (
+	// DefaultLogMaxSizeMB is the size at which the active file is rotated. It
+	// matches the sink's own default, so leaving the key out and writing 100
+	// produce the same file.
+	DefaultLogMaxSizeMB = 100
+	// DefaultLogMaxBackups and DefaultLogMaxAge bound what is kept. Both are
+	// needed: they are independent limits, and zero on both would keep every
+	// rotated file forever, which fills a disk quietly.
+	DefaultLogMaxBackups = 7
+	DefaultLogMaxAge     = 30
 )
 
 // Default returns the built-in configuration. These values are the lowest
@@ -68,6 +87,19 @@ func Default() Config {
 		Log: Log{
 			Level:  LogInfo,
 			Format: LogPretty,
+			File: LogFile{
+				// No filename: the console is the only sink until one is named.
+				MaxSize:    DefaultLogMaxSizeMB,
+				MaxBackups: DefaultLogMaxBackups,
+				MaxAge:     DefaultLogMaxAge,
+				Compress:   true,
+			},
+			OTLP: LogOTLP{
+				// Off, and pointing at the collector a local OTLP receiver
+				// listens on, so switching Enable on is the only step needed.
+				Enable:   false,
+				Endpoint: DefaultOTLPEndpoint,
+			},
 		},
 		Mailer: Mailer{
 			FromEmail: "mailer@example.com",
