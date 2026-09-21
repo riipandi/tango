@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/urfave/cli/v3"
 )
@@ -56,15 +58,54 @@ file decides.`,
 			return err
 		}
 
+		// The metrics exposition is the one surface serve can host before
+		// internal/transport exists: the Prometheus bridge already holds the
+		// registry, and a disabled signal exposes no handler at all rather than
+		// an endpoint that reports nothing.
+		mux := http.NewServeMux()
+		if handler := obs.MetricsHandler(); handler != nil {
+			mux.Handle(cfg.OTEL.Metrics.PrometheusPath, handler)
+		}
+
+		server := &http.Server{
+			Addr:              fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+			Handler:           mux,
+			ReadTimeout:       cfg.Server.ReadTimeout,
+			ReadHeaderTimeout: cfg.Server.ReadTimeout,
+			WriteTimeout:      cfg.Server.WriteTimeout,
+			IdleTimeout:       cfg.Server.IdleTimeout,
+		}
+
+		serveErr := make(chan error, 1)
+		go func() {
+			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				serveErr <- err
+			}
+		}()
+
 		log.Slog().InfoContext(ctx, "starting",
 			"mode", cfg.App.Mode,
 			"transport", cfg.Log.Transport,
 			"protocol", cfg.OTEL.Protocol,
 			"tracing", obs.Tracing(),
 			"metrics", obs.Metrics(),
-			"address", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port))
+			"address", server.Addr)
 
-		fmt.Println("not yet implemented")
+		select {
+		case err := <-serveErr:
+			return err
+		case <-ctx.Done():
+		}
+
+		// Shutdown closes the listener first, so a request that arrives during
+		// the drain is refused rather than served by a server the caller gave
+		// up on, then waits for the in-flight work, bounded by the configured
+		// drain window.
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.Server.ShutdownTimeout)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("serve: drain: %w", err)
+		}
 		return nil
 	},
 }

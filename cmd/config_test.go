@@ -433,3 +433,25 @@ func TestConfigPrintHasNoTrailingWhitespace(t *testing.T) {
 		assert.Equal(t, strings.TrimRight(line, " "), line, "line ends in whitespace: %q", line)
 	}
 }
+
+func TestASubcommandFlagReachesTheConfiguration(t *testing.T) {
+	// A root Before receives the root command, whose lineage stops at the root:
+	// without walking down to the subcommand the args name, serve --port would
+	// be parsed and then ignored, leaving the file's value in place.
+	useConfig(t, `{}`)
+
+	root := testRoot(&bytes.Buffer{}, "", &cli.Command{
+		Name: "serve",
+		Flags: []cli.Flag{
+			&cli.IntFlag{Name: "port"},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			cfg, err := configFrom(ctx)
+			require.NoError(t, err)
+			assert.Equal(t, 3191, cfg.Server.Port)
+			return nil
+		},
+	})
+
+	require.NoError(t, root.Run(t.Context(), []string{"tango", "serve", "--port", "3191"}))
+}

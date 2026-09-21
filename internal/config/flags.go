@@ -73,7 +73,11 @@ func Resolve(cmd *cli.Command) (Config, error) {
 // --host.
 func flagLayer(cmd *cli.Command) map[string]any {
 	out := make(map[string]any)
-	for _, level := range lineage(cmd) {
+	levels := lineage(cmd)
+	if sub := executingCommand(cmd); sub != nil {
+		levels = append(levels, sub)
+	}
+	for _, level := range levels {
 		for name, value := range readFlags(level) {
 			key, ok := flagBindings[name]
 			if !ok {
@@ -83,6 +87,26 @@ func flagLayer(cmd *cli.Command) map[string]any {
 		}
 	}
 	return out
+}
+
+// executingCommand returns the subcommand the run names, or nil when the run is
+// the root command itself.
+//
+// A root Before receives the root command, whose lineage stops at the root: the
+// flags a subcommand owns are parsed on the child the first positional argument
+// names, and without this walk they are invisible to the layer. One hop only —
+// no subcommand of this application nests another.
+func executingCommand(cmd *cli.Command) *cli.Command {
+	name := cmd.Args().First()
+	if name == "" || name == cmd.Name {
+		return nil
+	}
+	for _, sub := range cmd.Commands {
+		if sub.Name == name {
+			return sub
+		}
+	}
+	return nil
 }
 
 // readFlags returns the flags set on one command, keyed by flag name.
