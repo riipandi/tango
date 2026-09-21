@@ -29,6 +29,7 @@ var durationKeys = []string{
 	"otel.tracing.batch_timeout",
 	"otel.tracing.export_timeout",
 	"rate_limit.window",
+	"server.cors.max_age",
 	"server.idle_timeout",
 	"server.read_timeout",
 	"server.shutdown_timeout",

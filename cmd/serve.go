@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 
+	do "github.com/samber/do/v2"
 	"github.com/urfave/cli/v3"
+
+	"github.com/riipandi/tango/internal/registry"
 )
 
 var serveCmd = &cli.Command{
@@ -58,22 +62,14 @@ file decides.`,
 			return err
 		}
 
-		// The metrics exposition is the one surface serve can host before
-		// internal/transport exists: the Prometheus bridge already holds the
-		// registry, and a disabled signal exposes no handler at all rather than
-		// an endpoint that reports nothing.
-		mux := http.NewServeMux()
-		if handler := obs.MetricsHandler(); handler != nil {
-			mux.Handle(cfg.OTEL.Metrics.PrometheusPath, handler)
-		}
-
-		server := &http.Server{
-			Addr:              fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-			Handler:           mux,
-			ReadTimeout:       cfg.Server.ReadTimeout,
-			ReadHeaderTimeout: cfg.Server.ReadTimeout,
-			WriteTimeout:      cfg.Server.WriteTimeout,
-			IdleTimeout:       cfg.Server.IdleTimeout,
+		// The container wires the pool, the health checker, and the server, so
+		// the command only names what it blocks on. Resolving the server is
+		// what opens the pool: an unreachable database fails the run here,
+		// before the listener opens.
+		injector := registry.New(ctx, cfg, obs.MetricsHandler())
+		server, err := do.Invoke[*http.Server](injector)
+		if err != nil {
+			return fmt.Errorf("serve: %w", err)
 		}
 
 		serveErr := make(chan error, 1)
@@ -105,6 +101,12 @@ file decides.`,
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("serve: drain: %w", err)
+		}
+
+		// The pool outlives the listener, so it is closed after the drain: a
+		// request still finishing needs its connection until the drain ends.
+		if report := injector.ShutdownWithContext(shutdownCtx); report != nil && !report.Succeed {
+			slog.ErrorContext(ctx, "serve: release", "error", report.Error())
 		}
 		return nil
 	},

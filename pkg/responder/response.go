@@ -18,7 +18,7 @@ const (
 )
 
 const (
-	requestIDHeader = "X-Request-Id"
+	RequestIDHeader = "X-Request-Id"
 	traceIDHeader   = "X-Trace-Id"
 )
 
@@ -158,15 +158,15 @@ func newMetadata(w http.ResponseWriter, r *http.Request, status int) Metadata {
 // requestID gets the request ID from context, headers, or a new value.
 func requestID(w http.ResponseWriter, r *http.Request) string {
 	if id := RequestIDFromContext(r.Context()); id != "" {
-		w.Header().Set(requestIDHeader, id)
+		w.Header().Set(RequestIDHeader, id)
 		return id
 	}
 
-	id := strings.TrimSpace(r.Header.Get(requestIDHeader))
+	id := strings.TrimSpace(r.Header.Get(RequestIDHeader))
 	if id == "" {
 		id = NewRequestID()
 	}
-	w.Header().Set(requestIDHeader, id)
+	w.Header().Set(RequestIDHeader, id)
 	return id
 }
 

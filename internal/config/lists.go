@@ -15,6 +15,9 @@ import "strings"
 // so adding one fails until it is listed here.
 var listKeys = []string{
 	"log.transport",
+	"server.cors.allowed_headers",
+	"server.cors.allowed_methods",
+	"server.cors.allowed_origins",
 }
 
 // mapKeys are the config keys whose value is a map of its own, and which a

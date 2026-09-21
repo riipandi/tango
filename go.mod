@@ -21,6 +21,8 @@ require (
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/rodaine/table v1.4.0
+	github.com/rs/cors v1.11.1
+	github.com/samber/do/v2 v2.1.0
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/mailpit v0.44.0
@@ -152,8 +154,8 @@ require (
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.62.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/rs/cors v1.11.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	github.com/samber/go-type-to-string v1.8.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect

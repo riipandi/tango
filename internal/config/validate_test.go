@@ -780,3 +780,34 @@ func TestRedactedHidesTheS3Credentials(t *testing.T) {
 	assert.Equal(t, cfg.Storage.S3.BucketName, cfg.Redacted().Storage.S3.BucketName)
 	assert.Equal(t, cfg.Storage.S3.EndpointURL, cfg.Redacted().Storage.S3.EndpointURL)
 }
+
+func TestValidationAcceptsTheDefaultCORSPolicy(t *testing.T) {
+	require.NoError(t, resolveFile(t, ""))
+}
+
+func TestValidationAcceptsAWildcardWithoutCredentials(t *testing.T) {
+	err := resolveFile(t, `"server": {"cors": {"allowed_origins": ["*"], "allow_credentials": false}}`)
+	require.NoError(t, err)
+}
+
+func TestValidationRejectsWildcardWithCredentials(t *testing.T) {
+	// The CORS specification forbids the combination: a browser refuses the
+	// answer, so a run that held it would be quietly closed.
+	err := resolveFile(t, `"server": {"cors": {"allowed_origins": ["*"], "allow_credentials": true}}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "server.cors.allow_credentials")
+}
+
+func TestValidationRejectsAnOriginThatIsNotOne(t *testing.T) {
+	// A path is not part of an origin, so it can never match what a browser
+	// sends; accepting it would silently close the policy.
+	err := resolveFile(t, `"server": {"cors": {"allowed_origins": ["http://localhost:3000/app"]}}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "server.cors.allowed_origins")
+}
+
+func TestValidationRejectsABadHeaderName(t *testing.T) {
+	err := resolveFile(t, `"server": {"cors": {"allowed_headers": ["content type"]}}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "server.cors.allowed_headers")
+}

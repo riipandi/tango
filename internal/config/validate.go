@@ -247,6 +247,7 @@ func (c Config) Validate() error {
 	check(c.Server.WriteTimeout > 0, "server.write_timeout: must be positive")
 	check(c.Server.IdleTimeout > 0, "server.idle_timeout: must be positive")
 	check(c.Server.ShutdownTimeout > 0, "server.shutdown_timeout: must be positive")
+	checkCORS(&c.Server.CORS, check)
 
 	check(isOneOf(c.Session.Driver, SessionDB, SessionKV),
 		"session.driver: %q is not one of %s", c.Session.Driver, joinValues(SessionDB, SessionKV))
@@ -330,6 +331,32 @@ func indentProblems(problems []error) string {
 // isOneOf reports whether value matches one of the accepted values.
 func isOneOf[T comparable](value T, accepted ...T) bool {
 	return slices.Contains(accepted, value)
+}
+
+// checkCORS validates the cross-origin policy. It runs for every configuration,
+// because the middleware applies it to every route: a policy that cannot be
+// honoured has to fail the run, not disable itself quietly.
+func checkCORS(cors *CORS, check func(ok bool, format string, args ...any)) {
+	credentials := cors.AllowCredentials
+
+	for _, origin := range cors.AllowedOrigins {
+		if origin == corsWildcard {
+			// The specification forbids credentials with a wildcard: the
+			// browser refuses the combination, so a run would hold it
+			// silently.
+			check(!credentials, "server.cors.allow_credentials: must be false when allowed_origins is %s", corsWildcard)
+			continue
+		}
+		check(isOrigin(origin), "server.cors.allowed_origins: %q must be a scheme://host origin or %s", origin, corsWildcard)
+	}
+
+	for _, method := range cors.AllowedMethods {
+		check(isToken(method), "server.cors.allowed_methods: %q is not an HTTP method", method)
+	}
+	for _, header := range cors.AllowedHeaders {
+		check(isToken(header), "server.cors.allowed_headers: %q is not a header name", header)
+	}
+	check(cors.MaxAge >= 0, "server.cors.max_age: %s must not be negative", cors.MaxAge)
 }
 
 // noDuplicates reports whether every value appears once. A repeated value is a
@@ -473,6 +500,44 @@ func isHTTPURL(value string) bool {
 	}
 	return parsed.Host != ""
 }
+
+// corsWildcard is the origin entry that opens the policy to every origin.
+const corsWildcard = "*"
+
+// isOrigin reports whether value is what a browser sends in the Origin header:
+// scheme://host, with no path, query, or trailing slash. A wrong form would
+// never match a real origin, so the policy would be silently closed.
+func isOrigin(value string) bool {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	return parsed.Host != "" && parsed.Path == "" && parsed.RawQuery == "" && parsed.Fragment == ""
+}
+
+// isToken reports whether value is a valid HTTP token: the form a method and a
+// header name must take.
+func isToken(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		switch {
+		case 'a' <= char && char <= 'z', 'A' <= char && char <= 'Z', '0' <= char && char <= '9':
+		case strings.ContainsRune(tokenExtraChars, char):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// tokenExtraChars are the punctuation an HTTP token may carry besides letters
+// and digits, as RFC 9110 defines them.
+const tokenExtraChars = "!#$%&'*+-.^_`|~"
 
 // isGRPCTarget reports whether value is what a gRPC exporter accepts as an
 // address: a bare host:port, such as localhost:4317.

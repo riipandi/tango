@@ -68,6 +68,25 @@ const DefaultOTELMetricInterval = 60 * time.Second
 // a scrape job needs no configuration beyond the address.
 const DefaultPrometheusPath = "/metrics"
 
+// DefaultCORSMaxAge is how long a browser may cache a preflight answer. An hour
+// keeps the preflight out of most sessions without promising an origin list a
+// redeploy of the configuration could have changed.
+const DefaultCORSMaxAge = time.Hour
+
+// DefaultCORSOrigins is the origin list a fresh checkout gets: the Vite dev
+// server the SPA is served from in development. Production names its own
+// origin through the configuration, so a browser has to prove where the call
+// comes from rather than being trusted by default.
+var DefaultCORSOrigins = []string{"http://localhost:3000"}
+
+// DefaultCORSMethods is the method list a REST + ConnectRPC surface needs.
+var DefaultCORSMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
+
+// DefaultCORSHeaders is the header list a browser call may set: the fetch
+// headers the API envelope reads plus the authorization header the tokens
+// arrive in.
+var DefaultCORSHeaders = []string{"Accept", "Authorization", "Content-Type", "X-Requested-With"}
+
 // Mode names of the supported runtime modes.
 const (
 	ModeDevelopment = "development"
@@ -201,6 +220,12 @@ func Default() Config {
 			WriteTimeout:    30 * time.Second,
 			IdleTimeout:     60 * time.Second,
 			ShutdownTimeout: 15 * time.Second,
+			CORS: CORS{
+				AllowedOrigins: DefaultCORSOrigins,
+				AllowedMethods: DefaultCORSMethods,
+				AllowedHeaders: DefaultCORSHeaders,
+				MaxAge:         DefaultCORSMaxAge,
+			},
 		},
 		Session: Session{
 			Driver: SessionDB,

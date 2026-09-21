@@ -327,6 +327,32 @@ type Server struct {
 	IdleTimeout  time.Duration `koanf:"idle_timeout" json:"idle_timeout"`
 	// ShutdownTimeout bounds the graceful shutdown drain.
 	ShutdownTimeout time.Duration `koanf:"shutdown_timeout" json:"shutdown_timeout"`
+	// CORS holds the browser cross-origin policy for the API.
+	CORS CORS `koanf:"cors" json:"cors"`
+}
+
+// CORS holds the browser cross-origin policy, applied to every route by the
+// transport middleware. The lists are explicit rather than a single on/off
+// switch, because an API that names its origins can also drop the wildcard.
+//
+// An empty AllowedOrigins disables cross-origin access, which is the honest
+// default for a same-origin SPA; a deployment that serves the SPA from another
+// origin lists it.
+type CORS struct {
+	// AllowedOrigins lists the origins a browser may call from. Each is a
+	// scheme://host origin without a path, or "*" for any origin, which
+	// AllowCredentials forbids combining with.
+	AllowedOrigins []string `koanf:"allowed_origins" json:"allowed_origins"`
+	// AllowedMethods lists the HTTP methods a cross-origin request may use.
+	AllowedMethods []string `koanf:"allowed_methods" json:"allowed_methods"`
+	// AllowedHeaders lists the request headers a cross-origin call may set.
+	AllowedHeaders []string `koanf:"allowed_headers" json:"allowed_headers"`
+	// AllowCredentials lets a cross-origin call carry cookies and credentials.
+	// The CORS specification forbids credentials with a wildcard origin, so
+	// Validate refuses that combination.
+	AllowCredentials bool `koanf:"allow_credentials" json:"allow_credentials"`
+	// MaxAge is how long a browser may cache a preflight answer.
+	MaxAge time.Duration `koanf:"max_age" json:"max_age"`
 }
 
 // Session holds the session store settings.
