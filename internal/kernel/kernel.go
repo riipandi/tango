@@ -1,6 +1,5 @@
-// Package kernel holds the contract every feature module implements and the
-// registry that mounts them, so the transport can serve a route without knowing
-// which module owns it.
+// Package kernel holds the contract every feature module implements, so the
+// transport can serve a route without knowing which module owns it.
 package kernel
 
 import (
