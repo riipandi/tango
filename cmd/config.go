@@ -271,9 +271,10 @@ var configPrintCmd = &cli.Command{
 	Description: `Prints every configuration key with the value it actually resolved to: the
 built-in default, the config file, or a command-line flag, whichever won.
 
-A secret is never printed. Every key in the secret set is rendered as
-[redacted], and the database connection string is reduced to
-host:port/database, so the output is safe to paste into a bug report.
+A secret is never printed in full. Each one is masked to its first and
+last few characters, so a value can be traced to the key that produced
+it, and the database connection string is reduced to host:port/database.
+Nothing usable is shown, so the output is safe to share.
 
 --source adds the layer each value came from (default, config-file, or flag),
 which is how a value that is not what you expected is traced to its source.
@@ -306,11 +307,12 @@ func runConfigPrint(ctx context.Context, cmd *cli.Command) error {
 // printConfigTable renders the resolved configuration as a table of key and
 // value, in key order so two runs are diffable.
 //
-// The value is read from a redacted copy, so a secret cannot reach the table
-// even by mistake: the key list and the redaction list are the same list, which
-// a test asserts.
+// The value is read from a masked copy: a secret is shown by its first and last
+// few characters, which is enough to trace a value to the key that produced it
+// without printing anything usable. Nothing reaches the table straight from cfg,
+// so a secret cannot appear even by mistake.
 func printConfigTable(p printext.Palette, cfg config.Config, showSource bool) error {
-	values := config.Values(cfg.Redacted())
+	values := config.Values(cfg.Masked())
 	headers := []any{"KEY", "VALUE"}
 	if showSource {
 		headers = append(headers, "SOURCE")

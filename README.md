@@ -60,15 +60,19 @@ go run -tags debug ./cmd config:print --source
 ```
 
 `config:print` shows the value each key really resolved to — the default, the file, or a flag — so
-it answers "what is this process using" rather than "what does the file say". A secret is never
-printed: every secret key renders as `[redacted]` and the connection string is reduced to
-`host:port/database`, so the output is safe to paste into a bug report. `--source` adds the layer
-each value came from.
+it answers "what is this process using" rather than "what does the file say". `--source` adds the
+layer each value came from.
+
+A secret is never printed in full. Each one keeps its first and last four characters with the middle
+replaced, so a value can be traced back to the key that produced it, and the connection string is
+reduced to `host:port/database`. A secret shorter than 16 characters is hidden completely, because
+keeping eight of its characters would leave most of it readable.
 
 ```
 KEY                          VALUE                      SOURCE
 app.mode                     development                default
-app.secret_key               [redacted]                 config-file
+app.secret_key               11c0****5806               config-file
+auth.private_key             eyJh****FIn0               config-file
 database.url                 localhost:5432/tango       config-file
 mailer.smtp_port             587                        default
 ```

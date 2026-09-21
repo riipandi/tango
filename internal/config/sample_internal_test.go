@@ -174,10 +174,14 @@ func TestSampleMailerDirectivesResolveFromTheEnvironment(t *testing.T) {
 	assert.NoError(t, cfg.Validate())
 }
 
-func TestEverySampleSecretIsRedacted(t *testing.T) {
-	// The two lists must agree. If a key Sample writes as a directive were not a
-	// key Redacted hides, a generated file would carry a literal credential or a
-	// secret could reach a log line.
+func TestEverySampleSecretIsRendered(t *testing.T) {
+	// The list and the renderings must agree. If a key Sample writes as a
+	// directive were not a key these render, a generated file would carry a
+	// literal credential or a secret could reach a report or a log line.
+	//
+	// Both renderings are checked, not just Redacted: Masked is what
+	// config:print uses, so a secret added to the list and forgotten there would
+	// print in full.
 	cfg := Default()
 	cfg.App.SecretKey = probeSecret
 	cfg.Auth.PrivateKey = probeSecret
@@ -186,11 +190,24 @@ func TestEverySampleSecretIsRedacted(t *testing.T) {
 	cfg.Database.URL = probeDSN
 	cfg.Mailer.SMTPPassword = probeSecret
 
-	redacted := cfg.Redacted()
-	for _, key := range secretKeys {
-		assert.NotEqual(t, probeSecret, valueAt(redacted, key), "%s must be redacted", key)
-		assert.NotEqual(t, probeDSN, valueAt(redacted, key), "%s must be redacted", key)
+	for name, rendered := range map[string]Config{
+		"Redacted": cfg.Redacted(),
+		"Masked":   cfg.Masked(),
+	} {
+		for _, key := range secretKeys {
+			assert.NotEqual(t, probeSecret, valueAt(rendered, key), "%s must be hidden by %s", key, name)
+			assert.NotEqual(t, probeDSN, valueAt(rendered, key), "%s must be hidden by %s", key, name)
+		}
 	}
+}
+
+func TestMaskedShowsNothingOfAShortSecret(t *testing.T) {
+	// The two renderings differ in how much they show, so the assertion above
+	// cannot catch a Masked that returned the value unchanged for a short one.
+	cfg := Default()
+	cfg.Mailer.SMTPPassword = "hunter2"
+
+	assert.NotContains(t, cfg.Masked().Mailer.SMTPPassword, "hunter")
 }
 
 // valueAt reads a config key back out of a Config, so the redaction assertion

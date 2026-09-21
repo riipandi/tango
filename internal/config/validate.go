@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/mail"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -136,12 +137,7 @@ func indentProblems(problems []error) string {
 
 // isOneOf reports whether value matches one of the accepted values.
 func isOneOf[T comparable](value T, accepted ...T) bool {
-	for _, candidate := range accepted {
-		if value == candidate {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(accepted, value)
 }
 
 // joinValues renders a value list for a validation message.
@@ -200,20 +196,78 @@ func isEmail(value string) bool {
 // redacted is the placeholder a Redacted Config prints instead of a secret.
 const redacted = "[redacted]"
 
-// Redacted returns a copy with every secret replaced by a placeholder, safe to
-// print or log. The connection string is reduced to its host and database, so a
-// report can name the target without leaking the password.
-func (c Config) Redacted() Config {
+// Masking shows a little of a secret so a value can be traced back to its
+// source. It is for a report the operator runs against their own configuration,
+// never for a log line: see Masked.
+const (
+	// maskKeep is how many characters are kept at each end of a masked value.
+	maskKeep = 4
+	// maskSeparator stands in for the hidden middle. It is what makes a masked
+	// value recognisable as masked rather than as a short secret.
+	maskSeparator = "****"
+	// maskMinLength is the shortest value that is masked at all. A shorter one
+	// is redacted in full: keeping eight characters of a twelve-character
+	// secret would leave most of it readable. Every secret this configuration
+	// actually holds is far longer, so the floor only catches a short password,
+	// where hiding it completely is the safe answer.
+	maskMinLength = 16
+)
+
+// mask renders a secret for a report: the first and last few characters with
+// the middle replaced, so two keys can be told apart by eye.
+//
+// An empty value stays empty, so an unset secret is told apart from a set one;
+// a value below maskMinLength is redacted in full.
+func mask(secret string) string {
+	if secret == "" {
+		return ""
+	}
+	if len(secret) < maskMinLength {
+		return redacted
+	}
+	return secret[:maskKeep] + maskSeparator + secret[len(secret)-maskKeep:]
+}
+
+// secretRenderer renders one secret for display.
+type secretRenderer func(string) string
+
+// withSecrets returns a copy with every secret passed through render.
+//
+// The connection string is always reduced to host:port/database rather than
+// rendered: it is a composite value, so revealing part of the string says
+// nothing, while the host is the part a reader needs.
+func (c Config) withSecrets(render secretRenderer) Config {
 	out := c
-	out.App.SecretKey = redacted
-	out.Auth.PrivateKey = redacted
-	out.Auth.PublicKey = redacted
-	out.Auth.SecretKey = redacted
+	out.App.SecretKey = render(c.App.SecretKey)
+	out.Auth.PrivateKey = render(c.Auth.PrivateKey)
+	out.Auth.PublicKey = render(c.Auth.PublicKey)
+	out.Auth.SecretKey = render(c.Auth.SecretKey)
 	out.Database.URL = RedactDSN(c.Database.URL)
-	out.Mailer.SMTPPassword = redacted
+	out.Mailer.SMTPPassword = render(c.Mailer.SMTPPassword)
 	out.origin = nil
 	out.unresolved = nil
 	return out
+}
+
+// Redacted returns a copy with every secret replaced by a placeholder, safe to
+// print or log.
+//
+// This is the fail-safe. A Config rendered by %v, or a report that has no
+// business showing a secret at all, gets this one: it shows nothing of the
+// value, so there is no partial leak to reason about.
+func (c Config) Redacted() Config {
+	return c.withSecrets(func(string) string { return redacted })
+}
+
+// Masked returns a copy with every secret partially hidden: enough of each value
+// to recognise it, never enough to use it. It is what `config:print` renders.
+//
+// It is deliberately not what a log line gets. A log is read by everyone with
+// access to the logs, so a partial secret there is a secret that leaked slowly;
+// a report is read by the operator, who could read the value anyway. Keeping the
+// two apart is what lets the fail-safe stay absolute.
+func (c Config) Masked() Config {
+	return c.withSecrets(mask)
 }
 
 // RedactDSN reduces a Postgres connection string to host:port/database, the form

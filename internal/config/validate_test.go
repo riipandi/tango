@@ -166,3 +166,58 @@ func TestKeysMatchTheStruct(t *testing.T) {
 	assert.Contains(t, keys, "auth.access_ttl")
 	assert.IsIncreasing(t, keys, "Keys must be sorted")
 }
+
+func TestMaskedKeepsTheEndsOfALongSecret(t *testing.T) {
+	// The whole point of masking: two keys that look alike can be told apart,
+	// while nothing usable is revealed.
+	cfg := config.Default()
+	cfg.App.SecretKey = secret
+
+	assert.Equal(t, secret[:4]+"****"+secret[len(secret)-4:], cfg.Masked().App.SecretKey)
+}
+
+func TestMaskedHidesAShortSecretCompletely(t *testing.T) {
+	// Keeping eight of a twelve-character password would leave most of it
+	// readable, so a value below the floor is hidden in full.
+	for _, password := range []string{"hunter2", "0123456789abcde"} {
+		cfg := config.Default()
+		cfg.Mailer.SMTPPassword = password
+
+		assert.Equal(t, "[redacted]", cfg.Masked().Mailer.SMTPPassword, password)
+	}
+
+	cfg := config.Default()
+	cfg.Mailer.SMTPPassword = "0123456789abcdef"
+	assert.Equal(t, "0123****cdef", cfg.Masked().Mailer.SMTPPassword)
+}
+
+func TestMaskedLeavesAnEmptySecretEmpty(t *testing.T) {
+	// An unset secret must read as unset, not as a masked value: the difference
+	// is the whole answer when a key is missing.
+	assert.Empty(t, config.Default().Masked().App.SecretKey)
+	assert.Empty(t, config.Default().Masked().Auth.SecretKey)
+}
+
+func TestMaskedReducesTheDSNRatherThanMaskingIt(t *testing.T) {
+	// A connection string is a composite value: revealing part of the string
+	// says nothing, while the host is the part a reader needs.
+	cfg := config.Default()
+	cfg.Database.URL = "postgresql://user:sup3rs3cret@localhost:5432/tango?sslmode=disable"
+
+	masked := cfg.Masked()
+
+	assert.Equal(t, "localhost:5432/tango", masked.Database.URL)
+	assert.NotContains(t, masked.Database.URL, "sup3rs3cret")
+}
+
+func TestMaskedAndRedactedAreDifferent(t *testing.T) {
+	// Two renderings, two jobs. Masked is for a report the operator runs, and
+	// shows enough to trace a value; Redacted is the fail-safe behind a log
+	// line, and shows nothing at all.
+	cfg := config.Default()
+	cfg.App.SecretKey = secret
+
+	assert.NotEqual(t, cfg.Masked().App.SecretKey, cfg.Redacted().App.SecretKey)
+	assert.Equal(t, "[redacted]", cfg.Redacted().App.SecretKey)
+	assert.NotContains(t, cfg.String(), secret[:4], "a log line must not show part of a key")
+}

@@ -308,9 +308,9 @@ func TestConfigPrintShowsResolvedValues(t *testing.T) {
 	assert.Equal(t, "587", printedValue(t, out, "mailer.smtp_port"))
 }
 
-func TestConfigPrintRedactsSecrets(t *testing.T) {
-	// The point of the command: a report that can be pasted anywhere. No secret
-	// value and no password may appear in the output.
+func TestConfigPrintMasksSecrets(t *testing.T) {
+	// The point of the command: a report that can be shared. A secret is shown
+	// by its ends so it can be traced to a key, never in full.
 	useConfig(t, `{
 		"app": {"secret_key": "env:APP_SECRET_KEY"},
 		"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
@@ -324,19 +324,61 @@ func TestConfigPrintRedactsSecrets(t *testing.T) {
 	out, err := runConfigPrintCmd(t)
 	require.NoError(t, err)
 
-	assert.NotContains(t, out, testSecret, "a secret value must never be printed")
+	assert.NotContains(t, out, testSecret, "a secret value must never be printed in full")
 	assert.NotContains(t, out, "sup3rs3cret", "a DSN password must never be printed")
 	assert.NotContains(t, out, "hunter2", "an SMTP password must never be printed")
 
-	assert.Equal(t, "[redacted]", printedValue(t, out, "app.secret_key"))
-	assert.Equal(t, "[redacted]", printedValue(t, out, "auth.secret_key"))
+	// A long secret keeps its ends, which is what makes two keys tellable apart.
+	assert.Equal(t, "0123****cdef", printedValue(t, out, "app.secret_key"))
+	assert.Equal(t, "0123****cdef", printedValue(t, out, "auth.secret_key"))
+
+	// A value too short to mask safely is hidden completely: keeping eight of
+	// its twelve characters would leave most of the password readable.
 	assert.Equal(t, "[redacted]", printedValue(t, out, "mailer.smtp_password"))
 
-	// The DSN is reduced rather than hidden, so the target is still readable.
+	// The DSN is reduced rather than masked, so the target is still readable.
 	assert.Equal(t, "localhost:5432/tango", printedValue(t, out, "database.url"))
 
 	// A username is not a secret, so it stays readable.
 	assert.Equal(t, "bot", printedValue(t, out, "mailer.smtp_username"))
+}
+
+func TestConfigPrintMasksTheJWTKeyPair(t *testing.T) {
+	// The JWK keys are the case the masking exists for: a deployment has several
+	// and they all look alike, so the ends are what tell them apart.
+	const (
+		privateKey = "eyJhbGciOiJFUzI1NiIsImtpZCI6ImFiYyJ9"
+		publicKey  = "eyJhbGciOiJFUzI1NiIsImtpZCI6Inh5eiJ9"
+	)
+	useConfig(t, `{
+		"auth": {"private_key": "env:AUTH_PRIVATE_KEY", "public_key": "env:AUTH_PUBLIC_KEY"},
+		"database": {"url": "env:DATABASE_URL"}
+	}`)
+	t.Setenv("AUTH_PRIVATE_KEY", privateKey)
+	t.Setenv("AUTH_PUBLIC_KEY", publicKey)
+	t.Setenv(envfile.DatabaseURL, "postgresql://user:pass@localhost:5432/tango?sslmode=disable")
+
+	out, err := runConfigPrintCmd(t)
+	require.NoError(t, err)
+
+	maskedPrivate := printedValue(t, out, "auth.private_key")
+	assert.Equal(t, privateKey[:4]+"****"+privateKey[len(privateKey)-4:], maskedPrivate)
+	assert.NotContains(t, out, privateKey)
+	assert.NotEqual(t, maskedPrivate, printedValue(t, out, "auth.public_key"),
+		"two different keys must not mask to the same value")
+}
+
+func TestConfigPrintMasksAnEmptySecretAsEmpty(t *testing.T) {
+	// An unset secret must read as unset, not as a masked value: the difference
+	// is the whole answer when a key is missing.
+	useConfig(t, `{"database": {"url": "env:DATABASE_URL"}}`)
+	t.Setenv(envfile.DatabaseURL, "postgresql://user:pass@localhost:5432/tango?sslmode=disable")
+
+	out, err := runConfigPrintCmd(t)
+	require.NoError(t, err)
+
+	assert.Equal(t, "", printedValue(t, out, "app.secret_key"))
+	assert.Equal(t, "", printedValue(t, out, "auth.secret_key"))
 }
 
 func TestConfigPrintCoversEveryKey(t *testing.T) {
