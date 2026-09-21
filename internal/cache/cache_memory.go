@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"hash/maphash"
 	"sync"
 	"time"
@@ -112,8 +113,9 @@ func NewMemory(maxMemory int64, defaultTTL time.Duration) *Memory {
 
 // Get implements Cache. The hot path holds the read lock, verifies the
 // stored key bytes, checks the expiry, and appends the value — no allocation
-// while dst has room for the value.
-func (c *Memory) Get(dst []byte, key string) ([]byte, bool) {
+// while dst has room for the value. The context is taken but never waited
+// on: an in-process read has no network round trip to cancel.
+func (c *Memory) Get(_ context.Context, dst []byte, key string) ([]byte, bool) {
 	h := c.hash(key)
 	shard := &c.shards[h&c.mask]
 
@@ -140,7 +142,7 @@ func (c *Memory) Get(dst []byte, key string) ([]byte, bool) {
 // moves to the secondary — both stay reachable, and a third collision in the
 // same slot evicts the secondary the way the ring would have evicted it
 // anyway.
-func (c *Memory) Set(key string, value []byte, ttl time.Duration) {
+func (c *Memory) Set(_ context.Context, key string, value []byte, ttl time.Duration) {
 	h := c.hash(key)
 	shard := &c.shards[h&c.mask]
 
@@ -155,7 +157,7 @@ func (c *Memory) Set(key string, value []byte, ttl time.Duration) {
 
 // Del implements Cache. Deleting removes the entry whose key bytes match; a
 // colliding entry is left where it lives.
-func (c *Memory) Del(key string) {
+func (c *Memory) Del(_ context.Context, key string) {
 	h := c.hash(key)
 	shard := &c.shards[h&c.mask]
 

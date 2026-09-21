@@ -430,11 +430,11 @@ func (c Config) jsonUnsupportedSignals() []string {
 // It is what turns "a driver points at a switched-off backend" into a message
 // that names the key, rather than a failure at start-up. A feature that is
 // itself switched off reads no driver, so it is not reported.
+//
+// The cache is deliberately absent: it degrades to the no-op driver when its
+// backend is unavailable, which is a caching question, not a start-up one.
 func (c Config) kvStoreDrivers() []string {
 	var keys []string
-	if c.Cache.Enable && c.Cache.Driver == CacheKV {
-		keys = append(keys, "cache.driver")
-	}
 	if c.RateLimit.Driver == RateLimitKV {
 		keys = append(keys, "rate_limit.driver")
 	}
@@ -446,8 +446,8 @@ func (c Config) kvStoreDrivers() []string {
 
 // isKVURL reports whether value is a key-value connection string.
 //
-// The rules mirror the URL grammar the Valkey and Redis clients accept
-// (redis.ParseURL in github.com/redis/go-redis/v9), because validation that is
+// The rules mirror the URL grammar the Valkey client accepts
+// (valkey.ParseURL in github.com/valkey-io/valkey-go), because validation that is
 // stricter than the client rejects a URL that would have connected:
 //
 //   - redis, rediss (TLS), and unix (a unix socket) are the accepted schemes

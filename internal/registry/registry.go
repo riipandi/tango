@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/samber/do/v2"
 
+	"github.com/riipandi/tango/internal/cache"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/health"
@@ -71,6 +72,27 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler) *do.RootS
 			Checker: checker,
 			Metrics: metrics,
 		}), nil
+	})
+
+	do.Provide(injector, func(i do.Injector) (*datastore.Valkey, error) {
+		c := do.MustInvoke[*config.Config](i)
+		return datastore.NewValkey(ctx, datastore.ValkeyOptions{
+			URL:             c.KVStore.URL,
+			DB:              c.KVStore.DB,
+			ApplicationName: config.AppIdentifier,
+		})
+	})
+
+	do.Provide(injector, func(i do.Injector) (cache.Cache, error) {
+		c := do.MustInvoke[*config.Config](i)
+		// The backend client is resolved only while it is enabled: a run
+		// without it never opens a connection, and the cache factory
+		// answers the missing client with the no-op driver.
+		var kv *datastore.Valkey
+		if c.KVStore.Enable {
+			kv = do.MustInvoke[*datastore.Valkey](i)
+		}
+		return cache.New(*c, kv), nil
 	})
 
 	do.Provide(injector, func(i do.Injector) (*http.Server, error) {

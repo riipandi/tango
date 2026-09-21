@@ -223,33 +223,29 @@ func TestMaskedAndRedactedAreDifferent(t *testing.T) {
 	assert.NotContains(t, cfg.String(), secret[:4], "a log line must not show part of a key")
 }
 
-func TestValidationRejectsAKVDriverWithTheBackendOff(t *testing.T) {
-	// The two settings are separate decisions, so they can disagree. A driver
-	// pointing at a switched-off backend is the one combination that cannot
-	// work, and it must be reported rather than fail at start-up. The
-	// driver is only read while the cache is enabled, so the file turns the
-	// cache on to be held to the driver.
+func TestValidationAcceptsACacheDriverWithTheBackendOff(t *testing.T) {
+	// The cache is the one feature that may point at a switched-off backend:
+	// a cache that cannot reach its server is not a broken system, it is a
+	// run without caching — the driver bypasses to no-op at start-up, so
+	// this is accepted rather than reported.
 	err := resolveFile(t, `"cache": {"driver": "kvstore", "enable": true}`)
-	require.ErrorIs(t, err, config.ErrInvalid)
-	assert.Contains(t, err.Error(), "kvstore.enable")
-	assert.Contains(t, err.Error(), "cache.driver")
+	require.NoError(t, err)
 }
 
 func TestValidationNamesEveryKVDriverThatDisagrees(t *testing.T) {
 	err := resolveFile(t,
-		`"cache": {"driver": "kvstore", "enable": true}, `+
-			`"rate_limit": {"driver": "kvstore"}, `+
+		`"rate_limit": {"driver": "kvstore"}, `+
 			`"session": {"driver": "kvstore"}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
 
-	// One message naming all three beats three messages naming one each.
-	for _, key := range []string{"cache.driver", "rate_limit.driver", "session.driver"} {
+	// One message naming both beats two messages naming one each.
+	for _, key := range []string{"rate_limit.driver", "session.driver"} {
 		assert.Contains(t, err.Error(), key)
 	}
 }
 
 func TestValidationAcceptsAKVDriverWithTheBackendOn(t *testing.T) {
-	err := resolveFile(t, `"cache": {"driver": "kvstore", "enable": true}, "kvstore": {"enable": true}`)
+	err := resolveFile(t, `"rate_limit": {"driver": "kvstore"}, "session": {"driver": "kvstore"}, "kvstore": {"enable": true}`)
 	assert.NoError(t, err)
 }
 
