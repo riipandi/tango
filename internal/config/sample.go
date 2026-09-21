@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,6 +24,18 @@ var secretKeys = []string{
 	"database.url",
 	"kvstore.url",
 	"mailer.smtp_password",
+	"storage.s3.access_key_id",
+	"storage.s3.access_key_secret",
+}
+
+// nullKeys are the keys a generated file writes as null rather than as an empty
+// string, because empty has no meaning for them: an empty prefix is "no prefix",
+// which the key being absent says more directly.
+//
+// The two forms resolve alike — a null in the file leaves the key at its default
+// — so this is about what the file reads like, not about what it does.
+var nullKeys = []string{
+	"storage.s3.path_prefix",
 }
 
 // envKeys are the keys a generated file writes as an env: directive even though
@@ -44,17 +57,20 @@ var secretKeys = []string{
 // them is an error on its own: naming them would report a choice the user made on
 // purpose.
 var envKeys = map[string]string{
-	"app.mode":             "APP_MODE",
-	"kvstore.db":           "VALKEY_DB",
-	"kvstore.enable":       "VALKEY_ENABLE",
-	"kvstore.url":          "VALKEY_URL",
-	"mailer.smtp_host":     "MAILER_SMTP_HOST",
-	"mailer.smtp_port":     "MAILER_SMTP_PORT",
-	"mailer.smtp_secure":   "MAILER_SMTP_SECURE",
-	"mailer.smtp_username": "MAILER_SMTP_USERNAME",
-	"server.base_url":      "PUBLIC_BASE_URL",
-	"server.host":          "SERVER_HOST",
-	"server.port":          "SERVER_PORT",
+	"app.mode":                "APP_MODE",
+	"kvstore.db":              "VALKEY_DB",
+	"kvstore.enable":          "VALKEY_ENABLE",
+	"kvstore.url":             "VALKEY_URL",
+	"mailer.smtp_host":        "MAILER_SMTP_HOST",
+	"mailer.smtp_port":        "MAILER_SMTP_PORT",
+	"mailer.smtp_secure":      "MAILER_SMTP_SECURE",
+	"mailer.smtp_username":    "MAILER_SMTP_USERNAME",
+	"server.base_url":         "PUBLIC_BASE_URL",
+	"server.host":             "SERVER_HOST",
+	"server.port":             "SERVER_PORT",
+	"storage.s3.bucket_name":  "STORAGE_S3_BUCKET_NAME",
+	"storage.s3.endpoint_url": "STORAGE_S3_ENDPOINT_URL",
+	"storage.s3.region":       "STORAGE_S3_REGION",
 }
 
 // Sample renders the config file a fresh checkout starts from: every key with its
@@ -89,7 +105,8 @@ func Sample() ([]byte, error) {
 
 // nest turns flat dotted keys back into the tree the file is written as. A
 // duration is written as a number of seconds, which is the unit the file uses
-// everywhere: "15m0s" reads as a Go expression, and 900 reads as a duration.
+// everywhere: "15m0s" reads as a Go expression, and 900 reads as a duration. A
+// key in nullKeys is written as null.
 func nest(flat map[string]any) map[string]any {
 	out := make(map[string]any)
 	for key, value := range flat {
@@ -102,6 +119,10 @@ func nest(flat map[string]any) map[string]any {
 				node[part] = child
 			}
 			node = child
+		}
+		if slices.Contains(nullKeys, key) {
+			node[parts[len(parts)-1]] = nil
+			continue
 		}
 		node[parts[len(parts)-1]] = renderable(value)
 	}

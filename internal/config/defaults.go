@@ -7,6 +7,14 @@ import "time"
 // health check, and it matches the compose volume (./storage:/srv/storage).
 const DefaultDataDir = "storage"
 
+// DefaultS3Region is the signing region a deployment that never sets one gets.
+//
+// A region cannot be empty: the S3 client refuses to resolve an endpoint without
+// one and every request fails, even against a service that ignores the region
+// such as MinIO. The value is therefore a usable one rather than a placeholder,
+// and a deployment with a real region replaces it.
+const DefaultS3Region = "us-east-1"
+
 // Mode names of the supported runtime modes.
 const (
 	ModeDevelopment = "development"
@@ -86,6 +94,14 @@ func Default() Config {
 		Storage: Storage{
 			Driver:    StorageLocal,
 			LocalPath: DefaultDataDir,
+			S3: S3{
+				// Disabled by default along with the driver, but the values
+				// point at the service compose starts, so switching the driver
+				// is the only step needed.
+				ForcePathStyle:   true,
+				Region:           DefaultS3Region,
+				SignedURLExpires: time.Hour,
+			},
 		},
 	}
 }

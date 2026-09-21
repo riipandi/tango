@@ -171,6 +171,41 @@ type Storage struct {
 	// process: the backup default and the storage health check both read it, so
 	// there is no second path to disagree with it.
 	LocalPath string `koanf:"local_path" json:"local_path"`
+	// S3 holds the object-storage settings, used when Driver is StorageS3.
+	S3 S3 `koanf:"s3" json:"s3"`
+}
+
+// S3 holds the object-storage settings for an S3-compatible service, which may
+// be AWS or anything speaking the same protocol.
+//
+// The section is nested rather than flattened because its keys cover several
+// concerns at once — credentials, the bucket, the endpoint, the addressing
+// style, and the lifetime of a signed link. A common prefix on every one of them
+// would be noise the nesting already carries.
+type S3 struct {
+	// AccessKeyID and AccessKeySecret authenticate every request. Both are
+	// secrets, so Redacted hides them and Sample writes them as directives.
+	AccessKeyID     string `koanf:"access_key_id" json:"access_key_id"`
+	AccessKeySecret string `koanf:"access_key_secret" json:"access_key_secret"`
+	// BucketName is the bucket objects are written to.
+	BucketName string `koanf:"bucket_name" json:"bucket_name"`
+	// EndpointURL is the base URL of a service other than AWS, such as
+	// http://localhost:9100. Empty means AWS, addressed through Region.
+	EndpointURL string `koanf:"endpoint_url" json:"endpoint_url"`
+	// ForcePathStyle addresses a bucket as a path segment (host/bucket/key)
+	// instead of a subdomain (bucket.host/key). MinIO and Silo need it: the
+	// client does not fall back on its own, and bucket.localhost does not
+	// resolve.
+	ForcePathStyle bool `koanf:"force_path_style" json:"force_path_style"`
+	// PathPrefix is the key prefix objects are stored under. Empty means the
+	// bucket root.
+	PathPrefix string `koanf:"path_prefix" json:"path_prefix"`
+	// Region is the signing region. It is required even when EndpointURL is
+	// set, because the client refuses to resolve an endpoint without one, so
+	// the default is a usable value rather than an empty string.
+	Region string `koanf:"region" json:"region"`
+	// SignedURLExpires is how long a presigned link stays valid.
+	SignedURLExpires time.Duration `koanf:"signed_url_expires" json:"signed_url_expires"`
 }
 
 // Supported values for the driver and format fields. A driver is opt-in: the

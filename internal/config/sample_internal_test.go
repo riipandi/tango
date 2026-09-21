@@ -18,6 +18,7 @@ import (
 // cannot see the external test package's helpers.
 const (
 	probeDSN    = "postgresql://user:pass@localhost:5432/tango?sslmode=disable"
+	probeKVURL  = "redis://default:securedb@localhost:6379"
 	probeSecret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 )
 
@@ -67,16 +68,21 @@ func TestDeploymentKeysThatAreNotSecrets(t *testing.T) {
 	// Redacted hides secrets, and hiding a runtime mode would make a report
 	// harder to read for no gain.
 	//
-	// kvstore.url is deliberately in both lists: it is a secret, so it is hidden,
-	// and its variable is VALKEY_URL, so envKeys names it. This asserts the
-	// overlap is exactly that one key, so a second one is a decision rather than
-	// an accident.
+	// A key in both lists is a secret whose variable name is pinned rather than
+	// derived, so a rename of the key cannot silently rename the variable a
+	// deployment sets. This asserts the overlap is exactly that one key, so a
+	// second one is a decision rather than an accident.
+	//
+	// The S3 secrets are not here: their variable names are what EnvName
+	// derives, so listing them would restate a rule rather than pin a name.
 	var both []string
 	for key := range envKeys {
 		if slices.Contains(secretKeys, key) {
 			both = append(both, key)
 		}
 	}
+	slices.Sort(both)
+
 	assert.Equal(t, []string{"kvstore.url"}, both)
 }
 
@@ -207,7 +213,10 @@ func TestEverySampleSecretIsRendered(t *testing.T) {
 	cfg.Auth.PublicKey = probeSecret
 	cfg.Auth.SecretKey = probeSecret
 	cfg.Database.URL = probeDSN
+	cfg.KVStore.URL = probeKVURL
 	cfg.Mailer.SMTPPassword = probeSecret
+	cfg.Storage.S3.AccessKeyID = probeSecret
+	cfg.Storage.S3.AccessKeySecret = probeSecret
 
 	for name, rendered := range map[string]Config{
 		"Redacted": cfg.Redacted(),
@@ -243,8 +252,14 @@ func valueAt(cfg Config, key string) string {
 		return cfg.Auth.SecretKey
 	case "database.url":
 		return cfg.Database.URL
+	case "kvstore.url":
+		return cfg.KVStore.URL
 	case "mailer.smtp_password":
 		return cfg.Mailer.SMTPPassword
+	case "storage.s3.access_key_id":
+		return cfg.Storage.S3.AccessKeyID
+	case "storage.s3.access_key_secret":
+		return cfg.Storage.S3.AccessKeySecret
 	default:
 		return ""
 	}
@@ -270,4 +285,87 @@ func TestValuesCoverEveryKey(t *testing.T) {
 		assert.Contains(t, values, key, "%s must have a value", key)
 	}
 	assert.Len(t, values, len(Keys()))
+}
+
+func TestSampleWritesTheS3KeysAsDirectives(t *testing.T) {
+	// Every S3 key a deployment sets is written as a directive naming its
+	// conventional variable, so the file carries no credential and a deployment
+	// fills the section without editing it. The two secrets are covered by the
+	// secret test; this is the rest of the section.
+	flat := sampleDoc(t)
+
+	assert.Equal(t, "env:STORAGE_S3_BUCKET_NAME", flat["storage.s3.bucket_name"])
+	assert.Equal(t, "env:STORAGE_S3_ENDPOINT_URL", flat["storage.s3.endpoint_url"])
+	assert.Equal(t, "env:STORAGE_S3_REGION", flat["storage.s3.region"])
+}
+
+func TestSampleWritesThePathPrefixAsNull(t *testing.T) {
+	// An empty prefix means "no prefix", which a null says more directly than an
+	// empty string. The two resolve alike, so this is about what the file reads
+	// like: the key is present, so it is discoverable, and its value says there
+	// is nothing to set.
+	raw, err := Sample()
+	require.NoError(t, err)
+
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+
+	storage, ok := doc["storage"].(map[string]any)
+	require.True(t, ok)
+	s3, ok := storage["s3"].(map[string]any)
+	require.True(t, ok)
+
+	value, present := s3["path_prefix"]
+	assert.True(t, present, "the key must be discoverable in the file")
+	assert.Nil(t, value, "an empty prefix is written as null, not as an empty string")
+
+	// The null must not disturb the keys around it.
+	assert.Equal(t, true, s3["force_path_style"])
+	assert.Equal(t, float64(3600), s3["signed_url_expires"])
+}
+
+func TestNullKeysArePartOfTheSchema(t *testing.T) {
+	// A key written as null must be a real config key, or the generated file
+	// would carry an entry the loader drops.
+	for _, key := range nullKeys {
+		assert.Contains(t, Keys(), key)
+	}
+}
+
+func TestSampleS3SectionResolvesToTheDefaults(t *testing.T) {
+	// The strongest statement about the generated S3 section: loading it back
+	// with the variables set yields the built-in defaults.
+	raw, err := Sample()
+	require.NoError(t, err)
+
+	path := filepath.Join(t.TempDir(), "app.config.json")
+	require.NoError(t, os.WriteFile(path, raw, 0o600))
+
+	cfg, err := Load(Options{
+		ConfigFile: path,
+		Environ: []string{
+			"DATABASE_URL=" + probeDSN,
+			"AUTH_SECRET_KEY=" + probeSecret,
+			"APP_SECRET_KEY=" + probeSecret,
+			"AUTH_PRIVATE_KEY=" + probeSecret,
+			"AUTH_PUBLIC_KEY=" + probeSecret,
+			"STORAGE_S3_BUCKET_NAME=devbucket",
+			"STORAGE_S3_ENDPOINT_URL=http://localhost:9100",
+			"STORAGE_S3_REGION=us-east-1",
+			"STORAGE_S3_ACCESS_KEY_ID=s3admin",
+			"STORAGE_S3_ACCESS_KEY_SECRET=s3passw0rd",
+		},
+	})
+	require.NoError(t, err)
+
+	defaults := Default()
+	assert.Equal(t, defaults.Storage.S3.ForcePathStyle, cfg.Storage.S3.ForcePathStyle)
+	assert.Equal(t, defaults.Storage.S3.SignedURLExpires, cfg.Storage.S3.SignedURLExpires)
+	assert.Equal(t, "", cfg.Storage.S3.PathPrefix, "a null leaves the default")
+
+	assert.Equal(t, "devbucket", cfg.Storage.S3.BucketName)
+	assert.Equal(t, "http://localhost:9100", cfg.Storage.S3.EndpointURL)
+	assert.Equal(t, "us-east-1", cfg.Storage.S3.Region)
+	assert.Equal(t, "s3admin", cfg.Storage.S3.AccessKeyID)
+	assert.Equal(t, "s3passw0rd", cfg.Storage.S3.AccessKeySecret)
 }

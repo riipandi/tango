@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -108,6 +109,32 @@ func (c Config) Validate() error {
 	check(isOneOf(c.Storage.Driver, StorageLocal, StorageS3),
 		"storage.driver: %q is not one of %s", c.Storage.Driver, joinValues(StorageLocal, StorageS3))
 	check(c.Storage.LocalPath != "", "storage.local_path: must not be empty")
+
+	// The S3 section is checked only when the driver selects it. A local
+	// deployment never dials an object store, so holding its settings to
+	// anything would report a problem in a part of the file that is switched
+	// off, and a user keeping credentials there for a later switch could not
+	// run at all.
+	if c.Storage.Driver == StorageS3 {
+		s3 := c.Storage.S3
+		check(s3.BucketName != "", "storage.s3.bucket_name: %s",
+			c.unsetNote("storage.s3.bucket_name", "must not be empty when storage.driver is s3"))
+		check(s3.Region != "", "storage.s3.region: %s",
+			c.unsetNote("storage.s3.region", "must not be empty when storage.driver is s3"))
+		check(s3.AccessKeyID != "", "storage.s3.access_key_id: %s",
+			c.unsetNote("storage.s3.access_key_id", "must not be empty when storage.driver is s3"))
+		check(s3.AccessKeySecret != "", "storage.s3.access_key_secret: %s",
+			c.unsetNote("storage.s3.access_key_secret", "must not be empty when storage.driver is s3"))
+		check(s3.EndpointURL == "" || isHTTPURL(s3.EndpointURL),
+			"storage.s3.endpoint_url: %q must be an absolute http or https URL", s3.EndpointURL)
+		// The protocol caps a signed link at seven days, and the client takes a
+		// zero as "use my own fifteen-minute default" rather than as a
+		// lifetime, so both ends are held here instead of failing at signing
+		// time.
+		check(s3.SignedURLExpires > 0 && s3.SignedURLExpires <= maxS3SignedURLExpires,
+			"storage.s3.signed_url_expires: %s must be between 1s and %s",
+			s3.SignedURLExpires, maxS3SignedURLExpires)
+	}
 
 	// The key pair and the HMAC secret are alternatives: a token is signed with
 	// one or the other, so at least one must be present.
@@ -270,6 +297,12 @@ func isEmail(value string) bool {
 	return address.Address == value && strings.Contains(value, "@")
 }
 
+// maxS3SignedURLExpires is the longest lifetime a presigned URL may carry. The
+// S3 protocol caps a signed link at seven days; a client that asked for longer
+// would be refused by the server at signing time, so the limit is enforced where
+// the value is read.
+const maxS3SignedURLExpires = 7 * 24 * time.Hour
+
 // A caller validates a Config it did not write, and renders one safely when it
 // prints it. Both act on a resolved Config, so both live here.
 
@@ -325,6 +358,8 @@ func (c Config) withSecrets(render secretRenderer) Config {
 	out.Database.URL = RedactDSN(c.Database.URL)
 	out.KVStore.URL = RedactKVURL(c.KVStore.URL)
 	out.Mailer.SMTPPassword = render(c.Mailer.SMTPPassword)
+	out.Storage.S3.AccessKeyID = render(c.Storage.S3.AccessKeyID)
+	out.Storage.S3.AccessKeySecret = render(c.Storage.S3.AccessKeySecret)
 	out.origin = nil
 	out.unresolved = nil
 	return out

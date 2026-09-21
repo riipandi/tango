@@ -106,6 +106,32 @@ The variable names the generated file uses are the conventional ones (`DATABASE_
 A deployment variable is written the same way: `app.mode` asks for `APP_MODE`, `server.base_url` for
 `PUBLIC_BASE_URL`, and each `mailer.smtp_*` key for the matching `MAILER_SMTP_*`.
 
+The `storage.s3` section configures object storage. It is used when `storage.driver` is `s3`, and
+only then is it validated, so a local deployment can keep credentials in the file without being
+refused:
+
+```json
+"storage": {
+  "driver": "local",
+  "local_path": "storage",
+  "s3": {
+    "access_key_id": "env:STORAGE_S3_ACCESS_KEY_ID",
+    "access_key_secret": "env:STORAGE_S3_ACCESS_KEY_SECRET",
+    "bucket_name": "env:STORAGE_S3_BUCKET_NAME",
+    "endpoint_url": "env:STORAGE_S3_ENDPOINT_URL",
+    "force_path_style": true,
+    "path_prefix": null,
+    "region": "env:STORAGE_S3_REGION",
+    "signed_url_expires": 3600
+  }
+}
+```
+
+An empty `endpoint_url` means AWS, reached through `region` alone. For MinIO or Silo, set
+`endpoint_url` and leave `force_path_style` true: those services need a bucket addressed as a path
+segment, and the client does not fall back on its own. `region` has a usable default because the
+client refuses to resolve an endpoint without one, even when the service ignores it.
+
 The `kvstore` section configures the optional Valkey (or Redis compatible) backend. It is off by
 default, so a fresh checkout runs on Postgres and in-process memory alone:
 
