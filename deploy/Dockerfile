@@ -99,7 +99,8 @@ FROM base AS pruner
 COPY --from=builder /srv/build/release /srv
 
 # Create necessary data directories and set permissions
-RUN mkdir -p /srv/storage/{backup,certs,data,keys,logs,uploads} && chmod -R 0775 /srv/storage
+RUN mkdir -p /srv/storage/{backup,certs,data,keys,logs,uploads} && \
+    chmod -R 0775 /srv/storage && /srv/tango config:generate
 
 # ------------------------------------------------------------------------------
 # Production image, copy build output files and run the application.
@@ -119,17 +120,17 @@ COPY --from=pruner --chown=nonroot:nonroot /srv /srv
 # Define the host and port to listen on.
 # Prevent load certs from system (/etc/ssl/certs/ca-certificates.crt)
 ENV PATH="/usr/bin:/usr/local/bin:/nodejs/bin:$PATH"
-ARG HOST=0.0.0.0 PORT=3000 TZ=UTC
-ENV HOST=$HOST PORT=$PORT TZ=$TZ
-ENV SSL_CERT_FILE= SSL_CERT_DIR=
+ARG SERVER_HOST=0.0.0.0 SERVER_PORT=3000 TZ=UTC
+ENV SERVER_HOST=$SERVER_HOST SERVER_PORT=$SERVER_PORT
+ENV TZ=$TZ SSL_CERT_FILE= SSL_CERT_DIR=
 ENV TINI_SUBREAPER=true
 
 WORKDIR /srv
 USER nonroot:nonroot
-EXPOSE $PORT/tcp
+EXPOSE $SERVER_PORT/tcp
 
 # Define volumes for persistent storage and configuration.
-VOLUME /srv/storage/backup /srv/storage/certs /srv/storage/data /srv/storage/logs /srv/storage/uploads
+VOLUME /srv/storage /srv/app.config.json
 
 # Healthcheck to monitor application status
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD /srv/tango hc

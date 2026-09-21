@@ -39,9 +39,10 @@ var secretKeys = []string{
 // is the case where the two disagree, being VALKEY_URL rather than KVSTORE_URL.
 //
 // Validate reports a key here only when the variable leaves it unusable. An unset
-// APP_MODE falls back to development and an empty base_url is a valid value, so
-// neither is an error on its own: naming them would report a choice the user made
-// on purpose.
+// APP_MODE falls back to development, an empty base_url is a valid value, and an
+// unset HOST or PORT falls back to the listen address in the defaults, so none of
+// them is an error on its own: naming them would report a choice the user made on
+// purpose.
 var envKeys = map[string]string{
 	"app.mode":             "APP_MODE",
 	"kvstore.db":           "VALKEY_DB",
@@ -52,6 +53,8 @@ var envKeys = map[string]string{
 	"mailer.smtp_secure":   "MAILER_SMTP_SECURE",
 	"mailer.smtp_username": "MAILER_SMTP_USERNAME",
 	"server.base_url":      "PUBLIC_BASE_URL",
+	"server.host":          "SERVER_HOST",
+	"server.port":          "SERVER_PORT",
 }
 
 // Sample renders the config file a fresh checkout starts from: every key with its

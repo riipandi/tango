@@ -183,7 +183,7 @@ func TestConfigGenerateOverwriteReplaces(t *testing.T) {
 
 	written, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Contains(t, string(written), `"port": 3080`)
+	assert.Contains(t, string(written), `"port": "env:SERVER_PORT"`)
 	assert.NotContains(t, string(written), "replace me")
 }
 
