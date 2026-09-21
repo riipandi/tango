@@ -139,8 +139,12 @@ func New(cfg config.Config, opts ...Option) (*Logger, error) {
 // dependency is wired and call it directly:
 //
 //	sl := log.Slog()
-//	sl.Info("served", "status", 200)
+//	sl.InfoContext(ctx, "served", "status", 200)
 //	sl.With("request_id", id).Info("handled")
+//
+// Prefer the *Context methods wherever a context is in hand: the OpenTelemetry
+// sink correlates the record with the span the context carries, and a plain
+// Info writes a record with no trace ID.
 //
 // Slog returns the same *slog.Logger every time, so holding it in a struct field
 // is what a component does with it. Writing log.Slog().Info(...) at a call site

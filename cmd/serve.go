@@ -56,7 +56,7 @@ file decides.`,
 			return err
 		}
 
-		log.Slog().Info("starting",
+		log.Slog().InfoContext(ctx, "starting",
 			"mode", cfg.App.Mode,
 			"transport", cfg.Log.Transport,
 			"protocol", cfg.OTEL.Protocol,

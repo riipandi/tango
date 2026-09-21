@@ -74,10 +74,10 @@ func runLoggerSmoke(ctx context.Context, cmd *cli.Command) error {
 	// call, which is what a caller does when it emits more than one line.
 	sl := log.Slog()
 	started := time.Now()
-	sl.Debug("logger smoke", "marker", smokeMarker, "probe", "debug")
-	sl.Info("logger smoke", "marker", smokeMarker, "probe", "info")
-	sl.Warn("logger smoke", "marker", smokeMarker, "probe", "warn")
-	sl.Error("logger smoke", "marker", smokeMarker, "probe", "error")
+	sl.DebugContext(ctx, "logger smoke", "marker", smokeMarker, "probe", "debug")
+	sl.InfoContext(ctx, "logger smoke", "marker", smokeMarker, "probe", "info")
+	sl.WarnContext(ctx, "logger smoke", "marker", smokeMarker, "probe", "warn")
+	sl.ErrorContext(ctx, "logger smoke", "marker", smokeMarker, "probe", "error")
 
 	// The queue is flushed here rather than left to the root After, so a
 	// transport that failed to ship is reported by this command and not as a
