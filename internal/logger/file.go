@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"go.loglayer.dev/transports/lumberjack/v3"
+	lltransport "go.loglayer.dev/v3/transport"
 
 	"github.com/riipandi/tango/internal/config"
 )
@@ -26,17 +27,18 @@ type fileSink struct {
 // Rotation settings are passed through as configured; Validate has already
 // refused the combination that never deletes a rotated file.
 func newFileSink(cfg config.Config) (*fileSink, error) {
-	transport, err := lumberjack.Build(lumberjack.Config{
+	rotator, err := lumberjack.Build(lumberjack.Config{
 		Filename:   LogFilePath(cfg),
 		MaxSize:    cfg.Log.File.MaxSize,
 		MaxBackups: cfg.Log.File.MaxBackups,
 		MaxAge:     cfg.Log.File.MaxAge,
 		Compress:   cfg.Log.File.Compress,
+		BaseConfig: lltransport.BaseConfig{ID: "file"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("logger: file sink: %w", err)
 	}
-	return &fileSink{transport: transport}, nil
+	return &fileSink{transport: rotator}, nil
 }
 
 // LogFilePath is the active log file, under the one data directory of the

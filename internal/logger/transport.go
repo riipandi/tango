@@ -6,6 +6,7 @@ import (
 	"go.loglayer.dev/transports/pretty/v3"
 	"go.loglayer.dev/transports/structured/v3"
 	"go.loglayer.dev/v3"
+	"go.loglayer.dev/v3/transport"
 
 	"github.com/riipandi/tango/internal/config"
 )
@@ -19,10 +20,14 @@ import (
 // would put escape codes in the file.
 func consoleTransport(cfg config.Config, w io.Writer) loglayer.Transport {
 	if cfg.Log.Format == config.LogStructured {
-		return structured.New(structured.Config{Writer: w})
+		return structured.New(structured.Config{
+			Writer:     w,
+			BaseConfig: transport.BaseConfig{ID: "console"},
+		})
 	}
 	return pretty.New(pretty.Config{
-		Writer: w,
+		Writer:     w,
+		BaseConfig: transport.BaseConfig{ID: "console"},
 		// The renderer decides colour per destination, like pkg/printext: a
 		// redirected run and a test buffer must stay plain text.
 		NoColor: !isTerminal(w),

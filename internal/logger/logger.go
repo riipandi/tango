@@ -116,6 +116,10 @@ func New(cfg config.Config, opts ...Option) (*Logger, error) {
 	core, err := loglayer.Build(loglayer.Config{
 		Transports: transports,
 		Level:      levelFor(cfg.Log.Level),
+		// The recommended serializer: a wrapped or joined error becomes a
+		// `causes` array, so the chain an errors.Join built reaches the entry
+		// instead of only its top message.
+		ErrorSerializer: loglayer.UnwrappingErrorSerializer,
 		// Persistent fields and per-call metadata merge at the root rather than
 		// nesting under one key, so an entry reads the way slog's own JSON
 		// handler writes it. slog is the frontend every caller uses, so its
