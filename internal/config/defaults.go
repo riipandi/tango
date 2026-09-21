@@ -1,10 +1,26 @@
 package config
 
-import (
-	"fmt"
-	"time"
+import "time"
 
-	"github.com/jackc/pgx/v5"
+// DefaultDataDir is where the application keeps local files, relative to the
+// working directory. It is the default of App.DataDir and of the storage health
+// check, and it matches the compose volume (./storage:/srv/storage).
+const DefaultDataDir = "storage"
+
+// Env names of the supported runtime environments.
+const (
+	EnvDevelopment = "development"
+	EnvStaging     = "staging"
+	EnvProduction  = "production"
+	EnvTest        = "test"
+)
+
+// Log levels accepted by Log.Level.
+const (
+	LogDebug = "debug"
+	LogInfo  = "info"
+	LogWarn  = "warn"
+	LogError = "error"
 )
 
 // Default returns the built-in configuration. These values are the lowest
@@ -62,39 +78,9 @@ func Default() Config {
 	}
 }
 
-// Env names of the supported runtime environments.
-const (
-	EnvDevelopment = "development"
-	EnvStaging     = "staging"
-	EnvProduction  = "production"
-	EnvTest        = "test"
-)
-
-// Log levels accepted by Log.Level.
-const (
-	LogDebug = "debug"
-	LogInfo  = "info"
-	LogWarn  = "warn"
-	LogError = "error"
-)
-
 // DefaultsMap returns the built-in defaults as a flat map keyed by config path.
 // A secret has an empty default, so a fresh checkout carries no placeholder
 // credential: the layer that supplies it is the only source of that key.
 func DefaultsMap() map[string]any {
 	return flatten(Default())
-}
-
-// RedactDSN reduces a Postgres connection string to host:port/database, the form
-// the CLI prints for a database target. An unparsable string is replaced
-// wholesale, because it may still carry a password.
-func RedactDSN(dsn string) string {
-	if dsn == "" {
-		return ""
-	}
-	parsed, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		return redacted
-	}
-	return fmt.Sprintf("%s:%d/%s", parsed.Host, parsed.Port, parsed.Database)
 }

@@ -143,6 +143,40 @@ func isHTTPURL(value string) bool {
 	return parsed.Host != ""
 }
 
+// A caller validates a Config it did not write, and renders one safely when it
+// prints it. Both act on a resolved Config, so both live here.
+
+// redacted is the placeholder a Redacted Config prints instead of a secret.
+const redacted = "[redacted]"
+
+// Redacted returns a copy with every secret replaced by a placeholder, safe to
+// print or log. The connection string is reduced to its host and database, so a
+// report can name the target without leaking the password.
+func (c Config) Redacted() Config {
+	out := c
+	out.App.SecretKey = redacted
+	out.Auth.PrivateKey = redacted
+	out.Auth.PublicKey = redacted
+	out.Auth.SecretKey = redacted
+	out.Database.URL = RedactDSN(c.Database.URL)
+	out.origin = nil
+	return out
+}
+
+// RedactDSN reduces a Postgres connection string to host:port/database, the form
+// the CLI prints for a database target. An unparsable string is replaced
+// wholesale, because it may still carry a password.
+func RedactDSN(dsn string) string {
+	if dsn == "" {
+		return ""
+	}
+	parsed, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return redacted
+	}
+	return fmt.Sprintf("%s:%d/%s", parsed.Host, parsed.Port, parsed.Database)
+}
+
 // String renders the configuration with every secret redacted, so an accidental
 // %v of a Config cannot leak a credential.
 func (c Config) String() string {
