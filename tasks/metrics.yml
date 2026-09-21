@@ -4,17 +4,40 @@ version: "3"
 
 tasks:
   # ----------------------------------------------------------------------------
-  # Observability stack
-  #
-  # The services live in docker/compose.yaml, which includes compose-metrics.yaml.
-  # The tasks here are the shortcuts a developer needs while wiring the
-  # application to the stack: start it, check it, and read back what the
-  # application shipped.
+  # Observability stack — the services live in docker/compose.yaml, which
+  # includes compose-metrics.yaml. These are the shortcuts for wiring the
+  # application to the stack: start it, check it, read back what it shipped.
   # ----------------------------------------------------------------------------
 
   metrics:up:
     desc: Start the observability stack (VictoriaMetrics, VictoriaLogs, VictoriaTraces, Perses)
-    cmd: docker compose -f docker/compose.yaml up --detach --remove-orphans victoria-metrics victoria-logs victoria-traces perses
+    cmds:
+      - docker compose -f docker/compose.yaml up --detach --remove-orphans victoria-metrics victoria-logs victoria-traces perses
+      # The two distroless services cannot carry a healthcheck, so wait from the
+      # host instead.
+      - task: metrics:health
+
+  metrics:health:
+    desc: Probe every stack endpoint from the host and fail when one does not come up
+    # Perses answers on /api/v1/health, the rest on /health; each target carries
+    # its path as PORT/path. Plain shell, not a Task `for`: a Task variable
+    # holding a space would be quoted into one word. Each target is retried,
+    # because `metrics:up` calls this while the containers are still starting.
+    vars:
+      TIMEOUT: '{{.TIMEOUT | default "60"}}'
+    cmd: |
+      for target in 8428/health 9428/health 10428/health 3380/api/v1/health; do
+        url="http://localhost:${target%%/*}/${target#*/}"
+        deadline=$((SECONDS + {{.TIMEOUT}}))
+        until curl --silent --fail --max-time 5 "$url" >/dev/null 2>&1; do
+          if [ "$SECONDS" -ge "$deadline" ]; then
+            echo "down $url (no answer within {{.TIMEOUT}}s)"
+            exit 1
+          fi
+          sleep 1
+        done
+        echo "up   $url"
+      done
 
   metrics:endpoints:
     desc: Print the stack endpoints and the LOG_* variables that reach them
@@ -34,10 +57,8 @@ tasks:
     vars:
       QUERY: '{{.CLI_ARGS | default "*"}}'
     cmd: |
-      # The query is written unquoted in the command on purpose: Task substitutes
-      # a variable into the shell line and quotes it, and wrapping it again here
-      # would nest the quotes and lose them. A LogsQL query contains spaces and
-      # quotes, so `query={{.QUERY}}` is what keeps `a:"b" c:"d"` one value.
+      # Unquoted on purpose: Task already quotes a substituted variable, and
+      # quoting again would lose the spaces a LogsQL query contains.
       curl -sS --get --data-urlencode query={{.QUERY}} --data-urlencode 'limit=20' \
       http://localhost:9428/select/logsql/query
 

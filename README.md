@@ -463,6 +463,11 @@ task metrics:query -- 'marker:"tango-logger-smoke"'
 VictoriaMetrics is scraping. Perses is provisioned with the three datasources, so
 <http://localhost:3380> reads the stack without any setup.
 
+VictoriaLogs and VictoriaTraces run distroless images, which carry no shell and no HTTP client, so
+they cannot carry a container healthcheck — an exec probe fails with `exec: "nc": executable file
+not found` and marks the service unhealthy. `task metrics:up` therefore ends with
+`task metrics:health`, which probes every endpoint from the host and waits for each to answer.
+
 Changing `APP_SECRET_KEY` makes data encrypted with the previous key unreadable, and replacing a signing
 key invalidates the tokens signed with it. `key:rotate` (not implemented yet) is intended to re-encrypt
 stored data during rotation.
@@ -486,8 +491,8 @@ tasks/
   docker.yml       docker:build, docker:run, docker:shell, docker:push, docker:prune,
                    docker:images, docker:check
   lint.yml         format, check, lint, typecheck
-  metrics.yml      metrics:up, metrics:down, metrics:endpoints, metrics:query,
-                   metrics:targets, metrics:smoke
+  metrics.yml      metrics:up, metrics:down, metrics:health, metrics:endpoints,
+                   metrics:query, metrics:targets, metrics:smoke
   rpc.yml          rpc:generate, rpc:lint, rpc:breaking, rpc:stamp, rpc:stale
   test.yml         test, test:go, test:go:debug, test:ui, test:sdk, coverage
 ```
@@ -513,6 +518,7 @@ depend on a task in another by its plain name.
 | `task rpc:generate` | Generate Go and TypeScript from the proto contracts |
 | `task rpc:stale`    | Fail when generated code is out of date             |
 | `task metrics:up`   | Start the observability stack (VictoriaMetrics/Logs/Traces, Perses) |
+| `task metrics:health`| Probe every stack endpoint and wait for each to answer |
 | `task metrics:query`| Run a LogsQL query against the local log store      |
 | `task metrics:smoke`| Emit one line through every configured log transport |
 | `task compose:up`   | Start the docker compose services                   |

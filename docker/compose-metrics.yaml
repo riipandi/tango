@@ -5,6 +5,12 @@ x-common: &common
   extra_hosts: ['host.docker.internal:host-gateway']
   restart: unless-stopped
 
+# VictoriaLogs v1.52+ and VictoriaTraces v0.11+ are distroless: no shell, no HTTP
+# client, so an exec healthcheck cannot run and every `depends_on:
+# service_healthy` behind it never starts. They carry none, their dependents wait
+# for `service_started`, and `task metrics:health` probes them from the host.
+# Restore the healthchecks once `-health` ships (VictoriaLogs#1741).
+
 services:
   perses:
     <<: *common
@@ -14,8 +20,8 @@ services:
     ports: ['3380:3380']
     volumes:
       - '../.storage/perses_data:/perses:rw'
-      # Provisioned resources are read from this folder on every start, so the
-      # datasources a developer needs are there without clicking through the UI.
+      # Read on every start, so the datasources a developer needs are there
+      # without clicking through the UI.
       - './perses:/etc/perses/provisioning:ro'
     configs: [{ source: perses_config, target: /etc/perses/config.yaml }]
     command: '-web.listen-address=0.0.0.0:3380 -log.level=error --config=/etc/perses/config.yaml'
@@ -29,8 +35,8 @@ services:
       retries: 3
     depends_on:
       victoria-metrics: { condition: service_healthy }
-      victoria-logs: { condition: service_healthy }
-      victoria-traces: { condition: service_healthy }
+      victoria-logs: { condition: service_started }
+      victoria-traces: { condition: service_started }
 
   victoria-metrics:
     <<: *common
@@ -57,9 +63,8 @@ services:
     hostname: victoria-logs
     ports: ['9428:9428']
     volumes: ['../.storage/victoria_logs_data:/victoria_logs_data']
-    # The OTLP endpoint is on by default, so the application can ship straight
-    # here with no collector in between. Retention is kept short because this is
-    # a development store that shares a disk with the database.
+    # OTLP ingest is on by default, so the application ships straight here with
+    # no collector. Retention is short: a development store on a shared disk.
     command: >-
       -storageDataPath=/victoria_logs_data
       -retentionPeriod=14d
@@ -67,11 +72,6 @@ services:
     security_opt: ['no-new-privileges:true']
     shm_size: 128m # set shared memory limit
     mem_limit: 256m # set memory limit
-    healthcheck:
-      test: ['CMD', 'nc', '-vz', '127.0.0.1', '9428']
-      interval: 3s
-      timeout: 5s
-      retries: 3
 
   victoria-traces:
     <<: *common
@@ -83,11 +83,6 @@ services:
     security_opt: ['no-new-privileges:true']
     shm_size: 128m # set shared memory limit
     mem_limit: 256m # set memory limit
-    healthcheck:
-      test: ['CMD', 'nc', '-vz', '127.0.0.1', '10428']
-      interval: 3s
-      timeout: 5s
-      retries: 3
 
   postgres-exporter:
     <<: *common
@@ -185,9 +180,8 @@ configs:
         - job_name: redis-exporter
           static_configs:
             - targets: ['redis-exporter:9121']
-        # The Go server publishes its own metrics on the port it serves; the
-        # target is the host running `task dev`, reached through the extra_hosts
-        # entry every service in this stack carries.
+        # The Go server publishes metrics on the port it serves; the target is
+        # the host running `task dev`, reached through the extra_hosts entry.
         - job_name: tango
           static_configs:
             - targets: ['host.docker.internal:3080']
