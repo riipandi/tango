@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/rodaine/table"
 	"github.com/urfave/cli/v3"
 
 	"github.com/riipandi/tango/internal/config"
@@ -257,4 +261,138 @@ func printConfigValid(p printext.Palette, path string, cfg config.Config, elapse
 	return printStatusLine(p, "%s %s",
 		p.Green(fmt.Sprintf("%d %s", len(keys), printext.Plural(len(keys), "key"))),
 		p.Dim("valid in "+printext.Duration(elapsed)))
+}
+
+// # config:print
+
+var configPrintCmd = &cli.Command{
+	Name:  "config:print",
+	Usage: "Print the resolved configuration",
+	Description: `Prints every configuration key with the value it actually resolved to: the
+built-in default, the config file, or a command-line flag, whichever won.
+
+A secret is never printed. Every key in the secret set is rendered as
+[redacted], and the database connection string is reduced to
+host:port/database, so the output is safe to paste into a bug report.
+
+--source adds the layer each value came from (default, config-file, or flag),
+which is how a value that is not what you expected is traced to its source.
+
+Nothing is written, so it is safe to run in CI.`,
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "source",
+			Usage: "Show the layer each value came from",
+		},
+	},
+	Action: runConfigPrint,
+}
+
+// runConfigPrint prints the resolved configuration.
+//
+// It resolves without validating, unlike config:validate. A configuration that
+// is incomplete is exactly what a user is trying to inspect, so a missing DSN
+// must not stop the report: the empty value is the answer.
+func runConfigPrint(ctx context.Context, cmd *cli.Command) error {
+	p := printext.NewPalette(cmd.Root().Writer)
+
+	cfg, err := configFrom(ctx)
+	if err != nil {
+		return err
+	}
+	return printConfigTable(p, cfg, cmd.Bool("source"))
+}
+
+// printConfigTable renders the resolved configuration as a table of key and
+// value, in key order so two runs are diffable.
+//
+// The value is read from a redacted copy, so a secret cannot reach the table
+// even by mistake: the key list and the redaction list are the same list, which
+// a test asserts.
+func printConfigTable(p printext.Palette, cfg config.Config, showSource bool) error {
+	values := config.Values(cfg.Redacted())
+	headers := []any{"KEY", "VALUE"}
+	if showSource {
+		headers = append(headers, "SOURCE")
+	}
+
+	tbl := table.New(headers...).
+		WithWriter(trimmedWriter{p.Writer()}).
+		WithHeaderFormatter(func(format string, vals ...any) string {
+			// The padding is trimmed before the header is painted, because a
+			// colour reset is invisible but not zero-width: trimming after it
+			// would leave the padding inside the escape, where it survives into
+			// a redirected file.
+			line := strings.TrimRight(fmt.Sprintf(format, vals...), " \n")
+			return p.Dim(line) + "\n"
+		}).
+		WithFirstColumnFormatter(func(format string, vals ...any) string {
+			return p.Dim(fmt.Sprintf(format, vals...))
+		})
+
+	for _, key := range config.Keys() {
+		row := []any{key, renderValue(values[key])}
+		if showSource {
+			row = append(row, sourceLabel(cfg, key))
+		}
+		tbl.AddRow(row...)
+	}
+	tbl.Print()
+	return nil
+}
+
+// trimmedWriter drops the spaces a table pads a line with.
+//
+// Every cell is padded to its column width, including the last one, so each line
+// ends in whitespace. It is invisible on a terminal but it lands in a redirected
+// file and in a diff, so it is removed here rather than left to the reader.
+type trimmedWriter struct {
+	w io.Writer
+}
+
+func (t trimmedWriter) Write(p []byte) (int, error) {
+	if _, err := t.w.Write(trimTrailingSpaces(p)); err != nil {
+		return 0, err
+	}
+	// Report the bytes the caller handed over, not the bytes written: a short
+	// write would make fmt report an error for output that arrived intact.
+	return len(p), nil
+}
+
+// trimTrailingSpaces trims every line of p, keeping the line endings.
+func trimTrailingSpaces(p []byte) []byte {
+	lines := bytes.Split(p, []byte("\n"))
+	for i, line := range lines {
+		lines[i] = []byte(trimLineEnd(string(line)))
+	}
+	return bytes.Join(lines, []byte("\n"))
+}
+
+// trimLineEnd removes the padding at the end of a line.
+//
+// A row ends in plain spaces, which this removes. A coloured header ends in the
+// colour reset instead, so the formatter trims it before painting: an escape code
+// is invisible but not zero-width, and trimming after the reset would leave the
+// padding inside the escape.
+func trimLineEnd(line string) string {
+	return strings.TrimRight(line, " ")
+}
+
+// sourceLabel names the layer a value came from. An empty origin is a key no
+// source set, which is what an unresolved directive leaves behind.
+func sourceLabel(cfg config.Config, key string) string {
+	if origin := cfg.Origin(key); origin != "" {
+		return origin
+	}
+	return "-"
+}
+
+// renderValue renders a resolved value for the table. A nil is written as
+// "null" rather than "<nil>", and an empty string stays visibly empty so a
+// reader can tell it apart from a missing row.
+func renderValue(value any) string {
+	if value == nil {
+		return "null"
+	}
+	return fmt.Sprintf("%v", value)
 }

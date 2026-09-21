@@ -30,6 +30,7 @@ var rootCmd = &cli.Command{
 		healthCheckCmd,
 		configGenerateCmd,
 		configValidateCmd,
+		configPrintCmd,
 	},
 	Flags: []cli.Flag{
 		&cli.StringFlag{

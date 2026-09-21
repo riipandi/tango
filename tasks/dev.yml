@@ -9,8 +9,8 @@ tasks:
     cmd: pnpm exec vite dev {{.CLI_ARGS}}
 
   run:
-    desc: Run the Go backend directly (debug build)
-    cmd: go run -tags debug ./cmd serve --env-file=.env.local {{.CLI_ARGS}}
+    desc: Run the CLI directly (debug build)
+    cmd: go run -tags debug ./cmd --env-file=.env.local {{.CLI_ARGS}}
 
   email:dev:
     desc: Run React Email dev UI (:3030)

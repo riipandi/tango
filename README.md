@@ -53,7 +53,28 @@ go run -tags debug ./cmd config:generate --output=/tmp/app.config.json
 # Check the file and the variables it references. Nothing is written.
 task config:validate
 go run -tags debug ./cmd config:validate --config-file=/tmp/app.config.json
+
+# Print what actually resolved, with every secret redacted.
+task config:print
+go run -tags debug ./cmd config:print --source
 ```
+
+`config:print` shows the value each key really resolved to — the default, the file, or a flag — so
+it answers "what is this process using" rather than "what does the file say". A secret is never
+printed: every secret key renders as `[redacted]` and the connection string is reduced to
+`host:port/database`, so the output is safe to paste into a bug report. `--source` adds the layer
+each value came from.
+
+```
+KEY                          VALUE                      SOURCE
+app.mode                     development                default
+app.secret_key               [redacted]                 config-file
+database.url                 localhost:5432/tango       config-file
+mailer.smtp_port             587                        default
+```
+
+Unlike `config:validate`, it does not validate first: a configuration you are inspecting is often one
+that does not pass yet, so an unset key prints as empty instead of stopping the report.
 
 The environment is not a layer. A variable reaches a config key only where the file references it,
 with `env:NAME` as a whole value or `${NAME}` inline:
@@ -386,7 +407,7 @@ depend on a task in another by its plain name.
 | Command             | Description                                         |
 | ------------------- | --------------------------------------------------- |
 | `task dev`          | Vite dev server (:3000) + Go API server (:3080)     |
-| `task run`          | Run the Go server directly (debug build)            |
+| `task run`          | Run the CLI directly (debug build)                  |
 | `task build`        | Build the frontend and the Go binary (single file)  |
 | `task start`        | Run the production binary                           |
 | `task test`         | Run the frontend and backend tests                  |

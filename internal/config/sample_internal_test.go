@@ -213,3 +213,25 @@ func valueAt(cfg Config, key string) string {
 		return ""
 	}
 }
+
+func TestValuesRenderDurationsAsSeconds(t *testing.T) {
+	// A printed value must be comparable against the config file, which writes
+	// durations as seconds. Anything else would make the report read differently
+	// from the file it describes.
+	cfg := Default()
+	values := Values(cfg)
+
+	assert.Equal(t, int64(900), values["auth.access_ttl"])
+	assert.Equal(t, int64(3600), values["database.max_conn_lifetime"])
+	assert.Equal(t, "storage", values["storage.local_path"])
+	assert.Equal(t, true, values["mailer.smtp_secure"] != nil)
+}
+
+func TestValuesCoverEveryKey(t *testing.T) {
+	values := Values(Default())
+
+	for _, key := range Keys() {
+		assert.Contains(t, values, key, "%s must have a value", key)
+	}
+	assert.Len(t, values, len(Keys()))
+}

@@ -7,13 +7,30 @@ import (
 	"strings"
 )
 
-// Keys returns every config key, sorted. It is the list a `config:dump` prints
+// Keys returns every config key, sorted. It is the list `config:print` renders
 // and the list a test asserts against, so it is derived from the struct rather
 // than written out by hand.
 func Keys() []string {
 	known := DefaultsMap()
 	keys := slices.Sorted(maps.Keys(known))
 	return keys
+}
+
+// Values returns a resolved Config as a flat map keyed by config path, the form
+// `config:print` renders.
+//
+// A duration is written as a number of seconds, the unit the config file uses,
+// so a printed value can be compared against the file directly. Everything else
+// keeps its Go value, so a caller can tell a bool from a string.
+//
+// The result is a copy. A caller that must not print a secret passes
+// cfg.Redacted().
+func Values(cfg Config) map[string]any {
+	out := flatten(cfg)
+	for key, value := range out {
+		out[key] = renderable(value)
+	}
+	return out
 }
 
 // filterKnown drops every key that is not part of Config. An environment

@@ -11,6 +11,10 @@ tasks:
     desc: Check app.config.json and the variables it references
     cmd: go run -tags debug ./cmd config:validate {{.CLI_ARGS}}
 
+  config:print:
+    desc: Print the resolved configuration (secrets redacted; add -- --source)
+    cmd: go run -tags debug ./cmd config:print --env-file=.env.local {{.CLI_ARGS}}
+
   db:migrate:
     desc: Run database migrations
     cmd: go run -tags debug ./cmd migrate:up --env-file=.env.local {{.CLI_ARGS}}

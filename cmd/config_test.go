@@ -14,6 +14,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/pkg/envfile"
 )
 
 // testRoot builds the root command a test runs a subcommand through.
@@ -73,7 +74,7 @@ func configFor(t *testing.T, dataDir string) {
 // testSecret is a 64-character hex string, the shape of AUTH_SECRET_KEY.
 const testSecret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
-// # config:generate and config:validate
+// # config:generate, config:validate, and config:print
 
 // runConfigGenerate executes config:generate with args and returns stdout.
 func runConfigGenerateCmd(t *testing.T, args ...string) (string, error) {
@@ -92,6 +93,16 @@ func runConfigValidateCmd(t *testing.T, args ...string) (string, error) {
 	var out bytes.Buffer
 	root := testRoot(&out, "", configValidateCmd)
 	err := root.Run(context.Background(), append([]string{"tango", configValidateCmd.Name}, args...))
+	return out.String(), err
+}
+
+// runConfigPrint executes config:print with args and returns stdout.
+func runConfigPrintCmd(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+
+	var out bytes.Buffer
+	root := testRoot(&out, "", configPrintCmd)
+	err := root.Run(context.Background(), append([]string{"tango", configPrintCmd.Name}, args...))
 	return out.String(), err
 }
 
@@ -258,4 +269,125 @@ func writeTestConfigFile(t *testing.T, body string) string {
 	path := filepath.Join(t.TempDir(), "app.config.json")
 	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
 	return path
+}
+
+// # config:print
+
+// printedValue reads the VALUE column of one key out of a rendered table. An
+// empty value has no trailing space, so a line that is only the key counts as an
+// empty value rather than as a missing row.
+func printedValue(t *testing.T, out, key string) string {
+	t.Helper()
+
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimRight(line, " ")
+		name, rest, _ := strings.Cut(line, " ")
+		if name != key {
+			continue
+		}
+		return strings.TrimSpace(rest)
+	}
+	t.Fatalf("%s is not in the table:\n%s", key, out)
+	return ""
+}
+
+func TestConfigPrintShowsResolvedValues(t *testing.T) {
+	useConfig(t, `{"database": {"url": "env:DATABASE_URL"}, "server": {"port": 7777}}`)
+	t.Setenv(envfile.DatabaseURL, "postgresql://user:pass@localhost:5432/tango?sslmode=disable")
+
+	out, err := runConfigPrintCmd(t)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "KEY")
+	assert.Contains(t, out, "VALUE")
+
+	// A value the file set and one that fell back to the default, so the table
+	// is shown to report the resolved state rather than only the file.
+	assert.Equal(t, "7777", printedValue(t, out, "server.port"))
+	assert.Equal(t, "development", printedValue(t, out, "app.mode"))
+	assert.Equal(t, "587", printedValue(t, out, "mailer.smtp_port"))
+}
+
+func TestConfigPrintRedactsSecrets(t *testing.T) {
+	// The point of the command: a report that can be pasted anywhere. No secret
+	// value and no password may appear in the output.
+	useConfig(t, `{
+		"app": {"secret_key": "env:APP_SECRET_KEY"},
+		"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
+		"database": {"url": "env:DATABASE_URL"},
+		"mailer": {"smtp_username": "bot", "smtp_password": "hunter2"}
+	}`)
+	t.Setenv("APP_SECRET_KEY", testSecret)
+	t.Setenv("AUTH_SECRET_KEY", testSecret)
+	t.Setenv(envfile.DatabaseURL, "postgresql://user:sup3rs3cret@localhost:5432/tango?sslmode=disable")
+
+	out, err := runConfigPrintCmd(t)
+	require.NoError(t, err)
+
+	assert.NotContains(t, out, testSecret, "a secret value must never be printed")
+	assert.NotContains(t, out, "sup3rs3cret", "a DSN password must never be printed")
+	assert.NotContains(t, out, "hunter2", "an SMTP password must never be printed")
+
+	assert.Equal(t, "[redacted]", printedValue(t, out, "app.secret_key"))
+	assert.Equal(t, "[redacted]", printedValue(t, out, "auth.secret_key"))
+	assert.Equal(t, "[redacted]", printedValue(t, out, "mailer.smtp_password"))
+
+	// The DSN is reduced rather than hidden, so the target is still readable.
+	assert.Equal(t, "localhost:5432/tango", printedValue(t, out, "database.url"))
+
+	// A username is not a secret, so it stays readable.
+	assert.Equal(t, "bot", printedValue(t, out, "mailer.smtp_username"))
+}
+
+func TestConfigPrintCoversEveryKey(t *testing.T) {
+	useConfig(t, `{"database": {"url": "env:DATABASE_URL"}}`)
+	t.Setenv(envfile.DatabaseURL, "postgresql://user:pass@localhost:5432/tango?sslmode=disable")
+
+	out, err := runConfigPrintCmd(t)
+	require.NoError(t, err)
+
+	for _, key := range config.Keys() {
+		assert.Contains(t, out, key, "every key must be printed")
+	}
+}
+
+func TestConfigPrintSourceFlag(t *testing.T) {
+	useConfig(t, `{"database": {"url": "env:DATABASE_URL"}, "server": {"port": 7777}}`)
+	t.Setenv(envfile.DatabaseURL, "postgresql://user:pass@localhost:5432/tango?sslmode=disable")
+
+	out, err := runConfigPrintCmd(t, "--source")
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "SOURCE")
+	assert.Contains(t, out, "config-file")
+	assert.Contains(t, out, "default")
+}
+
+func TestConfigPrintRunsWithoutValidation(t *testing.T) {
+	// A configuration a user is inspecting is often one that does not validate
+	// yet, so an unset DSN must not stop the report: the empty value is the
+	// answer. This is what separates config:print from config:validate.
+	t.Chdir(t.TempDir())
+	useConfig(t, `{"server": {"port": 7777}}`)
+
+	out, err := runConfigPrintCmd(t)
+	require.NoError(t, err)
+
+	assert.Equal(t, "7777", printedValue(t, out, "server.port"))
+	assert.Equal(t, "", printedValue(t, out, "database.url"))
+}
+
+func TestConfigPrintHasNoTrailingWhitespace(t *testing.T) {
+	// Every cell is padded to its column width, including the last one, so a
+	// line would end in spaces. Invisible on a terminal, but it lands in a
+	// redirected file and in a diff.
+	useConfig(t, `{"database": {"url": "env:DATABASE_URL"}}`)
+	t.Setenv(envfile.DatabaseURL, "postgresql://user:pass@localhost:5432/tango?sslmode=disable")
+
+	out, err := runConfigPrintCmd(t)
+	require.NoError(t, err)
+
+	for line := range strings.SplitSeq(out, "\n") {
+		assert.Equal(t, strings.TrimRight(line, " "), line, "line ends in whitespace: %q", line)
+	}
 }
