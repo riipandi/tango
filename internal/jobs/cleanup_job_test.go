@@ -29,7 +29,7 @@ func TestRegisterSeedsOneMaintenanceTask(t *testing.T) {
 	dsn := container.NewDatabase(t)
 
 	pool, client := migratedClient(t, dsn)
-	require.NoError(t, Register(t.Context(), client, time.Hour))
+	require.NoError(t, Register(t.Context(), client, time.Hour, nil))
 
 	pending, err := client.Pending(t.Context(), CleanupName)
 	require.NoError(t, err)
@@ -39,7 +39,7 @@ func TestRegisterSeedsOneMaintenanceTask(t *testing.T) {
 	// finds the pending seed and adds nothing, so the schedule never
 	// multiplies.
 	_, restarted := migratedClient(t, dsn)
-	require.NoError(t, Register(t.Context(), restarted, time.Hour))
+	require.NoError(t, Register(t.Context(), restarted, time.Hour, nil))
 
 	pending, err = client.Pending(t.Context(), CleanupName)
 	require.NoError(t, err)
@@ -57,7 +57,7 @@ func TestCleanupJobPurgesExpiredRecordsAndReschedules(t *testing.T) {
 
 	// The interval is short, so the seeded run happens inside the test: the
 	// job deletes the expired record and queues its own successor.
-	require.NoError(t, Register(t.Context(), client, 50*time.Millisecond))
+	require.NoError(t, Register(t.Context(), client, 50*time.Millisecond, nil))
 	client.Start(t.Context())
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 5*time.Second)

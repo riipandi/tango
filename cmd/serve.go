@@ -18,6 +18,7 @@ import (
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/scheduler"
+	"github.com/riipandi/tango/internal/storage"
 )
 
 var serveCmd = &cli.Command{
@@ -95,6 +96,25 @@ file decides.`,
 			return fmt.Errorf("serve: %w", err)
 		}
 		jobScheduler.Start(ctx)
+
+		// The staging watcher runs only when it is switched on: a run that
+		// does not watch stages nothing, and resolving it would still be
+		// harmless, but starting it would enqueue uploads no caller asked
+		// for. It stops before the scheduler, its enqueues are durable, and
+		// a settle in flight is one task either enqueued or not.
+		if cfg.Storage.Watch.Enable {
+			stagingWatcher, err := do.Invoke[*storage.Watcher](injector)
+			if err != nil {
+				return fmt.Errorf("serve: %w", err)
+			}
+			watchErr := make(chan error, 1)
+			go func() { watchErr <- stagingWatcher.Start(ctx) }()
+			defer func() {
+				if err := <-watchErr; err != nil {
+					log.Slog().ErrorContext(ctx, "serve: staging watch ended", "err", err)
+				}
+			}()
+		}
 
 		// The console-less echo: a deployment that ships its logs elsewhere
 		// still gets the milestones on its terminal. The logger's own echo

@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -27,6 +28,7 @@ import (
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/scheduler"
+	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/pkg/crypto"
@@ -117,6 +119,7 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 		c := do.MustInvoke[*config.Config](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
 		log := do.MustInvoke[*slog.Logger](i)
+		uploader := do.MustInvoke[*storage.Manager](i)
 		var encryptor *crypto.Cipher
 		if c.Queue.Encrypt {
 			// Validation refuses an encrypted queue without a usable secret,
@@ -141,10 +144,40 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 
 		// The job list is registered beside the engine it runs on: a queue
 		// with no jobs is a worker pool with nothing to do.
-		if err := jobs.Register(ctx, client, c.Queue.CleanupInterval); err != nil {
+		if err := jobs.Register(ctx, client, c.Queue.CleanupInterval, uploader); err != nil {
 			return nil, err
 		}
 		return client, nil
+	})
+
+	do.Provide(injector, func(i do.Injector) (storage.Store, error) {
+		c := do.MustInvoke[*config.Config](i)
+		return storage.New(*c)
+	})
+
+	do.Provide(injector, func(i do.Injector) (*storage.Manager, error) {
+		c := do.MustInvoke[*config.Config](i)
+		pool := do.MustInvoke[*datastore.Postgres](i)
+		store := do.MustInvoke[storage.Store](i)
+		// The uploads hold one chunk buffer each; the budget keeps a sync's
+		// memory at budget × chunk size, whatever the file's size is.
+		return storage.NewManager(store, pool, c.Storage.ChunkSize,
+			filepath.Join(c.Storage.LocalPath, "staging"), 4)
+	})
+
+	do.Provide(injector, func(i do.Injector) (*storage.Watcher, error) {
+		c := do.MustInvoke[*config.Config](i)
+		manager := do.MustInvoke[*storage.Manager](i)
+		client := do.MustInvoke[*queue.Client](i)
+		return storage.NewWatcher(manager.Staging(), c.Storage.Watch.Debounce,
+			func(key string) {
+				if _, err := client.Add(jobs.ChunkUploadTask{Key: key}).Save(); err != nil {
+					// The staging file is still on disk, so the loss is a
+					// delayed upload, not a lost one: the next scan or the
+					// next write re-enqueues it.
+					slog.Error("storage: enqueue upload", "key", key, "err", err)
+				}
+			}), nil
 	})
 
 	do.Provide(injector, func(i do.Injector) (*scheduler.Scheduler, error) {
