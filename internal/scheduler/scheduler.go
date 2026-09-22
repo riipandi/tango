@@ -158,7 +158,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 	for i := range s.jobs {
 		if err := s.seed(ctx, &s.jobs[i]); err != nil {
 			s.log.ErrorContext(ctx, "scheduler: failed to seed job",
-				"job", s.jobs[i].Name, "error", err)
+				"job", s.jobs[i].Name, "err", err.Error())
 		}
 	}
 
@@ -215,7 +215,7 @@ func (s *Scheduler) fire(ctx context.Context, job *registeredJob) {
 		return s.claim(ctx, tx, job)
 	})
 	if err != nil {
-		s.log.ErrorContext(ctx, "scheduler: tick failed", "job", job.Name, "error", err)
+		s.log.ErrorContext(ctx, "scheduler: tick failed", "job", job.Name, "err", err.Error())
 		return
 	}
 	// The transaction is committed, so the task is visible and the

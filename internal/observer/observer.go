@@ -70,7 +70,7 @@ func New(ctx context.Context, cfg config.Config) (*Observer, error) {
 	// logger was installed, slog's default writes to stderr, which is still
 	// where a person looks first.
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
-		slog.Error("otel exporter", "error", err)
+		slog.Error("otel exporter", "err", err.Error())
 	}))
 
 	res := newResource(cfg)

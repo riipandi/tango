@@ -12,6 +12,10 @@ tasks:
     desc: Run the CLI directly (debug build)
     cmd: go run -tags debug ./cmd --env-file=.env.local {{.CLI_ARGS}}
 
+  serve:
+    desc: Run the Tango server (debug build)
+    cmd: go run -tags debug ./cmd --env-file=.env.local serve {{.CLI_ARGS}}
+
   email:dev:
     desc: Run React Email dev UI (:3030)
     cmd: pnpm exec email dev --dir ./email/templates --port 3030

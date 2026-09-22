@@ -3,6 +3,7 @@ package logger_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -148,6 +149,22 @@ func TestConsoleStaysPlainTextOffATerminal(t *testing.T) {
 	log.Slog().Info("plain")
 
 	assert.NotContains(t, buf.String(), "\x1b[")
+}
+
+func TestErrorsAreLoggedAsRenderedText(t *testing.T) {
+	// The error slot LogLayer's serializer renders is reachable only through
+	// LogLayer's own API, which feature code does not hold — the official slog
+	// integration maps every attribute onto fields, and a raw error value
+	// there encodes as an empty object. The convention is therefore the shape
+	// LogLayer's default serializer emits: the rendered text under err.
+	log, buf := newLogger(t, func(cfg *config.Config) { cfg.Log.Console.Format = config.LogStructured })
+
+	err := errors.New("connection refused")
+	log.Slog().Error("failed", "err", err.Error())
+
+	var entry map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &entry))
+	assert.Equal(t, "connection refused", entry["err"])
 }
 
 func TestTheDefaultConfigurationWritesOnlyToTheConsole(t *testing.T) {

@@ -37,7 +37,7 @@ func RequestID(next http.Handler) http.Handler {
 				// A prefix of lowercase letters is always valid, so this
 				// cannot fail in practice; an untagged request beats a
 				// failed one, and the envelope generates its own later.
-				slog.ErrorContext(r.Context(), "request id generation failed", "error", err)
+				slog.ErrorContext(r.Context(), "request id generation failed", "err", err.Error())
 				next.ServeHTTP(w, r)
 				return
 			}

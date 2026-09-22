@@ -198,7 +198,7 @@ func (d *dispatcher) fetch() {
 	deadline := at.Add(-d.releaseAfter)
 	tasks, err := claimReady(d.ctx, d.client.store, at, deadline, workers)
 	if err != nil {
-		d.client.log.ErrorContext(d.ctx, "queue: failed to claim tasks", "error", err)
+		d.client.log.ErrorContext(d.ctx, "queue: failed to claim tasks", "err", err.Error())
 		d.scheduleRetry()
 		return
 	}
@@ -214,7 +214,7 @@ func (d *dispatcher) fetch() {
 	// belongs to.
 	exists, wait, err := peekNext(d.ctx, d.client.store, deadline)
 	if err != nil {
-		d.client.log.ErrorContext(d.ctx, "queue: failed to peek next task", "error", err)
+		d.client.log.ErrorContext(d.ctx, "queue: failed to peek next task", "err", err.Error())
 	}
 	d.schedule(exists, wait)
 }
@@ -275,7 +275,7 @@ func (d *dispatcher) processTask(task *taskRow) {
 		d.client.log.WarnContext(d.ctx, "queue: task for unregistered queue",
 			"id", task.ID, "queue", task.Queue)
 		if err := requeueTask(d.ctx, d.client.store, task.ID, now().Add(requeueDelay)); err != nil {
-			d.client.log.ErrorContext(d.ctx, "queue: failed to requeue task", "error", err)
+			d.client.log.ErrorContext(d.ctx, "queue: failed to requeue task", "err", err.Error())
 		}
 		return
 	}
@@ -331,7 +331,7 @@ func (d *dispatcher) taskSuccess(ctx context.Context, queue Queue, task *taskRow
 	retention := queue.Config().Retention
 	if retention == nil || retention.OnlyFailed {
 		if err := deleteTask(ctx, d.client.store, task.ID); err != nil {
-			d.client.log.ErrorContext(ctx, "queue: failed to delete task", "error", err)
+			d.client.log.ErrorContext(ctx, "queue: failed to delete task", "err", err.Error())
 		}
 		return
 	}
@@ -347,11 +347,11 @@ func (d *dispatcher) taskFailure(ctx context.Context, queue Queue, task *taskRow
 	remaining := queue.Config().MaxAttempts - task.Attempts
 	d.client.log.ErrorContext(ctx, "task processing failed",
 		"id", task.ID, "queue", task.Queue, "duration", duration,
-		"attempt", task.Attempts, "remaining", remaining, "error", taskErr)
+		"attempt", task.Attempts, "remaining", remaining, "err", taskErr.Error())
 
 	if remaining >= 1 {
 		if err := requeueTask(d.ctx, d.client.store, task.ID, now().Add(queue.Config().Backoff)); err != nil {
-			d.client.log.ErrorContext(ctx, "queue: failed to requeue task", "error", err)
+			d.client.log.ErrorContext(ctx, "queue: failed to requeue task", "err", err.Error())
 		}
 		d.ready <- struct{}{}
 		return
@@ -360,7 +360,7 @@ func (d *dispatcher) taskFailure(ctx context.Context, queue Queue, task *taskRow
 	retention := queue.Config().Retention
 	if retention == nil {
 		if err := deleteTask(ctx, d.client.store, task.ID); err != nil {
-			d.client.log.ErrorContext(ctx, "queue: failed to delete task", "error", err)
+			d.client.log.ErrorContext(ctx, "queue: failed to delete task", "err", err.Error())
 		}
 		return
 	}
@@ -380,7 +380,7 @@ func (d *dispatcher) archive(ctx context.Context, task *taskRow, completed *comp
 	})
 	if err != nil {
 		d.client.log.ErrorContext(ctx, "queue: failed to archive task",
-			"id", task.ID, "queue", task.Queue, "error", err)
+			"id", task.ID, "queue", task.Queue, "err", err.Error())
 	}
 }
 

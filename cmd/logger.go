@@ -140,7 +140,7 @@ const observerShutdownTimeout = 10 * time.Second
 // and falls back to stderr when the logger itself is what failed to drain.
 func reportTelemetryLoss(ctx context.Context, component string, err error) {
 	if state, ok := ctx.Value(loggerKey{}).(*loggerState); ok && state.log != nil {
-		state.log.Slog().WarnContext(ctx, "telemetry dropped at shutdown", "component", component, "error", err)
+		state.log.Slog().WarnContext(ctx, "telemetry dropped at shutdown", "component", component, "err", err.Error())
 		return
 	}
 	fmt.Fprintf(os.Stderr, "%s: telemetry dropped at shutdown: %v\n", component, err)

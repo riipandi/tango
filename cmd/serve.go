@@ -137,7 +137,7 @@ file decides.`,
 		// The pool outlives the listener, so it is closed after the drain: a
 		// request still finishing needs its connection until the drain ends.
 		if report := injector.ShutdownWithContext(shutdownCtx); report != nil && !report.Succeed {
-			slog.ErrorContext(ctx, "serve: release", "error", report.Error())
+			slog.ErrorContext(ctx, "serve: release", "err", report.Error())
 		}
 		return nil
 	},
