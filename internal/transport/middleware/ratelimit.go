@@ -43,6 +43,12 @@ type Result struct {
 // a well-behaved client can pace itself and the envelope metadata the
 // responder publishes stays filled.
 //
+// The excluded prefixes are the paths the limiter never counts — the health
+// endpoint, a webhook a partner posts to. They are named by the caller at
+// the mount site, in the one list the router composes its pipeline from. A
+// prefix matches the paths under it, so an exclusion of "/api/healthz" also
+// spares "/api/healthz/deep".
+//
 // A limiter that cannot answer — a database that is down — lets the request
 // through. The limiter is a protection of the service, and taking the API
 // down to enforce it inverts the relationship: a degraded backend costs some
@@ -52,12 +58,22 @@ type Result struct {
 // address is the proxy's, which makes the limit global rather than per
 // client; a deployment that terminates TLS on the application itself gets
 // honest keys.
-func RateLimit(limiter Limiter) func(http.Handler) http.Handler {
+func RateLimit(limiter Limiter, excluded ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		if limiter == nil {
 			return next
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// An excluded path is answered before the check runs, so a probe
+			// costs the backend no round trip at all, not merely one it
+			// would have passed.
+			for _, prefix := range excluded {
+				if strings.HasPrefix(r.URL.Path, prefix) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
 			result, err := limiter.Allow(r.Context(), rateLimitKey(r))
 			if err != nil {
 				next.ServeHTTP(w, r)
@@ -71,10 +87,7 @@ func RateLimit(limiter Limiter) func(http.Handler) http.Handler {
 			}
 
 			if result.Limited {
-				seconds := int64(result.RetryAfter / time.Second)
-				if seconds < 1 {
-					seconds = 1
-				}
+				seconds := max(int64(result.RetryAfter/time.Second), 1)
 				w.Header().Set(RateLimitRetryHeader, strconv.FormatInt(seconds, 10))
 				responder.Fail(w, r, http.StatusTooManyRequests, "rate limit exceeded")
 				return

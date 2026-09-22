@@ -117,6 +117,24 @@ func TestRateLimitWithoutALimiterIsAPassThrough(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
+func TestRateLimitSparesTheExcludedPrefixes(t *testing.T) {
+	limiter := &stubLimiter{}
+	handler := RateLimit(limiter, "/api/healthz")(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/healthz", nil))
+	// A prefix matches the paths under it.
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/healthz/deep", nil))
+
+	assert.Empty(t, limiter.keys, "an excluded path reaches no check at all, not merely one it would pass")
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/healthcheck", nil))
+	assert.Equal(t, []string{"ip_192_0_2_1"}, limiter.keys,
+		"a path that merely shares a prefix character is still counted")
+}
+
 func TestRetryAfterFromDetailPrefersTheFunctionHint(t *testing.T) {
 	detail := "Key: ip_1, Count: 61, Limit: 60, Retry after: 42 seconds"
 	assert.Equal(t, 42*time.Second, retryAfterFromDetail(detail, time.Minute))

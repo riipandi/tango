@@ -41,6 +41,15 @@ type Options struct {
 	Modules []kernel.Module
 }
 
+// rateLimitExclusions are the API path prefixes the rate limiter never
+// counts. One entry per line, the reason beside it. A prefix matches the
+// paths under it, so "/api/healthz" also spares "/api/healthz/deep"; the
+// limiter itself runs on the API surface only, so a static asset or a
+// metrics scrape never reaches a check in the first place.
+var rateLimitExclusions = []string{
+	"/api/healthz", // liveness probes and load-balancer checks
+}
+
 // NewRouter builds the request pipeline: request id first, so every response
 // and log line can name its request; the request logger and the panic
 // recovery around every route; CORS, so a policy question is answered before
@@ -48,7 +57,8 @@ type Options struct {
 //
 // The rate limiter is the API surface's middleware and not the router's: a
 // static asset or a metrics scrape spends no rate-limit check, the budget
-// belonging to the API a client calls.
+// belonging to the API a client calls. Paths that must never be throttled
+// are listed in rateLimitExclusions above.
 //
 // The SPA is mounted last: its handler answers whatever the routes above it
 // did not claim, and its own not-found rule keeps API and protocol paths from
@@ -68,7 +78,7 @@ func NewRouter(opts Options) chi.Router {
 
 	r.Route("/api", func(api chi.Router) {
 		if opts.RateLimiter != nil {
-			api.Use(middleware.RateLimit(opts.RateLimiter))
+			api.Use(middleware.RateLimit(opts.RateLimiter, rateLimitExclusions...))
 		}
 		api.Get("/", apiRoot(opts.Config))
 		if opts.Checker != nil {

@@ -160,6 +160,9 @@ func TestRateLimitRunsOnTheAPISurfaceOnly(t *testing.T) {
 	assert.Equal(t, 1, limiter.calls, "an API request is throttled")
 
 	limiter.calls = 0
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/healthz", nil))
+	assert.Zero(t, limiter.calls, "a health probe spends no rate limit check")
+
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/anything-else", nil))
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/static/app.js", nil))
 	assert.Zero(t, limiter.calls, "the SPA surface spends no rate limit check")
