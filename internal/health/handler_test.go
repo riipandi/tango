@@ -19,7 +19,7 @@ import (
 // nonEmptyLines splits output into lines, dropping blank ones.
 func nonEmptyLines(s string) []string {
 	var lines []string
-	for _, line := range strings.Split(s, "\n") {
+	for line := range strings.SplitSeq(s, "\n") {
 		if strings.TrimSpace(line) != "" {
 			lines = append(lines, line)
 		}
@@ -349,7 +349,7 @@ func TestWriteTextHasNoTrailingWhitespace(t *testing.T) {
 	var out strings.Builder
 	require.NoError(t, health.WriteText(&out, result, nil))
 
-	for _, line := range strings.Split(out.String(), "\n") {
+	for line := range strings.SplitSeq(out.String(), "\n") {
 		assert.Equal(t, strings.TrimRight(line, " \t"), line, "line has trailing whitespace: %q", line)
 	}
 }

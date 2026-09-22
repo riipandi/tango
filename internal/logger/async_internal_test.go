@@ -39,7 +39,7 @@ func (r *recordingTransport) SendToLogger(params loglayer.TransportParams) {
 	}
 	msg := fmt.Sprint(params.Messages...)
 	if r.out != nil {
-		fmt.Fprintln(r.out, msg)
+		_, _ = fmt.Fprintln(r.out, msg)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -100,15 +100,13 @@ func TestConcurrentEmittersLoseNothing(t *testing.T) {
 	const emitters, perEmitter = 16, 3000
 	var wg sync.WaitGroup
 	for e := range emitters {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for i := range perEmitter {
 				a.SendToLogger(loglayer.TransportParams{
 					Messages: []any{fmt.Sprintf("%d-%d", e, i)},
 				})
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if err := a.Close(); err != nil {

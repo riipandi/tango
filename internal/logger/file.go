@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"go.loglayer.dev/transports/lumberjack/v3"
-	lltransport "go.loglayer.dev/v3/transport"
 
 	"github.com/riipandi/tango/internal/config"
 )
@@ -36,7 +35,7 @@ func newFileSink(cfg config.Config) (*fileSink, error) {
 		MaxBackups: cfg.Log.File.MaxBackups,
 		MaxAge:     cfg.Log.File.MaxAge,
 		Compress:   cfg.Log.File.Compress,
-		BaseConfig: lltransport.BaseConfig{ID: "file"},
+		ID:         "file",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("logger: file sink: %w", err)

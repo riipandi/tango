@@ -6,7 +6,6 @@ import (
 	"go.loglayer.dev/transports/pretty/v3"
 	"go.loglayer.dev/transports/structured/v3"
 	"go.loglayer.dev/v3"
-	"go.loglayer.dev/v3/transport"
 
 	"github.com/riipandi/tango/internal/config"
 )
@@ -27,14 +26,14 @@ func consoleSink(cfg config.Config, w io.Writer) *asyncTransport {
 	var inner loglayer.Transport
 	if cfg.Log.Console.Format == config.LogStructured {
 		inner = structured.New(structured.Config{
-			Writer:     dst,
-			BaseConfig: transport.BaseConfig{ID: "console"},
+			Writer: dst,
+			ID:     "console",
 		})
 	} else {
 		inner = pretty.New(pretty.Config{
-			Writer:     dst,
-			BaseConfig: transport.BaseConfig{ID: "console"},
-			NoColor:    !isTerminal(w),
+			Writer:  dst,
+			ID:      "console",
+			NoColor: !isTerminal(w),
 		})
 	}
 	return newAsyncTransport(inner, dst)
@@ -69,9 +68,9 @@ func (t *minLevelTransport) GetLoggerInstance() any { return t.inner.GetLoggerIn
 func echoSink(w io.Writer) loglayer.Transport {
 	return &minLevelTransport{
 		inner: pretty.New(pretty.Config{
-			Writer:     w,
-			BaseConfig: transport.BaseConfig{ID: "echo"},
-			NoColor:    !isTerminal(w),
+			Writer:  w,
+			ID:      "echo",
+			NoColor: !isTerminal(w),
 		}),
 		min: loglayer.LogLevelWarn,
 	}

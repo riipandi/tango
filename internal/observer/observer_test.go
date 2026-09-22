@@ -393,7 +393,7 @@ func readBody(t *testing.T, r *http.Request) []byte {
 		if err != nil {
 			t.Fatalf("decompress export: %v", err)
 		}
-		defer gzipReader.Close()
+		defer func() { _ = gzipReader.Close() }()
 		reader = gzipReader
 	}
 

@@ -166,7 +166,7 @@ func TestMemoryCleansItselfWhenTheBudgetIsSpent(t *testing.T) {
 	// runs while entries are still being written.
 	c := NewMemory(memoryChunkSize, 5*time.Minute)
 
-	for i := 0; i < 2000; i++ {
+	for i := range 2000 {
 		c.Set(t.Context(), fmt.Sprintf("key-%d", i), []byte(fmt.Sprintf("value-%d", i)), 0)
 	}
 
@@ -200,12 +200,12 @@ func TestMemorySurvivesConcurrentUse(t *testing.T) {
 	c := NewMemory(0, 5*time.Minute)
 
 	var wg sync.WaitGroup
-	for g := 0; g < 8; g++ {
+	for g := range 8 {
 		wg.Add(1)
 		go func(g int) {
 			defer wg.Done()
 			dst := make([]byte, 0, 128)
-			for i := 0; i < 200; i++ {
+			for i := range 200 {
 				key := fmt.Sprintf("g%d-k%d", g, i)
 				c.Set(t.Context(), key, []byte(key), 0)
 				value, ok := c.Get(t.Context(), dst, key)

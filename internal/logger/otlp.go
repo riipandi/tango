@@ -6,7 +6,6 @@ import (
 	"net/url"
 
 	"go.loglayer.dev/transports/otellog/v3"
-	"go.loglayer.dev/v3/transport"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
@@ -82,7 +81,7 @@ func newOTLPSink(cfg config.Config) (*otlpSink, error) {
 			Name:           config.AppIdentifier,
 			Version:        config.AppVersion,
 			LoggerProvider: provider,
-			BaseConfig:     transport.BaseConfig{ID: "otlp"},
+			ID:             "otlp",
 		}),
 		provider: provider,
 	}, nil

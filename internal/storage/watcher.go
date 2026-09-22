@@ -172,7 +172,7 @@ func (w *Watcher) stageKey(path string) (string, bool) {
 	if err != nil || rel == "." {
 		return "", false
 	}
-	for _, segment := range strings.Split(filepath.ToSlash(rel), "/") {
+	for segment := range strings.SplitSeq(filepath.ToSlash(rel), "/") {
 		if segment == "" || strings.HasPrefix(segment, ".") {
 			return "", false
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -28,12 +29,7 @@ func (s *settleSpy) settled(key string) {
 func (s *settleSpy) has(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, k := range s.keys {
-		if k == key {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s.keys, key)
 }
 
 // startWatcher runs a watcher over a staging directory with a short debounce
@@ -99,7 +95,7 @@ func TestWatcherDebounceCollapsesABurstOfWritesIntoOneSettle(t *testing.T) {
 	timers := make(map[string]*time.Timer)
 	settled := make(chan string, 8)
 	// Five resets inside one window: one timer, one settle.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		w.resetTimer(ctx, timers, settled, "busy.txt")
 		time.Sleep(20 * time.Millisecond)
 	}

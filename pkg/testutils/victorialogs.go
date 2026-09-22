@@ -106,7 +106,7 @@ func (v *VictoriaLogs) Query(ctx context.Context, t testing.TB, query string) []
 
 	response, err := http.DefaultClient.Do(request)
 	require.NoError(t, err, "query victoria-logs")
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	require.Equal(t, http.StatusOK, response.StatusCode, "victoria-logs rejected the query")
 

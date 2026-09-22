@@ -115,7 +115,7 @@ func ValidateKey(key string) error {
 	if strings.HasPrefix(key, "/") {
 		return fmt.Errorf("%w: %q is absolute", ErrInvalidKey, key)
 	}
-	for _, segment := range strings.Split(key, "/") {
+	for segment := range strings.SplitSeq(key, "/") {
 		if segment == "" || segment == "." || segment == ".." || strings.HasPrefix(segment, ".") {
 			return fmt.Errorf("%w: %q has segment %q", ErrInvalidKey, key, segment)
 		}

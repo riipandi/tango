@@ -64,7 +64,7 @@ func normalizeMaps(keys map[string]any) {
 // and the exporter reports a malformed header far from the key that caused it.
 func splitMap(text string) map[string]string {
 	out := make(map[string]string)
-	for _, entry := range strings.Split(text, ",") {
+	for entry := range strings.SplitSeq(text, ",") {
 		name, value, ok := strings.Cut(strings.TrimSpace(entry), "=")
 		name = strings.TrimSpace(name)
 		if !ok || name == "" {

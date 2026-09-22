@@ -66,8 +66,7 @@ func FieldErrors(err error) []FieldError {
 // isDecodeError reports whether err came from decoding the request body
 // rather than from a validation rule.
 func isDecodeError(err error) bool {
-	var syntaxErr *jsontext.SyntacticError
-	if errors.As(err, &syntaxErr) {
+	if _, ok := errors.AsType[*jsontext.SyntacticError](err); ok {
 		return true
 	}
 	var typeErr *json.SemanticError

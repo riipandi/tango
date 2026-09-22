@@ -409,9 +409,7 @@ func (c *Checker) buildInfo(ctx context.Context) map[string]string {
 
 	info := make(map[string]string, len(c.cfg.info))
 	for _, function := range c.cfg.infoFuncs {
-		for key, value := range function(ctx) {
-			info[key] = value
-		}
+		maps.Copy(info, function(ctx))
 	}
 	// Applied last, so a static value wins over a computed one.
 	maps.Copy(info, c.cfg.info)

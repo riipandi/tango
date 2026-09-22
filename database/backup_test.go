@@ -99,7 +99,7 @@ func TestSchemaOnlyDumpRebuildsTheSchema(t *testing.T) {
 		WHERE c.relkind = 'r' AND n.nspname IN ('public', 'internal', 'reference')`).
 		Scan(&tables)
 	require.NoError(t, err)
-	assert.Equal(t, 41, tables, "every application table must be recreated")
+	assert.Equal(t, 43, tables, "every application table must be recreated")
 }
 
 // Two dumps of the same state must be byte-identical apart from the header
