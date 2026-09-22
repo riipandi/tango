@@ -241,6 +241,12 @@ func NewChecker(options ...Option) *Checker {
 		seen[check.Name] = true
 	}
 
+	for _, key := range sortedKeys(cfg.info) {
+		if slices.Contains(reservedInfoKeys, key) {
+			panic(fmt.Sprintf("health: info key %q shadows a wire field", key))
+		}
+	}
+
 	return &Checker{
 		cfg:   cfg,
 		state: newState(len(cfg.checks)),

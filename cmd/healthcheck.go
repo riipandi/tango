@@ -32,7 +32,8 @@ so the CLI and the API always agree.
 
 It checks that Postgres answers and that the application data directory
 (storage by default, or storage.local_path from the configuration) exists,
-is writable, and is not world-writable.
+is writable, and is not world-writable. The optional Valkey backend is
+checked only while kvstore.enable is on.
 
 Output is text by default; pass --json for a machine-readable result or
 --short for the aggregated status alone.
@@ -107,7 +108,7 @@ func checkHealth(ctx context.Context, cmd *cli.Command, cfg config.Config, dsn s
 	started := time.Now()
 	pool, err := datastore.NewPostgres(ctx, datastore.PostgresOptions{DSN: dsn})
 	if err != nil {
-		result := health.Failure(health.CheckNamePostgres, err)
+		result := health.Failure(health.CheckNameDatabase, err)
 		// The time the failed connection attempt took is part of the report:
 		// it tells the reader whether the database refused or timed out.
 		result.Duration = time.Since(started)
@@ -116,12 +117,33 @@ func checkHealth(ctx context.Context, cmd *cli.Command, cfg config.Config, dsn s
 	}
 	defer pool.Close()
 
+	checks := []health.Check{
+		health.DatabaseCheck(pool, config.RedactDSN(dsn)),
+		// The CLI report is read by an operator who owns the machine, so the
+		// data directory may be named here; the endpoint publishes the plain
+		// check, which carries no path.
+		health.StorageCheckWithTarget(dataDir(cfg)),
+	}
+	// The backend is probed only while it is enabled, the way the server
+	// reports it. Opening it here proves the connection up front, so a
+	// refused handshake becomes the check's failure instead of the ping's.
+	if cfg.KVStore.Enable {
+		kv, err := datastore.NewValkey(ctx, datastore.ValkeyOptions{
+			URL:             cfg.KVStore.URL,
+			DB:              cfg.KVStore.DB,
+			ApplicationName: config.AppIdentifier,
+		})
+		if err != nil {
+			checks = append(checks, failedCheck(health.CheckNameKVStore, err))
+		} else {
+			defer kv.Close()
+			checks = append(checks, health.KVStoreCheck(kv, config.RedactKVURL(cfg.KVStore.URL)))
+		}
+	}
+
 	options := []health.Option{
 		health.WithTimeout(cmd.Duration("timeout")),
-		health.WithChecks(
-			health.PostgresCheck(pool, config.RedactDSN(dsn)),
-			health.StorageCheck(dataDir(cfg)),
-		),
+		health.WithChecks(checks...),
 		health.WithInfo(info),
 		health.WithInfoFunc(uptime),
 	}
@@ -129,6 +151,18 @@ func checkHealth(ctx context.Context, cmd *cli.Command, cfg config.Config, dsn s
 		options = append(options, health.WithCacheTTL(0))
 	}
 	return health.NewChecker(options...).Check(ctx)
+}
+
+// failedCheck is a check that always reports the given error, used when a
+// dependency could not even be opened: the reason it failed is exactly what
+// the report should say.
+func failedCheck(name string, err error) health.Check {
+	return health.Check{
+		Name: name,
+		Check: func(context.Context) error {
+			return err
+		},
+	}
 }
 
 // mergeInfo combines the static metadata with computed values. The computed

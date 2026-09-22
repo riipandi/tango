@@ -52,58 +52,34 @@ func FormatUptime(elapsed time.Duration) string {
 //   - Details are an ordered array, not a map. A map has no order, so a diff of
 //     two responses would churn and a human would read a different order each
 //     time. The order is by check name.
-//   - Info is an object with sorted keys. encoding/json/v2 does not sort map
-//     keys, so it is written by hand; without that, two identical probes would
-//     produce byte-different bodies.
+//   - The info entries are flattened to the top level, sorted by key, so mode,
+//     uptime, and version sit beside status instead of behind a nested object;
+//     without sorting, two identical probes would produce byte-different
+//     bodies.
 
 // jsonCheckResult is the wire form of CheckResult.
 type jsonCheckResult struct {
-	Name       string    `json:"name"`
-	Status     Status    `json:"status"`
-	Target     string    `json:"target,omitempty"`
-	Error      string    `json:"error,omitempty"`
-	Timestamp  time.Time `json:"timestamp"`
-	DurationMS float64   `json:"duration_ms"`
-	Optional   bool      `json:"optional,omitzero"`
+	Name      string    `json:"name"`
+	Status    Status    `json:"status"`
+	Target    string    `json:"target,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+	TookMS    float64   `json:"took_ms"`
+	Optional  bool      `json:"optional,omitzero"`
 }
 
-// jsonResult is the wire form of Result.
+// reservedInfoKeys are the wire fields an info entry must not shadow. The
+// entries are flattened to the top level of the JSON form, so a key equal to
+// one of these would write the same field twice.
+var reservedInfoKeys = []string{"status", "details", "took_ms"}
+
+// jsonResult is the fixed head of the wire form of Result. The info entries
+// are appended after these fields by Result.MarshalJSON, which is what
+// flattens them to the top level.
 type jsonResult struct {
-	Status     GlobalStatus      `json:"status"`
-	Details    []jsonCheckResult `json:"details"`
-	DurationMS float64           `json:"duration_ms"`
-	Info       jsonInfo          `json:"info,omitempty"`
-}
-
-// jsonInfo is a string map that marshals with sorted keys, so the output does
-// not depend on Go's map iteration order.
-type jsonInfo map[string]string
-
-// MarshalJSON implements json.Marshaler. Each key and value is encoded with the
-// standard encoder, so escaping matches the rest of the document.
-func (m jsonInfo) MarshalJSON() ([]byte, error) {
-	var out bytes.Buffer
-	out.WriteByte('{')
-
-	for i, key := range sortedKeys(m) {
-		if i > 0 {
-			out.WriteByte(',')
-		}
-		encodedKey, err := json.Marshal(key)
-		if err != nil {
-			return nil, err
-		}
-		encodedValue, err := json.Marshal(m[key])
-		if err != nil {
-			return nil, err
-		}
-		out.Write(encodedKey)
-		out.WriteByte(':')
-		out.Write(encodedValue)
-	}
-
-	out.WriteByte('}')
-	return out.Bytes(), nil
+	Status  GlobalStatus      `json:"status"`
+	Details []jsonCheckResult `json:"details"`
+	TookMS  float64           `json:"took_ms"`
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -111,30 +87,57 @@ func (r CheckResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.wire())
 }
 
-// MarshalJSON implements json.Marshaler.
+// MarshalJSON implements json.Marshaler. The info entries are flattened to
+// the top level, sorted by key after the fixed fields, so a probe consumer
+// reads mode, uptime, and version beside status rather than behind an
+// "info" object.
 func (r Result) MarshalJSON() ([]byte, error) {
 	details := make([]jsonCheckResult, 0, len(r.Details))
 	for _, name := range sortedNames(r.Details) {
 		details = append(details, r.Details[name].wire())
 	}
-	return json.Marshal(jsonResult{
-		Status:     r.Status,
-		Details:    details,
-		DurationMS: milliseconds(r.Duration),
-		Info:       r.Info,
+
+	head, err := json.Marshal(jsonResult{
+		Status:  r.Status,
+		Details: details,
+		TookMS:  milliseconds(r.Duration),
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	// The head ends with the closing brace; the info entries are spliced in
+	// before it, so the object stays one document.
+	var out bytes.Buffer
+	out.Write(head[:len(head)-1])
+	for _, key := range sortedKeys(r.Info) {
+		out.WriteByte(',')
+		encodedKey, err := json.Marshal(key)
+		if err != nil {
+			return nil, err
+		}
+		encodedValue, err := json.Marshal(r.Info[key])
+		if err != nil {
+			return nil, err
+		}
+		out.Write(encodedKey)
+		out.WriteByte(':')
+		out.Write(encodedValue)
+	}
+	out.WriteByte('}')
+	return out.Bytes(), nil
 }
 
 // wire converts a check result to its published form.
 func (r CheckResult) wire() jsonCheckResult {
 	return jsonCheckResult{
-		Name:       r.Name,
-		Status:     r.Status,
-		Target:     r.Target,
-		Error:      r.Error,
-		Timestamp:  r.Timestamp,
-		DurationMS: milliseconds(r.Duration),
-		Optional:   r.Optional,
+		Name:      r.Name,
+		Status:    r.Status,
+		Target:    r.Target,
+		Error:     r.Error,
+		Timestamp: r.Timestamp,
+		TookMS:    milliseconds(r.Duration),
+		Optional:  r.Optional,
 	}
 }
 

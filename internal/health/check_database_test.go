@@ -24,41 +24,41 @@ func (s *stubPool) Ping(context.Context) error {
 	return s.err
 }
 
-func TestPostgresCheckPassesWhenPoolPings(t *testing.T) {
+func TestDatabaseCheckPassesWhenPoolPings(t *testing.T) {
 	pool := &stubPool{}
 
-	result := health.NewChecker(health.WithCheck(health.PostgresCheck(pool, "localhost:5432/test"))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.DatabaseCheck(pool, "localhost:5432/test"))).Check(t.Context())
 
 	assert.True(t, pool.called)
 	assert.Equal(t, health.GlobalHealthy, result.Status)
-	assert.Equal(t, health.CheckNamePostgres, result.Details["postgres"].Name)
+	assert.Equal(t, health.CheckNameDatabase, result.Details["database"].Name)
 }
 
 // The target must be reported, so the text output says which database was
 // reached, and must never carry the password from the DSN.
-func TestPostgresCheckReportsTarget(t *testing.T) {
-	check := health.PostgresCheck(&stubPool{}, "localhost:5432/test")
+func TestDatabaseCheckReportsTarget(t *testing.T) {
+	check := health.DatabaseCheck(&stubPool{}, "localhost:5432/test")
 
 	assert.Equal(t, "localhost:5432/test", check.Target)
 	assert.NotContains(t, check.Target, "@")
 }
 
-// The error must name Postgres, so a failing probe says which dependency is
-// down without the caller inspecting the check set.
-func TestPostgresCheckWrapsPingError(t *testing.T) {
+// The error must name the dependency generically, so a failing probe says
+// which kind of dependency is down without revealing the engine behind it.
+func TestDatabaseCheckWrapsPingError(t *testing.T) {
 	pool := &stubPool{err: errors.New("connection refused")}
 
-	result := health.NewChecker(health.WithCheck(health.PostgresCheck(pool, "localhost:5432/test"))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.DatabaseCheck(pool, "localhost:5432/test"))).Check(t.Context())
 
 	assert.Equal(t, health.GlobalUnhealthy, result.Status)
-	assert.Contains(t, result.Details["postgres"].Error, "postgres")
-	assert.Contains(t, result.Details["postgres"].Error, "connection refused")
+	assert.Contains(t, result.Details["database"].Error, "database")
+	assert.Contains(t, result.Details["database"].Error, "connection refused")
 }
 
 // The check must be required, so a dead database fails the probe rather than
 // being reported as an optional extra.
-func TestPostgresCheckIsRequired(t *testing.T) {
-	check := health.PostgresCheck(&stubPool{}, "localhost:5432/test")
+func TestDatabaseCheckIsRequired(t *testing.T) {
+	check := health.DatabaseCheck(&stubPool{}, "localhost:5432/test")
 	assert.False(t, check.Optional)
 
 	// It carries its own timeout, shorter than the checker default, so a
@@ -67,9 +67,9 @@ func TestPostgresCheckIsRequired(t *testing.T) {
 	assert.Less(t, check.Timeout, health.DefaultTimeout)
 }
 
-// The check must work against the real adapter, not only a stub: this is the
-// interface the CLI and the server wire up.
-func TestPostgresCheckAgainstRealPool(t *testing.T) {
+// The check must work against the real adapter, not only a stub: this is
+// the interface the CLI and the server wire up.
+func TestDatabaseCheckAgainstRealPool(t *testing.T) {
 	container := testutils.StartPostgres(t.Context(), t)
 	dsn := container.NewDatabase(t)
 
@@ -77,7 +77,7 @@ func TestPostgresCheckAgainstRealPool(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 
-	result := health.NewChecker(health.WithCheck(health.PostgresCheck(pool, "localhost:5432/test"))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.DatabaseCheck(pool, "localhost:5432/test"))).Check(t.Context())
 	assert.Equal(t, health.GlobalHealthy, result.Status)
 	assert.Empty(t, result.Failed())
 
@@ -86,9 +86,9 @@ func TestPostgresCheckAgainstRealPool(t *testing.T) {
 	pool.Close()
 
 	result = health.NewChecker(
-		health.WithCheck(health.PostgresCheck(pool, "localhost:5432/test")),
+		health.WithCheck(health.DatabaseCheck(pool, "localhost:5432/test")),
 		health.WithTimeout(5*time.Second),
 	).Check(t.Context())
 	assert.Equal(t, health.GlobalUnhealthy, result.Status)
-	assert.Contains(t, result.Details["postgres"].Error, "postgres")
+	assert.Contains(t, result.Details["database"].Error, "database")
 }

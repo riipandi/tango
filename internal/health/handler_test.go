@@ -106,7 +106,7 @@ func TestHandlerIncludesFailureDetail(t *testing.T) {
 
 	// Durations are published in milliseconds, not nanoseconds: a probe result
 	// is meant to be read.
-	assert.Contains(t, postgres, "duration_ms")
+	assert.Contains(t, postgres, "took_ms")
 	assert.NotContains(t, postgres, "duration")
 }
 
@@ -150,7 +150,8 @@ func TestHandlerOrdersDetailsByName(t *testing.T) {
 	assert.Equal(t, []string{"postgres", "valkey"}, names)
 }
 
-// The info block identifies the build that answered the probe.
+// The info entries identify the build that answered the probe. They are
+// flattened to the top level of the response, not nested under an object.
 func TestHandlerPublishesInfo(t *testing.T) {
 	checker := health.NewChecker(
 		health.WithCheck(health.Check{Name: "postgres", Check: passing}),
@@ -161,10 +162,9 @@ func TestHandlerPublishesInfo(t *testing.T) {
 
 	data, ok := body["data"].(map[string]any)
 	require.True(t, ok)
-	info, ok := data["info"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "tango", info["name"])
-	assert.Equal(t, "1.2.3", info["version"])
+	assert.Equal(t, "tango", data["name"])
+	assert.Equal(t, "1.2.3", data["version"])
+	assert.NotContains(t, data, "info", "info entries must be flattened, not nested")
 }
 
 // An optional dependency that is down must not fail the endpoint, or a missing
@@ -525,6 +525,11 @@ func TestMarshalIsDeterministic(t *testing.T) {
 		assert.Equal(t, string(encoded), string(again))
 	}
 
-	assert.Contains(t, string(encoded), `"info":{"name":"tango","uptime":"<1 minute","version":"1"}`)
+	// The info entries are flattened to the top level, after the fixed
+	// fields, in key order.
+	assert.Contains(t, string(encoded), `"took_ms":1`)
 	assert.Less(t, strings.Index(string(encoded), `"postgres"`), strings.Index(string(encoded), `"storage"`))
+	assert.Less(t, strings.Index(string(encoded), `"took_ms":1`), strings.Index(string(encoded), `"name":"tango"`))
+	assert.Less(t, strings.Index(string(encoded), `"name":"tango"`), strings.Index(string(encoded), `"uptime"`))
+	assert.Less(t, strings.Index(string(encoded), `"uptime"`), strings.Index(string(encoded), `"version"`))
 }

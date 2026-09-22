@@ -123,7 +123,7 @@ func TestHealthJSONOutput(t *testing.T) {
 	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &result))
 	assert.Equal(t, "healthy", result["status"])
-	assert.Contains(t, result, "duration_ms")
+	assert.Contains(t, result, "took_ms")
 
 	// Details are an ordered array, so the CLI output and the API body have the
 	// same shape and the same order.
@@ -134,13 +134,19 @@ func TestHealthJSONOutput(t *testing.T) {
 	// Ordered by check name, so the CLI and the API always agree.
 	first, ok := details[0].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "postgres", first["name"])
+	assert.Equal(t, "database", first["name"])
 	assert.Equal(t, "up", first["status"])
 
 	second, ok := details[1].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "storage", second["name"])
 	assert.Equal(t, "up", second["status"])
+
+	// The CLI report may name the data directory: an operator reading the
+	// terminal owns the machine. The endpoint leaves the target empty.
+	storage, ok := second["target"].(string)
+	require.True(t, ok, "storage target must be present in the CLI report")
+	assert.True(t, filepath.IsAbs(storage), "storage target must be absolute: %s", storage)
 }
 
 // --short must print one word, so a shell script reads it without parsing.
@@ -173,7 +179,7 @@ func TestHealthTextOutput(t *testing.T) {
 	assert.Contains(t, out, "version: "+config.AppVersion)
 	assert.Contains(t, out, "status: healthy")
 	assert.Contains(t, out, "checks: 2 up, 0 down")
-	assert.Contains(t, out, "postgres: up (")
+	assert.Contains(t, out, "database: up (")
 	assert.Contains(t, out, "storage: up (")
 }
 
@@ -254,8 +260,8 @@ func TestHealthJSONMatchesTheAPIShape(t *testing.T) {
 
 	// The whole-call duration is measured per call, so it differs by design.
 	// Everything else — the status, the ordered details, the info — must match.
-	delete(cli, "duration_ms")
-	delete(api, "duration_ms")
+	delete(cli, "took_ms")
+	delete(api, "took_ms")
 	assert.Equal(t, api, cli)
 }
 

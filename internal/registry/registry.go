@@ -60,11 +60,16 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 	do.Provide(injector, func(i do.Injector) (*health.Checker, error) {
 		c := do.MustInvoke[*config.Config](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
+		checks := []health.Check{
+			health.DatabaseCheck(pool, config.RedactDSN(c.Database.URL)),
+			health.StorageCheck(c.Storage.LocalPath),
+		}
+		if c.KVStore.Enable {
+			kv := do.MustInvoke[*datastore.Valkey](i)
+			checks = append(checks, health.KVStoreCheck(kv, config.RedactKVURL(c.KVStore.URL)))
+		}
 		return health.NewChecker(
-			health.WithChecks(
-				health.PostgresCheck(pool, config.RedactDSN(c.Database.URL)),
-				health.StorageCheck(c.Storage.LocalPath),
-			),
+			health.WithChecks(checks...),
 			health.WithInfo(map[string]string{
 				"version": config.AppVersion,
 				"mode":    c.App.Mode,

@@ -18,10 +18,13 @@ const DefaultStorageTimeout = 2 * time.Second
 
 // StorageCheck reports whether the application data directory can be used.
 //
-// dir is resolved to an absolute path before the probe, and the result reports
-// that path. A relative path in the report would not say which directory was
-// inspected, because it depends on the working directory of the process that
-// happened to run the check.
+// The report carries no directory path: the endpoint publishes this result,
+// and a filesystem layout is not something an unauthenticated reader should
+// learn. The CLI report, which an operator who owns the machine reads, uses
+// StorageCheckWithTarget instead.
+//
+// The probe resolves dir to an absolute path before it runs, so the check
+// does not depend on the working directory of the process.
 //
 // It fails when the directory is missing, is not a directory, cannot be written
 // to, or is world-writable.
@@ -34,10 +37,24 @@ const DefaultStorageTimeout = 2 * time.Second
 // World-writable is a failure rather than a note, because this directory holds
 // uploads and certificates, so any local user could replace them.
 func StorageCheck(dir string) Check {
+	return storageCheck(dir, "")
+}
+
+// StorageCheckWithTarget is StorageCheck with the resolved directory path in
+// the result's target, for a surface an operator reads directly. The REST
+// endpoint publishes the plain check instead: a filesystem layout is not
+// something an unauthenticated reader should learn.
+func StorageCheckWithTarget(dir string) Check {
+	return storageCheck(dir, absolutePath(dir))
+}
+
+// storageCheck builds the probe. resolved is the absolute path the check
+// runs against; target is what the report names, empty to name nothing.
+func storageCheck(dir, target string) Check {
 	resolved := absolutePath(dir)
 	return Check{
 		Name:    CheckNameStorage,
-		Target:  resolved,
+		Target:  target,
 		Timeout: DefaultStorageTimeout,
 		Check: func(context.Context) error {
 			return checkDataDir(resolved)
@@ -46,8 +63,8 @@ func StorageCheck(dir string) Check {
 }
 
 // absolutePath resolves dir against the working directory. It keeps the input
-// when the working directory cannot be read, so the check still reports a path
-// instead of an empty target.
+// when the working directory cannot be read, so the check still probes a path
+// instead of nothing.
 func absolutePath(dir string) string {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -57,19 +74,21 @@ func absolutePath(dir string) string {
 }
 
 // checkDataDir returns the first problem that makes the directory unusable.
+// The error messages name the problem, never the path: the message travels
+// into the published report, the path does not.
 func checkDataDir(dir string) error {
 	info, err := os.Stat(dir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("storage: directory does not exist: %s", dir)
+			return fmt.Errorf("storage: directory does not exist")
 		}
-		return fmt.Errorf("storage: stat %s: %w", dir, err)
+		return fmt.Errorf("storage: stat: %w", err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("storage: not a directory: %s", dir)
+		return fmt.Errorf("storage: not a directory")
 	}
 	if mode := info.Mode().Perm(); mode&0o002 != 0 {
-		return fmt.Errorf("storage: directory mode %04o is world-writable: %s", mode, dir)
+		return fmt.Errorf("storage: directory mode %04o is world-writable", mode)
 	}
 	return probeWritable(dir)
 }
@@ -79,7 +98,7 @@ func checkDataDir(dir string) error {
 func probeWritable(dir string) error {
 	probe, err := os.CreateTemp(dir, ".health-write-probe-*")
 	if err != nil {
-		return fmt.Errorf("storage: directory is not writable: %s: %w", dir, err)
+		return fmt.Errorf("storage: directory is not writable: %w", err)
 	}
 
 	name := probe.Name()
@@ -88,7 +107,7 @@ func probeWritable(dir string) error {
 		return fmt.Errorf("storage: close write probe: %w", err)
 	}
 	if err := os.Remove(name); err != nil {
-		return fmt.Errorf("storage: remove write probe %s: %w", name, err)
+		return fmt.Errorf("storage: remove write probe: %w", err)
 	}
 	return nil
 }

@@ -42,7 +42,6 @@ func TestStorageCheckFailsWhenDirectoryMissing(t *testing.T) {
 
 	assert.Equal(t, health.StatusDown, detail.Status)
 	assert.Contains(t, detail.Error, "does not exist")
-	assert.Contains(t, detail.Error, dir)
 }
 
 // A path that is a file, not a directory, must be reported as such rather than
@@ -110,28 +109,40 @@ func TestStorageCheckIsRequired(t *testing.T) {
 	assert.LessOrEqual(t, check.Timeout, health.DefaultTimeout)
 }
 
-// The reported target must be absolute, so the report says which directory was
-// inspected rather than leaving it relative to an unknown working directory.
-func TestStorageCheckReportsAbsolutePath(t *testing.T) {
+// The report must not carry the directory path: the endpoint publishes this
+// result, and a filesystem layout is not something an unauthenticated reader
+// should learn.
+func TestStorageCheckHidesTargetPath(t *testing.T) {
 	dir := t.TempDir()
 	relative := relativeToWorkingDir(t, dir)
 
 	check := health.StorageCheck(relative)
+	assert.Empty(t, check.Target)
+}
+
+// The CLI report is read by an operator who owns the machine, so its variant
+// names the directory: absolute, so the report says which directory was
+// inspected rather than leaving it relative to an unknown working directory.
+func TestStorageCheckWithTargetReportsAbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	relative := relativeToWorkingDir(t, dir)
+
+	check := health.StorageCheckWithTarget(relative)
 	assert.True(t, filepath.IsAbs(check.Target), "target must be absolute: %s", check.Target)
 	assert.Equal(t, dir, check.Target)
 }
 
-// A relative path in the error message must also be absolute, or the message
-// does not say where to look.
-func TestStorageCheckErrorNamesAbsolutePath(t *testing.T) {
+// A path must not leak into the error message either: the failure names the
+// problem, the report stays free of the filesystem layout.
+func TestStorageCheckErrorNamesNoPath(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "nope")
 	relative := relativeToWorkingDir(t, missing)
 
 	detail := storageResult(t, relative)
 
 	assert.Equal(t, health.StatusDown, detail.Status)
-	assert.True(t, filepath.IsAbs(detail.Target), "target must be absolute: %s", detail.Target)
-	assert.Contains(t, detail.Error, detail.Target)
+	assert.NotContains(t, detail.Error, missing)
+	assert.NotContains(t, detail.Error, "nope")
 }
 
 // relativeToWorkingDir returns path relative to the test working directory, so
