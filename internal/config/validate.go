@@ -64,8 +64,6 @@ func (c Config) Validate() error {
 	check(c.Database.SearchPath != "", "database.search_path: must not be empty")
 	check(c.Database.Timezone != "", "database.timezone: must not be empty")
 
-	check(c.Fetcher.BaseURL == "" || isHTTPURLWithoutUserinfo(c.Fetcher.BaseURL),
-		"fetcher.base_url: %q must be an absolute http or https URL without userinfo", c.Fetcher.BaseURL)
 	check(isHeaderValue(c.Fetcher.UserAgent),
 		"fetcher.user_agent: must be a single header value of at most 256 characters")
 	check(c.Fetcher.Timeout > 0, "fetcher.timeout: must be positive")
@@ -80,6 +78,8 @@ func (c Config) Validate() error {
 	check(c.Fetcher.CircuitSuccessThreshold > 0, "fetcher.circuit_success_threshold: must be positive")
 	check(c.Fetcher.CircuitResetTimeout >= c.Fetcher.Timeout,
 		"fetcher.circuit_reset_timeout: must not be shorter than fetcher.timeout")
+	check(c.Fetcher.MaxBodyBytes > 0 && c.Fetcher.MaxBodyBytes <= maxFetcherBody,
+		"fetcher.max_body_bytes: %d must be between 1 and %d", c.Fetcher.MaxBodyBytes, maxFetcherBody)
 
 	check(isOneOf(c.Log.Level, LogDebug, LogInfo, LogWarn, LogError),
 		"log.level: %q is not one of %s", c.Log.Level, joinValues(LogDebug, LogInfo, LogWarn, LogError))
@@ -537,6 +537,11 @@ func isPostgresDSN(value string) bool {
 // a typo in the file becomes a retry storm against someone else's service.
 const maxFetcherRetries = 5
 
+// maxFetcherBody is the largest response body a deployment may keep. Above
+// this a typed number in the file is a typo that would buffer without a
+// useful bound.
+const maxFetcherBody = 32 << 20
+
 // isHTTPURL reports whether value is an absolute http or https URL.
 func isHTTPURL(value string) bool {
 	parsed, err := url.Parse(value)
@@ -547,17 +552,6 @@ func isHTTPURL(value string) bool {
 		return false
 	}
 	return parsed.Host != ""
-}
-
-// isHTTPURLWithoutUserinfo reports whether value is an absolute http or https
-// URL that carries no userinfo. Userinfo in a configured base URL is a
-// credential stored beside the address, and it would be sent on every call.
-func isHTTPURLWithoutUserinfo(value string) bool {
-	parsed, err := url.Parse(value)
-	if err != nil || parsed.User != nil {
-		return false
-	}
-	return isHTTPURL(value)
 }
 
 // isHeaderValue reports whether value can be one HTTP header field value:

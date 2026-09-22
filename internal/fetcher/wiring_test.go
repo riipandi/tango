@@ -22,7 +22,6 @@ func TestRegistryWiresTheClient(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	cfg := config.Default()
-	cfg.Fetcher.BaseURL = server.URL
 	injector := registry.New(t.Context(), cfg, nil, slog.New(slog.DiscardHandler))
 	t.Cleanup(func() {
 		report := injector.Shutdown()
@@ -33,7 +32,7 @@ func TestRegistryWiresTheClient(t *testing.T) {
 
 	client, err := do.Invoke[*fetcher.Client](injector)
 	require.NoError(t, err)
-	res, err := client.Do(t.Context(), fetcher.Request{URL: "/status"})
+	res, err := client.Do(t.Context(), fetcher.Request{URL: server.URL + "/status"})
 	require.NoError(t, err)
 	assert.Equal(t, "wired", string(res.Body))
 

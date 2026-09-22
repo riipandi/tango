@@ -105,15 +105,9 @@ type Database struct {
 
 // Fetcher holds the outbound HTTP client used to call external services.
 //
-// One client serves every integration: a base URL is optional because callers
-// pass absolute URLs, and the resilience values apply to every call so a
-// feature cannot quietly retry harder than the deployment allows.
+// Callers pass an absolute URL. The address of an upstream lives in the
+// code that calls it. The values here are the resilience shared by every call.
 type Fetcher struct {
-	// BaseURL is prepended to a relative request URL. Empty means every
-	// request carries its own absolute URL. It never carries userinfo: a
-	// credential belongs on the request, where it is not part of the
-	// configured address.
-	BaseURL string `koanf:"base_url" json:"base_url"`
 	// UserAgent is the product token sent on every request. It names this
 	// application. It is not a browser token and not another client's token.
 	UserAgent string `koanf:"user_agent" json:"user_agent"`
@@ -134,9 +128,13 @@ type Fetcher struct {
 	CircuitFailureThreshold int `koanf:"circuit_failure_threshold" json:"circuit_failure_threshold"`
 	// CircuitSuccessThreshold is how many successful probes close an open
 	// breaker. CircuitResetTimeout is how long it stays open before the
-	// first probe.
+	// first probe. Each upstream host has its own breaker, so one host
+	// opening does not stop calls to another.
 	CircuitSuccessThreshold int           `koanf:"circuit_success_threshold" json:"circuit_success_threshold"`
 	CircuitResetTimeout     time.Duration `koanf:"circuit_reset_timeout" json:"circuit_reset_timeout"`
+	// MaxBodyBytes is how much of a response body is kept. The rest is
+	// refused, so an upstream cannot grow the process without a bound.
+	MaxBodyBytes int64 `koanf:"max_body_bytes" json:"max_body_bytes"`
 }
 
 // KVStore holds the optional key-value backend settings, for a Valkey or Redis

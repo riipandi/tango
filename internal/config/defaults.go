@@ -158,6 +158,10 @@ const (
 	DefaultFetcherCircuitFailures = 5
 	DefaultFetcherCircuitSuccess  = 2
 	DefaultFetcherCircuitReset    = 30 * time.Second
+	// DefaultFetcherMaxBody is the response body kept from one call.
+	// Large enough for an API document, small enough that one response
+	// cannot dominate the process.
+	DefaultFetcherMaxBody = 16 << 20
 )
 
 // DefaultUserAgent is the product token the outbound client sends when a
@@ -210,6 +214,7 @@ func Default() Config {
 			CircuitFailureThreshold: DefaultFetcherCircuitFailures,
 			CircuitSuccessThreshold: DefaultFetcherCircuitSuccess,
 			CircuitResetTimeout:     DefaultFetcherCircuitReset,
+			MaxBodyBytes:            DefaultFetcherMaxBody,
 		},
 		Database: Database{
 			MaxConns:        10,

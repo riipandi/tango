@@ -8,23 +8,20 @@ package fetcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"resty.dev/v3"
 
 	"github.com/riipandi/tango/internal/config"
 )
-
-// maxResponseBytes is how much of a response body is kept. An integration
-// that answers with an unbounded body must not be able to grow the process
-// without limit. The remainder is refused rather than buffered.
-const maxResponseBytes = 16 << 20
 
 // Request is one outbound call. URL may be absolute, or relative to the
 // configured base URL. Query and Headers are added to that request only.
@@ -49,12 +46,16 @@ type Response struct {
 }
 
 // Client calls external HTTP services. It is safe for concurrent use.
-// Shutdown releases its idle connections; the composition root calls it.
+// Each host has its own circuit breaker. The hosts share one connection
+// pool. Shutdown releases the idle connections; the composition root calls it.
 type Client struct {
-	http       *resty.Client
+	mu         sync.Mutex
+	hosts      map[string]*resty.Client
+	baseHTTP   *http.Client
 	log        *slog.Logger
-	baseURL    string
 	retryCount int
+	maxBody    int64
+	settings   config.Fetcher
 }
 
 // New builds the client the configuration describes.
@@ -74,58 +75,88 @@ func New(cfg config.Config, log *slog.Logger) (*Client, error) {
 	// The dial and the handshake share the attempt budget. A transport
 	// timeout longer than the attempt would still be cut by the attempt
 	// context; keeping them equal means neither one waits alone.
-	httpClient := resty.NewWithTransportSettings(&resty.TransportSettings{
+	// One transport is shared by every host client, so connections to a
+	// healthy host stay pooled while another host's breaker is open.
+	seed := resty.NewWithTransportSettings(&resty.TransportSettings{
 		DialerTimeout:         settings.Timeout,
 		TLSHandshakeTimeout:   settings.Timeout,
 		ResponseHeaderTimeout: settings.Timeout,
 	})
-	// Both thresholds are non-negative here: ready refused anything else.
-	// The comparison is what makes the conversion to the breaker's uint64
-	// a value that cannot wrap.
-	if settings.CircuitFailureThreshold < 0 || settings.CircuitSuccessThreshold < 0 {
-		return nil, fmt.Errorf("fetcher: circuit thresholds must be positive")
-	}
-	failures := settings.CircuitFailureThreshold
-	successes := settings.CircuitSuccessThreshold
-	breaker := resty.NewCircuitBreakerCount(
-		uint64(failures),
-		uint64(successes),
-		settings.CircuitResetTimeout,
-		breakerFailure,
-	)
-	breaker.OnStateChange(func(from, to resty.CircuitBreakerState) {
-		log.Warn("fetcher: circuit breaker", "from", circuitState(from), "to", circuitState(to))
-	})
-	breaker.OnTrigger(func(*resty.Request, error) {
-		// The request is not logged: it can carry a credential, and the
-		// only fact that matters here is that the call was not sent.
-		log.Warn("fetcher: circuit open")
-	})
-
-	httpClient.
-		SetLogger(slogAdapter{log: log}).
-		SetDebug(false).
-		SetTimeout(settings.Timeout).
-		SetHeader(headerUserAgent, settings.UserAgent).
-		SetRetryCount(settings.RetryCount).
-		SetRetryWaitTime(settings.RetryWait).
-		SetRetryMaxWaitTime(settings.RetryMaxWait).
-		AddRetryConditions(retryable).
-		SetCircuitBreaker(breaker).
-		SetCookieJar(nil).
-		SetResponseBodyLimit(maxResponseBytes).
-		// A redirect to another host must not carry Authorization or Cookie.
-		SetRedirectPolicy(resty.RedirectHeaderStripSensitivePolicy(true))
-	if settings.BaseURL != "" {
-		httpClient.SetBaseURL(settings.BaseURL)
+	seed.SetCookieJar(nil)
+	baseHTTP := seed.Client()
+	if err := seed.Close(); err != nil {
+		return nil, err
 	}
 
 	return &Client{
-		http:       httpClient,
+		hosts:      make(map[string]*resty.Client),
+		baseHTTP:   baseHTTP,
 		log:        log,
-		baseURL:    settings.BaseURL,
 		retryCount: settings.RetryCount,
+		maxBody:    settings.MaxBodyBytes,
+		settings:   settings,
 	}, nil
+}
+
+// restyFor returns the client whose breaker belongs to host. host is
+// scheme://host, with no path and no query. The client is built on first
+// use and kept until Shutdown.
+func (c *Client) restyFor(host string) *resty.Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if existing, ok := c.hosts[host]; ok {
+		return existing
+	}
+	created := c.newHostClient(host)
+	c.hosts[host] = created
+	return created
+}
+
+// newHostClient builds a Resty client for one host. It shares the process
+// connection pool and owns the breaker for that host.
+func (c *Client) newHostClient(host string) *resty.Client {
+	// Both thresholds are non-negative here: ready refused anything else.
+	// The comparison is what makes the conversion to the breaker's uint64
+	// a value that cannot wrap.
+	failures := c.settings.CircuitFailureThreshold
+	successes := c.settings.CircuitSuccessThreshold
+	if failures < 0 {
+		failures = 0
+	}
+	if successes < 0 {
+		successes = 0
+	}
+	breaker := resty.NewCircuitBreakerCount(
+		uint64(failures),
+		uint64(successes),
+		c.settings.CircuitResetTimeout,
+		breakerFailure,
+	)
+	breaker.OnStateChange(func(from, to resty.CircuitBreakerState) {
+		c.log.Warn("fetcher: circuit breaker",
+			"target", host, "from", circuitState(from), "to", circuitState(to))
+	})
+	breaker.OnTrigger(func(*resty.Request, error) {
+		// The request is not logged: it can carry a credential. The host
+		// is the only fact that matters, and it is the breaker's key.
+		c.log.Warn("fetcher: circuit open", "target", host)
+	})
+
+	httpClient := resty.NewWithClient(c.baseHTTP)
+	httpClient.
+		SetLogger(slogAdapter{log: c.log}).
+		SetDebug(false).
+		SetTimeout(c.settings.Timeout).
+		SetHeader(headerUserAgent, c.settings.UserAgent).
+		SetRetryCount(c.settings.RetryCount).
+		SetRetryWaitTime(c.settings.RetryWait).
+		SetRetryMaxWaitTime(c.settings.RetryMaxWait).
+		AddRetryConditions(retryable).
+		SetCircuitBreaker(breaker).
+		SetResponseBodyLimit(c.maxBody).
+		// A redirect to another host must not carry Authorization or Cookie.
+		SetRedirectPolicy(resty.RedirectHeaderStripSensitivePolicy(true))
+	return httpClient
 }
 
 // headerUserAgent is the canonical header name, so a caller-supplied
@@ -151,6 +182,8 @@ func ready(settings config.Fetcher) error {
 		return fmt.Errorf("fetcher: circuit reset timeout must not be shorter than the attempt timeout")
 	case settings.UserAgent == "":
 		return fmt.Errorf("fetcher: user agent must not be empty")
+	case settings.MaxBodyBytes <= 0:
+		return fmt.Errorf("fetcher: max body must be positive")
 	default:
 		return nil
 	}
@@ -174,43 +207,91 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 	}
 	method = strings.ToUpper(method)
 
-	call := c.http.R().SetContext(ctx)
+	absolute, host, err := resolve(req.URL)
+	if err != nil {
+		return nil, err
+	}
+	target := safeTarget("", absolute)
+	ctx, span := startSpan(ctx, method, target)
+	var (
+		out        *Response
+		classified error
+	)
+	defer func() {
+		status := 0
+		if out != nil {
+			status = out.StatusCode
+		}
+		finishSpan(span, status, classified)
+	}()
+
+	headers := req.Headers.Clone()
+	if headers == nil {
+		headers = make(http.Header)
+	}
+	injectTrace(ctx, headers)
+
+	call := c.restyFor(host).R().SetContext(ctx).SetHeaderMultiValues(headers)
 	if len(req.Query) > 0 {
 		call.SetQueryParamsFromValues(req.Query)
-	}
-	if len(req.Headers) > 0 {
-		call.SetHeaderMultiValues(req.Headers)
 	}
 	if req.Body != nil {
 		call.SetBody(req.Body)
 	}
 
 	started := time.Now()
-	res, err := call.Execute(method, req.URL)
-	out, readErr := responseFrom(res)
-	if readErr != nil && err == nil {
-		err = readErr
+	res, callErr := call.Execute(method, absolute)
+	var readErr error
+	out, readErr = responseFrom(res, c.maxBody)
+	if readErr != nil && callErr == nil {
+		callErr = readErr
 	}
-	classified := classify(c.retryCount, c.baseURL, method, req.URL, out.Attempts, res, err)
-	c.logCall(ctx, method, safeTarget(c.baseURL, req.URL), out, classified, time.Since(started))
+	classified = classify(c.retryCount, "", method, absolute, out.Attempts, res, callErr)
+	c.logCall(ctx, method, target, out, classified, time.Since(started))
 	if classified != nil {
 		return out, classified
 	}
 	return out, nil
 }
 
-// Shutdown closes idle connections. In-flight calls finish on their own
-// context; this does not cancel them.
+// resolve returns the absolute URL and the host key the breaker is stored
+// under. The URL is the caller's: an upstream address is hardcoded at the
+// call site, so a relative URL has nothing to join to.
+func resolve(rawURL string) (absolute, host string, err error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", "", fmt.Errorf("fetcher: url: %w", err)
+	}
+	if parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", "", fmt.Errorf("fetcher: url must be an absolute http or https URL")
+	}
+	// Userinfo stays on the request URL: it is a credential the caller set.
+	// The host key and the logs use the host alone.
+	return parsed.String(), parsed.Scheme + "://" + parsed.Host, nil
+}
+
+// Shutdown closes every host client and the shared idle connections.
+// In-flight calls finish on their own context; this does not cancel them.
 func (c *Client) Shutdown(context.Context) error {
-	if c == nil || c.http == nil {
+	if c == nil {
 		return nil
 	}
-	return c.http.Close()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var errs []error
+	for _, httpClient := range c.hosts {
+		errs = append(errs, httpClient.Close())
+	}
+	clear(c.hosts)
+	if c.baseHTTP != nil {
+		c.baseHTTP.CloseIdleConnections()
+	}
+	return errors.Join(errs...)
 }
 
 // responseFrom copies the fields a caller is allowed to keep. The Resty
 // response stays inside this package: its request still holds headers.
-func responseFrom(res *resty.Response) (*Response, error) {
+func responseFrom(res *resty.Response, maxBody int64) (*Response, error) {
 	out := &Response{Attempts: attemptsOf(res)}
 	if res == nil {
 		return out, nil
@@ -219,16 +300,19 @@ func responseFrom(res *resty.Response) (*Response, error) {
 	if res.RawResponse != nil {
 		out.Header = res.Header().Clone()
 	}
-	body, err := readBody(res)
+	body, err := readBody(res, maxBody)
 	out.Body = body
 	return out, err
 }
 
 // readBody returns the buffered body, or reads it once, and never more than
-// maxResponseBytes. A body Resty already refused for size stays refused.
-func readBody(res *resty.Response) ([]byte, error) {
+// maxBody. A body Resty already refused for size stays refused.
+func readBody(res *resty.Response, maxBody int64) ([]byte, error) {
+	if maxBody < 1 {
+		maxBody = 1
+	}
 	if buffered := res.Bytes(); len(buffered) > 0 {
-		if len(buffered) > maxResponseBytes {
+		if int64(len(buffered)) > maxBody {
 			return nil, errResponseTooLarge
 		}
 		return buffered, nil
@@ -237,11 +321,11 @@ func readBody(res *resty.Response) ([]byte, error) {
 		return nil, nil
 	}
 	defer res.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(res.Body, maxResponseBytes+1))
+	body, err := io.ReadAll(io.LimitReader(res.Body, maxBody+1))
 	if err != nil {
 		return body, err
 	}
-	if len(body) > maxResponseBytes {
+	if int64(len(body)) > maxBody {
 		return nil, errResponseTooLarge
 	}
 	return body, nil

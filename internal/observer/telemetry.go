@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	otlpbridge "go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -268,6 +269,12 @@ func (o *Observer) SetGlobals() {
 	if o == nil {
 		return
 	}
+	// W3C trace context and baggage. The SDK's default propagator carries
+	// no fields, so an outbound call would drop a trace it was given.
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
 	if o.tracer != nil {
 		otel.SetTracerProvider(o.tracer)
 	}

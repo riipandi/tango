@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
 	"github.com/samber/do/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -279,7 +281,7 @@ func TestLogsDoNotCarrySecrets(t *testing.T) {
 	})
 	require.Error(t, err)
 
-	client.http.Logger().Errorf("authorization: Bearer super-secret-token password=hunter2 https://user:pw@example.com/path?token=super-secret-query")
+	slogAdapter{log: slog.New(records)}.Errorf("authorization: Bearer super-secret-token password=hunter2 https://user:pw@example.com/path?token=super-secret-query")
 	text := records.joined()
 	assert.NotContains(t, text, "super-secret-token")
 	assert.NotContains(t, text, "hunter2")
@@ -287,6 +289,79 @@ func TestLogsDoNotCarrySecrets(t *testing.T) {
 	assert.NotContains(t, text, "user:pw")
 	assert.Contains(t, text, "status")
 	assert.Contains(t, text, "[redacted]")
+}
+
+func TestDoRefusesARelativeURL(t *testing.T) {
+	client := newClient(t, config.Default())
+	_, err := client.Do(t.Context(), Request{URL: "/v1/items"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "absolute")
+}
+
+func TestDoKeepsAnOpenHostFromBlockingAnother(t *testing.T) {
+	var downHits atomic.Int32
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		downHits.Add(1)
+		http.Error(w, "down", http.StatusInternalServerError)
+	}))
+	t.Cleanup(down.Close)
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("up"))
+	}))
+	t.Cleanup(up.Close)
+
+	cfg := fastRetries(0)
+	cfg.Fetcher.CircuitFailureThreshold = 2
+	cfg.Fetcher.CircuitSuccessThreshold = 1
+	cfg.Fetcher.CircuitResetTimeout = time.Hour
+	client := newClient(t, cfg)
+
+	_, err := client.Do(t.Context(), Request{URL: down.URL})
+	require.ErrorIs(t, err, ErrStatus)
+	_, err = client.Do(t.Context(), Request{URL: down.URL})
+	require.ErrorIs(t, err, ErrStatus)
+	_, err = client.Do(t.Context(), Request{URL: down.URL})
+	require.ErrorIs(t, err, ErrCircuitOpen)
+	assert.Equal(t, int32(2), downHits.Load())
+
+	res, err := client.Do(t.Context(), Request{URL: up.URL})
+	require.NoError(t, err)
+	assert.Equal(t, "up", string(res.Body))
+}
+
+func TestDoInjectsTheTraceParent(t *testing.T) {
+	var traceparent string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		traceparent = r.Header.Get("traceparent")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(server.Close)
+
+	provider := sdktrace.NewTracerProvider()
+	ctx, span := provider.Tracer("test").Start(t.Context(), "parent")
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+
+	client := newClient(t, config.Default())
+	_, err := client.Do(ctx, Request{URL: server.URL + "/items"})
+	require.NoError(t, err)
+	span.End()
+
+	require.NotEmpty(t, traceparent)
+	assert.Contains(t, traceparent, span.SpanContext().TraceID().String())
+}
+
+func TestDoRefusesABodyOverTheLimit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("0123456789abcdef"))
+	}))
+	t.Cleanup(server.Close)
+
+	cfg := fastRetries(0)
+	cfg.Fetcher.MaxBodyBytes = 8
+	client := newClient(t, cfg)
+	_, err := client.Do(t.Context(), Request{URL: server.URL})
+	require.ErrorIs(t, err, ErrNetwork)
+	assert.NotContains(t, err.Error(), "0123456789")
 }
 
 func TestRedactStripsCredentials(t *testing.T) {

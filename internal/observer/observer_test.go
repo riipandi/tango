@@ -263,6 +263,7 @@ func TestSetGlobalsInstallsOnlyEnabledSignals(t *testing.T) {
 
 	assert.IsType(t, &sdktrace.TracerProvider{}, otel.GetTracerProvider(),
 		"tracing is on, so the global is the real provider")
+	assert.Contains(t, otel.GetTextMapPropagator().Fields(), "traceparent")
 	_, isReal := otel.GetMeterProvider().(*sdkmetric.MeterProvider)
 	assert.False(t, isReal, "metrics are off, so the global stays the no-op")
 }

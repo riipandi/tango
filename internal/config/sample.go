@@ -46,6 +46,14 @@ var nullKeys = []string{
 	"storage.s3.path_prefix",
 }
 
+// omittedKeys stay on Config and keep the built-in default, but a generated
+// file does not list them. fetcher.user_agent is the product token the binary
+// already sends. Writing it into the file would be the place a deployment
+// replaces it.
+var omittedKeys = []string{
+	"fetcher.user_agent",
+}
+
 // envKeys are the keys a generated file writes as an env: directive even though
 // the value is not a secret, mapped to the variable each one names.
 //
@@ -119,10 +127,17 @@ var envKeys = map[string]string{
 // variable a deployment sets.
 //
 // Every key is written out rather than only the ones a user is likely to change,
-// so the file doubles as the list of what can be configured. The output is
-// deterministic: keys are sorted, so two runs produce the same bytes.
+// so the file doubles as the list of what can be configured, except omittedKeys,
+// which keep the built-in default by being absent. The output is deterministic:
+// keys are sorted, so two runs produce the same bytes.
 func Sample() ([]byte, error) {
 	flat := DefaultsMap()
+	for _, key := range omittedKeys {
+		if _, ok := flat[key]; !ok {
+			return nil, fmt.Errorf("config: omitted key %s is not part of Config", key)
+		}
+		delete(flat, key)
+	}
 	for _, key := range secretKeys {
 		if _, ok := flat[key]; !ok {
 			return nil, fmt.Errorf("config: secret key %s is not part of Config", key)
