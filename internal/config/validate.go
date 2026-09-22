@@ -35,6 +35,10 @@ func (c Config) Validate() error {
 		joinValues(ModeDevelopment, ModeStaging, ModeProduction, ModeTest))
 	check(c.App.SecretKey == "" || isHexKey(c.App.SecretKey),
 		"app.secret_key: must be 64 hex characters")
+	check(c.App.BaseURL == "" || isHTTPURL(c.App.BaseURL),
+		"app.base_url: %q must be an absolute http or https URL", c.App.BaseURL)
+	check(c.App.AssetsURL == "" || isHTTPURL(c.App.AssetsURL),
+		"app.assets_url: %q must be an absolute http or https URL", c.App.AssetsURL)
 
 	// The cache is off by default, so a file that has not switched it on is
 	// not held to a driver or a budget it never runs — the way a signal
@@ -256,8 +260,6 @@ func (c Config) Validate() error {
 
 	check(c.Server.Host != "", "server.host: must not be empty")
 	check(c.Server.Port > 0 && c.Server.Port <= 65535, "server.port: %d must be between 1 and 65535", c.Server.Port)
-	check(c.Server.BaseURL == "" || isHTTPURL(c.Server.BaseURL),
-		"server.base_url: %q must be an absolute http or https URL", c.Server.BaseURL)
 	check(c.Server.ReadTimeout > 0, "server.read_timeout: must be positive")
 	check(c.Server.WriteTimeout > 0, "server.write_timeout: must be positive")
 	check(c.Server.IdleTimeout > 0, "server.idle_timeout: must be positive")

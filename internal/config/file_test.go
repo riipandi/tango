@@ -52,13 +52,13 @@ func TestConfigFileIgnoresUnknownKeys(t *testing.T) {
 }
 
 func TestInterpolationFromEnvironment(t *testing.T) {
-	path := configFile(t, `"server": {"base_url": "http://${TEST_HOST}:3080"}, "log": {"level": "info"}`)
+	path := configFile(t, `"app": {"base_url": "http://${TEST_HOST}:3080"}, "log": {"level": "info"}`)
 	environ := append(baseEnv(), "TEST_HOST=example.test")
 
 	cfg, err := config.Load(config.Options{ConfigFile: path, Environ: environ})
 	require.NoError(t, err)
 
-	assert.Equal(t, "http://example.test:3080", cfg.Server.BaseURL)
+	assert.Equal(t, "http://example.test:3080", cfg.App.BaseURL)
 	assert.Equal(t, "info", cfg.Log.Level, "a value with no directive is untouched")
 }
 
@@ -145,13 +145,13 @@ func TestUnresolvedVariableDoesNotBlockAnUnrelatedKey(t *testing.T) {
 func TestEmptyVariableIsAValueNotAnUnresolvedDirective(t *testing.T) {
 	// An empty value is a decision, unlike an absent variable.
 	cfg, err := config.Load(config.Options{
-		ConfigFile: writeConfig(t, `{"server": {"base_url": "env:EMPTY_URL"}}`),
+		ConfigFile: writeConfig(t, `{"app": {"base_url": "env:EMPTY_URL"}}`),
 		Environ:    append(baseEnv(), "EMPTY_URL="),
 	})
 	require.NoError(t, err)
 
 	require.Empty(t, cfg.Unresolved())
-	require.Equal(t, config.LayerConfigFile, cfg.Origin("server.base_url"))
+	require.Equal(t, config.LayerConfigFile, cfg.Origin("app.base_url"))
 }
 
 func TestInterpolationOnlyAppliesToTheFile(t *testing.T) {

@@ -136,6 +136,12 @@ const (
 // the only zone that needs no data file and reads the same on every host.
 const DefaultSchedulerTimezone = "UTC"
 
+// DefaultAssetsURL is where the browser fetches static assets from when a
+// deployment names none: the /static mount the application itself serves.
+// A deployment may point app.assets_url at an S3 bucket or a CDN origin —
+// the value is one URL, and nothing else changes with it.
+const DefaultAssetsURL = "http://localhost:3080/static"
+
 // Default returns the built-in configuration. These values are the lowest
 // precedence layer: every other source may replace them, but a key no source
 // mentions keeps the value set here.
@@ -143,6 +149,10 @@ func Default() Config {
 	return Config{
 		App: App{
 			Mode: ModeDevelopment,
+			// The public origin is empty by default: links are built absolute
+			// only where a deployment asks for it.
+			BaseURL:   "",
+			AssetsURL: DefaultAssetsURL,
 		},
 		Auth: Auth{
 			Issuer:     "tango",

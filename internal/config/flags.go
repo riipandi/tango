@@ -30,7 +30,7 @@ const (
 var flagBindings = map[string]string{
 	"host":     "server.host",
 	"port":     "server.port",
-	"base-url": "server.base_url",
+	"base-url": "app.base_url",
 }
 
 // FromCommand builds the options Load merges from a parsed command, so a caller

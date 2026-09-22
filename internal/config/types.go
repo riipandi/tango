@@ -43,6 +43,12 @@ type App struct {
 	Mode string `koanf:"mode" json:"mode"`
 	// SecretKey is the hex-encoded AES-256 key used to seal stored values.
 	SecretKey string `koanf:"secret_key" json:"secret_key"`
+	// BaseURL is the public origin, used to build absolute links.
+	BaseURL string `koanf:"base_url" json:"base_url"`
+	// AssetsURL is where the browser fetches static assets from: the built-in
+	// /static mount today, an S3 bucket or a CDN origin whenever a deployment
+	// points the variable there.
+	AssetsURL string `koanf:"assets_url" json:"assets_url"`
 }
 
 // Auth holds the JWT signing material.
@@ -360,8 +366,6 @@ type Server struct {
 	// Host and Port are the listen address.
 	Host string `koanf:"host" json:"host"`
 	Port int    `koanf:"port" json:"port"`
-	// BaseURL is the public origin, used to build absolute links.
-	BaseURL string `koanf:"base_url" json:"base_url"`
 	// ReadTimeout, WriteTimeout, and IdleTimeout are the net/http timeouts.
 	ReadTimeout  time.Duration `koanf:"read_timeout" json:"read_timeout"`
 	WriteTimeout time.Duration `koanf:"write_timeout" json:"write_timeout"`

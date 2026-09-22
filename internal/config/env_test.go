@@ -82,11 +82,11 @@ func TestEmptyValueIsKept(t *testing.T) {
 	cfg := load(t, `{
 		"database": {"url": "env:DATABASE_URL"},
 		"auth": {"secret_key": "env:AUTH_SECRET_KEY"},
-		"server": {"base_url": ""}
+		"app": {"base_url": ""}
 	}`)
 
-	assert.Empty(t, cfg.Server.BaseURL)
-	assert.Equal(t, config.LayerConfigFile, cfg.Origin("server.base_url"))
+	assert.Empty(t, cfg.App.BaseURL)
+	assert.Equal(t, config.LayerConfigFile, cfg.Origin("app.base_url"))
 }
 
 func TestDurationAndNumericFromFile(t *testing.T) {
@@ -121,7 +121,7 @@ func TestEnvFileFeedsInterpolation(t *testing.T) {
 	path := writeConfig(t, `{
 		"database": {"url": "env:MY_DSN"},
 		"auth": {"secret_key": "env:MY_SECRET"},
-		"server": {"base_url": "http://${MY_HOST}:3080"}
+		"app": {"base_url": "http://${MY_HOST}:3080"}
 	}`)
 
 	cfg, err := config.Load(config.Options{
@@ -133,7 +133,7 @@ func TestEnvFileFeedsInterpolation(t *testing.T) {
 
 	assert.Equal(t, dsn, cfg.Database.URL)
 	assert.Equal(t, secret, cfg.Auth.SecretKey)
-	assert.Equal(t, "http://example.test:3080", cfg.Server.BaseURL)
+	assert.Equal(t, "http://example.test:3080", cfg.App.BaseURL)
 }
 
 func TestEnvFileBeatsSystemEnvironmentForAName(t *testing.T) {

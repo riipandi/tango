@@ -60,7 +60,7 @@ func TestFromCommandReadsSubcommandFlags(t *testing.T) {
 
 	assert.Equal(t, "1.2.3.4", opts.Flags["server.host"])
 	assert.EqualValues(t, 9000, opts.Flags["server.port"])
-	assert.Equal(t, "https://x.test", opts.Flags["server.base_url"])
+	assert.Equal(t, "https://x.test", opts.Flags["app.base_url"])
 }
 
 func TestFromCommandOmitsUnsetFlags(t *testing.T) {
@@ -70,7 +70,7 @@ func TestFromCommandOmitsUnsetFlags(t *testing.T) {
 
 	assert.NotContains(t, opts.Flags, "server.port")
 	assert.NotContains(t, opts.Flags, "server.host")
-	assert.NotContains(t, opts.Flags, "server.base_url")
+	assert.NotContains(t, opts.Flags, "app.base_url")
 }
 
 func TestFromCommandReadsConfigFileFlag(t *testing.T) {

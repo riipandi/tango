@@ -107,9 +107,9 @@ func TestNormalizeMapsLeavesAJSONObjectAlone(t *testing.T) {
 func TestNormalizeMapsTouchesNoOtherKey(t *testing.T) {
 	// A string with an = under a key that is not a map is an ordinary value, and
 	// splitting it would silently change it.
-	keys := map[string]any{"server.base_url": "https://example.com?a=b"}
+	keys := map[string]any{"app.base_url": "https://example.com?a=b"}
 
 	normalizeMaps(keys)
 
-	assert.Equal(t, "https://example.com?a=b", keys["server.base_url"])
+	assert.Equal(t, "https://example.com?a=b", keys["app.base_url"])
 }

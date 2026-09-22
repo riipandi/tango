@@ -11,7 +11,7 @@ import (
 )
 
 // secretKeys are the keys a generated file must not carry a literal value for.
-// A secret is a property of the key, not of its default: server.base_url has an
+// A secret is a property of the key, not of its default: app.base_url has an
 // empty default too, and it is not a secret.
 //
 // otel.headers is the one key here whose value is a map rather than a string,
@@ -49,12 +49,14 @@ var nullKeys = []string{
 // envKeys are the keys a generated file writes as an env: directive even though
 // the value is not a secret, mapped to the variable each one names.
 //
-// A deployment sets the runtime mode, the public base URL, and the collector it
-// ships telemetry to, so a generated file asks for the variable rather than
-// baking in a value that would be wrong there. The variable name is written out
-// instead of derived from the key, because the two do not always agree:
-// server.base_url is PUBLIC_BASE_URL, the name the origin is known by outside
-// this file, not SERVER_BASE_URL.
+// A deployment sets the runtime mode, the public base URL, the origin the
+// browser fetches assets from, and the collector it ships telemetry to, so a
+// generated file asks for the variable rather than baking in a value that
+// would be wrong there. The variable name is written out instead of derived
+// from the key, because the two do not always agree: app.base_url is
+// PUBLIC_BASE_URL, the name the origin is known by outside this file, not
+// APP_BASE_URL, and app.assets_url is PUBLIC_ASSETS_URL for the same reason —
+// the same origin an S3 bucket or a CDN is published at.
 //
 // A path is deliberately not here. storage.local_path comes from the file alone:
 // where an instance writes its files is a property of the deployment image, and a
@@ -78,12 +80,15 @@ var nullKeys = []string{
 // is the case where the two disagree, being VALKEY_URL rather than KVSTORE_URL.
 //
 // Validate reports a key here only when the variable leaves it unusable. An unset
-// APP_MODE falls back to development, an empty base_url is a valid value, an
-// unset OTEL_ENDPOINT falls back to the collector on the default port, and an
-// unset HOST or PORT falls back to the listen address in the defaults, so none of
+// APP_MODE falls back to development, an empty base_url is a valid value, an unset
+// APP_ASSETS_URL falls back to the built-in /static mount, an unset OTEL_ENDPOINT
+// falls back to the collector on the default port, and an unset HOST or PORT falls
+// back to the listen address in the defaults, so none of
 // them is an error on its own: naming them would report a choice the user made on
 // purpose.
 var envKeys = map[string]string{
+	"app.assets_url":              "PUBLIC_ASSETS_URL",
+	"app.base_url":                "PUBLIC_BASE_URL",
 	"app.mode":                    "APP_MODE",
 	"cache.enable":                "CACHE_ENABLE",
 	"kvstore.db":                  "VALKEY_DB",
@@ -100,7 +105,6 @@ var envKeys = map[string]string{
 	"otel.protocol":               "OTEL_PROTOCOL",
 	"otel.service_name":           "OTEL_SERVICE_NAME",
 	"otel.tracing.enable":         "OTEL_TRACING_ENABLE",
-	"server.base_url":             "PUBLIC_BASE_URL",
 	"server.cors.allowed_origins": "CORS_ALLOWED_ORIGINS",
 	"server.host":                 "SERVER_HOST",
 	"server.port":                 "SERVER_PORT",

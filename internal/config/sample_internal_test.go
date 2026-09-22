@@ -59,8 +59,10 @@ func TestSampleWritesDeploymentKeysAsDirectives(t *testing.T) {
 	for key, name := range envKeys {
 		assert.Equal(t, "env:"+name, flat[key], "%s must name %s", key, name)
 	}
-	assert.Equal(t, "env:PUBLIC_BASE_URL", flat["server.base_url"],
-		"the public origin is PUBLIC_BASE_URL, not SERVER_BASE_URL")
+	assert.Equal(t, "env:PUBLIC_BASE_URL", flat["app.base_url"],
+		"the public origin is PUBLIC_BASE_URL, not APP_BASE_URL")
+	assert.Equal(t, "env:PUBLIC_ASSETS_URL", flat["app.assets_url"],
+		"the asset origin is PUBLIC_ASSETS_URL, not APP_ASSETS_URL")
 	assert.Equal(t, "env:VALKEY_URL", flat["kvstore.url"],
 		"the key-value URL is VALKEY_URL, not KVSTORE_URL")
 }

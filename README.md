@@ -86,7 +86,7 @@ with `env:NAME` as a whole value or `${NAME}` inline:
 ```json
 {
   "database": { "url": "env:MY_DSN" },
-  "server": { "base_url": "http://${MY_HOST}:3080" }
+  "app": { "base_url": "http://${MY_HOST}:3080" }
 }
 ```
 
@@ -103,8 +103,9 @@ reports every unresolved variable at once.
 
 The variable names the generated file uses are the conventional ones (`DATABASE_URL`,
 `AUTH_SECRET_KEY`), which is also how `key:generate` writes them and how `.env.example` lists them.
-A deployment variable is written the same way: `app.mode` asks for `APP_MODE`, `server.base_url` for
-`PUBLIC_BASE_URL`, and each `mailer.smtp_*` key for the matching `MAILER_SMTP_*`.
+A deployment variable is written the same way: `app.mode` asks for `APP_MODE`, `app.base_url` for
+`PUBLIC_BASE_URL`, `app.assets_url` for `PUBLIC_ASSETS_URL`, and each `mailer.smtp_*` key for the
+matching `MAILER_SMTP_*`.
 
 The `storage.s3` section configures object storage. It is used when `storage.driver` is `s3`, and
 only then is it validated, so a local deployment can keep credentials in the file without being
