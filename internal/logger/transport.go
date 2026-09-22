@@ -11,27 +11,33 @@ import (
 	"github.com/riipandi/tango/internal/config"
 )
 
-// consoleTransport builds the sink a human reads: the colourised renderer on a
-// terminal, or one JSON object per line when the format asks for it.
+// consoleSink builds the sink a human reads: the colourised renderer on a
+// terminal, or one JSON object per line when the format asks for it, behind
+// the async worker every sink a request writes to shares.
 //
 // The console is the only sink with a rendering choice. A file or a collector
 // keeps its own form, because what a person reads in a terminal and what a
 // machine reads from a log file are two different questions, and answering the
-// second with the first would put escape codes in the file.
-func consoleTransport(cfg config.Config, w io.Writer) loglayer.Transport {
+// second with the first would put escape codes in the file. Colour is still
+// decided per destination: the renderer sees the real writer, so a redirected
+// run and a test buffer stay plain text even though the entries reach it
+// through the batch buffer.
+func consoleSink(cfg config.Config, w io.Writer) *asyncTransport {
+	dst := newBatchWriter(w)
+	var inner loglayer.Transport
 	if cfg.Log.Console.Format == config.LogStructured {
-		return structured.New(structured.Config{
-			Writer:     w,
+		inner = structured.New(structured.Config{
+			Writer:     dst,
 			BaseConfig: transport.BaseConfig{ID: "console"},
 		})
+	} else {
+		inner = pretty.New(pretty.Config{
+			Writer:     dst,
+			BaseConfig: transport.BaseConfig{ID: "console"},
+			NoColor:    !isTerminal(w),
+		})
 	}
-	return pretty.New(pretty.Config{
-		Writer:     w,
-		BaseConfig: transport.BaseConfig{ID: "console"},
-		// The renderer decides colour per destination, like pkg/printext: a
-		// redirected run and a test buffer must stay plain text.
-		NoColor: !isTerminal(w),
-	})
+	return newAsyncTransport(inner, dst)
 }
 
 // levelFor maps a configured level onto the logger's own threshold. The

@@ -70,6 +70,7 @@ func TestConsoleRendersEveryLevelTheConfigurationAllows(t *testing.T) {
 	log.Slog().Info("info line")
 	log.Slog().Warn("warn line")
 	log.Slog().Error("error line")
+	log.Flush()
 
 	out := buf.String()
 	for _, message := range []string{"debug line", "info line", "warn line", "error line"} {
@@ -86,6 +87,7 @@ func TestConfiguredLevelIsTheLoggerThreshold(t *testing.T) {
 	log.Slog().Debug("dropped debug")
 	log.Slog().Info("dropped info")
 	log.Slog().Warn("kept warn")
+	log.Flush()
 
 	out := buf.String()
 	assert.NotContains(t, out, "dropped debug")
@@ -99,6 +101,7 @@ func TestStructuredFormatWritesOneJSONObjectPerLine(t *testing.T) {
 	log, buf := newLogger(t, func(cfg *config.Config) { cfg.Log.Console.Format = config.LogStructured })
 
 	log.Slog().Info("served", "user", "alice", "status", 200)
+	log.Flush()
 
 	lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
 	require.Len(t, lines, 1)
@@ -123,6 +126,7 @@ func TestSlogChainCarriesFieldsThroughThePipeline(t *testing.T) {
 	request := log.Slog().With("request_id", "abc123")
 	request.Info("first")
 	request.WithGroup("user").Info("second", "id", 42)
+	log.Flush()
 
 	lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
 	require.Len(t, lines, 2)
@@ -147,6 +151,7 @@ func TestConsoleStaysPlainTextOffATerminal(t *testing.T) {
 	log, buf := newLogger(t, nil)
 
 	log.Slog().Info("plain")
+	log.Flush()
 
 	assert.NotContains(t, buf.String(), "\x1b[")
 }
@@ -161,6 +166,7 @@ func TestErrorsAreLoggedAsRenderedText(t *testing.T) {
 
 	err := errors.New("connection refused")
 	log.Slog().Error("failed", "err", err.Error())
+	log.Flush()
 
 	var entry map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &entry))
@@ -183,6 +189,7 @@ func TestTheDefaultConfigurationWritesOnlyToTheConsole(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, log.Shutdown(context.Background())) })
 
 	log.Slog().Info("console only")
+	log.Flush()
 
 	assert.Contains(t, buf.String(), "console only")
 	assert.NoDirExists(t, filepath.Join(dir, config.LogDir),
@@ -241,6 +248,7 @@ func TestSetDefaultInstallsTheProcessLogger(t *testing.T) {
 	log.SetDefault()
 
 	slog.Info("from the package default")
+	log.Flush()
 
 	assert.Contains(t, buf.String(), "from the package default")
 }

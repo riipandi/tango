@@ -10,10 +10,11 @@ import (
 	"github.com/riipandi/tango/internal/config"
 )
 
-// fileSink is the rotating file transport, held so Shutdown can release the file
-// descriptor it owns.
+// fileSink is the rotating file transport behind the async worker the sinks
+// a request writes to share. The rotator is held so Close can release the
+// file descriptor it owns after the queue has drained.
 type fileSink struct {
-	transport *lumberjack.Transport
+	async *asyncTransport
 }
 
 // newFileSink builds the rotating file sink the configuration names.
@@ -25,7 +26,9 @@ type fileSink struct {
 // driver does.
 //
 // Rotation settings are passed through as configured; Validate has already
-// refused the combination that never deletes a rotated file.
+// refused the combination that never deletes a rotated file. No batch writer
+// sits in front of the rotator: it writes through, so a size-based rotation
+// never overshoots by more than one entry.
 func newFileSink(cfg config.Config) (*fileSink, error) {
 	rotator, err := lumberjack.Build(lumberjack.Config{
 		Filename:   LogFilePath(cfg),
@@ -38,7 +41,7 @@ func newFileSink(cfg config.Config) (*fileSink, error) {
 	if err != nil {
 		return nil, fmt.Errorf("logger: file sink: %w", err)
 	}
-	return &fileSink{transport: rotator}, nil
+	return &fileSink{async: newAsyncTransport(rotator, nil)}, nil
 }
 
 // LogFilePath is the active log file, under the one data directory of the
@@ -57,10 +60,4 @@ func dataDir(cfg config.Config) string {
 		return config.DefaultDataDir
 	}
 	return cfg.Storage.LocalPath
-}
-
-// close releases the file handle. The sink stops accepting entries first, so a
-// late call cannot make the rotator reopen the file it just closed.
-func (s *fileSink) close() error {
-	return s.transport.Close()
 }

@@ -27,6 +27,7 @@ func TestACollectorThatIsDownDoesNotStopConstruction(t *testing.T) {
 	require.NoError(t, err)
 
 	log.Slog().Info("the collector is down")
+	log.Flush()
 
 	assert.Contains(t, buf.String(), "the collector is down", "the local sink still received the entry")
 

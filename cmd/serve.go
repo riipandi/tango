@@ -139,6 +139,11 @@ file decides.`,
 		if report := injector.ShutdownWithContext(shutdownCtx); report != nil && !report.Succeed {
 			slog.ErrorContext(ctx, "serve: release", "err", report.Error())
 		}
+
+		// The closing line is what proves the drain finished: a run that
+		// prints it released the listener, the scheduler, the pool, and the
+		// queue, so a service that exits without it stopped the hard way.
+		log.Slog().InfoContext(ctx, "shutdown complete", "address", server.Addr)
 		return nil
 	},
 }

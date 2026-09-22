@@ -40,10 +40,12 @@ import (
 type Logger struct {
 	slog *slog.Logger
 
-	// file and otlp are held so Shutdown can release them: the file sink owns a
+	// console, file and otlp are held so Shutdown can release them: the async
+	// workers hold queues that only a drain can flush, the file sink owns a
 	// descriptor, and the collector owns a queue nothing else can flush.
-	file *fileSink
-	otlp *otlpSink
+	console *asyncTransport
+	file    *fileSink
+	otlp    *otlpSink
 }
 
 // Options carries what a caller overrides at construction. Everything else comes
@@ -83,7 +85,8 @@ func New(cfg config.Config, opts ...Option) (*Logger, error) {
 	for _, name := range cfg.Log.Transport {
 		switch name {
 		case config.LogTransportConsole:
-			transports = append(transports, consoleTransport(cfg, options.Writer))
+			l.console = consoleSink(cfg, options.Writer)
+			transports = append(transports, l.console)
 
 		case config.LogTransportFile:
 			file, err := newFileSink(cfg)
@@ -91,7 +94,7 @@ func New(cfg config.Config, opts ...Option) (*Logger, error) {
 				return nil, errors.Join(err, l.release())
 			}
 			l.file = file
-			transports = append(transports, file.transport)
+			transports = append(transports, file.async)
 
 		case config.LogTransportOTLP:
 			otlp, err := newOTLPSink(cfg)
@@ -162,12 +165,28 @@ func (l *Logger) Slog() *slog.Logger { return l.slog }
 // through slog without being handed one lands in the same pipeline.
 func (l *Logger) SetDefault() { slog.SetDefault(l.slog) }
 
+// Flush drains every async sink without stopping it: entries queued before
+// the call are written and the batch buffers are pushed out when Flush
+// returns. It is what a test reads its destination after, and what a caller
+// that hands the log to a pipe it is about to close needs.
+func (l *Logger) Flush() {
+	if l.console != nil {
+		l.console.waitDrained()
+	}
+	if l.file != nil {
+		l.file.async.waitDrained()
+	}
+}
+
 // Shutdown flushes and releases every sink. It is safe to call more than once,
 // and a second call does nothing.
 //
-// The collector is drained with the caller's context: its batch processor holds
-// queued records that nothing else can flush, so a shutdown that skips it loses
-// whatever was queued. The file sink needs no drain, only its descriptor back.
+// The collector is drained first, with the caller's context: its batch
+// processor holds queued records that nothing else can flush, so a shutdown
+// that skips it loses whatever was queued. The async sinks come next — each
+// drain writes every queued entry and pushes the batch buffer out — and the
+// inner transports are released only after their queue is empty, so a
+// graceful stop loses nothing.
 func (l *Logger) Shutdown(ctx context.Context) error {
 	var errs []error
 	if l.otlp != nil {
@@ -176,13 +195,41 @@ func (l *Logger) Shutdown(ctx context.Context) error {
 		}
 		l.otlp = nil
 	}
-	if l.file != nil {
-		if err := l.file.close(); err != nil {
+	errs = append(errs, l.closeSink(ctx, l.console, "console")...)
+	l.console = nil
+	errs = append(errs, l.closeSink(ctx, l.fileAsync(), "file")...)
+	l.file = nil
+	return errors.Join(errs...)
+}
+
+// fileAsync exposes the file sink's worker for Shutdown, nil when absent.
+func (l *Logger) fileAsync() *asyncTransport {
+	if l.file == nil {
+		return nil
+	}
+	return l.file.async
+}
+
+// closeSink drains and releases one async sink under the caller's context.
+// The wait is bounded: a destination that stopped accepting must not hang
+// the shutdown past the context, and the drain that misses the deadline is
+// reported rather than silently abandoned.
+func (l *Logger) closeSink(ctx context.Context, sink *asyncTransport, name string) []error {
+	if sink == nil {
+		return nil
+	}
+	done := make(chan error, 1)
+	go func() { done <- sink.Close() }()
+	var errs []error
+	select {
+	case err := <-done:
+		if err != nil {
 			errs = append(errs, err)
 		}
-		l.file = nil
+	case <-ctx.Done():
+		errs = append(errs, fmt.Errorf("logger: %s sink drain: %w", name, ctx.Err()))
 	}
-	return errors.Join(errs...)
+	return errs
 }
 
 // release closes every sink that was built before a later one failed. The sinks
