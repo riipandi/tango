@@ -426,7 +426,7 @@ and order, replaces the existing key values, and appends the ones that are missi
 
 | Transport | Writes to                                                |
 | --------- | -------------------------------------------------------- |
-| `console` | The terminal. `log.format` selects `pretty` or `structured`. |
+| `console` | The terminal. `log.console.format` selects `pretty` or `structured`. |
 | `file`    | One JSON object per line, under `<storage.local_path>/logs/tango.log`, rotated. |
 | `otlp`    | The OpenTelemetry collector at `otel.endpoint`.          |
 

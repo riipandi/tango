@@ -126,9 +126,6 @@ type KVStore struct {
 type Log struct {
 	// Level is one of debug, info, warn, or error.
 	Level string `koanf:"level" json:"level"`
-	// Format is LogPretty or LogStructured. It selects the console rendering,
-	// the sink a human reads; the other sinks keep their own form.
-	Format string `koanf:"format" json:"format"`
 	// Transport names the sinks to write to, in the order given. More than one
 	// may be named, so a run can keep the terminal and ship to a collector at
 	// once. The default is the console alone, which is what a fresh checkout
@@ -138,12 +135,25 @@ type Log struct {
 	// alternatives: naming one is what turns it on, and there is no second flag
 	// that could disagree with the list.
 	Transport []string `koanf:"transport" json:"transport"`
+	// Console holds the console sink settings, read when Transport names
+	// LogTransportConsole.
+	Console LogConsole `koanf:"console" json:"console"`
 	// File holds the rotating file sink settings, read when Transport names
 	// LogTransportFile.
 	File LogFile `koanf:"file" json:"file"`
 	// OTLP holds the log export settings that are specific to logs, read when
 	// Transport names LogTransportOTLP.
 	OTLP LogOTLP `koanf:"otlp" json:"otlp"`
+}
+
+// LogConsole holds the console sink settings.
+//
+// The console is the only sink with a rendering choice, because it is the one
+// a person reads: a file or a collector keeps its machine form regardless, so
+// no other sink has a key to choose it.
+type LogConsole struct {
+	// Format is LogPretty or LogStructured.
+	Format string `koanf:"format" json:"format"`
 }
 
 // LogOTLP holds the log export settings that are specific to logs.

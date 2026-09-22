@@ -4,7 +4,10 @@
 // the only source of truth, each signal is opt-in, and a signal nothing enables
 // dials nothing. Logging is not here — internal/logger owns it — but the three
 // signals share one collector address and one resource, so the two packages
-// describe the same service from the same configuration.
+// describe the same service from the same configuration. The exporter plumbing
+// all of them need (transport credentials, TLS, compression, signal routes)
+// lives here in exporter.go, and the logger's OTLP sink consumes it rather
+// than carrying a copy.
 //
 // # Nothing on the request path blocks
 //

@@ -14,12 +14,12 @@ import (
 // consoleTransport builds the sink a human reads: the colourised renderer on a
 // terminal, or one JSON object per line when the format asks for it.
 //
-// The format selects this sink alone. A file or a collector keeps its own form,
-// because what a person reads in a terminal and what a machine reads from a log
-// file are two different questions, and answering the second with the first
-// would put escape codes in the file.
+// The console is the only sink with a rendering choice. A file or a collector
+// keeps its own form, because what a person reads in a terminal and what a
+// machine reads from a log file are two different questions, and answering the
+// second with the first would put escape codes in the file.
 func consoleTransport(cfg config.Config, w io.Writer) loglayer.Transport {
-	if cfg.Log.Format == config.LogStructured {
+	if cfg.Log.Console.Format == config.LogStructured {
 		return structured.New(structured.Config{
 			Writer:     w,
 			BaseConfig: transport.BaseConfig{ID: "console"},

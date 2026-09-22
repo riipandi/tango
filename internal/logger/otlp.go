@@ -15,7 +15,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 
 	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/otlp"
+	"github.com/riipandi/tango/internal/observer"
 )
 
 // otlpPath is the path the OTLP protocol serves logs on. An endpoint that names
@@ -98,13 +98,13 @@ func newLogExporter(cfg config.Config) (sdklog.Exporter, error) {
 		options := []otlploggrpc.Option{
 			otlploggrpc.WithEndpoint(cfg.CollectorEndpoint()),
 			otlploggrpc.WithHeaders(cfg.OTEL.Headers),
-			otlploggrpc.WithCompressor(otlp.Compressor(cfg.OTEL.Compression)),
+			otlploggrpc.WithCompressor(observer.Compressor(cfg.OTEL.Compression)),
 			otlploggrpc.WithTimeout(cfg.Log.OTLP.Timeout),
 			// Explicit credentials rather than WithInsecure: the two reach the
 			// same place, but credentials take priority over anything the
 			// environment contributed, so an OTEL_EXPORTER_OTLP_CERTIFICATE in
 			// the shell cannot turn a plaintext connection into a TLS one.
-			otlploggrpc.WithTLSCredentials(otlp.GRPCTransport(cfg.CollectorSecure())),
+			otlploggrpc.WithTLSCredentials(observer.GRPCTransport(cfg.CollectorSecure())),
 		}
 		exporter, err := otlploggrpc.New(context.Background(), options...)
 		if err != nil {
@@ -130,14 +130,14 @@ func newLogExporter(cfg config.Config) (sdklog.Exporter, error) {
 	// protocol's — says where the logs go, and overriding it with the default
 	// would send them somewhere the user did not ask for. An explicit
 	// log.otlp.path wins over both, being the one thing that is unambiguous.
-	if path := otlp.SignalPath(cfg.Log.OTLP.Path, endpoint.Path, otlpPath); path != "" {
+	if path := observer.SignalPath(cfg.Log.OTLP.Path, endpoint.Path, otlpPath); path != "" {
 		options = append(options, otlploghttp.WithURLPath(path))
 	}
 	// A nil TLS configuration is not the same as leaving the option out: it is
 	// what stops the exporter from loading OTEL_EXPORTER_OTLP_CERTIFICATE and
 	// friends. A secure endpoint gets the floor of TLS 1.2 and the system's root
 	// certificates, because the config file names no certificate of its own.
-	options = append(options, otlploghttp.WithTLSClientConfig(otlp.TLSConfig(cfg.CollectorSecure())))
+	options = append(options, otlploghttp.WithTLSClientConfig(observer.TLSConfig(cfg.CollectorSecure())))
 
 	exporter, err := otlploghttp.New(context.Background(), options...)
 	if err != nil {

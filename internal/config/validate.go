@@ -66,8 +66,6 @@ func (c Config) Validate() error {
 
 	check(isOneOf(c.Log.Level, LogDebug, LogInfo, LogWarn, LogError),
 		"log.level: %q is not one of %s", c.Log.Level, joinValues(LogDebug, LogInfo, LogWarn, LogError))
-	check(isOneOf(c.Log.Format, LogPretty, LogStructured),
-		"log.format: %q is not one of %s", c.Log.Format, joinValues(LogPretty, LogStructured))
 	check(len(c.Log.Transport) > 0, "log.transport: at least one transport is required")
 	// Every name is checked, not just the first: a list with one good name and
 	// one typo would otherwise start with a sink silently missing, which is the
@@ -78,6 +76,15 @@ func (c Config) Validate() error {
 	}
 	check(noDuplicates(c.Log.Transport),
 		"log.transport: %s must not repeat a transport", strings.Join(c.Log.Transport, ", "))
+
+	// The console is the only sink with a rendering choice, so its format is
+	// read only when it is named: holding it to anything would report a
+	// problem in a part of the file that is switched off. A file or a
+	// collector has no key to choose, because neither has a second form.
+	if c.logTransport(LogTransportConsole) {
+		check(isOneOf(c.Log.Console.Format, LogPretty, LogStructured),
+			"log.console.format: %q is not one of %s", c.Log.Console.Format, joinValues(LogPretty, LogStructured))
+	}
 
 	// The file sink is built only when it is named, so the rotation settings are
 	// read only then: holding them to anything would report a problem in a part
@@ -773,5 +780,5 @@ func (c Config) String() string {
 	redacted := c.Redacted()
 	return fmt.Sprintf("app=%s database=%s server=%s:%d log=%s/%s",
 		redacted.App.Mode, RedactDSN(redacted.Database.URL), redacted.Server.Host,
-		redacted.Server.Port, redacted.Log.Level, redacted.Log.Format)
+		redacted.Server.Port, redacted.Log.Level, redacted.Log.Console.Format)
 }

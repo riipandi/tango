@@ -187,11 +187,13 @@ func Default() Config {
 			DB:     0,
 		},
 		Log: Log{
-			Level:  LogInfo,
-			Format: LogPretty,
+			Level: LogInfo,
 			// The console alone: a fresh checkout writes to the terminal and
 			// nothing else, so no run needs a volume or a collector to start.
 			Transport: []string{LogTransportConsole},
+			Console: LogConsole{
+				Format: LogPretty,
+			},
 			File: LogFile{
 				MaxSize:    DefaultLogMaxSizeMB,
 				MaxBackups: DefaultLogMaxBackups,

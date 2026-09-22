@@ -1,16 +1,18 @@
-// Package otlp holds the exporter plumbing every OTLP signal shares.
+// Exporter plumbing shared by every OTLP exporter this process builds.
 //
-// internal/logger and internal/observer build five exporters across two
-// protocols, and the settings that close the environment door are the same for
-// all of them. They live here once, so a decision about what an exporter may
-// read from the environment cannot drift between the packages that depend on it.
+// internal/observer builds four exporters across two protocols, and
+// internal/logger builds the fifth — the log sink — against the same collector.
+// The settings that close the environment door are the same for all of them, so
+// they live here once, and a decision about what an exporter may read from the
+// environment cannot drift between the packages that depend on it.
 //
 // The rule the helpers carry out: the resolved configuration is the only source
 // of truth for where telemetry goes. The exporters otherwise read
 // OTEL_EXPORTER_OTLP_* on their own — endpoint, headers, compression, TLS
 // material — and a stray export in a shell could redirect a signal, inject a
 // header, or trust a certificate the config file never mentioned.
-package otlp
+
+package observer
 
 import (
 	"crypto/tls"
