@@ -24,6 +24,7 @@ type Config struct {
 	OTEL      OTEL      `koanf:"otel" json:"otel"`
 	Queue     Queue     `koanf:"queue" json:"queue"`
 	RateLimit RateLimit `koanf:"rate_limit" json:"rate_limit"`
+	Scheduler Scheduler `koanf:"scheduler" json:"scheduler"`
 	Server    Server    `koanf:"server" json:"server"`
 	Session   Session   `koanf:"session" json:"session"`
 	Storage   Storage   `koanf:"storage" json:"storage"`
@@ -329,6 +330,19 @@ type Queue struct {
 	// CleanupInterval is how often the maintenance job deletes the completed
 	// records their retention has expired.
 	CleanupInterval time.Duration `koanf:"cleanup_interval" json:"cleanup_interval"`
+	// Encrypt seals task payloads at rest with the application secret
+	// (app.secret_key). A task still in flight when the flag flips is read
+	// as the plaintext it is; every task written afterwards is sealed.
+	Encrypt bool `koanf:"encrypt" json:"encrypt"`
+}
+
+// Scheduler holds the cron scheduler settings. The scheduler enqueues tasks
+// onto the queue at cron times and claims each tick in Postgres, so the
+// schedule survives a restart and one replica only fires a tick.
+type Scheduler struct {
+	// Timezone resolves a spec that names no zone of its own, so "0 3 * * *"
+	// is three in the morning somewhere in particular.
+	Timezone string `koanf:"timezone" json:"timezone"`
 }
 
 // RateLimit holds the request throttling settings.

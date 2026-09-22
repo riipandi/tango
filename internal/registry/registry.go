@@ -25,7 +25,9 @@ import (
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/internal/scheduler"
 	"github.com/riipandi/tango/internal/transport"
+	"github.com/riipandi/tango/pkg/crypto"
 )
 
 // New registers the shared services of a serve run. The metrics handler and
@@ -101,11 +103,23 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 	do.Provide(injector, func(i do.Injector) (*queue.Client, error) {
 		c := do.MustInvoke[*config.Config](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
+		var encryptor *crypto.Cipher
+		if c.Queue.Encrypt {
+			// Validation refuses an encrypted queue without a usable secret,
+			// so a failing parse here is a broken deployment, not a silent
+			// switch to plaintext.
+			cipher, err := crypto.NewCipherFromHex(c.App.SecretKey)
+			if err != nil {
+				return nil, err
+			}
+			encryptor = cipher
+		}
 		client, err := queue.NewClient(queue.ClientConfig{
 			Store:        pool,
 			Logger:       logger,
 			NumWorkers:   c.Queue.NumWorkers,
 			ReleaseAfter: c.Queue.ReleaseAfter,
+			Encryptor:    encryptor,
 		})
 		if err != nil {
 			return nil, err
@@ -117,6 +131,23 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 			return nil, err
 		}
 		return client, nil
+	})
+
+	do.Provide(injector, func(i do.Injector) (*scheduler.Scheduler, error) {
+		c := do.MustInvoke[*config.Config](i)
+		pool := do.MustInvoke[*datastore.Postgres](i)
+		client := do.MustInvoke[*queue.Client](i)
+		location, err := time.LoadLocation(c.Scheduler.Timezone)
+		if err != nil {
+			return nil, err
+		}
+		return scheduler.New(scheduler.Config{
+			Store:    pool,
+			Client:   client,
+			Logger:   logger,
+			Location: location,
+			Jobs:     jobs.Scheduled(),
+		})
 	})
 
 	do.Provide(injector, func(i do.Injector) (*http.Server, error) {

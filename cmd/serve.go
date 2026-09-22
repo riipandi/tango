@@ -12,6 +12,7 @@ import (
 
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/registry"
+	"github.com/riipandi/tango/internal/scheduler"
 )
 
 var serveCmd = &cli.Command{
@@ -81,6 +82,15 @@ file decides.`,
 		}
 		queueClient.Start(ctx)
 
+		// The scheduler fires after the queue it enqueues onto, so its first
+		// tick claims into a running dispatcher; it stops before the drain,
+		// and its fires in flight join the queue's own drain.
+		jobScheduler, err := do.Invoke[*scheduler.Scheduler](injector)
+		if err != nil {
+			return fmt.Errorf("serve: %w", err)
+		}
+		jobScheduler.Start(ctx)
+
 		serveErr := make(chan error, 1)
 		go func() {
 			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -103,12 +113,23 @@ file decides.`,
 		case <-ctx.Done():
 		}
 
+		// The drain window bounds everything the run waits for at shutdown:
+		// the scheduler's fires, the listener's requests, the queue's tasks.
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.Server.ShutdownTimeout)
+		defer cancel()
+
+		// The scheduler stops before the HTTP drain: a fire in flight
+		// finishes its enqueue — an enqueued task is durable, so the queue's
+		// own drain after this cannot lose one — and no new fire starts
+		// while the listener is closing.
+		if !jobScheduler.Stop(shutdownCtx) {
+			log.Slog().WarnContext(ctx, "serve: scheduler left fires running")
+		}
+
 		// Shutdown closes the listener first, so a request that arrives during
 		// the drain is refused rather than served by a server the caller gave
 		// up on, then waits for the in-flight work, bounded by the configured
 		// drain window.
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.Server.ShutdownTimeout)
-		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("serve: drain: %w", err)
 		}

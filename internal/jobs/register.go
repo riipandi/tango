@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/internal/scheduler"
 )
 
 // Register registers every job the application runs and seeds the recurring
@@ -35,5 +36,13 @@ func Register(ctx context.Context, client *queue.Client, cleanupInterval time.Du
 
 	slog.InfoContext(ctx, "queue: maintenance job seeded",
 		"queue", CleanupName, "interval", cleanupInterval.String())
+	return nil
+}
+
+// Scheduled lists the jobs the cron scheduler enqueues at their times. The
+// list is empty until a feature asks for a cron schedule — a recurring job
+// that runs on a fixed interval belongs with Register, whose self-enqueued
+// successor is durable without a second mechanism.
+func Scheduled() []scheduler.Job {
 	return nil
 }

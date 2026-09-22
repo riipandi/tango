@@ -141,7 +141,7 @@ func TestMigrateUpDryRunListsPendingWithoutApplying(t *testing.T) {
 	out, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--dry-run")
 	require.NoError(t, err)
 	assert.Contains(t, out, "initialize_schema")
-	assert.Contains(t, out, "9 migrations pending")
+	assert.Contains(t, out, "10 migrations pending")
 	assert.NotContains(t, out, "applied")
 
 	// Nothing may have been written.
@@ -164,7 +164,7 @@ func TestMigrateUpAppliesAndIsIdempotent(t *testing.T) {
 	out, err := runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
 	assertMigrationRow(t, out, 1, "applied")
-	assert.Contains(t, out, "9 migrations applied")
+	assert.Contains(t, out, "10 migrations applied")
 
 	out, err = runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
@@ -182,7 +182,7 @@ func TestMigrateUpStopsAtToVersion(t *testing.T) {
 
 	out, err = runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
-	assert.Contains(t, out, "7 migrations applied")
+	assert.Contains(t, out, "8 migrations applied")
 }
 
 // A non-interactive run (stdin is not a terminal) must not block on the
@@ -194,7 +194,7 @@ func TestMigrateUpDoesNotPromptWithoutTerminal(t *testing.T) {
 	out, err := runMigrateUpCmd(t, "", "--env-file="+envFile)
 	require.NoError(t, err)
 	assert.NotContains(t, out, "[y/N]")
-	assert.Contains(t, out, "9 migrations applied")
+	assert.Contains(t, out, "10 migrations applied")
 }
 
 func TestConfirm(t *testing.T) {
@@ -248,19 +248,20 @@ func TestMigrateDownRollsBackNewestFirst(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
-	assertMigrationRow(t, out, 9, "rolled back")
+	assertMigrationRow(t, out, 10, "rolled back")
 	assert.Contains(t, out, "1 migration rolled back")
 
-	// The queue tables arrive in 00008, which is now the highest applied
-	// migration, so they must still exist.
+	// The scheduler table arrives in 00010, which is now the highest applied
+	// migration, so it must have been rolled back; the queue tables, one
+	// version below, must still exist.
 	db, err := datastore.OpenMigrationDB(t.Context(), datastore.PostgresOptions{DSN: dsn})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 
 	var exists bool
 	require.NoError(t, db.QueryRowContext(t.Context(),
-		"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sessions' AND column_name = 'remember')").Scan(&exists))
-	assert.False(t, exists, "00009 must have been rolled back")
+		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'scheduler_jobs')").Scan(&exists))
+	assert.False(t, exists, "00010 must have been rolled back")
 
 	require.NoError(t, db.QueryRowContext(t.Context(),
 		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'queue_tasks')").Scan(&exists))
@@ -277,18 +278,18 @@ func TestMigrateDownCountAndDryRun(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--dry-run")
 	require.NoError(t, err)
-	assert.Contains(t, out, "add_session_remember")
+	assert.Contains(t, out, "create_scheduler_jobs")
 	assert.Contains(t, out, "1 migration to roll back")
 
 	// --dry-run must not have rolled anything back.
 	version := currentVersion(t, dsn)
-	assert.Equal(t, int64(9), version)
+	assert.Equal(t, int64(10), version)
 
 	out, err = runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=3")
 	require.NoError(t, err)
-	assertMigrationRow(t, out, 7, "rolled back")
+	assertMigrationRow(t, out, 8, "rolled back")
 	assert.Contains(t, out, "3 migrations rolled back")
-	assert.Equal(t, int64(6), currentVersion(t, dsn))
+	assert.Equal(t, int64(7), currentVersion(t, dsn))
 }
 
 // A count above what the database has rolls back everything instead of failing.
@@ -302,7 +303,7 @@ func TestMigrateDownCountAboveApplied(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=50")
 	require.NoError(t, err)
-	assert.Contains(t, out, "9 migrations rolled back")
+	assert.Contains(t, out, "10 migrations rolled back")
 	assert.Zero(t, currentVersion(t, dsn))
 }
 
@@ -342,7 +343,7 @@ func TestMigrateDownDeclinedLeavesDatabase(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "roll back 1 migration? [y/N]")
 	assert.Contains(t, out, "1 migration left applied")
-	assert.Equal(t, int64(9), currentVersion(t, dsn))
+	assert.Equal(t, int64(10), currentVersion(t, dsn))
 }
 
 // An accepted rollback applies, proving the prompt gate is not the only path.
@@ -359,8 +360,8 @@ func TestMigrateDownAcceptedPrompt(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "y\n", "--env-file="+envFile)
 	require.NoError(t, err)
-	assertMigrationRow(t, out, 9, "rolled back")
-	assert.Equal(t, int64(8), currentVersion(t, dsn))
+	assertMigrationRow(t, out, 10, "rolled back")
+	assert.Equal(t, int64(9), currentVersion(t, dsn))
 }
 
 // assertMigrationRow asserts that a migration appears as a full row of the
@@ -414,7 +415,7 @@ func TestMigrateStatus(t *testing.T) {
 	out, err := runMigrateStatusCmd(t, "--env-file="+envFile)
 	require.NoError(t, err)
 	assert.Contains(t, out, "00001 pending -                   initialize_schema")
-	assert.Contains(t, out, "version 00000; 0 of 9 applied")
+	assert.Contains(t, out, "version 00000; 0 of 10 applied")
 	assert.Contains(t, out, "no migrations applied yet")
 
 	_, err = runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
@@ -424,9 +425,9 @@ func TestMigrateStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "00001 applied")
 	assert.Contains(t, out, "initialize_schema")
-	assert.Contains(t, out, "version 00009; 9 of 9 applied")
+	assert.Contains(t, out, "version 00010; 10 of 10 applied")
 	assert.Contains(t, out, "last run ")
-	assert.Contains(t, out, " UTC (00009_add_session_remember.sql)")
+	assert.Contains(t, out, " UTC (00010_create_scheduler_jobs.sql)")
 }
 
 // After a rollback the last run is the migration that ran before it, not the
@@ -444,8 +445,8 @@ func TestMigrateStatusReportsLastRunAfterRollback(t *testing.T) {
 	out, err := runMigrateStatusCmd(t, "--env-file="+envFile)
 	require.NoError(t, err)
 	assert.Contains(t, out, "last run ")
-	assert.Contains(t, out, "(00007_create_rate_limits_table.sql)")
-	assert.NotContains(t, out, "(00009_add_session_remember.sql)")
+	assert.Contains(t, out, "(00008_create_queue_tables.sql)")
+	assert.NotContains(t, out, "(00010_create_scheduler_jobs.sql)")
 }
 
 // The applied time must be a real timestamp, not a zero value.
@@ -559,7 +560,7 @@ func TestMigrateDownRewindsTheVersionTableIdentity(t *testing.T) {
 	require.NoError(t, err)
 	afterUp := maxMigrationID(t, dsn)
 
-	_, err = runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=9")
+	_, err = runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=10")
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), maxMigrationID(t, dsn), "only the sentinel must remain")
 

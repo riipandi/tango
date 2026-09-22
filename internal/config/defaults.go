@@ -132,6 +132,10 @@ const (
 	DefaultQueueCleanupArchive = time.Hour
 )
 
+// DefaultSchedulerTimezone is where a spec that names no zone fires. UTC is
+// the only zone that needs no data file and reads the same on every host.
+const DefaultSchedulerTimezone = "UTC"
+
 // Default returns the built-in configuration. These values are the lowest
 // precedence layer: every other source may replace them, but a key no source
 // mentions keeps the value set here.
@@ -238,6 +242,10 @@ func Default() Config {
 			NumWorkers:      DefaultQueueNumWorkers,
 			ReleaseAfter:    DefaultQueueReleaseAfter,
 			CleanupInterval: DefaultQueueCleanupArchive,
+			Encrypt:         false,
+		},
+		Scheduler: Scheduler{
+			Timezone: DefaultSchedulerTimezone,
 		},
 		Server: Server{
 			Host:            "0.0.0.0",

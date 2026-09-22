@@ -242,6 +242,72 @@ func flushCompleted(ctx context.Context, q datastore.Querier) (int64, error) {
 	return tag.RowsAffected(), nil
 }
 
+// deadRows lists the archived tasks a replay can bring back: the ones that
+// exhausted their attempts and kept their payload, not yet expired under
+// their queue's retention. A dead task whose payload is gone cannot be
+// replayed, and it stays for the cleanup to expire.
+func deadRows(ctx context.Context, q datastore.Querier, at time.Time) ([]*completedRow, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("id", "queue", "task", "attempts", "last_duration_micro", "succeeded", "error", "expires_at", "last_executed_at", "created_at")
+	sb.From(completedTable)
+	sb.Where(
+		sb.Equal("succeeded", false),
+		sb.IsNotNull("task"),
+		sb.Or(sb.IsNull("expires_at"), sb.GT("expires_at", at)),
+	)
+	sb.OrderBy("id ASC")
+
+	query, args := sb.Build()
+	rows, err := q.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var dead []*completedRow
+	for rows.Next() {
+		c := &completedRow{}
+		if err := rows.Scan(&c.ID, &c.Queue, &c.Payload, &c.Attempts, &c.LastDuration,
+			&c.Succeeded, &c.Error, &c.ExpiresAt, &c.LastExecutedAt, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		dead = append(dead, c)
+	}
+	return dead, rows.Err()
+}
+
+// countDead reports how many dead tasks a queue's archive holds: the ones
+// that exhausted their attempts, whether or not their payload survived.
+func countDead(ctx context.Context, q datastore.Querier, queue string) (int64, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("count(*)")
+	sb.From(completedTable)
+	sb.Where(sb.Equal("queue", queue), sb.Equal("succeeded", false))
+
+	query, args := sb.Build()
+	var count int64
+	err := q.QueryRow(ctx, query, args...).Scan(&count)
+	return count, err
+}
+
+// deleteCompletedByIDs removes archived tasks by their IDs. The replay owns
+// a transaction, so a dead task never stays archived while its re-queued
+// form is already pending. One statement per ID: the dead pile is small, and
+// a slice of uuid values has no binary encoding pgx will agree to.
+func deleteCompletedByIDs(ctx context.Context, q datastore.Querier, ids []uuid.UUID) error {
+	for _, id := range ids {
+		db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+		db.DeleteFrom(completedTable)
+		db.Where(db.Equal("id", id))
+
+		query, args := db.Build()
+		if _, err := q.Exec(ctx, query, args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // taskStatus reports the state of one task across the two tables. The second
 // query only runs when the first found nothing, so a completed task costs two
 // lookups and everything else one.

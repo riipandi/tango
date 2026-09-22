@@ -294,7 +294,10 @@ func (d *dispatcher) processTask(task *taskRow) {
 	ctx = context.WithValue(ctx, ctxKeyClient{}, d.client)
 
 	start := now()
-	err := d.runProcessor(ctx, queue, task)
+	payload, err := d.client.decrypt(task.Payload)
+	if err == nil {
+		err = d.runProcessor(ctx, queue, task, payload)
+	}
 	duration := time.Since(start)
 
 	if err == nil {
@@ -304,9 +307,10 @@ func (d *dispatcher) processTask(task *taskRow) {
 	d.taskFailure(ctx, queue, task, start, duration, err)
 }
 
-// runProcessor invokes the queue's callback, turning a panic into the error
+// runProcessor invokes the queue's callback with the payload opened for
+// processing — the stored form stays sealed — turning a panic into the error
 // the outcome settles on.
-func (d *dispatcher) runProcessor(ctx context.Context, queue Queue, task *taskRow) (err error) {
+func (d *dispatcher) runProcessor(ctx context.Context, queue Queue, task *taskRow, payload []byte) (err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			d.client.log.ErrorContext(ctx, "queue: panic processing task",
@@ -314,7 +318,7 @@ func (d *dispatcher) runProcessor(ctx context.Context, queue Queue, task *taskRo
 			err = fmt.Errorf("%v", rec)
 		}
 	}()
-	return queue.Process(ctx, task.Payload)
+	return queue.Process(ctx, payload)
 }
 
 // taskSuccess settles a successful execution: the task leaves the pending

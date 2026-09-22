@@ -13,6 +13,11 @@ task queues that run within the application — no external message broker requi
 - **Embedded execution** — workers run as goroutines inside your process, no separate service needed
 - **Type-safe queues** — generic `NewQueue[T Task]` with compile-time type checking for payloads
 - **Persistent** — tasks survive process restarts via PostgreSQL
+- **Batch enqueue** — `Add(tasks...)` writes every task in one statement and one transaction
+- **Dead letter queue** — a task that exhausted its attempts rests in the archive with its
+  error, and `ReplayDead` brings the ones that kept their payload back with a fresh budget
+- **Payload encryption at rest** — an optional `crypto.Cipher` seals every payload with
+  AES-256-GCM (`queue.encrypt`)
 - **Automatic retries** — configurable max attempts with a per-queue backoff
 - **Atomic claims** — a single `UPDATE ... RETURNING` over `FOR UPDATE SKIP LOCKED`; two dispatcher
   instances never execute the same task twice
@@ -208,9 +213,12 @@ client.Register(queue.NewQueue[OrderTask](func(ctx context.Context, task OrderTa
 | `queue.num_workers`    | 5       | Worker goroutines that execute queued tasks concurrently                        |
 | `queue.release_after`  | 10m     | How long a claimed task may run before the queue considers its worker lost      |
 | `queue.cleanup_interval` | 1h    | How often the cleanup job purges the completed records retention has expired    |
+| `queue.encrypt`        | false   | Seal task payloads at rest with `app.secret_key` (AES-256-GCM)                  |
 
 Durations are written as plain numbers of seconds in the config file. `release_after` must
 exceed the longest `Timeout` any queue configures, or a slow task would be claimed twice.
+`queue.encrypt` requires `app.secret_key` to be set — validation refuses the combination of
+an encrypted queue and a missing secret.
 
 ### `ClientConfig`
 
@@ -220,6 +228,7 @@ exceed the longest `Timeout` any queue configures, or a slow task would be claim
 | `Logger`       | `*slog.Logger`  | No       | The process logger; nil discards every line                  |
 | `NumWorkers`   | `int`           | Yes      | Worker goroutines (must be >= 1)                             |
 | `ReleaseAfter` | `time.Duration` | Yes      | Fail-safe release for tasks whose worker was lost (must be > 0) |
+| `Encryptor`    | `*crypto.Cipher`| No       | Seals payloads at rest when set (`queue.encrypt` wires it)   |
 
 ### `QueueConfig`
 
@@ -342,6 +351,18 @@ removed.
 Deletes the completed records whose retention has expired. This is the maintenance the
 cleanup job schedules; nothing else calls it.
 
+### `(*Client).Dead(ctx context.Context, queue string) (int64, error)`
+
+Reports how many dead tasks a queue's archive holds: the ones that exhausted their attempts.
+They are the replay's raw material.
+
+### `(*Client).ReplayDead(ctx context.Context) (int64, error)`
+
+Re-enqueues the dead tasks the archive still carries under a fresh identity with a fresh
+attempt budget, and reports how many went back. A dead task whose queue did not retain its
+payload cannot come back — its content is gone, and it stays for the cleanup to expire.
+The replay, the re-insert, and the archive removal share one transaction.
+
 ### `FromContext(ctx context.Context) *Client`
 
 Retrieves the client from a processor context, allowing processors to enqueue follow-up
@@ -462,6 +483,8 @@ go test -race ./internal/queue/
 | UUIDv7 primary keys, generated in Go  | Time-sortable and referenceable before any commit; the DB default exists for rows inserted elsewhere |
 | Atomic claim (`UPDATE ... RETURNING`) | Contended tasks are never executed twice across dispatcher instances                               |
 | `FOR UPDATE SKIP LOCKED`              | A competing dispatcher skips locked rows instead of blocking or failing                            |
+| Payloads cloned out of the encode buffer | The buffer is reused across a batch; a shared backing array would rewrite earlier tasks' bytes   |
+| Encryption seals on write, detects on read | `queue.encrypt` flipped mid-flight: sealed payloads carry `crypto.EncPrefix`, an in-flight plaintext task still runs |
 | TIMESTAMPTZ everywhere                | Consistent timezone handling, no ambiguity                                                        |
 | go-sqlbuilder                         | Type-safe query construction, PostgreSQL flavor, matching the seeders' idiom                       |
 | Channel-based task distribution       | Low-latency dispatch, no polling overhead beyond the one-minute fallback                            |

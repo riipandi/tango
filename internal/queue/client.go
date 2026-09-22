@@ -13,6 +13,7 @@ import (
 	"uuid"
 
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/pkg/crypto"
 )
 
 // ctxKeyClient stores the client in a processor's context, so a task can
@@ -35,8 +36,10 @@ type (
 		queues queues
 		// buffers is a pool of byte buffers for payload encoding.
 		buffers sync.Pool
-		// dispatcher claims tasks and hands them to the workers.
-		dispatcher dispatcher
+	// dispatcher claims tasks and hands them to the workers.
+	dispatcher dispatcher
+	// encryptor seals task payloads at rest when the client runs with one.
+	encryptor *crypto.Cipher
 	}
 
 	// ClientConfig contains configuration for the Client.
@@ -50,11 +53,16 @@ type (
 		// NumWorkers is the number of goroutines that execute queued tasks
 		// concurrently.
 		NumWorkers int
-		// ReleaseAfter is the duration after which a claimed task is released
-		// back to the queue if it has not finished. It should be much higher
-		// than every queue's Timeout, existing as the fail-safe for a worker
-		// lost to a crash or a network partition.
-		ReleaseAfter time.Duration
+	// ReleaseAfter is the duration after which a claimed task is released
+	// back to the queue if it has not finished. It should be much higher
+	// than every queue's Timeout, existing as the fail-safe for a worker
+	// lost to a crash or a network partition.
+	ReleaseAfter time.Duration
+	// Encryptor seals task payloads at rest when set: every task the client
+	// writes carries crypto.EncPrefix, and a claimed payload is opened
+	// before its queue decodes it. The archive keeps the sealed form, so a
+	// replayed task rides through the same path.
+	Encryptor *crypto.Cipher
 	}
 )
 
@@ -82,10 +90,11 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	}
 
 	c := &Client{
-		store:   cfg.Store,
-		log:     cfg.Logger,
-		queues:  queues{registry: make(map[string]Queue)},
-		buffers: sync.Pool{New: func() any { return bytes.NewBuffer(nil) }},
+		store:     cfg.Store,
+		log:       cfg.Logger,
+		queues:    queues{registry: make(map[string]Queue)},
+		buffers:   sync.Pool{New: func() any { return bytes.NewBuffer(nil) }},
+		encryptor: cfg.Encryptor,
 	}
 	c.dispatcher.init(c, cfg.NumWorkers, cfg.ReleaseAfter)
 	return c, nil
@@ -166,6 +175,54 @@ func (c *Client) DeleteExpiredCompleted(ctx context.Context) (int64, error) {
 	return deleteExpiredCompleted(ctx, c.store, now())
 }
 
+// Dead reports how many dead tasks a queue's archive holds: the ones that
+// exhausted their attempts. They are the replay's raw material.
+func (c *Client) Dead(ctx context.Context, queue string) (int64, error) {
+	return countDead(ctx, c.store, queue)
+}
+
+// ReplayDead re-enqueues the dead tasks the archive still carries — the ones
+// that exhausted their attempts and kept their payload, not yet expired —
+// under a fresh identity with a fresh attempt budget, and reports how many
+// went back. A dead task whose queue did not retain its payload cannot come
+// back: its content is gone, and it stays for the cleanup to expire.
+func (c *Client) ReplayDead(ctx context.Context) (int64, error) {
+	var replayed int64
+	err := c.store.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		rows, err := deadRows(ctx, tx, now())
+		if err != nil {
+			return err
+		}
+		replayed = int64(len(rows))
+		if replayed == 0 {
+			return nil
+		}
+
+		tasks := make([]*taskRow, len(rows))
+		ids := make([]uuid.UUID, len(rows))
+		for i, dead := range rows {
+			tasks[i] = &taskRow{
+				ID:        uuid.NewV7(),
+				Queue:     dead.Queue,
+				Payload:   dead.Payload,
+				CreatedAt: now(),
+			}
+			ids[i] = dead.ID
+		}
+		if err := insertTasks(ctx, tx, tasks); err != nil {
+			return err
+		}
+		return deleteCompletedByIDs(ctx, tx, ids)
+	})
+	if err != nil {
+		return 0, err
+	}
+	if replayed > 0 {
+		c.Notify()
+	}
+	return replayed, nil
+}
+
 // FromContext returns the client a processor's context carries, so a task can
 // enqueue the task that follows it. Nil outside a processor.
 func FromContext(ctx context.Context) *Client {
@@ -193,7 +250,13 @@ func (c *Client) save(op *TaskAddOp) ([]string, error) {
 		if err := encode(buf, task); err != nil {
 			return nil, err
 		}
-		row, err := newTask(task, buf.Bytes(), op.wait)
+		// The buffer is reused across the batch, so the payload is taken out
+		// before the next encode rewrites the bytes underneath it.
+		payload, err := c.seal(bytes.Clone(buf.Bytes()))
+		if err != nil {
+			return nil, err
+		}
+		row, err := newTask(task, payload, op.wait)
 		if err != nil {
 			return nil, err
 		}
@@ -228,4 +291,33 @@ func encode(buf *bytes.Buffer, task Task) error {
 		return fmt.Errorf("queue: encode task: %w", err)
 	}
 	return nil
+}
+
+// seal puts a payload into its stored form: sealed when the client runs
+// with an encryptor, plain otherwise. Sealing is a write-time decision only,
+// and every payload a sealing client writes carries the prefix.
+func (c *Client) seal(payload []byte) ([]byte, error) {
+	if c.encryptor == nil {
+		return payload, nil
+	}
+	sealed, err := c.encryptor.Encrypt(string(payload))
+	if err != nil {
+		return nil, fmt.Errorf("queue: seal task: %w", err)
+	}
+	return []byte(sealed), nil
+}
+
+// decrypt opens a payload when the queue encrypts at rest. A payload without
+// the prefix was written before the deployment started sealing — a task
+// still in flight when the flag flipped — and reads as the plaintext it is;
+// every stored form a sealing client writes carries the prefix.
+func (c *Client) decrypt(payload []byte) ([]byte, error) {
+	if c.encryptor == nil || !bytes.HasPrefix(payload, []byte(crypto.EncPrefix)) {
+		return payload, nil
+	}
+	opened, err := c.encryptor.Decrypt(string(payload))
+	if err != nil {
+		return nil, fmt.Errorf("queue: open task: %w", err)
+	}
+	return []byte(opened), nil
 }

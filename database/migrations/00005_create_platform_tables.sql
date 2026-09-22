@@ -2,7 +2,7 @@
 -- +goose StatementBegin
 
 -- --------------------------------------------------------
--- Table: public.apis (resource servers, "APIs" in Pocket ID)
+-- Table: public.apis (resource servers)
 -- --------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS public.apis (
