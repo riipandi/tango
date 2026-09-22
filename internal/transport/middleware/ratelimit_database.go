@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/riipandi/tango/internal/config"
@@ -43,11 +44,15 @@ func NewDatabaseLimiter(pool datastore.Querier, cfg config.RateLimit) *DatabaseL
 func (l *DatabaseLimiter) Allow(ctx context.Context, key string) (Result, error) {
 	windowSeconds := max(int(l.window/time.Second), 1)
 
+	// The check is one function call, built the way every table query is:
+	// the placeholders are sqlbuilder's, so the arguments never sit in the
+	// statement by hand.
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("fn_check_rate_limit(" + sb.Var(key) + ", " + sb.Var(l.limit) + ", " + sb.Var(windowSeconds) + ")")
+	query, args := sb.Build()
+
 	var raw []byte
-	err := l.pool.QueryRow(ctx,
-		"SELECT fn_check_rate_limit($1, $2, $3)",
-		key, l.limit, windowSeconds,
-	).Scan(&raw)
+	err := l.pool.QueryRow(ctx, query, args...).Scan(&raw)
 
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == sqlStateLimited {

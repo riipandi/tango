@@ -70,7 +70,7 @@ func TestLoggerCountsTheBytesItServed(t *testing.T) {
 	var buf bytes.Buffer
 	handler := Logger(slog.New(slog.NewJSONHandler(&buf, nil)))(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("0123456789"))
+			_, _ = w.Write([]byte("0123456789"))
 		}))
 
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
