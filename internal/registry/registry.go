@@ -12,6 +12,7 @@ package registry
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -27,16 +28,19 @@ import (
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/scheduler"
 	"github.com/riipandi/tango/internal/transport"
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/pkg/crypto"
 )
 
 // New registers the shared services of a serve run. The metrics handler and
 // the logger come from the caller because both are built and closed by the
-// command lifecycle, not by the container.
+// command lifecycle, not by the container; they are registered as values so
+// the services below resolve them like any other dependency.
 func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *slog.Logger) *do.RootScope {
 	injector := do.New()
 
 	do.ProvideValue(injector, &cfg)
+	do.ProvideValue(injector, logger)
 
 	do.Provide(injector, func(i do.Injector) (*datastore.Postgres, error) {
 		c := do.MustInvoke[*config.Config](i)
@@ -72,10 +76,14 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 	do.Provide(injector, func(i do.Injector) (chi.Router, error) {
 		c := do.MustInvoke[*config.Config](i)
 		checker := do.MustInvoke[*health.Checker](i)
+		log := do.MustInvoke[*slog.Logger](i)
+		limiter := do.MustInvoke[middleware.Limiter](i)
 		return transport.NewRouter(transport.Options{
-			Config:  *c,
-			Checker: checker,
-			Metrics: metrics,
+			Config:      *c,
+			Checker:     checker,
+			Metrics:     metrics,
+			Logger:      log,
+			RateLimiter: limiter,
 		}), nil
 	})
 
@@ -103,6 +111,7 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 	do.Provide(injector, func(i do.Injector) (*queue.Client, error) {
 		c := do.MustInvoke[*config.Config](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
+		log := do.MustInvoke[*slog.Logger](i)
 		var encryptor *crypto.Cipher
 		if c.Queue.Encrypt {
 			// Validation refuses an encrypted queue without a usable secret,
@@ -116,7 +125,7 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 		}
 		client, err := queue.NewClient(queue.ClientConfig{
 			Store:        pool,
-			Logger:       logger,
+			Logger:       log,
 			NumWorkers:   c.Queue.NumWorkers,
 			ReleaseAfter: c.Queue.ReleaseAfter,
 			Encryptor:    encryptor,
@@ -137,6 +146,7 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 		c := do.MustInvoke[*config.Config](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
 		client := do.MustInvoke[*queue.Client](i)
+		log := do.MustInvoke[*slog.Logger](i)
 		location, err := time.LoadLocation(c.Scheduler.Timezone)
 		if err != nil {
 			return nil, err
@@ -144,10 +154,27 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 		return scheduler.New(scheduler.Config{
 			Store:    pool,
 			Client:   client,
-			Logger:   logger,
+			Logger:   log,
 			Location: location,
 			Jobs:     jobs.Scheduled(),
 		})
+	})
+
+	do.Provide(injector, func(i do.Injector) (middleware.Limiter, error) {
+		c := do.MustInvoke[*config.Config](i)
+		switch c.RateLimit.Driver {
+		case config.RateLimitDB:
+			pool := do.MustInvoke[*datastore.Postgres](i)
+			return middleware.NewDatabaseLimiter(pool, c.RateLimit), nil
+		case config.RateLimitKV:
+			// Validation refuses a kvstore driver while the backend is
+			// disabled, so resolving the client here is always a run that
+			// asked for it.
+			kv := do.MustInvoke[*datastore.Valkey](i)
+			return middleware.NewKVStoreLimiter(kv.Client(), c.RateLimit), nil
+		default:
+			return nil, fmt.Errorf("registry: rate_limit.driver: unknown driver %q", c.RateLimit.Driver)
+		}
 	})
 
 	do.Provide(injector, func(i do.Injector) (*http.Server, error) {

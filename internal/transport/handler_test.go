@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -135,4 +136,40 @@ func TestRouterServesAProbeRequestContext(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+// countingLimiter records the keys it was asked about, so a test asserts where
+// the rate limit middleware ran without stubbing a backend.
+type countingLimiter struct {
+	calls int
+}
+
+func (c *countingLimiter) Allow(_ context.Context, _ string) (middleware.Result, error) {
+	c.calls++
+	return middleware.Result{Limit: 100, Remaining: 99, ResetAt: time.Now().Add(time.Minute)}, nil
+}
+
+func TestRateLimitRunsOnTheAPISurfaceOnly(t *testing.T) {
+	limiter := &countingLimiter{}
+	router := NewRouter(Options{
+		Config:      config.Default(),
+		RateLimiter: limiter,
+	})
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api", nil))
+	assert.Equal(t, 1, limiter.calls, "an API request is throttled")
+
+	limiter.calls = 0
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/anything-else", nil))
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/static/app.js", nil))
+	assert.Zero(t, limiter.calls, "the SPA surface spends no rate limit check")
+}
+
+func TestRouterSkipsTheLoggingMiddlewaresWithoutALogger(t *testing.T) {
+	router := NewRouter(Options{Config: config.Default()})
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api", nil))
+
+	assert.Equal(t, http.StatusOK, rec.Code, "a router without a logger still serves")
 }

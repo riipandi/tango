@@ -115,9 +115,9 @@ func TestSlogChainCarriesFieldsThroughThePipeline(t *testing.T) {
 	// logger is what implements them: With(...) accumulates attributes on a
 	// derived handler and every later record carries them, while WithGroup(...)
 	// nests what follows under one key. Feature code is expected to use these
-// rather than reaching for the LogLayer core, so the path is asserted here
-// rather than assumed.
-log, buf := newLogger(t, func(cfg *config.Config) { cfg.Log.Console.Format = config.LogStructured })
+	// rather than reaching for the LogLayer core, so the path is asserted here
+	// rather than assumed.
+	log, buf := newLogger(t, func(cfg *config.Config) { cfg.Log.Console.Format = config.LogStructured })
 
 	request := log.Slog().With("request_id", "abc123")
 	request.Info("first")

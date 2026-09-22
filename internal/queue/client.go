@@ -3,8 +3,8 @@ package queue
 import (
 	"bytes"
 	"context"
-	"encoding/json/v2"
 	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -36,10 +36,10 @@ type (
 		queues queues
 		// buffers is a pool of byte buffers for payload encoding.
 		buffers sync.Pool
-	// dispatcher claims tasks and hands them to the workers.
-	dispatcher dispatcher
-	// encryptor seals task payloads at rest when the client runs with one.
-	encryptor *crypto.Cipher
+		// dispatcher claims tasks and hands them to the workers.
+		dispatcher dispatcher
+		// encryptor seals task payloads at rest when the client runs with one.
+		encryptor *crypto.Cipher
 	}
 
 	// ClientConfig contains configuration for the Client.
@@ -53,16 +53,16 @@ type (
 		// NumWorkers is the number of goroutines that execute queued tasks
 		// concurrently.
 		NumWorkers int
-	// ReleaseAfter is the duration after which a claimed task is released
-	// back to the queue if it has not finished. It should be much higher
-	// than every queue's Timeout, existing as the fail-safe for a worker
-	// lost to a crash or a network partition.
-	ReleaseAfter time.Duration
-	// Encryptor seals task payloads at rest when set: every task the client
-	// writes carries crypto.EncPrefix, and a claimed payload is opened
-	// before its queue decodes it. The archive keeps the sealed form, so a
-	// replayed task rides through the same path.
-	Encryptor *crypto.Cipher
+		// ReleaseAfter is the duration after which a claimed task is released
+		// back to the queue if it has not finished. It should be much higher
+		// than every queue's Timeout, existing as the fail-safe for a worker
+		// lost to a crash or a network partition.
+		ReleaseAfter time.Duration
+		// Encryptor seals task payloads at rest when set: every task the client
+		// writes carries crypto.EncPrefix, and a claimed payload is opened
+		// before its queue decodes it. The archive keeps the sealed form, so a
+		// replayed task rides through the same path.
+		Encryptor *crypto.Cipher
 	}
 )
 

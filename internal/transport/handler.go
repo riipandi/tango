@@ -3,6 +3,7 @@
 package transport
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -28,13 +29,26 @@ type Options struct {
 	// Metrics is the Prometheus exposition handler. A nil handler mounts no
 	// metrics endpoint, which is the state a disabled signal is in.
 	Metrics http.Handler
+	// Logger is the process logger the request middleware writes through. A
+	// nil logger leaves the request and panic middleware out, which is the
+	// state a test that reads only responses is in.
+	Logger *slog.Logger
+	// RateLimiter is the limiter the API surface is throttled by. A nil
+	// limiter mounts no throttling, which is the state a run without a
+	// rate_limit driver is in.
+	RateLimiter middleware.Limiter
 	// Modules are the feature modules whose routes the server mounts.
 	Modules []kernel.Module
 }
 
 // NewRouter builds the request pipeline: request id first, so every response
-// and log line can name its request; CORS second, so a policy question is
-// answered before a route runs; then the endpoints.
+// and log line can name its request; the request logger and the panic
+// recovery around every route; CORS, so a policy question is answered before
+// a route runs; the request timeout; then the endpoints.
+//
+// The rate limiter is the API surface's middleware and not the router's: a
+// static asset or a metrics scrape spends no rate-limit check, the budget
+// belonging to the API a client calls.
 //
 // The SPA is mounted last: its handler answers whatever the routes above it
 // did not claim, and its own not-found rule keeps API and protocol paths from
@@ -43,13 +57,19 @@ func NewRouter(opts Options) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
+	r.Use(middleware.Logger(opts.Logger))
+	r.Use(middleware.Recoverer(opts.Logger))
 	r.Use(middleware.CORS(opts.Config.Server.CORS))
+	r.Use(middleware.Timeout(opts.Config.Server.WriteTimeout))
 
 	if opts.Metrics != nil {
 		r.Handle(opts.Config.OTEL.Metrics.PrometheusPath, opts.Metrics)
 	}
 
 	r.Route("/api", func(api chi.Router) {
+		if opts.RateLimiter != nil {
+			api.Use(middleware.RateLimit(opts.RateLimiter))
+		}
 		api.Get("/", apiRoot(opts.Config))
 		if opts.Checker != nil {
 			api.Get("/healthz", health.Handler(opts.Checker))

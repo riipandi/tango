@@ -71,7 +71,7 @@ func TestAddSavesTheWholeBatchAtomically(t *testing.T) {
 func TestAddDelaysTheWholeBatch(t *testing.T) {
 	client := newTestClient(t)
 
-	save(t, client.Add(probeTask{Name: "a"}, probeTask{Name: "b"}).Wait(50 * time.Millisecond))
+	save(t, client.Add(probeTask{Name: "a"}, probeTask{Name: "b"}).Wait(50*time.Millisecond))
 
 	rows, err := client.store.Query(t.Context(),
 		"SELECT wait_until FROM public.queue_tasks ORDER BY id")
