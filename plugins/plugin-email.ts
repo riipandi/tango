@@ -51,6 +51,14 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`
 }
 
+// Printed relative to the working directory, so a line names the path a
+// developer would type; a path outside it stays absolute.
+function displayPath(target: string): string {
+  const rel = path.relative(process.cwd(), target)
+  if (rel === '') return '.'
+  return rel.startsWith('..') ? target : rel
+}
+
 function log(msg: string) {
   console.log(`${PREFIX} ${msg}`)
 }
@@ -160,15 +168,15 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
     const absOutput = path.resolve(viteRoot, opts.outputDir)
 
     if (!fs.existsSync(absTemplates)) {
-      logError(`templates directory not found: ${opts.templateDir}`)
+      logError(`templates directory not found: ${displayPath(absTemplates)}`)
       return false
     }
 
     fs.mkdirSync(absOutput, { recursive: true })
 
     log('building email templates...')
-    logInfo('templates', opts.templateDir)
-    logInfo('output', opts.outputDir)
+    logInfo('templates', displayPath(absTemplates))
+    logInfo('output', displayPath(absOutput))
 
     const startedAt = Date.now()
     const files = fs.readdirSync(absTemplates).filter((file) => file.endsWith('.tsx'))
@@ -188,10 +196,10 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
 
     if (built > 0) {
       log(
-        `${C.green}built ${built}/${files.length} templates → ${opts.outputDir} in ${duration}${C.reset}\n`
+        `${C.green}built ${built}/${files.length} templates → ${displayPath(absOutput)} in ${duration}${C.reset}\n`
       )
     } else if (files.length === 0) {
-      log(`no templates found in ${opts.templateDir}`)
+      log(`no templates found in ${displayPath(absTemplates)}`)
     }
 
     return failed === 0
@@ -277,7 +285,7 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
 
       if (!opts.watch) return
 
-      log(`watching ${opts.templateDir} for changes...`)
+      log(`watching ${displayPath(path.resolve(viteRoot, opts.templateDir))} for changes...`)
 
       const onFile = (file: string) => {
         if (disposed || !shouldWatch(file)) return

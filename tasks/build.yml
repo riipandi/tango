@@ -9,10 +9,10 @@ tasks:
     cmd: pnpm exec vite build
 
   start:
-    desc: Run the release binary on :3000
+    desc: Run the release binary
     cmds:
-      - pnpm exec kill-port 3000
-      - ./build/release/{{.APP_NAME}} serve --port 3000 {{.CLI_ARGS}}
+      - pnpm exec kill-port 3000 3080
+      - ./build/release/{{.APP_NAME}} --env-file=.env.local serve {{.CLI_ARGS}}
 
   release:
     desc: Build release binaries via goreleaser

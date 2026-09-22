@@ -120,6 +120,14 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`
 }
 
+// Printed relative to the working directory, so a line names the path a
+// developer would type; a path outside it stays absolute.
+function displayPath(target: string): string {
+  const rel = path.relative(process.cwd(), target)
+  if (rel === '') return '.'
+  return rel.startsWith('..') ? target : rel
+}
+
 // One arg builder for both paths (dev rebuilds and production targets): flags
 // before the package argument, so every target gets exactly the same shape.
 function resolveTarget(
@@ -158,7 +166,7 @@ function formatBuildInfo(target: ResolvedTarget): Array<{ label: string; value: 
     lines.push({ label: `ldflags[${index}]`, value: flag })
   }
 
-  lines.push({ label: 'output', value: target.binPath })
+  lines.push({ label: 'output', value: displayPath(target.binPath) })
 
   return lines
 }
@@ -425,7 +433,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
 
         const embedPath = path.resolve(viteRoot, embedDir)
         if (!fs.existsSync(embedPath)) {
-          log(`embed directory "${embedDir}" not found, skipping go builds`)
+          log(`embed directory "${displayPath(embedPath)}" not found, skipping go builds`)
           process.exitCode = 1
           return
         }
@@ -458,7 +466,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
           }
 
           log(
-            `${C.green}binary built → ${target.binPath}${size} in ${formatDuration(duration)}${C.reset}\n`
+            `${C.green}binary built → ${displayPath(target.binPath)}${size} in ${formatDuration(duration)}${C.reset}\n`
           )
         }
       }
