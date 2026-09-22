@@ -191,14 +191,14 @@ func (m *Manager) Stage(ctx context.Context, key string, r io.Reader, metadata m
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
 
-	if _, err := io.Copy(tmp, r); err != nil {
+	if _, err = io.Copy(tmp, r); err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("storage: staging %q: %w", key, err)
 	}
-	if err := tmp.Close(); err != nil {
+	if err = tmp.Close(); err != nil {
 		return fmt.Errorf("storage: staging %q: %w", key, err)
 	}
-	if err := os.Rename(tmp.Name(), target); err != nil {
+	if err = os.Rename(tmp.Name(), target); err != nil {
 		return fmt.Errorf("storage: staging %q: %w", key, err)
 	}
 
@@ -282,7 +282,7 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 		if fingerprint.size >= parallelHashThreshold && m.uploads > 1 {
 			chunks, err = m.chunker.ParallelSplit(f, fingerprint.size, m.uploads)
 		} else {
-			if _, err := f.Seek(0, io.SeekStart); err != nil {
+			if _, err = f.Seek(0, io.SeekStart); err != nil {
 				return fmt.Errorf("storage: rewind staging %q: %w", key, err)
 			}
 			chunks, err = m.chunker.Split(f)
@@ -304,13 +304,13 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 		prior.File.ChunkCount = len(chunks)
 		prior.File.StagingSize = fingerprint.size
 		prior.File.StagingMtime = fingerprint.mtime
-		if err := m.db.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
-			return m.manifests.Save(ctx, tx, prior)
-		}); err != nil {
+		err = m.saveManifest(ctx, prior)
+		if err != nil {
 			return err
 		}
 		if m.afterSync != nil {
-			if err := m.afterSync(ctx, prior); err != nil {
+			err = m.afterSync(ctx, prior)
+			if err != nil {
 				return fmt.Errorf("storage: after-sync hook for %q: %w", key, err)
 			}
 		}
@@ -336,9 +336,8 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 		Chunks: chunks,
 	}
 	if !reuse {
-		if err := m.db.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
-			return m.manifests.Save(ctx, tx, checkpoint)
-		}); err != nil {
+		err = m.saveManifest(ctx, checkpoint)
+		if err != nil {
 			return err
 		}
 	}
@@ -353,9 +352,8 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 	// unless it changed underneath the sync, which the guard catches.
 	checkpoint.File.Status = StatusReady
 	checkpoint.File.ChunksDone = len(chunks)
-	if err := m.db.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
-		return m.manifests.Save(ctx, tx, checkpoint)
-	}); err != nil {
+	err = m.saveManifest(ctx, checkpoint)
+	if err != nil {
 		return err
 	}
 	if !reuse && done > 0 {
@@ -368,11 +366,19 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 	// ready manifest with a matching fingerprint and replays the hook
 	// through the finished-manifest fast path.
 	if m.afterSync != nil {
-		if err := m.afterSync(ctx, checkpoint); err != nil {
+		err = m.afterSync(ctx, checkpoint)
+		if err != nil {
 			return fmt.Errorf("storage: after-sync hook for %q: %w", key, err)
 		}
 	}
 	return m.clearStaging(ctx, path, fingerprint)
+}
+
+// saveManifest commits a manifest in its own transaction.
+func (m *Manager) saveManifest(ctx context.Context, manifest Manifest) error {
+	return m.db.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		return m.manifests.Save(ctx, tx, manifest)
+	})
 }
 
 // uploadMissing puts every chunk the backend does not hold yet, several at
@@ -400,7 +406,8 @@ func (m *Manager) uploadMissing(ctx context.Context, key string, chunks []Chunk)
 	// round reports the true distance to the total, not the distance this
 	// process happens to have walked.
 	done := len(chunks) - len(pending)
-	if err := m.manifests.SetProgress(ctx, m.db, key, done); err != nil {
+	err = m.manifests.SetProgress(ctx, m.db, key, done)
+	if err != nil {
 		return 0, err
 	}
 	if len(pending) == 0 {
@@ -435,7 +442,8 @@ func (m *Manager) uploadMissing(ctx context.Context, key string, chunks []Chunk)
 			if err != nil {
 				return err
 			}
-			if err := m.store.PutChunk(ctx, chunk.Hash, data); err != nil {
+			err = m.store.PutChunk(ctx, chunk.Hash, data)
+			if err != nil {
 				return err
 			}
 			mu.Lock()
@@ -523,8 +531,8 @@ func (m *Manager) CollectGarbage(ctx context.Context) (int, error) {
 		if _, ok := keep[hash]; ok {
 			return nil
 		}
-		if err := m.store.DeleteChunk(ctx, hash); err != nil {
-			return err
+		if delErr := m.store.DeleteChunk(ctx, hash); delErr != nil {
+			return delErr
 		}
 		removed++
 		return nil

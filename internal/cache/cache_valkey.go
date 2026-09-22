@@ -95,7 +95,9 @@ func (c *Valkey) GetMany(ctx context.Context, keys []string) map[string][]byte {
 		if err != nil {
 			continue
 		}
-		found[keys[i]] = value
+		if i < len(keys) {
+			found[keys[i]] = value
+		}
 	}
 	return found
 }

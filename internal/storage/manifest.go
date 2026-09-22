@@ -93,7 +93,8 @@ func (Manifests) Load(ctx context.Context, q datastore.Querier, key string) (Man
 	if err != nil {
 		return Manifest{}, fmt.Errorf("storage: load file %q: %w", key, err)
 	}
-	if err := json.Unmarshal(metadata, &file.Metadata); err != nil {
+	err = json.Unmarshal(metadata, &file.Metadata)
+	if err != nil {
 		return Manifest{}, fmt.Errorf("storage: decode metadata of %q: %w", key, err)
 	}
 
@@ -303,13 +304,15 @@ func (Manifests) Delete(ctx context.Context, q datastore.Querier, key string) ([
 	var hashes []string
 	for rows.Next() {
 		var hash string
-		if err := rows.Scan(&hash); err != nil {
+		err = rows.Scan(&hash)
+		if err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("storage: scan chunk of %q: %w", key, err)
 		}
 		hashes = append(hashes, hash)
 	}
-	if err := rows.Err(); err != nil {
+	err = rows.Err()
+	if err != nil {
 		rows.Close()
 		return nil, fmt.Errorf("storage: list chunks of %q: %w", key, err)
 	}

@@ -107,7 +107,8 @@ func TestManagerSyncStoresTheManifestAndDropsTheStagingFile(t *testing.T) {
 
 	// Every chunk the manifest names is in the backend under its hash.
 	for _, chunk := range manifest.Chunks {
-		exists, err := hasChunk(ctx, store, chunk.Hash)
+		var exists bool
+		exists, err = hasChunk(ctx, store, chunk.Hash)
 		require.NoError(t, err)
 		assert.True(t, exists, "chunk %d missing from the backend", chunk.Index)
 	}

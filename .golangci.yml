@@ -66,8 +66,8 @@ linters:
               reason: gofrs' package was not go module before v5
     govet:
       disable:
-        # Disable struct field alignment warnings to allow easier refactoring
-        # and avoid unnecessary churn in PRs.
+        # Disable struct field alignment warnings to allow easier
+        # refactoring and avoid unnecessary churn in PRs.
         - fieldalignment
       enable-all: true
     inamedparam:
