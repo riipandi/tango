@@ -2,6 +2,8 @@ package database_test
 
 import (
 	"database/sql"
+	"regexp"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,11 +14,28 @@ import (
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
-// migrationCount is the number of files in database/migrations.
-const migrationCount = 9
+// embeddedMigrations loads the migrations compiled into the test binary once.
+// Every count and version expectation derives from it, so adding a migration
+// file never means editing these tests.
+var embeddedMigrations = sync.OnceValue(func() []database.EmbeddedMigration {
+	files, err := database.EmbeddedMigrations()
+	if err != nil {
+		panic(err)
+	}
+	if len(files) == 0 {
+		panic("database: no migrations are compiled into the test binary")
+	}
+	return files
+})
 
-// highestVersion is the version of the last migration file.
-const highestVersion = 9
+// migrationCount is the number of files compiled into the binary.
+func migrationCount() int { return len(embeddedMigrations()) }
+
+// highestVersion is the version of the last embedded migration.
+func highestVersion() int64 {
+	files := embeddedMigrations()
+	return files[len(files)-1].Version
+}
 
 func newMigrator(t *testing.T) (*database.Migrator, *sql.DB) {
 	t.Helper()
@@ -42,7 +61,7 @@ func TestNewMigratorRequiresHandle(t *testing.T) {
 func TestMigratorLoadsEveryEmbeddedFile(t *testing.T) {
 	migrator, _ := newMigrator(t)
 
-	assert.Equal(t, int64(highestVersion), migrator.HighestVersion())
+	assert.Equal(t, highestVersion(), migrator.HighestVersion())
 }
 
 func TestMigratorAppliesEveryMigration(t *testing.T) {
@@ -51,7 +70,7 @@ func TestMigratorAppliesEveryMigration(t *testing.T) {
 
 	applied, err := migrator.Up(ctx)
 	require.NoError(t, err)
-	require.Len(t, applied, migrationCount)
+	require.Len(t, applied, migrationCount())
 	for i, migration := range applied {
 		assert.Equal(t, int64(i+1), migration.Version, "migrations must apply in version order")
 		assert.NotEmpty(t, migration.Name)
@@ -60,7 +79,7 @@ func TestMigratorAppliesEveryMigration(t *testing.T) {
 
 	version, err := migrator.Version(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, int64(highestVersion), version)
+	assert.Equal(t, highestVersion(), version)
 
 	// The schema the first migration creates must exist, proving version 1 ran.
 	var exists bool
@@ -90,7 +109,7 @@ func TestMigratorRecordsVersionInAppMigration(t *testing.T) {
 	var count int
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT count(*) FROM "+database.VersionTable).Scan(&count))
 	// One row per applied migration plus goose's version 0 sentinel.
-	assert.Equal(t, migrationCount+1, count)
+	assert.Equal(t, migrationCount()+1, count)
 }
 
 func TestMigratorStatusAndPending(t *testing.T) {
@@ -99,7 +118,7 @@ func TestMigratorStatusAndPending(t *testing.T) {
 
 	statuses, err := migrator.Status(ctx)
 	require.NoError(t, err)
-	require.Len(t, statuses, migrationCount)
+	require.Len(t, statuses, migrationCount())
 	for _, status := range statuses {
 		assert.False(t, status.Applied)
 		assert.True(t, status.AppliedAt.IsZero())
@@ -107,7 +126,7 @@ func TestMigratorStatusAndPending(t *testing.T) {
 
 	pending, err := migrator.Pending(ctx)
 	require.NoError(t, err)
-	assert.Len(t, pending, migrationCount)
+	assert.Len(t, pending, migrationCount())
 
 	_, err = migrator.Up(ctx)
 	require.NoError(t, err)
@@ -143,14 +162,17 @@ func TestMigratorUpToStopsAtVersion(t *testing.T) {
 		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'queue_tasks')").Scan(&exists))
 	assert.False(t, exists, "migration 00008 must not have run")
 
-	rest, err := migrator.UpTo(ctx, highestVersion)
+	rest, err := migrator.UpTo(ctx, highestVersion())
 	require.NoError(t, err)
-	assert.Len(t, rest, migrationCount-3)
+	assert.Len(t, rest, migrationCount()-3)
 }
 
 func TestMigratorDownRollsBackNewestFirst(t *testing.T) {
 	migrator, db := newMigrator(t)
 	ctx := t.Context()
+
+	files := embeddedMigrations()
+	newest, previous := files[len(files)-1], files[len(files)-2]
 
 	_, err := migrator.Up(ctx)
 	require.NoError(t, err)
@@ -158,28 +180,51 @@ func TestMigratorDownRollsBackNewestFirst(t *testing.T) {
 	rolled, err := migrator.Down(ctx, 2)
 	require.NoError(t, err)
 	require.Len(t, rolled, 2)
-	assert.Equal(t, int64(9), rolled[0].Version)
-	assert.Equal(t, int64(8), rolled[1].Version)
+	assert.Equal(t, newest.Version, rolled[0].Version)
+	assert.Equal(t, previous.Version, rolled[1].Version)
 
 	version, err := migrator.Version(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, int64(7), version)
+	assert.Equal(t, files[len(files)-3].Version, version)
 
-	// 00009 creates the filestore tables; both rolled-back migrations' tables
-	// must be gone, while the tables from earlier migrations stay.
-	var exists bool
-	require.NoError(t, db.QueryRowContext(ctx,
-		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'storage_files')").Scan(&exists))
-	assert.False(t, exists)
-
-	require.NoError(t, db.QueryRowContext(ctx,
-		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'scheduler_jobs')").Scan(&exists))
-	assert.False(t, exists)
+	// Every table the two rolled-back migrations create must be gone, while a
+	// table from an older migration survives.
+	for _, migration := range []database.EmbeddedMigration{newest, previous} {
+		for _, table := range migrationTables(migration) {
+			assert.False(t, tableExists(t, db, table),
+				"%s must have rolled back table %s", migration.Name, table)
+		}
+	}
+	assert.True(t, tableExists(t, db, "rate_limits"),
+		"a table from an older migration must survive the rollback")
 
 	// The applied rows are gone too, so a later up reapplies them.
 	pending, err := migrator.Pending(ctx)
 	require.NoError(t, err)
 	assert.Len(t, pending, 2)
+}
+
+// migrationTables lists the table names a migration's SQL creates.
+func migrationTables(migration database.EmbeddedMigration) []string {
+	matches := createTableRe.FindAllStringSubmatch(migration.SQL, -1)
+	tables := make([]string, 0, len(matches))
+	for _, match := range matches {
+		tables = append(tables, match[1])
+	}
+	return tables
+}
+
+var createTableRe = regexp.MustCompile(`(?i)CREATE TABLE (?:IF NOT EXISTS )?([a-z_][a-z0-9_]*)`)
+
+// tableExists asks the catalog whether a table is present.
+func tableExists(t *testing.T, db *sql.DB, name string) bool {
+	t.Helper()
+
+	var exists bool
+	require.NoError(t, db.QueryRowContext(t.Context(),
+		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)", name).
+		Scan(&exists))
+	return exists
 }
 
 // A count above what is applied rolls back everything and reports only what it
@@ -248,7 +293,7 @@ func TestMigratorUsesSingleConnection(t *testing.T) {
 
 	applied, err := migrator.Up(t.Context())
 	require.NoError(t, err)
-	assert.Len(t, applied, migrationCount)
+	assert.Len(t, applied, migrationCount())
 }
 
 func TestMigratorAllowsOutOfOrderWhenEnabled(t *testing.T) {
@@ -264,7 +309,7 @@ func TestMigratorAllowsOutOfOrderWhenEnabled(t *testing.T) {
 
 	applied, err := migrator.Up(t.Context())
 	require.NoError(t, err)
-	assert.Len(t, applied, migrationCount)
+	assert.Len(t, applied, migrationCount())
 }
 
 // versionTableIDs reads the recorded ids of the version table, lowest first.
@@ -297,7 +342,7 @@ func TestMigratorResetIdentityRewindsAfterRollback(t *testing.T) {
 	require.NoError(t, err)
 
 	// A full rollback leaves only the sentinel goose requires.
-	_, err = migrator.Down(t.Context(), migrationCount)
+	_, err = migrator.Down(t.Context(), migrationCount())
 	require.NoError(t, err)
 	assert.Equal(t, []int64{1}, versionTableIDs(t, db), "only the sentinel row must remain")
 
@@ -307,9 +352,9 @@ func TestMigratorResetIdentityRewindsAfterRollback(t *testing.T) {
 	require.NoError(t, err)
 
 	ids := versionTableIDs(t, db)
-	require.Len(t, ids, migrationCount+1)
+	require.Len(t, ids, migrationCount()+1)
 	assert.Equal(t, int64(1), ids[0], "the sentinel keeps id 1")
-	assert.Equal(t, int64(migrationCount+1), ids[len(ids)-1],
+	assert.Equal(t, int64(migrationCount()+1), ids[len(ids)-1],
 		"the ids must be dense again, not pushed past the previous cycle")
 }
 
@@ -319,7 +364,7 @@ func TestMigratorResetIdentityKeepsTheZeroVersionRow(t *testing.T) {
 
 	_, err := migrator.Up(t.Context())
 	require.NoError(t, err)
-	_, err = migrator.Down(t.Context(), migrationCount)
+	_, err = migrator.Down(t.Context(), migrationCount())
 	require.NoError(t, err)
 
 	require.NoError(t, migrator.ResetIdentity(t.Context()))
@@ -350,7 +395,7 @@ func TestMigratorResetIdentityAfterPartialRollback(t *testing.T) {
 	require.NoError(t, err)
 
 	ids := versionTableIDs(t, db)
-	require.Len(t, ids, migrationCount+1)
-	assert.Equal(t, int64(migrationCount+1), ids[len(ids)-1],
+	require.Len(t, ids, migrationCount()+1)
+	assert.Equal(t, int64(migrationCount()+1), ids[len(ids)-1],
 		"the ids must stay dense after a partial rollback too")
 }

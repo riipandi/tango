@@ -41,6 +41,45 @@ type ValidationReport struct {
 // OK reports whether the migrations passed every check.
 func (r ValidationReport) OK() bool { return len(r.Issues) == 0 }
 
+// EmbeddedMigration is one migration compiled into this binary.
+type EmbeddedMigration struct {
+	// Name is the full file name, version prefix included.
+	Name string
+	// Version is the numeric prefix of the file name.
+	Version int64
+	// SQL is the file's content, Up and Down blocks included.
+	SQL string
+}
+
+// EmbeddedMigrations returns the migrations compiled into this binary, in
+// version order. Tests and tooling derive their expectations from this list
+// instead of hardcoding counts that go stale with every new file.
+func EmbeddedMigrations() ([]EmbeddedMigration, error) {
+	fsys, err := fs.Sub(migrationFiles, migrationsDir)
+	if err != nil {
+		return nil, fmt.Errorf("database: open embedded migrations: %w", err)
+	}
+
+	files, issues := listMigrations(fsys)
+	if len(issues) > 0 {
+		messages := make([]string, len(issues))
+		for i, issue := range issues {
+			messages[i] = issue.String()
+		}
+		return nil, fmt.Errorf("database: embedded migrations do not validate: %s", strings.Join(messages, "; "))
+	}
+
+	out := make([]EmbeddedMigration, 0, len(files))
+	for _, file := range files {
+		sql, err := fs.ReadFile(fsys, file.name)
+		if err != nil {
+			return nil, fmt.Errorf("database: read %s: %w", file.name, err)
+		}
+		out = append(out, EmbeddedMigration{Name: file.name, Version: file.version, SQL: string(sql)})
+	}
+	return out, nil
+}
+
 // Validate checks the embedded migrations for the structural mistakes goose
 // rejects while applying. It reads nothing outside the binary and needs no
 // database, so it runs in CI before a connection exists.

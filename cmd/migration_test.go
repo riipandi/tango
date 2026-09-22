@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +23,40 @@ import (
 	"github.com/riipandi/tango/pkg/printext"
 	"github.com/riipandi/tango/pkg/testutils"
 )
+
+// embeddedFiles loads the migrations compiled into the test binary once. Every
+// count and version expectation derives from it, so adding a migration file
+// never means editing these tests.
+var embeddedFiles = sync.OnceValue(func() []database.EmbeddedMigration {
+	files, err := database.EmbeddedMigrations()
+	if err != nil {
+		panic(err)
+	}
+	if len(files) == 0 {
+		panic("cmd: no migrations are compiled into the test binary")
+	}
+	return files
+})
+
+// migrationTotal is the number of migrations compiled into the binary.
+func migrationTotal() int { return len(embeddedFiles()) }
+
+// latestMigration is the last migration in version order.
+func latestMigration() database.EmbeddedMigration {
+	files := embeddedFiles()
+	return files[len(files)-1]
+}
+
+// migrationTables lists the table names a migration's SQL creates.
+func migrationTables(m database.EmbeddedMigration) []string {
+	var tables []string
+	for _, match := range createTableRe.FindAllStringSubmatch(m.SQL, -1) {
+		tables = append(tables, match[1])
+	}
+	return tables
+}
+
+var createTableRe = regexp.MustCompile(`(?i)CREATE TABLE (?:IF NOT EXISTS )?([a-z_][a-z0-9_]*)`)
 
 // writeEnvFile writes a dotenv file containing DATABASE_URL.
 func writeEnvFile(t *testing.T, dsn string) string {
@@ -182,7 +218,7 @@ func TestMigrateUpStopsAtToVersion(t *testing.T) {
 
 	out, err = runMigrateUpCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
-	assert.Contains(t, out, "7 migrations applied")
+	assert.Contains(t, out, fmt.Sprintf("%d migrations applied", migrationTotal()-2))
 }
 
 // A non-interactive run (stdin is not a terminal) must not block on the
@@ -194,7 +230,7 @@ func TestMigrateUpDoesNotPromptWithoutTerminal(t *testing.T) {
 	out, err := runMigrateUpCmd(t, "", "--env-file="+envFile)
 	require.NoError(t, err)
 	assert.NotContains(t, out, "[y/N]")
-	assert.Contains(t, out, "9 migrations applied")
+	assert.Contains(t, out, fmt.Sprintf("%d migrations applied", migrationTotal()))
 }
 
 func TestConfirm(t *testing.T) {
@@ -248,28 +284,27 @@ func TestMigrateDownRollsBackNewestFirst(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--force")
 	require.NoError(t, err)
-	assertMigrationRow(t, out, 9, "rolled back")
+	assertMigrationRow(t, out, latestMigration().Version, "rolled back")
 	assert.Contains(t, out, "1 migration rolled back")
 
-	// 00009, the highest applied migration, creates the filestore tables, so
-	// they must have been rolled back; the queue and scheduler tables, one
-	// version below, must still exist.
+	// Every table the newest migration creates must be gone, while tables from
+	// older migrations stay.
 	db, err := datastore.OpenMigrationDB(t.Context(), datastore.PostgresOptions{DSN: dsn})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 
+	for _, table := range migrationTables(latestMigration()) {
+		var exists bool
+		require.NoError(t, db.QueryRowContext(t.Context(),
+			"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)", table).
+			Scan(&exists))
+		assert.False(t, exists, "%s must have been rolled back", table)
+	}
+
 	var exists bool
 	require.NoError(t, db.QueryRowContext(t.Context(),
-		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'storage_files')").Scan(&exists))
-	assert.False(t, exists, "00009 must have been rolled back")
-
-	require.NoError(t, db.QueryRowContext(t.Context(),
-		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'queue_tasks')").Scan(&exists))
-	assert.True(t, exists, "00008 must still be applied")
-
-	require.NoError(t, db.QueryRowContext(t.Context(),
 		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'rate_limits')").Scan(&exists))
-	assert.True(t, exists, "00007 must still be applied")
+	assert.True(t, exists, "a table from an older migration must survive")
 }
 
 func TestMigrateDownCountAndDryRun(t *testing.T) {
@@ -282,18 +317,19 @@ func TestMigrateDownCountAndDryRun(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--dry-run")
 	require.NoError(t, err)
-	assert.Contains(t, out, "create_filestore_tables")
+	assert.Contains(t, out, migrationLabel(latestMigration().Name))
 	assert.Contains(t, out, "1 migration to roll back")
 
 	// --dry-run must not have rolled anything back.
 	version := currentVersion(t, dsn)
-	assert.Equal(t, int64(9), version)
+	assert.Equal(t, latestMigration().Version, version)
 
+	files := embeddedFiles()
 	out, err = runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=3")
 	require.NoError(t, err)
-	assertMigrationRow(t, out, 7, "rolled back")
+	assertMigrationRow(t, out, files[len(files)-3].Version, "rolled back")
 	assert.Contains(t, out, "3 migrations rolled back")
-	assert.Equal(t, int64(6), currentVersion(t, dsn))
+	assert.Equal(t, files[len(files)-4].Version, currentVersion(t, dsn))
 }
 
 // A count above what the database has rolls back everything instead of failing.
@@ -307,7 +343,7 @@ func TestMigrateDownCountAboveApplied(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=50")
 	require.NoError(t, err)
-	assert.Contains(t, out, "9 migrations rolled back")
+	assert.Contains(t, out, fmt.Sprintf("%d migrations rolled back", migrationTotal()))
 	assert.Zero(t, currentVersion(t, dsn))
 }
 
@@ -364,8 +400,9 @@ func TestMigrateDownAcceptedPrompt(t *testing.T) {
 
 	out, err := runMigrateDownCmd(t, "y\n", "--env-file="+envFile)
 	require.NoError(t, err)
-	assertMigrationRow(t, out, 9, "rolled back")
-	assert.Equal(t, int64(8), currentVersion(t, dsn))
+	assertMigrationRow(t, out, latestMigration().Version, "rolled back")
+	files := embeddedFiles()
+	assert.Equal(t, files[len(files)-2].Version, currentVersion(t, dsn))
 }
 
 // assertMigrationRow asserts that a migration appears as a full row of the
@@ -429,9 +466,10 @@ func TestMigrateStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "00001 applied")
 	assert.Contains(t, out, "initialize_schema")
-	assert.Contains(t, out, "version 00009; 9 of 9 applied")
+	assert.Contains(t, out, fmt.Sprintf("version %0*d; %d of %d applied",
+		database.MigrationPrefixWidth, latestMigration().Version, migrationTotal(), migrationTotal()))
 	assert.Contains(t, out, "last run ")
-	assert.Contains(t, out, " UTC (00009_create_filestore_tables.sql)")
+	assert.Contains(t, out, " UTC ("+latestMigration().Name+")")
 }
 
 // After a rollback the last run is the migration that ran before it, not the
@@ -448,9 +486,11 @@ func TestMigrateStatusReportsLastRunAfterRollback(t *testing.T) {
 
 	out, err := runMigrateStatusCmd(t, "--env-file="+envFile)
 	require.NoError(t, err)
+	files := embeddedFiles()
 	assert.Contains(t, out, "last run ")
-	assert.Contains(t, out, "(00007_create_rate_limits_table.sql)")
-	assert.NotContains(t, out, "(00009_create_filestore_tables.sql)")
+	assert.Contains(t, out, "("+files[len(files)-3].Name+")")
+	assert.NotContains(t, out, "("+files[len(files)-2].Name+")")
+	assert.NotContains(t, out, "("+files[len(files)-1].Name+")")
 }
 
 // The applied time must be a real timestamp, not a zero value.
@@ -564,7 +604,7 @@ func TestMigrateDownRewindsTheVersionTableIdentity(t *testing.T) {
 	require.NoError(t, err)
 	afterUp := maxMigrationID(t, dsn)
 
-	_, err = runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count=9")
+	_, err = runMigrateDownCmd(t, "", "--env-file="+envFile, "--force", "--count="+fmt.Sprint(migrationTotal()))
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), maxMigrationID(t, dsn), "only the sentinel must remain")
 

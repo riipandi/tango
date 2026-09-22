@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,14 +25,14 @@ func TestMigrateValidateNeedsNoDatabase(t *testing.T) {
 
 	out, err := runMigrateValidateCmd(t)
 	require.NoError(t, err)
-	assert.Contains(t, out, "status: 9 migration files valid")
+	assert.Contains(t, out, fmt.Sprintf("status: %d migration files valid", migrationTotal()))
 }
 
 func TestMigrateValidateReportsNoIssues(t *testing.T) {
 	out, err := runMigrateValidateCmd(t)
 	require.NoError(t, err)
 	assert.NotContains(t, out, "goose will skip")
-	assert.Contains(t, out, "status: 9 migration files valid")
+	assert.Contains(t, out, fmt.Sprintf("status: %d migration files valid", migrationTotal()))
 }
 
 // A broken file must fail the command, so `task check` fails with it.
@@ -77,15 +78,15 @@ func TestMigrateResetWithUpReappliesEverything(t *testing.T) {
 
 	out, err := runMigrateResetCmd(t, "", "--env-file="+envFile, "--force", "--up")
 	require.NoError(t, err)
-	assert.Contains(t, out, "9 migrations rolled back")
-	assert.Contains(t, out, "9 migrations applied")
-	assert.Equal(t, int64(9), currentVersion(t, dsn))
+	assert.Contains(t, out, fmt.Sprintf("%d migrations rolled back", migrationTotal()))
+	assert.Contains(t, out, fmt.Sprintf("%d migrations applied", migrationTotal()))
+	assert.Equal(t, latestMigration().Version, currentVersion(t, dsn))
 
 	// The two halves must each use their own state column and their own clock.
 	// The migrator holds the reporter's progress callback, so a half that
 	// replaced the reporter instead of restarting it would keep the other half's
 	// width and include the other half's time.
-	assertMigrationRow(t, out, 9, "rolled back")
+	assertMigrationRow(t, out, latestMigration().Version, "rolled back")
 	assertMigrationRow(t, out, 1, "applied")
 
 	for _, line := range strings.Split(out, "\n") {
@@ -112,7 +113,7 @@ func TestMigrateResetDryRunChangesNothing(t *testing.T) {
 	// With --up the pending half is listed too, still without touching anything.
 	out, err = runMigrateResetCmd(t, "", "--env-file="+envFile, "--dry-run", "--up")
 	require.NoError(t, err)
-	assert.Contains(t, out, "6 migrations pending")
+	assert.Contains(t, out, fmt.Sprintf("%d migrations pending", migrationTotal()-3))
 	assert.Equal(t, int64(3), currentVersion(t, dsn))
 }
 
@@ -155,9 +156,9 @@ func TestMigrateResetWithUpOnFreshDatabasePromptsToApply(t *testing.T) {
 
 	out, err := runMigrateResetCmd(t, "n\n", "--env-file="+envFile, "--up")
 	require.NoError(t, err)
-	assert.Contains(t, out, "apply all 9 pending migrations? [y/N]")
+	assert.Contains(t, out, fmt.Sprintf("apply all %d pending migrations?", migrationTotal()))
 	assert.NotContains(t, out, "roll back")
-	assert.Contains(t, out, "9 pending migrations left unapplied")
+	assert.Contains(t, out, fmt.Sprintf("%d pending migrations left unapplied", migrationTotal()))
 	assert.Zero(t, currentVersion(t, dsn))
 }
 
@@ -193,9 +194,9 @@ func TestMigrateResetDeclinedLeavesDatabase(t *testing.T) {
 
 	out, err := runMigrateResetCmd(t, "n\n", "--env-file="+envFile)
 	require.NoError(t, err)
-	assert.Contains(t, out, "roll back all 9 migrations? [y/N]")
-	assert.Contains(t, out, "9 migrations left applied")
-	assert.Equal(t, int64(9), currentVersion(t, dsn))
+	assert.Contains(t, out, fmt.Sprintf("roll back all %d migrations?", migrationTotal()))
+	assert.Contains(t, out, fmt.Sprintf("%d migrations left applied", migrationTotal()))
+	assert.Equal(t, latestMigration().Version, currentVersion(t, dsn))
 }
 
 func runMigrateResetCmd(t *testing.T, stdin string, args ...string) (string, error) {
@@ -306,5 +307,5 @@ func TestMigrateResetWithUpKeepsIDsDense(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, afterUp, maxMigrationID(t, dsn),
 		"the re-apply must reuse the ids, not continue past them")
-	assert.Equal(t, int64(9), currentVersion(t, dsn))
+	assert.Equal(t, latestMigration().Version, currentVersion(t, dsn))
 }

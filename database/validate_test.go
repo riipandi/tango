@@ -29,7 +29,7 @@ func TestValidateEmbeddedMigrations(t *testing.T) {
 	report := database.Validate()
 
 	assert.True(t, report.OK(), "issues: %v", report.Issues)
-	assert.Equal(t, migrationCount, report.Checked)
+	assert.Equal(t, migrationCount(), report.Checked)
 }
 
 func TestValidateAcceptsValidMigrations(t *testing.T) {

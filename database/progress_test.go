@@ -37,7 +37,7 @@ func TestMigratorReportsProgressPerMigration(t *testing.T) {
 
 	results, err := migrator.Up(t.Context())
 	require.NoError(t, err)
-	require.Len(t, results, migrationCount)
+	require.Len(t, results, migrationCount())
 
 	// Every migration reports a start and one finished state, so the count is
 	// exactly twice the number of migrations.
@@ -52,8 +52,8 @@ func TestMigratorReportsProgressPerMigration(t *testing.T) {
 		finished[event.Version] = event
 	}
 
-	assert.Len(t, started, migrationCount, "every migration must report a start")
-	assert.Len(t, finished, migrationCount, "every migration must report a finished state")
+	assert.Len(t, started, migrationCount(), "every migration must report a start")
+	assert.Len(t, finished, migrationCount(), "every migration must report a finished state")
 
 	for version, event := range finished {
 		assert.Equal(t, database.ProgressApplied, event.State, "version %d", version)
@@ -104,5 +104,5 @@ func TestMigratorWithoutProgressStaysSilent(t *testing.T) {
 
 	results, err := migrator.Up(t.Context())
 	require.NoError(t, err)
-	assert.Len(t, results, migrationCount)
+	assert.Len(t, results, migrationCount())
 }

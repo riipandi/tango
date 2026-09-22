@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -94,7 +95,7 @@ func TestMigrateSeedRequiresSchema(t *testing.T) {
 
 	out, err := runMigrateSeedCmd(t, "", "--env-file="+envFile, "--force")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "9 migrations pending")
+	assert.Contains(t, err.Error(), fmt.Sprintf("%d migrations pending", migrationTotal()))
 	assert.Contains(t, err.Error(), "run migrate:up first")
 	assert.Empty(t, out)
 }
@@ -111,7 +112,7 @@ func TestMigrateSeedRequiresEveryMigration(t *testing.T) {
 
 	out, err := runMigrateSeedCmd(t, "", "--env-file="+envFile, "--force")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "7 migrations pending")
+	assert.Contains(t, err.Error(), fmt.Sprintf("%d migrations pending", migrationTotal()-2))
 	assert.Empty(t, out)
 	assert.Zero(t, countUsers(t, envFile))
 }

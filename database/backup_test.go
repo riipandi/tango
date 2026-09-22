@@ -1,6 +1,7 @@
 package database_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -92,14 +93,37 @@ func TestSchemaOnlyDumpRebuildsTheSchema(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 
-	var tables int
-	err = pool.QueryRow(t.Context(), `
-		SELECT count(*) FROM pg_class c
+	// The restored database must carry exactly the tables the migrated source
+	// has, whatever that set is. The dump leaves the migrator's own version
+	// table out — the target's migrator owns it — so it is filtered here too.
+	restored := applicationTables(t, pool)
+	require.NotEmpty(t, restored, "every application table must be recreated")
+	expected := slices.DeleteFunc(applicationTables(t, source), func(name string) bool {
+		return name == database.VersionTable
+	})
+	assert.Equal(t, expected, restored)
+}
+
+// applicationTables lists the relation names the dump must carry over.
+func applicationTables(t *testing.T, pool *pgxpool.Pool) []string {
+	t.Helper()
+
+	rows, err := pool.Query(t.Context(), `
+		SELECT c.relname FROM pg_class c
 		JOIN pg_namespace n ON n.oid = c.relnamespace
-		WHERE c.relkind = 'r' AND n.nspname IN ('public', 'internal', 'reference')`).
-		Scan(&tables)
+		WHERE c.relkind = 'r' AND n.nspname IN ('public', 'internal', 'reference')
+		ORDER BY c.relname`)
 	require.NoError(t, err)
-	assert.Equal(t, 43, tables, "every application table must be recreated")
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		require.NoError(t, rows.Scan(&name))
+		names = append(names, name)
+	}
+	require.NoError(t, rows.Err())
+	return names
 }
 
 // Two dumps of the same state must be byte-identical apart from the header
