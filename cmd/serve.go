@@ -6,10 +6,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"slices"
+	"strings"
+	"time"
 
 	"github.com/samber/do/v2"
 	"github.com/urfave/cli/v3"
 
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/scheduler"
@@ -91,6 +96,18 @@ file decides.`,
 		}
 		jobScheduler.Start(ctx)
 
+		// The console-less echo: a deployment that ships its logs elsewhere
+		// still gets the milestones on its terminal. The logger's own echo
+		// sink carries the warnings and errors; these two lines are the start
+		// and the end a watcher looks for, written directly because they are
+		// informational and must not pretend to be part of the log stream.
+		quiet := !slices.Contains(cfg.Log.Transport, config.LogTransportConsole)
+		echo := func(format string, args ...any) {
+			if quiet {
+				fmt.Fprintf(os.Stderr, "%s %s\n", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
+			}
+		}
+
 		serveErr := make(chan error, 1)
 		go func() {
 			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -106,6 +123,7 @@ file decides.`,
 			"metrics", obs.Metrics(),
 			"workers", cfg.Queue.NumWorkers,
 			"address", server.Addr)
+		echo("serving on %s (mode %s, logs to %s)", server.Addr, cfg.App.Mode, strings.Join(cfg.Log.Transport, ","))
 
 		select {
 		case err := <-serveErr:
@@ -144,6 +162,7 @@ file decides.`,
 		// prints it released the listener, the scheduler, the pool, and the
 		// queue, so a service that exits without it stopped the hard way.
 		log.Slog().InfoContext(ctx, "shutdown complete", "address", server.Addr)
+		echo("shutdown complete on %s", server.Addr)
 		return nil
 	},
 }

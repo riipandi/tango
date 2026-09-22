@@ -40,6 +40,43 @@ func consoleSink(cfg config.Config, w io.Writer) *asyncTransport {
 	return newAsyncTransport(inner, dst)
 }
 
+// minLevelTransport drops the entries below a threshold, so a sink can carry
+// only the levels it exists for. LogLayer dispatches every entry to every
+// transport and leaves the filtering to them.
+type minLevelTransport struct {
+	inner loglayer.Transport
+	min   loglayer.LogLevel
+}
+
+func (t *minLevelTransport) SendToLogger(params loglayer.TransportParams) {
+	if params.LogLevel < t.min {
+		return
+	}
+	t.inner.SendToLogger(params)
+}
+
+func (t *minLevelTransport) ID() string             { return t.inner.ID() }
+func (t *minLevelTransport) IsEnabled() bool        { return t.inner.IsEnabled() }
+func (t *minLevelTransport) GetLoggerInstance() any { return t.inner.GetLoggerInstance() }
+
+// echoSink is the terminal a deployment that does not name the console still
+// gets: a warning or an error reaches the operator who is watching the
+// service, even though the entries themselves go to the file or the collector
+// the configuration named. It is deliberately not configurable and carries no
+// queue — the entries it takes are rare, and a synchronous write keeps the
+// one line that says something is wrong on the terminal even if the process
+// dies a moment later.
+func echoSink(w io.Writer) loglayer.Transport {
+	return &minLevelTransport{
+		inner: pretty.New(pretty.Config{
+			Writer:     w,
+			BaseConfig: transport.BaseConfig{ID: "echo"},
+			NoColor:    !isTerminal(w),
+		}),
+		min: loglayer.LogLevelWarn,
+	}
+}
+
 // levelFor maps a configured level onto the logger's own threshold. The
 // configuration has already rejected anything else, so an unknown value is not
 // reachable; it is treated as info rather than as "every level", because a

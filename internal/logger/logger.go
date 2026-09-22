@@ -24,6 +24,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 
 	"go.loglayer.dev/integrations/sloghandler/v3"
 	"go.loglayer.dev/v3"
@@ -54,6 +55,10 @@ type Options struct {
 	// Writer is the console destination. It defaults to stdout, which is where a
 	// service logs; a test passes a buffer to read what was emitted.
 	Writer io.Writer
+	// EchoWriter is where the warning-and-above echo goes when the
+	// configuration does not name the console. It defaults to stderr; a test
+	// passes a buffer to read what the terminal would show.
+	EchoWriter io.Writer
 }
 
 // Option adjusts Options.
@@ -64,6 +69,12 @@ func WithWriter(w io.Writer) Option {
 	return func(o *Options) { o.Writer = w }
 }
 
+// WithEchoWriter sends the console-less warning echo somewhere other than
+// stderr.
+func WithEchoWriter(w io.Writer) Option {
+	return func(o *Options) { o.EchoWriter = w }
+}
+
 // New builds the logger the configuration describes.
 //
 // It fails rather than degrading: a sink that cannot be built is an error, not a
@@ -71,7 +82,7 @@ func WithWriter(w io.Writer) Option {
 // a collector and did not get one has lost the logs it is being trusted with.
 // Nothing is left open when it fails part way through.
 func New(cfg config.Config, opts ...Option) (*Logger, error) {
-	options := Options{Writer: os.Stdout}
+	options := Options{Writer: os.Stdout, EchoWriter: os.Stderr}
 	for _, apply := range opts {
 		apply(&options)
 	}
@@ -114,6 +125,15 @@ func New(cfg config.Config, opts ...Option) (*Logger, error) {
 	}
 	if len(transports) == 0 {
 		return nil, errors.New("logger: log.transport: no transport configured")
+	}
+
+	// A run whose transports do not name the console is silent on the
+	// terminal by configuration, but an operator watching the service still
+	// has to hear when something is wrong. The echo sink carries warnings and
+	// errors to stderr — nothing else, so a file-only deployment does not get
+	// a second copy of every request line.
+	if !slices.Contains(cfg.Log.Transport, config.LogTransportConsole) {
+		transports = append(transports, echoSink(options.EchoWriter))
 	}
 
 	core, err := loglayer.Build(loglayer.Config{
