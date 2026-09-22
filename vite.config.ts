@@ -53,7 +53,7 @@ export default defineConfig({
     golang({
       packageName: pkg.name,
       packagePath: resolve('cmd'),
-      binArgs: ['serve'],
+      binArgs: ['--env-file=.env.local', 'serve'],
       build: {
         embedDir: resolve('web/output'),
         devTarget: 'debug',
@@ -79,11 +79,10 @@ export default defineConfig({
   build: {
     emptyOutDir: true,
     chunkSizeWarningLimit: 1024 * 4,
-    outDir: resolve('output'),
+    outDir: resolve('web/output'),
     reportCompressedSize: false,
     rolldownOptions: {
-      input: { app: resolve('web/index.html') },
-      output: { dir: resolve('web/output') }
+      input: { app: resolve('web/index.html') }
     }
   },
   worker: { plugins: () => [comlink()] },

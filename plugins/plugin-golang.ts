@@ -258,7 +258,9 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     ...opts.excludeRegex.map((r) => new RegExp(r))
   ]
 
-  let viteRoot = process.cwd()
+  // The Go module and the config file live in the directory vite was started
+  // from, which is not vite's root when the SPA sits in a subdirectory.
+  const projectRoot = process.cwd()
   let command: 'serve' | 'build' = 'serve'
   let goProcess: ChildProcess | null = null
   let buildTimer: ReturnType<typeof setTimeout> | null = null
@@ -308,9 +310,9 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
   }
 
   function startBinary() {
-    const binPath = path.resolve(viteRoot, devTarget.binPath)
+    const binPath = path.resolve(projectRoot, devTarget.binPath)
     const proc = spawn(binPath, opts.binArgs, {
-      cwd: viteRoot,
+      cwd: projectRoot,
       stdio: 'inherit',
       detached: true
     })
@@ -337,7 +339,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
       stage === 'rebuild' ? `rebuilding (${target.name})...` : `building ${target.name} binary...`
     )
 
-    const { code, output, duration } = await runGoBuild(opts.cmd, target.args, viteRoot)
+    const { code, output, duration } = await runGoBuild(opts.cmd, target.args, projectRoot)
     isBuilding = false
 
     if (code !== 0) {
@@ -395,10 +397,12 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
   return {
     name: 'vite-plugin-go',
     configResolved(config) {
-      viteRoot = config.root
       command = config.command
     },
     configureServer(_server: ViteDevServer) {
+      // Vite watches its own root (web/); the Go sources and the module live
+      // above it, so the tree has to be added explicitly.
+      _server.watcher.add(projectRoot)
       void initialBuild()
 
       _server.watcher.on('change', (file: string) => {
@@ -431,7 +435,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
           return
         }
 
-        const embedPath = path.resolve(viteRoot, embedDir)
+        const embedPath = path.resolve(projectRoot, embedDir)
         if (!fs.existsSync(embedPath)) {
           log(`embed directory "${displayPath(embedPath)}" not found, skipping go builds`)
           process.exitCode = 1
@@ -439,7 +443,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
         }
 
         for (const target of Object.values(targets)) {
-          fs.mkdirSync(path.resolve(viteRoot, target.outputDir), { recursive: true })
+          fs.mkdirSync(path.resolve(projectRoot, target.outputDir), { recursive: true })
 
           log(`building binary (${target.name})...`)
 
@@ -449,7 +453,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
             logInfo(line.label, line.value, gutter)
           }
 
-          const { code, output, duration } = await runGoBuild(opts.cmd, target.args, viteRoot)
+          const { code, output, duration } = await runGoBuild(opts.cmd, target.args, projectRoot)
 
           if (code !== 0) {
             log(`${C.red}build failed (exit code ${code}) in ${formatDuration(duration)}${C.reset}`)
@@ -460,7 +464,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
 
           let size = ''
           try {
-            size = ` (${formatFileSize(fs.statSync(path.resolve(viteRoot, target.binPath)).size)})`
+            size = ` (${formatFileSize(fs.statSync(path.resolve(projectRoot, target.binPath)).size)})`
           } catch {
             // binary missing after a successful build is highly unlikely; keep summary short
           }

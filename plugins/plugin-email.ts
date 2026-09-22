@@ -119,7 +119,10 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
 
   const opts: PluginEmailDefaults = { ...defaults, ...userOptions }
 
-  let viteRoot = process.cwd()
+  // The templates and the compiled output are addressed from the directory
+  // vite was started from, which is not vite's root when the SPA sits in a
+  // subdirectory.
+  const projectRoot = process.cwd()
   let command: 'serve' | 'build' = 'serve'
   let timer: ReturnType<typeof setTimeout> | null = null
   let isBuilding = false
@@ -164,8 +167,8 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
   }
 
   async function buildAll(): Promise<boolean> {
-    const absTemplates = path.resolve(viteRoot, opts.templateDir)
-    const absOutput = path.resolve(viteRoot, opts.outputDir)
+    const absTemplates = path.resolve(projectRoot, opts.templateDir)
+    const absOutput = path.resolve(projectRoot, opts.outputDir)
 
     if (!fs.existsSync(absTemplates)) {
       logError(`templates directory not found: ${displayPath(absTemplates)}`)
@@ -208,8 +211,8 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
   // A dev rebuild touches only the templates that changed; the untouched
   // compiled pairs keep their files, so the Go embed sees no churn.
   async function rebuildChanged(): Promise<boolean> {
-    const absTemplates = path.resolve(viteRoot, opts.templateDir)
-    const absOutput = path.resolve(viteRoot, opts.outputDir)
+    const absTemplates = path.resolve(projectRoot, opts.templateDir)
+    const absOutput = path.resolve(projectRoot, opts.outputDir)
     const files = [...pending]
     pending.clear()
 
@@ -270,14 +273,13 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
 
   function shouldWatch(filePath: string): boolean {
     if (!filePath.endsWith('.tsx')) return false
-    const rel = path.relative(path.resolve(viteRoot, opts.templateDir), filePath)
+    const rel = path.relative(path.resolve(projectRoot, opts.templateDir), filePath)
     return !rel.startsWith('..')
   }
 
   return {
     name: 'vite-plugin-email',
     configResolved(config) {
-      viteRoot = config.root
       command = config.command
     },
     configureServer(server) {
@@ -285,7 +287,9 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
 
       if (!opts.watch) return
 
-      log(`watching ${displayPath(path.resolve(viteRoot, opts.templateDir))} for changes...`)
+      // Vite watches its own root (web/); the templates live outside it.
+      server.watcher.add(path.resolve(projectRoot, opts.templateDir))
+      log(`watching ${displayPath(path.resolve(projectRoot, opts.templateDir))} for changes...`)
 
       const onFile = (file: string) => {
         if (disposed || !shouldWatch(file)) return
