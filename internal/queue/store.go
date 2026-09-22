@@ -33,6 +33,7 @@ type taskRow struct {
 	Queue          string
 	Payload        []byte
 	Attempts       int
+	Priority       int
 	WaitUntil      *time.Time
 	ClaimedAt      *time.Time
 	CreatedAt      time.Time
@@ -59,9 +60,9 @@ type completedRow struct {
 func insertTasks(ctx context.Context, q datastore.Querier, tasks []*taskRow) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(tasksTable)
-	ib.Cols("id", "queue", "task", "wait_until", "created_at")
+	ib.Cols("id", "queue", "task", "attempts", "priority", "wait_until", "created_at")
 	for _, t := range tasks {
-		ib.Values(t.ID, t.Queue, t.Payload, t.WaitUntil, t.CreatedAt)
+		ib.Values(t.ID, t.Queue, t.Payload, t.Attempts, t.Priority, t.WaitUntil, t.CreatedAt)
 	}
 
 	query, args := ib.Build()
@@ -71,10 +72,11 @@ func insertTasks(ctx context.Context, q datastore.Querier, tasks []*taskRow) err
 
 // claimReady claims the earliest tasks a dispatcher may run right now: never
 // claimed, or claimed long enough ago that their worker is considered lost,
-// and past their wait. The claim is one statement, so two dispatchers — two
-// processes sharing the database — never execute the same task twice: a row
-// is locked while it is read and updated, and a competing dispatcher skips
-// the locked rows and takes the next ones.
+// and past their wait. Priority wins over age — a higher number is claimed
+// first, ties keeping insertion order. The claim is one statement, so two
+// dispatchers — two processes sharing the database — never execute the same
+// task twice: a row is locked while it is read and updated, and a competing
+// dispatcher skips the locked rows and takes the next ones.
 func claimReady(ctx context.Context, q datastore.Querier, at time.Time, reclaimBefore time.Time, limit int) ([]*taskRow, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("id")
@@ -83,7 +85,7 @@ func claimReady(ctx context.Context, q datastore.Querier, at time.Time, reclaimB
 		sb.Or(sb.IsNull("claimed_at"), sb.LT("claimed_at", reclaimBefore)),
 		sb.Or(sb.IsNull("wait_until"), sb.LE("wait_until", at)),
 	)
-	sb.OrderBy("wait_until ASC NULLS FIRST", "id ASC")
+	sb.OrderBy("priority DESC", "wait_until ASC NULLS FIRST", "id ASC")
 	sb.Limit(limit)
 	sb.ForUpdate()
 	sb.SkipLocked()
@@ -92,7 +94,7 @@ func claimReady(ctx context.Context, q datastore.Querier, at time.Time, reclaimB
 	ub.Update(tasksTable)
 	ub.Set(ub.Assign("claimed_at", at), ub.Incr("attempts"))
 	ub.Where(ub.In("id", sb))
-	ub.Returning("id", "queue", "task", "attempts", "wait_until", "created_at", "last_executed_at")
+	ub.Returning("id", "queue", "task", "attempts", "priority", "wait_until", "created_at", "last_executed_at")
 
 	query, args := ub.Build()
 	rows, err := q.Query(ctx, query, args...)
@@ -104,7 +106,7 @@ func claimReady(ctx context.Context, q datastore.Querier, at time.Time, reclaimB
 	var tasks []*taskRow
 	for rows.Next() {
 		t := &taskRow{}
-		if err := rows.Scan(&t.ID, &t.Queue, &t.Payload, &t.Attempts,
+		if err := rows.Scan(&t.ID, &t.Queue, &t.Payload, &t.Attempts, &t.Priority,
 			&t.WaitUntil, &t.CreatedAt, &t.LastExecutedAt); err != nil {
 			return nil, err
 		}
@@ -164,6 +166,23 @@ func deleteTask(ctx context.Context, q datastore.Querier, id uuid.UUID) error {
 	query, args := db.Build()
 	_, err := q.Exec(ctx, query, args...)
 	return err
+}
+
+// cancelTask removes an unclaimed task and reports whether it was still
+// cancellable. A claimed task is in flight — its worker may already be
+// halfway through it — and cannot be revoked from here, so the caller
+// reports it as too late rather than pretending it was stopped.
+func cancelTask(ctx context.Context, q datastore.Querier, id uuid.UUID) (bool, error) {
+	db := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db.DeleteFrom(tasksTable)
+	db.Where(db.Equal("id", id), db.IsNull("claimed_at"))
+
+	query, args := db.Build()
+	tag, err := q.Exec(ctx, query, args...)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // insertCompleted archives a finished task. The caller owns the transaction,

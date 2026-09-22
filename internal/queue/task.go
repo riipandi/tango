@@ -23,6 +23,7 @@ type TaskAddOp struct {
 	ctx      context.Context
 	tasks    []Task
 	wait     *time.Time
+	priority int
 	executor datastore.Querier
 }
 
@@ -42,6 +43,14 @@ func (t *TaskAddOp) At(processAt time.Time) *TaskAddOp {
 func (t *TaskAddOp) Wait(duration time.Duration) *TaskAddOp {
 	at := now().Add(duration)
 	return t.At(at)
+}
+
+// Priority sets the execution priority of the tasks: a higher number is
+// claimed before a lower one, ties keeping insertion order. Zero is the
+// default, and negative values are refused at save time.
+func (t *TaskAddOp) Priority(priority int) *TaskAddOp {
+	t.priority = priority
+	return t
 }
 
 // Executor writes the tasks through an open transaction, so a task is
@@ -79,11 +88,15 @@ const (
 // application — time-sortable, so the pending table reads in insertion order
 // without a second index — because a caller that enqueues inside its own
 // transaction wants to reference the task before any commit has happened.
-func newTask(task Task, payload []byte, wait *time.Time) (*taskRow, error) {
+func newTask(task Task, payload []byte, wait *time.Time, priority int) (*taskRow, error) {
+	if priority < 0 {
+		return nil, errNegativePriority
+	}
 	return &taskRow{
 		ID:        uuid.NewV7(),
 		Queue:     task.Config().Name,
 		Payload:   payload,
+		Priority:  priority,
 		WaitUntil: wait,
 		CreatedAt: now(),
 	}, nil

@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS public.user_mfa_pending (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL UNIQUE REFERENCES public.users (id) ON DELETE CASCADE,
     token_hash TEXT NOT NULL UNIQUE,
+    remember BOOLEAN NOT NULL DEFAULT false,
     expires_at TIMESTAMPTZ NOT NULL CHECK (expires_at > CURRENT_TIMESTAMP),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

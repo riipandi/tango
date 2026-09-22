@@ -210,7 +210,7 @@ database: localhost:5432/tango
   00002 applied 2026-09-21 01:15:32 create_identity_tables (35.029 ms)
   ...
 
-status: 9 migrations applied in 146.256 ms
+status: 8 migrations applied in 146.256 ms
 ```
 
 A run reports each migration as it finishes, not in one block at the end, so a slow migration leaves
@@ -232,14 +232,13 @@ go run -tags debug ./cmd migrate:reset --env-file=.env.local --force --up | grep
 ```
 
 ```text
-status: 9 migrations rolled back in 176.226 ms
-status: 9 migrations applied in 131.927 ms
+status: 8 migrations rolled back in 176.226 ms
+status: 8 migrations applied in 131.927 ms
 ```
 
 `migrate:status` omits the duration, because the recorded time says when a migration ran, not how
 long it took, and that command runs nothing to find out. A `--dry-run` lists rows too, with the time
-column empty (`-`) and no duration, because nothing has run. Counts are pluralized (`1 migration`,
-`9 migrations`) and durations are humanized. `migrate:version` is the exception: it prints the bare
+column empty (`-`) and no duration, because nothing has run. Counts are pluralized (`1 migration`, `8 migrations`) and durations are humanized. `migrate:version` is the exception: it prints the bare
 number, because scripts read it directly.
 
 `migrate:seed` creates the default records a fresh database needs. It refuses to run until every

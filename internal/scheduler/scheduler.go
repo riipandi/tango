@@ -26,8 +26,8 @@ import (
 )
 
 // jobsTable is the scheduler's own state table, created by
-// database/migrations/00010. The engine reads and writes it, and nothing
-// else in the process names it.
+// database/migrations/00008_create_scheduler_tables.sql. The engine reads
+// and writes it, and nothing else in the process names it.
 const jobsTable = "public.scheduler_jobs"
 
 // now returns the current time in a way tests can override.
@@ -48,6 +48,9 @@ type (
 		Name string
 		Spec string
 		Task queue.Task
+		// Priority is handed to the enqueued task: a higher number is
+		// claimed by the dispatcher first. Zero is the default.
+		Priority int
 	}
 
 	// Config is the scheduler's construction options.
@@ -268,7 +271,7 @@ func (s *Scheduler) claim(ctx context.Context, tx datastore.Querier, job *regist
 		return err
 	}
 
-	if _, err := s.client.Add(job.Task).Ctx(ctx).Executor(tx).Save(); err != nil {
+	if _, err := s.client.Add(job.Task).Ctx(ctx).Priority(job.Priority).Executor(tx).Save(); err != nil {
 		return fmt.Errorf("enqueue task: %w", err)
 	}
 

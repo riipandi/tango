@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS public.sessions (
     device_name TEXT,
     device_fingerprint TEXT,
     ip_address INET,
+    remember BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMPTZ NOT NULL CHECK (expires_at > CURRENT_TIMESTAMP),
     refreshed_at TIMESTAMPTZ DEFAULT NULL,

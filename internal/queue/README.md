@@ -14,6 +14,8 @@ task queues that run within the application — no external message broker requi
 - **Type-safe queues** — generic `NewQueue[T Task]` with compile-time type checking for payloads
 - **Persistent** — tasks survive process restarts via PostgreSQL
 - **Batch enqueue** — `Add(tasks...)` writes every task in one statement and one transaction
+- **Priorities** — `Add(task).Priority(n)`: a higher number is claimed first, ties keep insertion order
+- **Cancellation** — `Cancel(id)` removes a task that has not been claimed yet; a claimed one finishes
 - **Dead letter queue** — a task that exhausted its attempts rests in the archive with its
   error, and `ReplayDead` brings the ones that kept their payload back with a fresh budget
 - **Payload encryption at rest** — an optional `crypto.Cipher` seals every payload with
@@ -97,8 +99,9 @@ it in `internal/registry`: the client is built from the shared `datastore.Postgr
 the `queue` config section, and `internal/jobs.Register` lists the application's job queues
 and seeds the recurring ones.
 
-Schema is owned by the migrations (`database/migrations/00008_create_queue_tables.sql`) — run
-`task db:migrate`; the client never creates tables itself.
+Schema is owned by the migrations (`database/migrations/00008_create_scheduler_tables.sql`,
+shared with the scheduler's state table) — run `task db:migrate`; the client never creates
+tables itself.
 
 The engine logs through `log/slog` — the same `*slog.Logger` the process built in
 `internal/logger`, handed over by `serve` — so queue lines reach every configured sink
@@ -275,6 +278,9 @@ ids, err = client.Add(myTask).Wait(5 * time.Minute).Save()
 // Scheduled
 ids, err = client.Add(myTask).At(futureTime).Save()
 
+// With priority (a higher number is claimed first; negative is refused)
+ids, err = client.Add(myTask).Priority(5).Save()
+
 // With context
 ids, err = client.Add(myTask).Ctx(requestCtx).Save()
 
@@ -341,6 +347,16 @@ itself, so a restart never adds a second schedule.
 Deletes all pending (unclaimed) tasks and returns how many were removed. Claimed tasks —
 in flight or awaiting release — are untouched and will finish their lifecycle normally.
 
+### `(*Client).Cancel(ctx context.Context, taskID uuid.UUID) (bool, error)`
+
+Removes a task that has not been claimed yet and reports whether it was cancelled. A claimed
+task is already running — or awaiting the release of a lost worker — so `false` means too
+late, not failure; the task finishes its lifecycle either way.
+
+```go
+ok, err := client.Cancel(ctx, taskID)
+```
+
 ### `(*Client).FlushCompleted(ctx context.Context) (int64, error)`
 
 Deletes all completed task records, bypassing retention expiry, and returns how many were
@@ -370,7 +386,7 @@ tasks. See "Process Tasks from Another Task".
 
 ## Database Schema
 
-Two tables, created by migration `database/migrations/00008_create_queue_tables.sql`:
+Three tables, created by migration `database/migrations/00008_create_scheduler_tables.sql`:
 
 ### `queue_tasks`
 
@@ -380,12 +396,18 @@ Two tables, created by migration `database/migrations/00008_create_queue_tables.
 | `queue`            | `TEXT`        | Queue name                                 |
 | `task`             | `BYTEA`       | JSON-encoded task payload                  |
 | `attempts`         | `INTEGER`     | Execution attempt counter                  |
+| `priority`         | `INTEGER`     | Claim rank, higher first (default `0`)     |
 | `wait_until`       | `TIMESTAMPTZ` | Earliest execution time (NULL = ready now) |
 | `claimed_at`       | `TIMESTAMPTZ` | When a dispatcher claimed this task        |
 | `last_executed_at` | `TIMESTAMPTZ` | Last execution timestamp                   |
 | `created_at`       | `TIMESTAMPTZ` | Original creation time                     |
 
-**Index:** `idx_queue_tasks_fetch` on `(wait_until ASC, id ASC)` WHERE `wait_until IS NOT NULL`
+**Index:** `idx_queue_tasks_fetch` on `(priority DESC, wait_until ASC NULLS FIRST, id ASC)`
+
+### `scheduler_jobs`
+
+The scheduler's durable state (one row per registered job) is documented in
+`internal/scheduler/README.md`; it shares this migration.
 
 ### `queue_tasks_completed`
 

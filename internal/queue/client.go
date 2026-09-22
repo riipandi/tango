@@ -72,6 +72,10 @@ var (
 	errMissingStore = errors.New("queue: missing store")
 	errNoWorkers    = errors.New("queue: at least one worker required")
 	errNoRelease    = errors.New("queue: release duration must be greater than zero")
+	// errNegativePriority refuses a TaskAddOp.Priority below zero: a priority
+	// is a rank among peers, and a negative rank would invert the index the
+	// claim orders by.
+	errNegativePriority = errors.New("queue: priority must not be negative")
 )
 
 // NewClient initializes a new Client. The dispatcher is built but not run:
@@ -160,6 +164,18 @@ func (c *Client) Pending(ctx context.Context, queue string) (int64, error) {
 // states finish their lifecycle normally.
 func (c *Client) Flush(ctx context.Context) (int64, error) {
 	return flushPending(ctx, c.store)
+}
+
+// Cancel removes a task that has not been claimed yet and reports whether it
+// was cancelled. A claimed task is already running — or awaiting the release
+// of a lost worker — and cannot be revoked, so false means too late, not
+// failure; the task finishes its lifecycle either way.
+func (c *Client) Cancel(ctx context.Context, taskID uuid.UUID) (bool, error) {
+	cancelled, err := cancelTask(ctx, c.store, taskID)
+	if err != nil {
+		return false, err
+	}
+	return cancelled, nil
 }
 
 // FlushCompleted deletes every completed task record, retention
@@ -256,7 +272,7 @@ func (c *Client) save(op *TaskAddOp) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		row, err := newTask(task, payload, op.wait)
+		row, err := newTask(task, payload, op.wait, op.priority)
 		if err != nil {
 			return nil, err
 		}

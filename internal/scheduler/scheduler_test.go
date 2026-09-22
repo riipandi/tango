@@ -144,6 +144,31 @@ func TestClaimEnqueuesAndAdvancesTheDueTime(t *testing.T) {
 	require.Equal(t, 1, count)
 }
 
+// The job's priority rides the enqueue: the tick's task is claimed before
+// any default-priority task that arrived earlier.
+func TestClaimEnqueuesAtTheJobPriority(t *testing.T) {
+	pool := migratedPool(t)
+	s := newScheduler(t, pool, nil, Job{
+		Name: "urgent", Spec: "@every 1h", Task: tickTask{Name: "urgent"}, Priority: 7,
+	})
+
+	require.NoError(t, s.seed(t.Context(), &s.jobs[0]))
+	tag, err := pool.Exec(t.Context(),
+		"UPDATE public.scheduler_jobs SET next_due = CURRENT_TIMESTAMP WHERE name = 'urgent'")
+	require.NoError(t, err)
+	require.EqualValues(t, 1, tag.RowsAffected())
+
+	err = pool.WithTx(t.Context(), func(ctx context.Context, tx datastore.Querier) error {
+		return s.claim(ctx, tx, &s.jobs[0])
+	})
+	require.NoError(t, err)
+
+	var priority int
+	require.NoError(t, pool.QueryRow(t.Context(),
+		"SELECT priority FROM public.queue_tasks WHERE queue = 'tick'").Scan(&priority))
+	require.Equal(t, 7, priority)
+}
+
 // A tick that is not yet due is a no-op: the fire that finds the row already
 // advanced reads a future due time and does nothing.
 func TestClaimSkipsATickAnotherReplicaWon(t *testing.T) {

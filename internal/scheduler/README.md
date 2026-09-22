@@ -18,7 +18,7 @@ scheduler service, no leader election, no paid module.
 ## Features
 
 - **Durable schedule state** — every job's due time lives in `public.scheduler_jobs`
-  (migration `00010`), so a restart resumes the schedule a row already carries
+  (migration `00008`), so a restart resumes the schedule a row already carries
 - **Exactly one winner per tick** — every replica fires the cron time, and the one that
   moves `next_due` forward wins; the others read a future due time and do nothing
 - **Transactional claim + enqueue** — the row lock (`FOR UPDATE`), the due-time advance,
@@ -28,6 +28,8 @@ scheduler service, no leader election, no paid module.
   so replica clock skew cannot double-fire a tick
 - **Cron specs + intervals** — standard 5-field cron, `@every`, and the `@` descriptors
   robfig/cron parses; a spec that names no zone resolves in `scheduler.timezone`
+- **Per-job priority** — `Job.Priority` rides the enqueue: a higher number is claimed
+  by the dispatcher first, the way `Add(task).Priority(n)` ranks a plain task
 - **Graceful stop** — `Stop` waits for the fires in flight, and an enqueued tick is durable
   regardless
 - **Zero-dependency timing** — `robfig/cron/v3` v3.0.1 carries no dependencies of its own
@@ -81,8 +83,9 @@ pool and the queue client, and its job list comes from `jobs.Scheduled()` in
 `internal/jobs/register.go` — the same one place the application's job lists are spelled
 out.
 
-Schema is owned by the migration (`database/migrations/00010_create_scheduler_jobs.sql`) —
-run `task db:migrate`; the scheduler never creates tables itself.
+Schema is owned by the migration (`database/migrations/00008_create_scheduler_tables.sql`,
+shared with the queue's tables) — run `task db:migrate`; the scheduler never creates tables
+itself.
 
 The engine logs through `log/slog` — the process logger `serve` hands over — so scheduler
 lines reach every configured sink and carry the trace context of the run.
@@ -122,6 +125,7 @@ func Scheduled() []scheduler.Job {
 			Name: "daily-report",           // the state row's key
 			Spec: "0 6 * * *",              // 06:00 in scheduler.timezone
 			Task: ReportTask{Date: "today"},
+			// Priority: 5,            // optional: the dispatcher claims higher first
 		},
 	}
 }
@@ -129,7 +133,8 @@ func Scheduled() []scheduler.Job {
 
 The name must be unique, the task must be non-nil, and the spec must parse — `New` refuses
 each, because a job that cannot be told apart or never parses is a wiring bug, not a
-run-time condition.
+run-time condition. `Priority` is optional and defaults to zero; a negative value is
+refused at enqueue time, as it is for a plain queue task.
 
 ### 3. Wiring and Lifecycle
 
@@ -171,11 +176,12 @@ through the queue's own drain.
 
 ### `Job`
 
-| Field  | Type        | Description                                                      |
-| ------ | ----------- | ---------------------------------------------------------------- |
-| `Name` | `string`    | Unique job name; the state row's primary key                     |
-| `Spec` | `string`    | Cron spec (standard 5-field, `@every`, `@` descriptors, `TZ=`)    |
-| `Task` | `queue.Task`| The task a claimed tick enqueues                                 |
+| Field      | Type         | Description                                                       |
+| ---------- | ------------ | ----------------------------------------------------------------- |
+| `Name`     | `string`     | Unique job name; the state row's primary key                      |
+| `Spec`     | `string`     | Cron spec (standard 5-field, `@every`, `@` descriptors, `TZ=`)     |
+| `Task`     | `queue.Task` | The task a claimed tick enqueues                                  |
+| `Priority` | `int`        | Claim rank handed to the enqueued task, higher first (default `0`)|
 
 ## API Reference
 
@@ -197,7 +203,8 @@ closes when they do. Returns `true` when every fire finished in time.
 
 ## Database Schema
 
-One table, created by migration `database/migrations/00010_create_scheduler_jobs.sql`:
+One table, created by migration `database/migrations/00008_create_scheduler_tables.sql`
+(shared with the queue's two tables):
 
 ### `scheduler_jobs`
 
@@ -226,9 +233,10 @@ go test ./internal/scheduler/
 go test -race ./internal/scheduler/
 ```
 
-Covered: construction refusals, a claimed tick (enqueue + due advance + `last_fired`), two
-schedulers where only one wins, the full cron loop against a running dispatcher, a stopped
-scheduler firing nothing, and the resume-from-stale-due shape.
+Covered: construction refusals, a claimed tick (enqueue + due advance + `last_fired`), the
+job's priority landing on the enqueued task, two schedulers where only one wins, the full
+cron loop against a running dispatcher, a stopped scheduler firing nothing, and the
+resume-from-stale-due shape.
 
 ## Design Decisions
 

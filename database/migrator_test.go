@@ -13,10 +13,10 @@ import (
 )
 
 // migrationCount is the number of files in database/migrations.
-const migrationCount = 10
+const migrationCount = 8
 
 // highestVersion is the version of the last migration file.
-const highestVersion = 10
+const highestVersion = 8
 
 func newMigrator(t *testing.T) (*database.Migrator, *sql.DB) {
 	t.Helper()
@@ -158,15 +158,15 @@ func TestMigratorDownRollsBackNewestFirst(t *testing.T) {
 	rolled, err := migrator.Down(ctx, 2)
 	require.NoError(t, err)
 	require.Len(t, rolled, 2)
-	assert.Equal(t, int64(10), rolled[0].Version)
-	assert.Equal(t, int64(9), rolled[1].Version)
+	assert.Equal(t, int64(8), rolled[0].Version)
+	assert.Equal(t, int64(7), rolled[1].Version)
 
 	version, err := migrator.Version(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, int64(8), version)
+	assert.Equal(t, int64(6), version)
 
-	// 00010 creates scheduler_jobs and 00009 adds the remember column; both
-	// must be gone, while the tables from earlier migrations stay.
+	// 00008 creates the queue and scheduler tables together; both must be
+	// gone, while the tables from earlier migrations stay.
 	var exists bool
 	require.NoError(t, db.QueryRowContext(ctx,
 		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'scheduler_jobs')").Scan(&exists))
@@ -174,7 +174,7 @@ func TestMigratorDownRollsBackNewestFirst(t *testing.T) {
 
 	require.NoError(t, db.QueryRowContext(ctx,
 		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'queue_tasks')").Scan(&exists))
-	assert.True(t, exists)
+	assert.False(t, exists)
 
 	// The applied rows are gone too, so a later up reapplies them.
 	pending, err := migrator.Pending(ctx)
