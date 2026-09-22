@@ -225,10 +225,17 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 	case reuse:
 		chunks, contentHash = prior.Chunks, prior.File.ContentHash
 	default:
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
-			return fmt.Errorf("storage: rewind staging %q: %w", key, err)
+		// A large file pays for hashing in parallel — the pass reads at
+		// each chunk's own offset, the same shape as the upload pass —
+		// while a small one is cheaper read straight through.
+		if fingerprint.size >= parallelHashThreshold && m.uploads > 1 {
+			chunks, err = m.chunker.ParallelSplit(f, fingerprint.size, m.uploads)
+		} else {
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
+				return fmt.Errorf("storage: rewind staging %q: %w", key, err)
+			}
+			chunks, err = m.chunker.Split(f)
 		}
-		chunks, err = m.chunker.Split(f)
 		if err != nil {
 			return err
 		}

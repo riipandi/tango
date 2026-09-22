@@ -155,6 +155,34 @@ func TestManagerProgressFollowsTheUpload(t *testing.T) {
 	assert.Equal(t, int64(len(data)), progress.Size)
 }
 
+func TestManagerSyncHashesALargeFileInParallel(t *testing.T) {
+	// The threshold lowered to a few chunks, this sync runs the parallel
+	// hashing pass: the manifest and the file it reconstructs must be
+	// exactly what the sequential pass produces.
+	old := parallelHashThreshold
+	parallelHashThreshold = 96 // three chunks of 32 bytes
+	t.Cleanup(func() { parallelHashThreshold = old })
+
+	manager, _, _ := newManager(t)
+	ctx := t.Context()
+
+	data := bytes.Repeat([]byte("parallel-hash"), 96) // 1248 bytes, 39 chunks
+	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data), nil))
+	require.NoError(t, manager.Sync(ctx, "k"))
+
+	reader, err := manager.Open(ctx, "k")
+	require.NoError(t, err)
+	defer func() { _ = reader.Close() }()
+	got, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	assert.Equal(t, data, got)
+
+	progress, err := manager.Progress(ctx, "k")
+	require.NoError(t, err)
+	assert.Equal(t, StatusReady, progress.Status)
+	assert.Equal(t, 39, progress.Total)
+}
+
 func TestManagerRetryReusesTheCheckpointedManifest(t *testing.T) {
 	// The checkpoint is what makes a retry of a large file cheap: a
 	// pending manifest whose staging fingerprint matches is reused whole,

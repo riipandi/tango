@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -85,4 +87,47 @@ func TestChunkerReadAtReadsOnlyTheNamedChunk(t *testing.T) {
 	got, err := chunker.ReadAt(f, chunks[1], make([]byte, chunkSize))
 	require.NoError(t, err)
 	assert.Equal(t, "ghijklmnop", string(got))
+}
+
+func TestParallelSplitProducesTheManifestSplitProduces(t *testing.T) {
+	// The two passes are interchangeable behind Sync: a file hashed in
+	// parallel must carry the identical chunk list — same order, same
+	// sizes, same hashes — as one hashed straight through, whatever the
+	// worker count.
+	const chunkSize = 64
+	chunker, err := NewChunker(chunkSize)
+	require.NoError(t, err)
+
+	// 64 + 64 + 64 + 13: three full chunks and a short tail, more chunks
+	// than any worker count here, so the slots really interleave.
+	data := bytes.Repeat([]byte("parallel"), 4*chunkSize/8+1)
+	data = data[:3*chunkSize+13]
+	sequential, err := chunker.Split(bytes.NewReader(data))
+	require.NoError(t, err)
+
+	staging := t.TempDir()
+	f, err := os.Create(filepath.Join(staging, "k"))
+	require.NoError(t, err)
+	_, err = f.Write(data)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	f, err = os.Open(f.Name())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = f.Close() })
+
+	for _, workers := range []int{1, 2, 4, 8} {
+		parallel, err := chunker.ParallelSplit(f, int64(len(data)), workers)
+		require.NoError(t, err)
+		assert.Equal(t, sequential, parallel, "workers=%d", workers)
+	}
+}
+
+func TestParallelSplitOfAnEmptyFileIsNoChunks(t *testing.T) {
+	chunker, err := NewChunker(64)
+	require.NoError(t, err)
+
+	f := bytes.NewReader(nil)
+	chunks, err := chunker.ParallelSplit(f, 0, 4)
+	require.NoError(t, err)
+	assert.Empty(t, chunks)
 }
