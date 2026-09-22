@@ -60,6 +60,11 @@ type Error struct {
 	Target string
 	Code   int
 	Kind   error
+	// cause is the underlying failure when it is one this package defines and a
+	// caller may act on it — ErrInsecureAuth is the case: the class is
+	// authentication, and the specific reason is what tells a deployment to
+	// turn TLS on.
+	cause error
 
 	// detail is the server's own reply text. It is kept for the message but
 	// never for a log line, where the class is what matters.
@@ -83,12 +88,15 @@ func (e *Error) Error() string {
 }
 
 // Unwrap returns the class, plus the context sentinel a cancellation or a
-// deadline belongs to.
+// deadline belongs to, plus the specific cause when there is one.
 func (e *Error) Unwrap() []error {
 	if e == nil || e.Kind == nil {
 		return nil
 	}
 	out := []error{e.Kind}
+	if e.cause != nil {
+		out = append(out, e.cause)
+	}
 	switch e.Kind {
 	case ErrCanceled:
 		out = append(out, context.Canceled)
@@ -112,6 +120,12 @@ func classify(op Op, target string, err error) error {
 		failure.Kind = ErrTimeout
 	case errors.Is(err, errNoAuthMechanism):
 		failure.Kind = ErrAuth
+	case errors.Is(err, ErrInsecureAuth):
+		// The class is authentication, because that is the step that refused;
+		// the cause is kept so a caller can tell this from a rejected
+		// credential.
+		failure.Kind = ErrAuth
+		failure.cause = ErrInsecureAuth
 	default:
 		var smtpErr *smtp.SMTPError
 		if errors.As(err, &smtpErr) {

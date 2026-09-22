@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
@@ -32,4 +33,41 @@ func TestStartTLSUnsupportedMatchesTheLibraryMessage(t *testing.T) {
 func TestIsStartTLSUnsupportedRejectsOtherFailures(t *testing.T) {
 	assert.False(t, isStartTLSUnsupported(nil))
 	assert.False(t, isStartTLSUnsupported(errNoAuthMechanism))
+}
+
+func TestAuthenticateRefusesAPlaintextSessionToARemoteHost(t *testing.T) {
+	// The end-to-end statement for the credential guard: a real plaintext
+	// session — Mailpit without TLS, so TLSConnectionState reports plain — with
+	// the configuration naming a host that is not this machine. The password is
+	// refused, not offered.
+	server := testutils.StartMailpit(t.Context(), t)
+
+	conn, err := net.Dial("tcp", server.SMTPAddr)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	session := smtp.NewClient(conn)
+	require.NoError(t, session.Hello("tango.test"))
+	_, encrypted := session.TLSConnectionState()
+	require.False(t, encrypted, "the container must serve a plaintext session for this test to mean anything")
+
+	cfg := config.Default()
+	// The container is reached over loopback; the configuration names a remote
+	// server, which is the case the guard exists for.
+	cfg.Mailer.SMTPHost = "smtp.example.com"
+	cfg.Mailer.SMTPPort = 587
+	cfg.Mailer.SMTPUsername = server.Username
+	cfg.Mailer.SMTPPassword = server.Password
+
+	client, err := New(cfg, nil)
+	require.NoError(t, err)
+
+	err = client.authenticate(session)
+	assert.ErrorIs(t, err, ErrInsecureAuth)
+
+	// The same session, with the opt-in, is allowed through to the server.
+	cfg.Mailer.SMTPAllowPlaintextAuth = true
+	allowed, err := New(cfg, nil)
+	require.NoError(t, err)
+	assert.NoError(t, allowed.authenticate(session))
 }

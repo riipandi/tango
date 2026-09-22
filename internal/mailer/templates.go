@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	htmltemplate "html/template"
+	"io"
 	"io/fs"
 	"path"
 	"slices"
@@ -184,16 +185,35 @@ func (t *Templates) Has(name string) bool {
 	return ok
 }
 
-// Render produces both renderings of one template.
+// Render produces both renderings of one template as strings. It is the
+// convenient form for a caller that wants the body in hand — a test, a preview,
+// a body sent some other way.
+//
+// The send path does not use it: RenderTo writes one rendering straight to a
+// writer, so a message never becomes a string on its way to the session.
+func (t *Templates) Render(name string, view View) (Body, error) {
+	var body Body
+	var htmlOut, textOut bytes.Buffer
+	if err := t.RenderTo(&htmlOut, name, BodyHTML, view); err != nil {
+		return Body{}, err
+	}
+	if err := t.RenderTo(&textOut, name, BodyText, view); err != nil {
+		return Body{}, err
+	}
+	body.HTML = htmlOut.String()
+	body.Text = textOut.String()
+	return body, nil
+}
+
+// RenderTo renders one rendering of one template into w.
 //
 // The sender identity comes from the Templates value, so a caller supplies only
 // what is specific to this message. An unknown name is refused rather than
 // rendered as an empty body.
-func (t *Templates) Render(name string, view View) (Body, error) {
-	htmlTemplate, ok := t.html[name]
-	if !ok {
-		return Body{}, fmt.Errorf("mailer: unknown template %q; known: %s",
-			name, strings.Join(t.Names(), ", "))
+func (t *Templates) RenderTo(w io.Writer, name string, kind BodyKind, view View) error {
+	parsed, err := t.parsed(name, kind)
+	if err != nil {
+		return err
 	}
 	context := struct {
 		AppName string
@@ -206,16 +226,31 @@ func (t *Templates) Render(name string, view View) (Body, error) {
 		Email:   view.Email,
 		Data:    view.Data,
 	}
+	if err := parsed.ExecuteTemplate(w, "root", context); err != nil {
+		return fmt.Errorf("mailer: render %s %s: %w", name, kind, err)
+	}
+	return nil
+}
 
-	var body Body
-	var htmlOut, textOut bytes.Buffer
-	if err := htmlTemplate.ExecuteTemplate(&htmlOut, "root", context); err != nil {
-		return Body{}, fmt.Errorf("mailer: render %s html: %w", name, err)
+// parsed returns the template for one name and rendering.
+func (t *Templates) parsed(name string, kind BodyKind) (executable, error) {
+	switch kind {
+	case BodyHTML:
+		if parsed, ok := t.html[name]; ok {
+			return parsed, nil
+		}
+	case BodyText:
+		if parsed, ok := t.text[name]; ok {
+			return parsed, nil
+		}
 	}
-	if err := t.text[name].ExecuteTemplate(&textOut, "root", context); err != nil {
-		return Body{}, fmt.Errorf("mailer: render %s text: %w", name, err)
-	}
-	body.HTML = htmlOut.String()
-	body.Text = textOut.String()
-	return body, nil
+	return nil, fmt.Errorf("mailer: unknown template %q (%s); known: %s",
+		name, kind, strings.Join(t.Names(), ", "))
+}
+
+// executable is the one method both template types share: the renderings are
+// separate sets because their escaping differs, and this is the seam where the
+// difference stops mattering.
+type executable interface {
+	ExecuteTemplate(w io.Writer, name string, data any) error
 }

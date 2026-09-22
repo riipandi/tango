@@ -120,6 +120,20 @@ func TestValidationRejectsANonPositiveMailerTimeout(t *testing.T) {
 	assert.Contains(t, err.Error(), "mailer.timeout")
 }
 
+func TestValidationAcceptsRemoteCredentialsWithoutTLS(t *testing.T) {
+	// The configuration cannot know whether the server offers STARTTLS, so a
+	// remote host with credentials is valid. Refusing it here would reject the
+	// ordinary submission server; the decision is made on the session, where
+	// the answer exists (mailer.ErrInsecureAuth).
+	cfg, err := resolveAndValidate(t, config.Options{
+		ConfigFile: configFile(t, `"mailer": {"smtp_host": "smtp.example.com", "smtp_username": "bot", "smtp_password": "hunter2"}`),
+		Environ:    baseEnv(),
+	})
+	require.NoError(t, err)
+	assert.False(t, cfg.Mailer.SMTPSecure)
+	assert.False(t, cfg.Mailer.SMTPAllowPlaintextAuth)
+}
+
 func TestRedactedHidesTheSMTPPassword(t *testing.T) {
 	cfg, err := resolveAndValidate(t, config.Options{
 		ConfigFile: configFile(t, `"mailer": {"smtp_username": "bot", "smtp_password": "hunter2"}`),

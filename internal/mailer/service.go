@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Request is one templated email: who receives it, what it says, and which
@@ -50,8 +51,9 @@ func (s *Service) Configured() bool { return s.mailer.Configured() }
 
 // Send renders one template and submits the result.
 //
-// The template is rendered before the session is opened, so a broken template
-// costs no connection and no credential exchange.
+// The rendering is streamed into the session rather than produced as a string
+// first: a body is written once, where it is going. The template is still
+// resolved before the connection opens, so an unknown name costs no session.
 func (s *Service) Send(ctx context.Context, req Request) error {
 	if s.mailer == nil || s.templates == nil {
 		return errors.New("mailer: service is not built")
@@ -59,19 +61,17 @@ func (s *Service) Send(ctx context.Context, req Request) error {
 	if req.Template == "" {
 		return errors.New("mailer: request names no template")
 	}
-	body, err := s.templates.Render(req.Template, req.View)
-	if err != nil {
-		return err
+	if !s.templates.Has(req.Template) {
+		return fmt.Errorf("mailer: unknown template %q; known: %s",
+			req.Template, strings.Join(s.templates.Names(), ", "))
 	}
-	return s.mailer.Send(ctx, Message{
+	return s.mailer.sendTemplate(ctx, Message{
 		To:      req.To,
 		Cc:      req.Cc,
 		Bcc:     req.Bcc,
 		Subject: req.Subject,
-		HTML:    body.HTML,
-		Text:    body.Text,
 		Headers: req.Headers,
-	})
+	}, s.templates, req.Template, req.View)
 }
 
 // String names what the service can send without revealing a credential.

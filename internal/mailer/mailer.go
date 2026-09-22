@@ -11,7 +11,6 @@
 package mailer
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -87,6 +86,26 @@ func (m *Mailer) Address() string {
 // classified and matched with errors.Is: ErrNetwork, ErrTimeout, ErrCanceled,
 // ErrAuth, ErrRejected, ErrTemporary, or ErrNotConfigured.
 func (m *Mailer) Send(ctx context.Context, msg Message) error {
+	body, err := staticBody(msg.HTML, msg.Text)
+	if err != nil {
+		return err
+	}
+	return m.send(ctx, msg, body)
+}
+
+// sendTemplate renders the named template into the session as it is submitted,
+// so the rendered message is never held as a string.
+func (m *Mailer) sendTemplate(ctx context.Context, msg Message, templates *Templates, name string, view View) error {
+	if !templates.Has(name) {
+		return fmt.Errorf("mailer: unknown template %q; known: %s",
+			name, strings.Join(templates.Names(), ", "))
+	}
+	return m.send(ctx, msg, renderBody(templates, name, view))
+}
+
+// send is the one submission path: prepare the envelope, open a session, and
+// write the message into its DATA command.
+func (m *Mailer) send(ctx context.Context, msg Message, body bodySource) error {
 	if !m.Configured() {
 		return ErrNotConfigured
 	}
@@ -94,7 +113,9 @@ func (m *Mailer) Send(ctx context.Context, msg Message) error {
 		ctx = context.Background()
 	}
 
-	envelope, err := m.envelope(msg)
+	// Everything that does not need the session is resolved first: a malformed
+	// message costs no connection and no credential exchange.
+	env, err := m.prepare(msg, body)
 	if err != nil {
 		return err
 	}
@@ -115,7 +136,7 @@ func (m *Mailer) Send(ctx context.Context, msg Message) error {
 	if err := m.authenticate(client); err != nil {
 		return classify(OpAuth, m.Address(), err)
 	}
-	if err := client.SendMail(envelope.from, envelope.rcpt, bytes.NewReader(envelope.raw)); err != nil {
+	if err := m.submit(client, env); err != nil {
 		return classify(OpSend, m.Address(), err)
 	}
 
@@ -126,9 +147,37 @@ func (m *Mailer) Send(ctx context.Context, msg Message) error {
 	}
 	m.log.DebugContext(ctx, "mailer: sent",
 		"target", m.Address(),
-		"recipients", len(envelope.rcpt),
+		"recipients", len(env.rcpt),
 		"duration", time.Since(started).String())
 	return nil
+}
+
+// submit issues the envelope and writes the message into the DATA command.
+//
+// The message goes straight to the session's writer rather than through
+// SendMail, which would take an io.Reader and could not be given a body that is
+// produced on demand. Nothing is buffered here: a large HTML body never becomes
+// a string.
+func (m *Mailer) submit(client *smtp.Client, env *envelope) error {
+	if err := client.Mail(env.from, nil); err != nil {
+		return err
+	}
+	for _, addr := range env.rcpt {
+		if err := client.Rcpt(addr, nil); err != nil {
+			return err
+		}
+	}
+	data, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if err := env.writeTo(data); err != nil {
+		// The DATA command is aborted rather than closed: the server must not
+		// accept a half-written message as a complete one.
+		_ = client.Reset()
+		return err
+	}
+	return data.Close()
 }
 
 // connect opens a session and completes the greeting.
@@ -237,9 +286,19 @@ func (m *Mailer) limit(client *smtp.Client) *smtp.Client {
 
 // authenticate logs in when credentials are configured. PLAIN is preferred;
 // LOGIN is used where the server offers only that.
+//
+// A credential is never offered to a server that is not this machine over an
+// unencrypted connection. go-sasl sends the password as soon as it is asked,
+// with no opinion about the transport — the stdlib's net/smtp refuses that case
+// inside PlainAuth and this package has to refuse it itself. The loopback
+// exemption is what lets a local development server (Mailpit published on
+// 127.0.0.1) work without a certificate.
 func (m *Mailer) authenticate(client *smtp.Client) error {
 	if m.settings.SMTPUsername == "" {
 		return nil
+	}
+	if !credentialIsSafe(m.settings, encrypted(client)) {
+		return ErrInsecureAuth
 	}
 	user, pass := m.settings.SMTPUsername, m.settings.SMTPPassword
 	switch {
@@ -250,6 +309,54 @@ func (m *Mailer) authenticate(client *smtp.Client) error {
 	default:
 		return errNoAuthMechanism
 	}
+}
+
+// encrypted reports whether the session is running over TLS. A session that is
+// not there reports as unencrypted, which is the safe reading: the guard then
+// refuses rather than assumes.
+func encrypted(client *smtp.Client) bool {
+	if client == nil {
+		return false
+	}
+	_, ok := client.TLSConnectionState()
+	return ok
+}
+
+// credentialIsSafe reports whether a password may be offered on this session.
+//
+// Two things make it safe: the connection does not leave this machine, or the
+// deployment opted in. A session that is encrypted never reaches this check,
+// because the caller asks it only for a session that is not.
+//
+// The decision is deliberately made here rather than in Validate: whether a
+// server offers STARTTLS is only known once it has been asked, and a
+// configuration that refused every remote host with credentials would reject the
+// ordinary submission server.
+func credentialIsSafe(settings config.Mailer, sessionEncrypted bool) bool {
+	return sessionEncrypted || settings.SMTPAllowPlaintextAuth || isLoopbackHost(settings.SMTPHost)
+}
+
+// isLoopbackHost reports whether host names this machine. A connection to it does
+// not leave the machine, so an unencrypted session is not a leak.
+//
+// It answers for the forms a mailer host is written in: an IP literal, or the
+// conventional loopback name. A name that resolves to loopback only through DNS
+// is not covered — that would need a resolver, and this is a guard against the
+// obvious mistake, not an authority.
+func isLoopbackHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	// A bracketed IPv6 literal is what net.JoinHostPort writes; the brackets are
+	// not part of the address.
+	trimmed := strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	if strings.EqualFold(trimmed, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(trimmed); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 // localName is the host the greeting introduces: the sender's domain, which is
@@ -265,6 +372,17 @@ func localName(from string) string {
 // errNoAuthMechanism is returned when credentials are configured and the server
 // offers no way to present them.
 var errNoAuthMechanism = errors.New("server offers no supported authentication mechanism")
+
+// ErrInsecureAuth is returned when a credential would travel over an
+// unencrypted connection that leaves this machine. It is the guard the stdlib's
+// net/smtp performs inside PlainAuth and go-sasl does not perform at all, so it
+// is performed here, before the password is offered.
+//
+// It is exported and distinct from ErrAuth because a caller can act on it: the
+// deployment either sets mailer.smtp_secure, enables STARTTLS at the server, or
+// opts in with mailer.smtp_allow_plaintext_auth. It is a misconfiguration, not a
+// rejected credential, so it must not be retried as one.
+var ErrInsecureAuth = errors.New("mailer: refusing to authenticate over an unencrypted connection; use TLS or set mailer.smtp_allow_plaintext_auth")
 
 // String renders the mailer without a credential: the address and whether a
 // session is authenticated, never the username or the password.

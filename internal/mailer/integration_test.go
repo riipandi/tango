@@ -37,18 +37,24 @@ func startMailer(t *testing.T) (*mailer.Service, *testutils.Mailpit) {
 	return mailer.NewService(client, templates), server
 }
 
-// mailpitConfig is the configuration that reaches the container.
-func mailpitConfig(t *testing.T, server *testutils.Mailpit) config.Config {
+// mailpitHostPort splits the container's SMTP address into the two fields the
+// configuration takes.
+func mailpitHostPort(t *testing.T, server *testutils.Mailpit) (string, int) {
 	t.Helper()
 
 	host, portText, err := net.SplitHostPort(server.SMTPAddr)
 	require.NoError(t, err)
 	port, err := strconv.Atoi(portText)
 	require.NoError(t, err)
+	return host, port
+}
+
+// mailpitConfig is the configuration that reaches the container.
+func mailpitConfig(t *testing.T, server *testutils.Mailpit) config.Config {
+	t.Helper()
 
 	cfg := config.Default()
-	cfg.Mailer.SMTPHost = host
-	cfg.Mailer.SMTPPort = port
+	cfg.Mailer.SMTPHost, cfg.Mailer.SMTPPort = mailpitHostPort(t, server)
 	cfg.Mailer.SMTPUsername = server.Username
 	cfg.Mailer.SMTPPassword = server.Password
 	cfg.Mailer.FromEmail = "no-reply@tango.test"
@@ -131,6 +137,29 @@ func TestSendReportsRejectedCredentials(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, mailer.ErrAuth)
+}
+
+func TestSendAllowsPlaintextCredentialsToALoopbackServer(t *testing.T) {
+	// The exemption that keeps a local development server usable without a
+	// certificate. Mailpit without TLS is reached over loopback, so no opt-in
+	// is needed.
+	server := testutils.StartMailpit(t.Context(), t)
+
+	cfg := config.Default()
+	cfg.Mailer.SMTPHost, cfg.Mailer.SMTPPort = mailpitHostPort(t, server)
+	cfg.Mailer.SMTPUsername = server.Username
+	cfg.Mailer.SMTPPassword = server.Password
+
+	client, err := mailer.New(cfg, nil)
+	require.NoError(t, err)
+
+	subject := uniqueSubject("mailer loopback plaintext")
+	require.NoError(t, client.Send(t.Context(), mailer.Message{
+		To:      []string{"andi@tango.test"},
+		Subject: subject,
+		Text:    "Hello",
+	}))
+	assert.NotEmpty(t, awaitMessage(t, server, subject))
 }
 
 // uniqueSubject makes a subject this run can be found by. The container is

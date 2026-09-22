@@ -2,6 +2,7 @@ package mailer
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -35,6 +36,40 @@ func testMailer(t *testing.T) *Mailer {
 	return client
 }
 
+// renderMessage runs the same two steps Send does — prepare the envelope, then
+// write it — and returns the bytes a receiving client would see.
+func renderMessage(t *testing.T, m *Mailer, msg Message) ([]byte, error) {
+	t.Helper()
+	body, err := staticBody(msg.HTML, msg.Text)
+	if err != nil {
+		return nil, err
+	}
+	env, err := m.prepare(msg, body)
+	if err != nil {
+		return nil, err
+	}
+	var out bytes.Buffer
+	if err := env.writeTo(&out); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
+// renderTemplateMessage is the templated path: the body is rendered into the
+// writer as it is written, so no rendered string exists at any point.
+func renderTemplateMessage(t *testing.T, m *Mailer, templates *Templates, msg Message, name string, view View) ([]byte, error) {
+	t.Helper()
+	env, err := m.prepare(msg, renderBody(templates, name, view))
+	if err != nil {
+		return nil, err
+	}
+	var out bytes.Buffer
+	if err := env.writeTo(&out); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
 // parsed is a rendered message taken apart the way a receiving client would.
 type parsed struct {
 	header mail.Header
@@ -43,7 +78,7 @@ type parsed struct {
 
 func parseMessage(t *testing.T, raw []byte) parsed {
 	t.Helper()
-	msg, err := mail.ReadMessage(bufio.NewReader(strings.NewReader(string(raw))))
+	msg, err := mail.ReadMessage(bufio.NewReader(bytes.NewReader(raw)))
 	require.NoError(t, err)
 	body, err := readBody(msg)
 	require.NoError(t, err)
@@ -57,7 +92,7 @@ func readBody(msg *mail.Message) (string, error) {
 
 func TestEnvelopeWritesBothBodiesAsAlternatives(t *testing.T) {
 	m := testMailer(t)
-	env, err := m.envelope(Message{
+	raw, err := renderMessage(t, m, Message{
 		To:      []string{"user@example.com"},
 		Subject: "Hello",
 		HTML:    "<p>Hello</p>",
@@ -65,7 +100,7 @@ func TestEnvelopeWritesBothBodiesAsAlternatives(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	msg := parseMessage(t, env.raw)
+	msg := parseMessage(t, raw)
 	mediaType, params, err := mime.ParseMediaType(msg.header.Get("Content-Type"))
 	require.NoError(t, err)
 	assert.Equal(t, "multipart/alternative", mediaType)
@@ -87,10 +122,10 @@ func TestEnvelopeWritesBothBodiesAsAlternatives(t *testing.T) {
 
 func TestEnvelopeWritesOneBodyWithoutAMultipartWrapper(t *testing.T) {
 	m := testMailer(t)
-	env, err := m.envelope(Message{To: []string{"user@example.com"}, Subject: "Hello", Text: "Hello"})
+	raw, err := renderMessage(t, m, Message{To: []string{"user@example.com"}, Subject: "Hello", Text: "Hello"})
 	require.NoError(t, err)
 
-	msg := parseMessage(t, env.raw)
+	msg := parseMessage(t, raw)
 	mediaType, params, err := mime.ParseMediaType(msg.header.Get("Content-Type"))
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", mediaType)
@@ -102,45 +137,49 @@ func TestEnvelopeOmitsAnEmptyToHeader(t *testing.T) {
 	// A message may be addressed only through Cc. An empty "To:" line is worse
 	// than none at all, so the header is written only when it has an address.
 	m := testMailer(t)
-	env, err := m.envelope(Message{
+	env, err := m.prepare(Message{
 		Cc:      []string{"watcher@example.com"},
 		Subject: "Hello",
-		Text:    "Hello",
-	})
+	}, mustBody(t, "", "Hello"))
 	require.NoError(t, err)
 
-	msg := parseMessage(t, env.raw)
+	assert.Equal(t, []string{"watcher@example.com"}, env.rcpt)
+	var out bytes.Buffer
+	require.NoError(t, env.writeTo(&out))
+
+	msg := parseMessage(t, out.Bytes())
 	assert.Empty(t, msg.header.Get("To"))
 	assert.Equal(t, "watcher@example.com", msg.header.Get("Cc"))
-	assert.Equal(t, []string{"watcher@example.com"}, env.rcpt)
 }
 
 func TestEnvelopeKeepsBccOffTheHeaders(t *testing.T) {
 	m := testMailer(t)
-	env, err := m.envelope(Message{
+	env, err := m.prepare(Message{
 		To:      []string{"user@example.com"},
 		Bcc:     []string{"audit@example.com"},
 		Subject: "Hello",
-		Text:    "Hello",
-	})
+	}, mustBody(t, "", "Hello"))
 	require.NoError(t, err)
 
 	// The blind recipient is an envelope recipient only.
 	assert.Equal(t, []string{"user@example.com", "audit@example.com"}, env.rcpt)
-	assert.NotContains(t, string(env.raw), "audit@example.com")
-	assert.Empty(t, parseMessage(t, env.raw).header.Get("Bcc"))
+
+	var out bytes.Buffer
+	require.NoError(t, env.writeTo(&out))
+	assert.NotContains(t, out.String(), "audit@example.com")
+	assert.Empty(t, parseMessage(t, out.Bytes()).header.Get("Bcc"))
 }
 
 func TestEnvelopeEncodesNonASCII(t *testing.T) {
 	m := testMailer(t)
-	env, err := m.envelope(Message{
+	raw, err := renderMessage(t, m, Message{
 		To:      []string{"user@example.com"},
 		Subject: "Pendaftaran — selesai",
 		HTML:    "<p>Halo, Andi</p>",
 	})
 	require.NoError(t, err)
 
-	msg := parseMessage(t, env.raw)
+	msg := parseMessage(t, raw)
 	// A header is ASCII on the wire, so a non-ASCII subject is an encoded word
 	// the client decodes back.
 	assert.NotContains(t, msg.header.Get("Subject"), "—")
@@ -151,14 +190,14 @@ func TestEnvelopeEncodesNonASCII(t *testing.T) {
 
 func TestEnvelopeEncodesTheBodyAsQuotedPrintable(t *testing.T) {
 	m := testMailer(t)
-	env, err := m.envelope(Message{
+	raw, err := renderMessage(t, m, Message{
 		To:      []string{"user@example.com"},
 		Subject: "Hello",
 		Text:    "Halo — panjang " + strings.Repeat("x", 200),
 	})
 	require.NoError(t, err)
 
-	msg := parseMessage(t, env.raw)
+	msg := parseMessage(t, raw)
 	assert.Equal(t, "quoted-printable", msg.header.Get("Content-Transfer-Encoding"))
 	// Every line of an SMTP body is CRLF terminated; the transport rewraps
 	// anything longer.
@@ -170,7 +209,7 @@ func TestEnvelopeEncodesTheBodyAsQuotedPrintable(t *testing.T) {
 func TestEnvelopeRefusesHeaderInjection(t *testing.T) {
 	m := testMailer(t)
 
-	_, err := m.envelope(Message{
+	_, err := renderMessage(t, m, Message{
 		To:      []string{"user@example.com\r\nBcc: attacker@example.com"},
 		Subject: "Hello",
 		Text:    "Hello",
@@ -178,7 +217,7 @@ func TestEnvelopeRefusesHeaderInjection(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "line break")
 
-	_, err = m.envelope(Message{
+	_, err = renderMessage(t, m, Message{
 		To:      []string{"user@example.com"},
 		Subject: "Hello",
 		Text:    "Hello",
@@ -194,12 +233,17 @@ func TestEnvelopeRefusesAnEmptyMessage(t *testing.T) {
 	for name, msg := range map[string]Message{
 		"no recipient": {Subject: "Hello", Text: "Hello"},
 		"no subject":   {To: []string{"user@example.com"}, Text: "Hello"},
-		"no body":      {To: []string{"user@example.com"}, Subject: "Hello"},
 		"bad address":  {To: []string{"not-an-address"}, Subject: "Hello", Text: "Hello"},
 	} {
-		_, err := m.envelope(msg)
+		_, err := renderMessage(t, m, msg)
 		assert.Error(t, err, name)
 	}
+
+	// A message with no body is refused by the body source, which is what knows
+	// whether it carries anything.
+	_, err := staticBody("", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no body")
 }
 
 func TestSendReportsAnUnconfiguredMailer(t *testing.T) {
@@ -325,9 +369,84 @@ func decodeQuotedPrintable(t *testing.T, body string) string {
 func TestEnvelopeBodyDecodesBackToTheOriginal(t *testing.T) {
 	const body = "Halo — baris kedua dengan karakter non-ASCII: ünïcödé"
 	m := testMailer(t)
-	env, err := m.envelope(Message{To: []string{"a@b.c"}, Subject: "x", Text: body})
+	raw, err := renderMessage(t, m, Message{To: []string{"a@b.c"}, Subject: "x", Text: body})
 	require.NoError(t, err)
 
-	msg := parseMessage(t, env.raw)
+	msg := parseMessage(t, raw)
 	assert.Equal(t, body, strings.TrimRight(decodeQuotedPrintable(t, msg.body), "\r\n"))
+}
+
+// mustBody builds a static body for the cases that check the envelope rather
+// than the rendering.
+func mustBody(t *testing.T, html, text string) bodySource {
+	t.Helper()
+	body, err := staticBody(html, text)
+	require.NoError(t, err)
+	return body
+}
+
+// TestTemplatedBodyIsStreamedNotBuffered is the point of the body source: the
+// envelope asks the template for one rendering at a time, straight into the
+// writer, so no rendered string exists on the send path.
+func TestTemplatedBodyIsStreamedNotBuffered(t *testing.T) {
+	templates, err := NewTemplates(SenderFrom(config.Default()))
+	require.NoError(t, err)
+
+	m := testMailer(t)
+	raw, err := renderTemplateMessage(t, m, templates, Message{
+		To:      []string{"andi@example.com"},
+		Subject: "Reset your password",
+	}, TemplatePasswordReset, View{Data: PasswordResetData{
+		Email:     "andi@example.com",
+		ResetLink: "https://app.example.com/reset?token=abc",
+	}})
+	require.NoError(t, err)
+
+	msg := parseMessage(t, raw)
+	mediaType, params, err := mime.ParseMediaType(msg.header.Get("Content-Type"))
+	require.NoError(t, err)
+	assert.Equal(t, "multipart/alternative", mediaType)
+
+	// Both renderings are present, and the HTML one carries the link.
+	decoded := decodeQuotedPrintable(t, msg.body)
+	assert.Contains(t, decoded, "https://app.example.com/reset?token=abc")
+	assert.Contains(t, decoded, "<!DOCTYPE html")
+	_ = params
+}
+
+// TestRenderToMatchesRender proves the streaming and buffered forms produce the
+// same bytes, so a caller can pick either without changing the message.
+func TestRenderToMatchesRender(t *testing.T) {
+	templates, err := NewTemplates(SenderFrom(config.Default()))
+	require.NoError(t, err)
+	view := View{Data: PasswordResetData{
+		Email:     "andi@example.com",
+		ResetLink: "https://app.example.com/reset?token=abc",
+	}}
+
+	buffered, err := templates.Render(TemplatePasswordReset, view)
+	require.NoError(t, err)
+
+	var html, text bytes.Buffer
+	require.NoError(t, templates.RenderTo(&html, TemplatePasswordReset, BodyHTML, view))
+	require.NoError(t, templates.RenderTo(&text, TemplatePasswordReset, BodyText, view))
+
+	assert.Equal(t, buffered.HTML, html.String())
+	assert.Equal(t, buffered.Text, text.String())
+}
+
+// TestRenderToRefusesAnUnknownKind covers the pair lookup: a name with a known
+// HTML rendering and no text rendering is not reachable through the embedded
+// set, but the lookup must still refuse rather than panic.
+func TestRenderToRefusesAnUnknownKind(t *testing.T) {
+	templates, err := NewTemplates(SenderFrom(config.Default()))
+	require.NoError(t, err)
+
+	err = templates.RenderTo(&bytes.Buffer{}, TemplateTestEmail, BodyKind("xml"), View{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "xml")
+
+	err = templates.RenderTo(&bytes.Buffer{}, "no-such-template", BodyHTML, View{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no-such-template")
 }

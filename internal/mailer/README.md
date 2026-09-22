@@ -15,14 +15,20 @@ process logger.
   recipients, the subject, and the template's fields
 - **Two bodies, always** — every message carries the HTML and the plain-text rendering, so a client
   that refuses HTML still shows the message
+- **Streamed, not buffered** — the body is rendered straight into the SMTP session's `DATA`
+  command, so a rendered message is never held as a string on the send path
 - **Blind recipients stay blind** — `Bcc` is an envelope recipient only and is never written into
   the headers
 - **Encrypted where possible** — implicit TLS (`mailer.smtp_secure`) or STARTTLS when the server
   advertises it; a server offering neither is sent to in the clear and reported as a warning
+- **A credential never travels in the clear** — authentication over an unencrypted connection is
+  refused with `ErrInsecureAuth` unless the server is on this machine or
+  `mailer.smtp_allow_plaintext_auth` is set. `go-sasl` has no such guard (the stdlib's `net/smtp`
+  does, inside `PlainAuth`), so it is enforced here before the password is offered
 - **One attempt budget** — `mailer.timeout` bounds the dial, the handshake, every command, and the
   message body. The caller's context ends the session
 - **Errors a caller can match** — `ErrNotConfigured`, `ErrNetwork`, `ErrTimeout`, `ErrCanceled`,
-  `ErrAuth`, `ErrRejected`, `ErrTemporary` (`errors.Is`)
+  `ErrAuth`, `ErrInsecureAuth`, `ErrRejected`, `ErrTemporary` (`errors.Is`)
 - **No credentials in a log line** — the target is `host:port`; the username and the password are
   never rendered
 - **Templates checked at construction** — the compiled files are parsed as HTML/text pairs when the
@@ -60,6 +66,28 @@ Adding a template means a `.tsx` file, a struct in `data.go`, and a fixture in
 `internal/mailer/templates_test.go` — the test renders every template the binary carries, so a
 missing fixture or a renamed field fails there.
 
+## Rendering: `Render` or `RenderTo`
+
+`Templates.Render(name, view)` returns both renderings as strings — the convenient form for a test,
+a preview, or a body sent some other way. `Templates.RenderTo(w, name, kind, view)` writes one
+rendering into a writer, which is what the send path uses: the body goes into the SMTP session's
+`DATA` command and never becomes a string. The two produce identical bytes
+(`TestRenderToMatchesRender`).
+
+The parsed templates **are** the cache: parsing happens once per process, in the registry, and every
+send reuses it. Measured on an M2 Pro (`internal/mailer/bench_test.go`):
+
+| Operation | Time | Allocations |
+| --- | --- | --- |
+| `RenderTo` one rendering (send path) | ~4.5 µs | 58, 1.5 KB |
+| `Render` both renderings | ~10.4 µs | 73, 20 KB |
+| Parse every template (once per process) | ~177 µs | 2318, 276 KB |
+
+A submission costs 60–100 ms against a real server, so rendering is ~0.005% of it. There is no
+second cache layer, and one would not pay: memoizing by template data would retain reset tokens in
+memory past their use, and caching templates in `internal/cache` would add a network round trip for
+content that is already in the binary.
+
 ## Defaults
 
 | Key | Default |
@@ -69,9 +97,25 @@ missing fixture or a renamed field fails there.
 | `mailer.smtp_host` | empty — the mailer is off |
 | `mailer.smtp_port` | `587` |
 | `mailer.smtp_secure` | `false` (STARTTLS when offered) |
+| `mailer.smtp_allow_plaintext_auth` | `false` |
 | `mailer.timeout` | 15s |
 
 Durations in the config file are seconds.
+
+## Authentication safety
+
+`go-sasl` sends the password as soon as the server asks for it, with no opinion about the transport.
+The stdlib's `net/smtp` refuses that case inside `PlainAuth`; `internal/mailer` refuses it in
+`authenticate`, before any mechanism is chosen:
+
+- a session over TLS (implicit or STARTTLS) is always allowed;
+- a session to a loopback host (`localhost`, `127.0.0.0/8`, `::1`) is allowed, so a local Mailpit
+  works without a certificate;
+- anything else needs `mailer.smtp_allow_plaintext_auth` (or `MAILER_SMTP_ALLOW_PLAINTEXT_AUTH`).
+
+The refusal is `ErrInsecureAuth`, which also matches `ErrAuth`. It is deliberately **not** a
+`Validate` rule: whether a server offers STARTTLS is only known once it has been asked, and a
+configuration check would reject the ordinary submission server.
 
 ## Proving it works
 

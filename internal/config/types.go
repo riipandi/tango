@@ -364,6 +364,12 @@ type Mailer struct {
 	SMTPPassword string `koanf:"smtp_password" json:"smtp_password"`
 	// SMTPSecure selects implicit TLS on connect instead of STARTTLS.
 	SMTPSecure bool `koanf:"smtp_secure" json:"smtp_secure"`
+	// SMTPAllowPlaintextAuth permits a credential to be sent over an
+	// unencrypted connection to a host that is not this machine. It defaults to
+	// false: a password in the clear is a leak, and a server that offers
+	// STARTTLS is never affected. A loopback host needs no setting, because a
+	// connection to it never leaves the machine.
+	SMTPAllowPlaintextAuth bool `koanf:"smtp_allow_plaintext_auth" json:"smtp_allow_plaintext_auth"`
 	// Timeout bounds one send: the dial, the handshake, the commands, and the
 	// message body. A submission that hangs must fail rather than hold the
 	// caller for as long as the kernel's own connect timeout allows.
