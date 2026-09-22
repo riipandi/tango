@@ -41,6 +41,24 @@ type Progress struct {
 	Size int64
 }
 
+// BeforeSyncHook gates one sync attempt. It runs after the staging file
+// exists and before its fingerprint is read, so a hook that rewrites or
+// replaces the file is hashed from its own output. path is the staging
+// file's location; the hook owns reading and writing it. Returning an
+// error fails the round — the queue retries it, and a hook that keeps
+// refusing a file walks it to the dead letters. Idempotence is the
+// hook's contract: the queue's retries replay it.
+type BeforeSyncHook func(ctx context.Context, key, path string) error
+
+// AfterSyncHook runs once a sync's manifest is committed ready — every
+// chunk is in the backend, the staging copy still exists. It runs before
+// the staging copy is removed, so a failed hook is retried with the file
+// still present, and a retry of an already-ready file reaches it through
+// the finished-manifest fast path. Because retries replay it, it must be
+// idempotent; it must also stay quick — long work belongs in a job the
+// hook enqueues, not in the upload worker's slot.
+type AfterSyncHook func(ctx context.Context, manifest Manifest) error
+
 // Manager is the file-level engine over a Store: staging, the chunked
 // upload, the assembled read, and the deletion. Features hold this, not a
 // backend; which backend answers is the configuration's business.
@@ -53,6 +71,10 @@ type Manager struct {
 	// uploads caps the chunk uploads in flight. Each holds one chunk buffer,
 	// so this — not the file size — is what a sync costs in memory.
 	uploads int
+	// beforeSync and afterSync are the feature extension points around
+	// the upload round; nil means no hook, and a nil hook costs nothing.
+	beforeSync BeforeSyncHook
+	afterSync  AfterSyncHook
 }
 
 // NewManager builds the engine. staging is the directory a caller writes the
@@ -75,6 +97,22 @@ func NewManager(store Store, db DB, chunkSize int, staging string, uploads int) 
 		staging:   staging,
 		uploads:   uploads,
 	}, nil
+}
+
+// WithBeforeSync installs the hook that runs before each sync attempt —
+// the gate a feature validates or pre-processes the staging file through.
+// Returns the manager, so registry wiring reads as a chain.
+func (m *Manager) WithBeforeSync(hook BeforeSyncHook) *Manager {
+	m.beforeSync = hook
+	return m
+}
+
+// WithAfterSync installs the hook that runs once the manifest is ready —
+// the point a feature's post-processing (thumbnail, notification) starts
+// from. Returns the manager, so registry wiring reads as a chain.
+func (m *Manager) WithAfterSync(hook AfterSyncHook) *Manager {
+	m.afterSync = hook
+	return m
 }
 
 // Manifest reads the stored manifest of a key, the version a feature reads
@@ -178,19 +216,32 @@ func (m *Manager) Stage(ctx context.Context, key string, r io.Reader, metadata m
 // uploads only the chunks the backend does not hold — in parallel, bounded
 // by the upload budget — and commits the ready manifest in one transaction.
 // It is the body of the upload job; idempotent, so the queue's retries
-// replay it.
+// replay it. The before- and after-sync hooks (nil by default) wrap the
+// round; their contracts sit on their types.
 func (m *Manager) Sync(ctx context.Context, key string) error {
 	if err := ValidateKey(key); err != nil {
 		return err
 	}
 	path := m.stagingPath(key)
-	f, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		// A key with no staging file has nothing to sync: either another
 		// attempt already finished, or the file was staged by a caller
 		// that manages its own lifecycle.
 		return nil
+	} else if err != nil {
+		return fmt.Errorf("storage: stat staging %q: %w", key, err)
 	}
+
+	// The gate runs before the fingerprint is read: a hook that rewrites
+	// or replaces the staging file is hashed from its own output, and the
+	// fingerprint the TOCTOU guard trusts is the post-hook file's.
+	if m.beforeSync != nil {
+		if err := m.beforeSync(ctx, key, path); err != nil {
+			return fmt.Errorf("storage: before-sync hook for %q: %w", key, err)
+		}
+	}
+
+	f, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("storage: open staging %q: %w", key, err)
 	}
@@ -244,7 +295,9 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 
 	// The finished-manifest fast path: the stored manifest is ready and
 	// hashes to the same root, so the backend already holds every chunk
-	// this file needs. The row is refreshed and the staging copy can go.
+	// this file needs. The row is refreshed and the staging copy can go —
+	// but the after-sync hook still runs: a retry that reaches this path
+	// after a failed hook is how the hook gets its replay.
 	if prior.File.Status == StatusReady && prior.File.ContentHash == contentHash {
 		prior.File.Size = fingerprint.size
 		prior.File.ChunkSize = m.chunker.size
@@ -255,6 +308,11 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 			return m.manifests.Save(ctx, tx, prior)
 		}); err != nil {
 			return err
+		}
+		if m.afterSync != nil {
+			if err := m.afterSync(ctx, prior); err != nil {
+				return fmt.Errorf("storage: after-sync hook for %q: %w", key, err)
+			}
 		}
 		return m.clearStaging(ctx, path, fingerprint)
 	}
@@ -303,6 +361,16 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 	if !reuse && done > 0 {
 		slog.InfoContext(ctx, "storage: file synced",
 			"key", key, "chunks", len(chunks), "uploaded", done, "size", fingerprint.size)
+	}
+
+	// The after-sync hook runs before the staging copy is removed: a
+	// failed hook leaves the file in place, so the queue's retry finds a
+	// ready manifest with a matching fingerprint and replays the hook
+	// through the finished-manifest fast path.
+	if m.afterSync != nil {
+		if err := m.afterSync(ctx, checkpoint); err != nil {
+			return fmt.Errorf("storage: after-sync hook for %q: %w", key, err)
+		}
 	}
 	return m.clearStaging(ctx, path, fingerprint)
 }
