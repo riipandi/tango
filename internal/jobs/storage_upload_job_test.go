@@ -26,7 +26,7 @@ func TestChunkUploadJobSyncsAStagedFile(t *testing.T) {
 	require.NoError(t, Register(t.Context(), client, time.Hour, manager))
 
 	data := bytes.Repeat([]byte("queued"), 40)
-	require.NoError(t, manager.Stage(t.Context(), "uploads/report.bin", bytes.NewReader(data)))
+	require.NoError(t, manager.Stage(t.Context(), "uploads/report.bin", bytes.NewReader(data), nil))
 
 	// The watcher's job: one task enqueued onto the durable queue, executed
 	// by the dispatcher this test starts.

@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -22,6 +24,21 @@ import (
 type DB interface {
 	datastore.Querier
 	WithTx(ctx context.Context, fn func(ctx context.Context, tx datastore.Querier) error) error
+}
+
+// Progress is the upload state of one key, the data a status endpoint reads
+// while the queue works. The transport that carries it to a frontend is not
+// wired yet — see the TODO in llms/architecture.md, storage section.
+type Progress struct {
+	// Status is pending while chunks travel, ready once the manifest is
+	// committed.
+	Status string
+	// Done and Total count the chunks of the current upload round: Done
+	// grows as chunks land in the backend, Total is the file's chunk count.
+	Done  int
+	Total int
+	// Size is the file's byte size, known from the moment it is staged.
+	Size int64
 }
 
 // Manager is the file-level engine over a Store: staging, the chunked
@@ -70,20 +87,62 @@ func (m *Manager) Manifest(ctx context.Context, key string) (Manifest, error) {
 	return manifest, err
 }
 
+// UpdateMetadata replaces the metadata a key carries — content type, the
+// original file name, whatever the feature records — leaving the manifest
+// and the chunks untouched. Works before and after the upload.
+func (m *Manager) UpdateMetadata(ctx context.Context, key string, metadata map[string]any) error {
+	if err := ValidateKey(key); err != nil {
+		return err
+	}
+	return m.manifests.UpdateMetadata(ctx, m.db, key, metadata)
+}
+
+// Progress reports how far one key's upload has travelled, the shape a
+// status endpoint would serve.
+//
+// TODO(notification): nothing serves this yet — the ConnectRPC and REST
+// wiring does not exist. When it does, a handler maps this onto either a
+// polling response or a server-streamed updates channel; the data is
+// already current, the queue's workers bump it as chunks land.
+func (m *Manager) Progress(ctx context.Context, key string) (Progress, error) {
+	manifest, err := m.Manifest(ctx, key)
+	if err != nil {
+		return Progress{}, err
+	}
+	return Progress{
+		Status: manifest.File.Status,
+		Done:   manifest.File.ChunksDone,
+		Total:  manifest.File.ChunkCount,
+		Size:   manifest.File.Size,
+	}, nil
+}
+
 // Staging is the directory the next file is written into. The watcher owns
 // it; a caller that does not run the watcher names the same directory.
 func (m *Manager) Staging() string { return m.staging }
 
-// Stage writes a file into the staging directory — the one write on the
-// request path, local and buffered, so an API handler pays a disk write and
-// nothing else. The bytes move to the backend later, on the queue.
-func (m *Manager) Stage(ctx context.Context, key string, r io.Reader) error {
+// Stage writes a file into the staging directory and records the intent:
+// the key's metadata and the staging fingerprint land in the manifest
+// before the first byte travels, so a crash between the two leaves a
+// pending row, never a half-stored file. The write is the one cost on the
+// request path — local and buffered; the bytes move to the backend later,
+// on the queue.
+//
+// metadata is the feature's own record (content type, original file name,
+// owner); the engine carries it, never reads it. Re-staging a key replaces
+// its metadata and makes the stored manifest stale, so the next sync
+// uploads the new version.
+func (m *Manager) Stage(ctx context.Context, key string, r io.Reader, metadata map[string]any) error {
+	if err := ValidateKey(key); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(m.staging, 0o755); err != nil {
 		return fmt.Errorf("storage: staging directory: %w", err)
 	}
-	// The temp file makes a half-written staging file invisible: the watcher
-	// only ever sees the final name, complete or absent. A key may name a
-	// subdirectory, so the target directory exists before the rename.
+	// A key may name a subdirectory, so the target directory exists before
+	// the rename. The temp file makes a half-written staging file
+	// invisible: the watcher only ever sees the final name, complete or
+	// absent.
 	target := m.stagingPath(key)
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return fmt.Errorf("storage: staging %q: %w", key, err)
@@ -104,14 +163,26 @@ func (m *Manager) Stage(ctx context.Context, key string, r io.Reader) error {
 	if err := os.Rename(tmp.Name(), target); err != nil {
 		return fmt.Errorf("storage: staging %q: %w", key, err)
 	}
-	return nil
+
+	// The row is the durable half of the staging write: metadata and the
+	// fingerprint the sync's checkpoint compares against, committed before
+	// the upload is enqueued.
+	info, err := os.Stat(target)
+	if err != nil {
+		return fmt.Errorf("storage: staging %q: %w", key, err)
+	}
+	return m.manifests.Stage(ctx, m.db, key, info.Size(), info.ModTime(), metadata)
 }
 
-// Sync uploads a staging file: it computes the chunk manifest, uploads only
-// the chunks that differ from the stored manifest — in parallel, bounded by
-// the upload budget — and commits the new manifest in one transaction. It is
-// the body of the upload job; idempotent, so the queue's retries replay it.
+// Sync uploads a staging file: it computes or reuses the chunk manifest,
+// uploads only the chunks the backend does not hold — in parallel, bounded
+// by the upload budget — and commits the ready manifest in one transaction.
+// It is the body of the upload job; idempotent, so the queue's retries
+// replay it.
 func (m *Manager) Sync(ctx context.Context, key string) error {
+	if err := ValidateKey(key); err != nil {
+		return err
+	}
 	path := m.stagingPath(key)
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -125,95 +196,145 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	// Pass one learns the manifest. The file is opened once and read
-	// through ReaderAt in both passes, so the OS page cache serves the
-	// second one.
-	size, err := f.Seek(0, io.SeekEnd)
+	// The fingerprint is read once and trusted for the whole sync: the
+	// file the chunks were computed from is the file the TOCTOU guard
+	// compares against before the staging copy is removed.
+	info, err := f.Stat()
 	if err != nil {
-		return fmt.Errorf("storage: size staging %q: %w", key, err)
+		return fmt.Errorf("storage: stat staging %q: %w", key, err)
 	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("storage: rewind staging %q: %w", key, err)
-	}
-	chunks, err := m.chunker.Split(f)
-	if err != nil {
-		return err
-	}
-	contentHash := RootHash(chunks)
+	fingerprint := stagingFingerprint{size: info.Size(), mtime: info.ModTime()}
 
 	prior, err := m.manifests.Load(ctx, m.db, key)
 	if err != nil && !errors.Is(err, ErrNoManifest) {
 		return err
 	}
 
-	// The root hash is the fast path: same content, nothing to upload. The
-	// manifest is rewritten anyway, so the stored row carries the chunk
-	// sizes this run computed even if the chunking changed.
-	if len(prior.Chunks) > 0 && prior.File.ContentHash == contentHash {
-		prior.File.Size = size
+	// The checkpoint is the retry's fast path: a pending manifest whose
+	// fingerprint matches this staging file was computed from the same
+	// bytes, so the chunk list is reused and the whole hashing pass —
+	// the one thing a retry of a large file cannot afford — is skipped.
+	reuse := len(prior.Chunks) > 0 &&
+		prior.File.Status == StatusPending &&
+		prior.File.StagingSize == fingerprint.size &&
+		prior.File.StagingMtime.Equal(fingerprint.mtime)
+
+	var chunks []Chunk
+	contentHash := ""
+	switch {
+	case reuse:
+		chunks, contentHash = prior.Chunks, prior.File.ContentHash
+	default:
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return fmt.Errorf("storage: rewind staging %q: %w", key, err)
+		}
+		chunks, err = m.chunker.Split(f)
+		if err != nil {
+			return err
+		}
+		contentHash = RootHash(chunks)
+	}
+
+	// The finished-manifest fast path: the stored manifest is ready and
+	// hashes to the same root, so the backend already holds every chunk
+	// this file needs. The row is refreshed and the staging copy can go.
+	if prior.File.Status == StatusReady && prior.File.ContentHash == contentHash {
+		prior.File.Size = fingerprint.size
 		prior.File.ChunkSize = m.chunker.size
 		prior.File.ChunkCount = len(chunks)
-		prior.File.Status = StatusReady
+		prior.File.StagingSize = fingerprint.size
+		prior.File.StagingMtime = fingerprint.mtime
 		if err := m.db.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
 			return m.manifests.Save(ctx, tx, prior)
 		}); err != nil {
 			return err
 		}
-		return os.Remove(path)
+		return m.clearStaging(ctx, path, fingerprint)
 	}
 
-	if err := m.uploadMissing(ctx, key, chunks); err != nil {
-		return err
-	}
-
-	manifest := Manifest{
+	// The checkpoint: the chunk list lands before the first chunk travels,
+	// so a retry resumes from the stored hashes instead of recomputing
+	// them. The progress counter restarts with the round.
+	checkpoint := Manifest{
 		File: File{
-			Key:         key,
-			Size:        size,
-			ChunkSize:   m.chunker.size,
-			ChunkCount:  len(chunks),
-			ContentHash: contentHash,
-			Status:      StatusReady,
+			Key:          key,
+			Size:         fingerprint.size,
+			ChunkSize:    m.chunker.size,
+			ChunkCount:   len(chunks),
+			ContentHash:  contentHash,
+			Status:       StatusPending,
+			Metadata:     prior.File.Metadata,
+			ChunksDone:   0,
+			StagingSize:  fingerprint.size,
+			StagingMtime: fingerprint.mtime,
 		},
 		Chunks: chunks,
 	}
-	if err := m.db.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
-		return m.manifests.Save(ctx, tx, manifest)
-	}); err != nil {
+	if !reuse {
+		if err := m.db.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+			return m.manifests.Save(ctx, tx, checkpoint)
+		}); err != nil {
+			return err
+		}
+	}
+
+	done, err := m.uploadMissing(ctx, key, chunks)
+	if err != nil {
 		return err
 	}
 
-	// The manifest is committed: the staging copy's bytes live in the
-	// backend, chunk for chunk, so the local file has served its purpose.
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("storage: clear staging %q: %w", key, err)
+	// The ready commit closes the round: every chunk is in the backend,
+	// the manifest says so, and the staging copy has served its purpose —
+	// unless it changed underneath the sync, which the guard catches.
+	checkpoint.File.Status = StatusReady
+	checkpoint.File.ChunksDone = len(chunks)
+	if err := m.db.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		return m.manifests.Save(ctx, tx, checkpoint)
+	}); err != nil {
+		return err
 	}
-	slog.InfoContext(ctx, "storage: file synced",
-		"key", key, "chunks", len(chunks), "size", size)
-	return nil
+	if !reuse && done > 0 {
+		slog.InfoContext(ctx, "storage: file synced",
+			"key", key, "chunks", len(chunks), "uploaded", done, "size", fingerprint.size)
+	}
+	return m.clearStaging(ctx, path, fingerprint)
 }
 
-// uploadMissing puts every chunk the backend does not hold yet, several at a
-// time. The worker count is the budget; each worker borrows one buffer from
-// the pool, so a sync's memory is budget × chunk size, never the file size.
-func (m *Manager) uploadMissing(ctx context.Context, key string, chunks []Chunk) error {
+// uploadMissing puts every chunk the backend does not hold yet, several at
+// a time. The worker count is the budget; each worker borrows one buffer
+// from the pool, so a sync's memory is budget × chunk size, never the file
+// size. Returns how many chunks this round actually uploaded.
+func (m *Manager) uploadMissing(ctx context.Context, key string, chunks []Chunk) (int, error) {
+	hashes := make([]string, 0, len(chunks))
+	for _, chunk := range chunks {
+		hashes = append(hashes, chunk.Hash)
+	}
+	present, err := m.store.HasChunks(ctx, hashes)
+	if err != nil {
+		return 0, fmt.Errorf("storage: probe chunks of %q: %w", key, err)
+	}
+
 	pending := make([]Chunk, 0, len(chunks))
 	for _, chunk := range chunks {
-		ok, err := m.store.HasChunk(ctx, chunk.Hash)
-		if err != nil {
-			return fmt.Errorf("storage: probe chunk %s: %w", chunk.Hash, err)
-		}
-		if !ok {
+		if !present[chunk.Hash] {
 			pending = append(pending, chunk)
 		}
 	}
+
+	// The counter starts at what the backend already holds, so a resumed
+	// round reports the true distance to the total, not the distance this
+	// process happens to have walked.
+	done := len(chunks) - len(pending)
+	if err := m.manifests.SetProgress(ctx, m.db, key, done); err != nil {
+		return 0, err
+	}
 	if len(pending) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	f, err := os.Open(m.stagingPath(key))
 	if err != nil {
-		return fmt.Errorf("storage: open staging %q: %w", key, err)
+		return 0, fmt.Errorf("storage: open staging %q: %w", key, err)
 	}
 	defer func() { _ = f.Close() }()
 
@@ -224,6 +345,10 @@ func (m *Manager) uploadMissing(ctx context.Context, key string, chunks []Chunk)
 		buffers <- make([]byte, m.chunker.size)
 	}
 
+	// The progress counter grows one UPDATE per landed chunk — the data a
+	// status reader watches while the round runs. The mutex keeps the
+	// counter and the row in step without a read-modify-write race.
+	var mu sync.Mutex
 	group, ctx := errgroup.WithContext(ctx)
 	group.SetLimit(m.uploads)
 	for _, chunk := range pending {
@@ -235,13 +360,20 @@ func (m *Manager) uploadMissing(ctx context.Context, key string, chunks []Chunk)
 			if err != nil {
 				return err
 			}
-			return m.store.PutChunk(ctx, chunk.Hash, data)
+			if err := m.store.PutChunk(ctx, chunk.Hash, data); err != nil {
+				return err
+			}
+			mu.Lock()
+			done++
+			err = m.manifests.BumpProgress(ctx, m.db, key, 1)
+			mu.Unlock()
+			return err
 		})
 	}
 	if err := group.Wait(); err != nil {
-		return fmt.Errorf("storage: upload %q: %w", key, err)
+		return done, fmt.Errorf("storage: upload %q: %w", key, err)
 	}
-	return nil
+	return done, nil
 }
 
 // Open reads a stored file back as one stream: chunks are fetched in order
@@ -263,6 +395,10 @@ func (m *Manager) Open(ctx context.Context, key string) (io.ReadCloser, error) {
 // between the two leaves an unreferenced chunk for the garbage collection,
 // never a manifest that names a missing chunk.
 func (m *Manager) Delete(ctx context.Context, key string) error {
+	if err := ValidateKey(key); err != nil {
+		return err
+	}
+
 	var hashes []string
 	err := m.db.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) (err error) {
 		if hashes, err = m.manifests.Delete(ctx, tx, key); err != nil {
@@ -290,6 +426,10 @@ func (m *Manager) Delete(ctx context.Context, key string) error {
 			return fmt.Errorf("storage: delete chunk %s: %w", hash, err)
 		}
 	}
+
+	// A staged-but-never-synced copy would outlive its manifest; the key
+	// is gone, so its staging file goes with it.
+	_ = os.Remove(m.stagingPath(key))
 	return nil
 }
 
@@ -320,9 +460,40 @@ func (m *Manager) CollectGarbage(ctx context.Context) (int, error) {
 	return removed, nil
 }
 
-// stagingPath is where a key's staging file waits.
+// clearStaging removes the staging copy, but only the copy this sync read:
+// a file re-staged underneath a running sync has a different fingerprint,
+// and removing it would destroy an upload nobody has recorded. The mismatch
+// is an error, so the queue retries and the newer staging file gets its own
+// round.
+func (m *Manager) clearStaging(ctx context.Context, path string, fingerprint stagingFingerprint) error {
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: clear staging: %w", err)
+	}
+	if info.Size() != fingerprint.size || !info.ModTime().Equal(fingerprint.mtime) {
+		return fmt.Errorf("storage: staging %s changed during sync, left for a fresh round", filepath.Base(path))
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("storage: clear staging: %w", err)
+	}
+	return nil
+}
+
+// stagingPath is where a key's staging file waits. The key is validated by
+// every entry point before it reaches here, so the join cannot walk out of
+// the staging directory.
 func (m *Manager) stagingPath(key string) string {
 	return filepath.Join(m.staging, key)
+}
+
+// stagingFingerprint is the identity of the staging file one sync read:
+// size and modification time. Equal fingerprints mean the same bytes.
+type stagingFingerprint struct {
+	size  int64
+	mtime time.Time
 }
 
 // chunkReader assembles a stored file from its chunks, fetching the next one

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -16,6 +17,16 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/testutils"
 )
+
+// hasChunk answers the batch probe with one hash, the shape the manager
+// tests assert through.
+func hasChunk(ctx context.Context, store Store, hash string) (bool, error) {
+	found, err := store.HasChunks(ctx, []string{hash})
+	if err != nil {
+		return false, err
+	}
+	return found[hash], nil
+}
 
 // migratedPool applies the migrations to a fresh test database and returns
 // the pool the manager's manifest reads and writes go through.
@@ -79,7 +90,7 @@ func TestManagerSyncStoresTheManifestAndDropsTheStagingFile(t *testing.T) {
 	ctx := t.Context()
 
 	data := bytes.Repeat([]byte("chunked"), 100) // 700 bytes, 22 chunks
-	require.NoError(t, manager.Stage(ctx, "docs/report.txt", bytes.NewReader(data)))
+	require.NoError(t, manager.Stage(ctx, "docs/report.txt", bytes.NewReader(data), nil))
 	require.NoError(t, manager.Sync(ctx, "docs/report.txt"))
 
 	// The staging file has served its purpose: the bytes are chunk-addressed
@@ -96,7 +107,7 @@ func TestManagerSyncStoresTheManifestAndDropsTheStagingFile(t *testing.T) {
 
 	// Every chunk the manifest names is in the backend under its hash.
 	for _, chunk := range manifest.Chunks {
-		exists, err := store.HasChunk(ctx, chunk.Hash)
+		exists, err := hasChunk(ctx, store, chunk.Hash)
 		require.NoError(t, err)
 		assert.True(t, exists, "chunk %d missing from the backend", chunk.Index)
 	}
@@ -116,12 +127,12 @@ func TestManagerSyncOfTheSameBytesIsAShortCircuit(t *testing.T) {
 	ctx := t.Context()
 
 	data := bytes.Repeat([]byte("stable"), 50)
-	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data)))
+	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data), nil))
 	require.NoError(t, manager.Sync(ctx, "k"))
 
 	// The second sync reads the same bytes: the root hash matches, so no
 	// chunk is re-uploaded and the answer is still a stored file.
-	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data)))
+	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data), nil))
 	require.NoError(t, manager.Sync(ctx, "k"))
 
 	reader, err := manager.Open(ctx, "k")
@@ -137,12 +148,12 @@ func TestManagerReuploadTouchesOnlyTheChangedChunk(t *testing.T) {
 	ctx := t.Context()
 
 	data := bytes.Repeat([]byte("A"), 96) // three chunks of 32
-	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data)))
+	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data), nil))
 	require.NoError(t, manager.Sync(ctx, "k"))
 
 	changed := bytes.Clone(data)
 	changed[40] = 'B' // inside the second chunk only
-	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(changed)))
+	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(changed), nil))
 	require.NoError(t, manager.Sync(ctx, "k"))
 
 	// The untouched chunks keep their address: a one-byte edit near the
@@ -158,7 +169,7 @@ func TestManagerReuploadTouchesOnlyTheChangedChunk(t *testing.T) {
 	// never deletes on upload — the garbage collection does, once nothing
 	// references the old bytes.
 	oldHash := hashOf(data[32:64])
-	exists, err := store.HasChunk(ctx, oldHash)
+	exists, err := hasChunk(ctx, store, oldHash)
 	require.NoError(t, err)
 	assert.True(t, exists, "the replaced chunk waits for the garbage collection")
 
@@ -180,9 +191,9 @@ func TestManagerDeleteKeepsAChunkAnotherFileShares(t *testing.T) {
 
 	// Both files carry the same first 32 bytes: one chunk object serves
 	// them both.
-	require.NoError(t, manager.Stage(ctx, "left", bytes.NewReader(append(append([]byte{}, shared[:32]...), unique...))))
+	require.NoError(t, manager.Stage(ctx, "left", bytes.NewReader(append(append([]byte{}, shared[:32]...), unique...)), nil))
 	require.NoError(t, manager.Sync(ctx, "left"))
-	require.NoError(t, manager.Stage(ctx, "right", bytes.NewReader(append(append([]byte{}, shared[:32]...), unique...))))
+	require.NoError(t, manager.Stage(ctx, "right", bytes.NewReader(append(append([]byte{}, shared[:32]...), unique...)), nil))
 	require.NoError(t, manager.Sync(ctx, "right"))
 
 	require.NoError(t, manager.Delete(ctx, "left"))
@@ -199,7 +210,7 @@ func TestManagerDeleteKeepsAChunkAnotherFileShares(t *testing.T) {
 	assert.Equal(t, append(append([]byte{}, shared[:32]...), unique...), got)
 
 	sharedHash := hashOf(shared[:32])
-	exists, err := store.HasChunk(ctx, sharedHash)
+	exists, err := hasChunk(ctx, store, sharedHash)
 	require.NoError(t, err)
 	assert.True(t, exists, "a chunk another file references is not deleted")
 }
@@ -209,7 +220,7 @@ func TestManagerCollectGarbageRemovesOnlyUnreferencedChunks(t *testing.T) {
 	ctx := t.Context()
 
 	data := bytes.Repeat([]byte("gced"), 32)
-	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data)))
+	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data), nil))
 	require.NoError(t, manager.Sync(ctx, "k"))
 
 	// An upload that died after its PutChunk: the bytes are in the
@@ -222,14 +233,14 @@ func TestManagerCollectGarbageRemovesOnlyUnreferencedChunks(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, removed)
 
-	exists, err := store.HasChunk(ctx, orphanHash)
+	exists, err := hasChunk(ctx, store, orphanHash)
 	require.NoError(t, err)
 	assert.False(t, exists)
 
 	// The referenced chunk survives the sweep.
 	manifest, err := manager.manifests.Load(ctx, manager.db, "k")
 	require.NoError(t, err)
-	exists, err = store.HasChunk(ctx, manifest.Chunks[0].Hash)
+	exists, err = hasChunk(ctx, store, manifest.Chunks[0].Hash)
 	require.NoError(t, err)
 	assert.True(t, exists)
 }

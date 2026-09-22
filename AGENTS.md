@@ -55,7 +55,7 @@ Implemented today — treat as the contract. One line each here; the reasoning, 
 - `internal/queue` — durable Postgres task queue (SKIP LOCKED claim, priority, retries, replayable dead letters, optional payload encryption).
 - `internal/jobs` — concrete jobs on the queue; recurring jobs re-enqueue their own next instance.
 - `internal/scheduler` — durable cron scheduler; Postgres row lock claims a tick, the queue executes it.
-- `internal/storage` — chunked file engine over local FS or S3; content-addressed chunks, manifest in Postgres, staging watcher, upload on the durable queue.
+- `internal/storage` — chunked file engine over local FS or S3; content-addressed chunks, manifest in Postgres, staging watcher, upload on the durable queue; flexible multi-purpose keys (`storage.Key`), per-file JSONB metadata, checkpointed resumable uploads, progress counters (endpoint stubbed, see architecture.md TODO(notification)).
 - `internal/config` (implemented) / `internal/kernel`, `internal/transport`, `internal/registry` — see `llms/architecture.md` for the full contract of each.
 - `api/connect/*.proto` — ConnectRPC contracts. `email/templates` — React Email sources. `web` — SPA embed and static serving.
 

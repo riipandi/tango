@@ -56,21 +56,40 @@ func NewS3(cfg config.S3) (*S3, error) {
 	}, nil
 }
 
-// HasChunk heads the chunk's object. A not-found answer is the miss the
-// upload diff runs on, so the API's own not-found shape is translated here
-// and nowhere else.
-func (s *S3) HasChunk(ctx context.Context, hash string) (bool, error) {
-	_, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(s.bucket),
-		Key:    aws.String(s.chunkKey(hash)),
-	})
-	if err == nil {
-		return true, nil
+// HasChunks answers the whole batch with one listing per two-hex-character
+// prefix the chunks share: a file's chunks spread across at most as many
+// prefixes as its first bytes do, so a sync probes the backend with a
+// handful of LISTs instead of one HEAD per chunk.
+func (s *S3) HasChunks(ctx context.Context, hashes []string) (map[string]bool, error) {
+	found := make(map[string]bool, len(hashes))
+	prefixes := make(map[string][]string)
+	for _, hash := range hashes {
+		prefix := hash[:2]
+		prefixes[prefix] = append(prefixes[prefix], hash)
 	}
-	if isS3NotFound(err) {
-		return false, nil
+
+	for prefix, group := range prefixes {
+		listed := make(map[string]bool, len(group))
+		paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+			Bucket: aws.String(s.bucket),
+			Prefix: aws.String(s.prefix + "chunks/" + prefix + "/"),
+		})
+		for paginator.HasMorePages() {
+			page, err := paginator.NextPage(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("storage: probe chunks %s/*: %w", prefix, err)
+			}
+			for _, object := range page.Contents {
+				if hash, ok := s.chunkHash(aws.ToString(object.Key)); ok {
+					listed[hash] = true
+				}
+			}
+		}
+		for _, hash := range group {
+			found[hash] = listed[hash]
+		}
 	}
-	return false, fmt.Errorf("storage: head chunk %s: %w", hash, err)
+	return found, nil
 }
 
 // PutChunk stores the chunk as one object. Writing the same hash twice

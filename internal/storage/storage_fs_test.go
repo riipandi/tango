@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -22,17 +23,27 @@ func newFSStore(t *testing.T) (*FS, string, []byte) {
 	return NewFS(root), hex.EncodeToString(hash[:]), data
 }
 
+// hasChunks answers the batch probe with one hash, the shape every store
+// test runs through.
+func hasChunks(store Store, ctx context.Context, hash string) (bool, error) {
+	found, err := store.HasChunks(ctx, []string{hash})
+	if err != nil {
+		return false, err
+	}
+	return found[hash], nil
+}
+
 func TestFSStoreRoundTripsAChunk(t *testing.T) {
 	store, hash, data := newFSStore(t)
 	ctx := t.Context()
 
-	exists, err := store.HasChunk(ctx, hash)
+	exists, err := hasChunks(store, ctx, hash)
 	require.NoError(t, err)
 	assert.False(t, exists)
 
 	require.NoError(t, store.PutChunk(ctx, hash, data))
 
-	exists, err = store.HasChunk(ctx, hash)
+	exists, err = hasChunks(store, ctx, hash)
 	require.NoError(t, err)
 	assert.True(t, exists)
 
@@ -41,7 +52,7 @@ func TestFSStoreRoundTripsAChunk(t *testing.T) {
 	assert.Equal(t, data, got)
 
 	require.NoError(t, store.DeleteChunk(ctx, hash))
-	exists, err = store.HasChunk(ctx, hash)
+	exists, err = hasChunks(store, ctx, hash)
 	require.NoError(t, err)
 	assert.False(t, exists)
 }

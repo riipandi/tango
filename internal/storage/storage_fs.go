@@ -30,16 +30,23 @@ func NewFS(root string) *FS {
 	return &FS{root: root}
 }
 
-// HasChunk reports whether the chunk's file exists.
-func (s *FS) HasChunk(_ context.Context, hash string) (bool, error) {
-	_, err := os.Stat(s.chunkPath(hash))
-	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
+// HasChunks stats every named chunk. A stat is an in-process call, so the
+// batch is a loop here — the round trip the batch saves lives in the
+// networked driver.
+func (s *FS) HasChunks(_ context.Context, hashes []string) (map[string]bool, error) {
+	found := make(map[string]bool, len(hashes))
+	for _, hash := range hashes {
+		_, err := os.Stat(s.chunkPath(hash))
+		if errors.Is(err, fs.ErrNotExist) {
+			found[hash] = false
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("storage: stat chunk %s: %w", hash, err)
+		}
+		found[hash] = true
 	}
-	if err != nil {
-		return false, fmt.Errorf("storage: stat chunk %s: %w", hash, err)
-	}
-	return true, nil
+	return found, nil
 }
 
 // PutChunk writes the chunk through a temp file and a rename, so a reader

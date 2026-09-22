@@ -61,6 +61,18 @@ func TestWatcherSettlesAFileAfterTheDebounceWindow(t *testing.T) {
 	waitFor(t, spy, "report.txt")
 }
 
+func TestWatcherSettlesANestedFile(t *testing.T) {
+	// Keys name nested paths — avatar/usr_1/128.png — so a file written
+	// into a subdirectory must settle like one at the root, whether the
+	// directory predates the watch or appears under it.
+	_, spy, staging := startWatcher(t, 50*time.Millisecond)
+
+	require.NoError(t, os.MkdirAll(filepath.Join(staging, "avatar", "usr_1"), 0o755))
+	time.Sleep(100 * time.Millisecond) // the watch picks the new directory up
+	require.NoError(t, os.WriteFile(filepath.Join(staging, "avatar", "usr_1", "128.png"), []byte("v1"), 0o600))
+	waitFor(t, spy, filepath.Join("avatar", "usr_1", "128.png"))
+}
+
 func TestWatcherSettlesARenamedInFileOnce(t *testing.T) {
 	_, spy, staging := startWatcher(t, 50*time.Millisecond)
 
