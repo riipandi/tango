@@ -152,8 +152,43 @@ func New(cfg config.Config, opts ...Option) (*Logger, error) {
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("logger: %w", err), l.release())
 	}
-	l.slog = slog.New(sloghandler.New(core))
+	l.slog = slog.New(sourceGate{sloghandler.New(core)})
 	return l, nil
+}
+
+// sourceGate is the wrapper around the slog handler that keeps the call site
+// a debug-only fact. The handler behind it forwards Record.PC on every entry
+// — the capture cost is already paid by slog — but the function, file, and
+// line of the emitting call are sensitive: a file path tells a reader where
+// the code lives. Entries above debug reach the sinks without it; a debug
+// entry, which is the one a developer turns on to trace a problem, keeps it.
+//
+// The gate sits at the frontend rather than on any sink, so the rule holds
+// for every destination at once — the console, the file, the collector, the
+// echo — instead of a policy each transport would have to remember.
+type sourceGate struct {
+	inner slog.Handler
+}
+
+func (g sourceGate) Enabled(ctx context.Context, level slog.Level) bool {
+	return g.inner.Enabled(ctx, level)
+}
+
+func (g sourceGate) Handle(ctx context.Context, r slog.Record) error {
+	if r.Level > slog.LevelDebug {
+		// The record is a copy the handler owns; zeroing the PC here is the
+		// documented way to keep the call site out of what follows.
+		r.PC = 0
+	}
+	return g.inner.Handle(ctx, r)
+}
+
+func (g sourceGate) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return sourceGate{inner: g.inner.WithAttrs(attrs)}
+}
+
+func (g sourceGate) WithGroup(name string) slog.Handler {
+	return sourceGate{inner: g.inner.WithGroup(name)}
 }
 
 // Slog returns the logger the application calls.

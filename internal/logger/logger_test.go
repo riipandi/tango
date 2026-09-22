@@ -173,6 +173,32 @@ func TestErrorsAreLoggedAsRenderedText(t *testing.T) {
 	assert.Equal(t, "connection refused", entry["err"])
 }
 
+// TestSourceIsADebugOnlyField pins the sensitivity rule: the function, file,
+// and line of the emitting call reach the sinks only at debug level, because
+// a file path tells a reader where the code lives.
+func TestSourceIsADebugOnlyField(t *testing.T) {
+	log, buf := newLogger(t, func(cfg *config.Config) {
+		cfg.Log.Console.Format = config.LogStructured
+		cfg.Log.Level = config.LogDebug
+	})
+
+	log.Slog().Info("at info", "n", 1)
+	log.Slog().Debug("at debug", "n", 2)
+	log.Flush()
+
+	lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
+	require.Len(t, lines, 2)
+
+	var info, debug map[string]any
+	require.NoError(t, json.Unmarshal(lines[0], &info))
+	require.NoError(t, json.Unmarshal(lines[1], &debug))
+
+	assert.NotContains(t, info, "source",
+		"an info entry must not carry the call site")
+	assert.Contains(t, debug, "source",
+		"a debug entry is where the call site belongs")
+}
+
 func TestTheDefaultConfigurationWritesOnlyToTheConsole(t *testing.T) {
 	// A fresh checkout writes no files and dials nothing, so nothing has to be
 	// installed before the application runs. This is the default the docs
