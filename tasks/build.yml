@@ -4,11 +4,9 @@ version: "3"
 
 tasks:
   build:
-    desc: Build frontend + Go binary (single file)
+    desc: Build frontend + Go binaries (debug and release in one pass)
     deps: [rpc:generate]
-    cmds:
-      - BUILD_MODE=release pnpm exec vite build
-      - BUILD_MODE=debug pnpm exec vite build
+    cmd: pnpm exec vite build
 
   start:
     desc: Run the release binary on :3000

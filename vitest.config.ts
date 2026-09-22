@@ -51,6 +51,17 @@ export default defineConfig({
           exclude: ['node_modules', 'tests-e2e'],
           globals: true
         }
+      },
+      {
+        extends: true,
+        resolve: { tsconfigPaths: true },
+        test: {
+          name: 'plugins',
+          environment: 'node',
+          include: ['./plugins/**/*.test.ts'],
+          exclude: ['node_modules', 'tests-e2e'],
+          globals: true
+        }
       }
     ]
   }

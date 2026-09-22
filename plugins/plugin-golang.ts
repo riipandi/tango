@@ -3,23 +3,38 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { Plugin, ViteDevServer } from 'vite'
 
-export interface GoBuildOptions {
-  args?: string[]
-  packagePath?: string
-  outputDir?: string
-  outputBin?: string
-  embedDir?: string
+/** One build target: a Go binary variant identified by its mode name. */
+export interface GoTargetOptions {
+  /** Directory the binary is written to (e.g. "build/debug"). */
+  outputDir: string
+  /** Build tags; by convention includes the mode name ("debug"/"release"). */
   buildTags?: string[]
   buildFlags?: string[]
   ldflags?: string[]
 }
 
+export interface GoBuildOptions {
+  /** Package to build (default: the plugin's packagePath). */
+  packagePath?: string
+  /** Binary file name inside the target's outputDir (default: packageName). */
+  outputBin?: string
+  /** Directory that must exist before a production build runs (default: "web/output"). */
+  embedDir?: string
+  /**
+   * Targets built by `vite build`, in insertion order. Default: debug + release.
+   * The dev server only ever builds and runs one of them — see devTarget.
+   */
+  targets?: Record<string, GoTargetOptions>
+  /** Which target the dev server builds and runs (default: "debug"). */
+  devTarget?: string
+}
+
 export interface PluginGolangOptions {
   packageName: string
+  /** Go toolchain binary (default: "go"). */
   cmd?: string
-  args?: string[]
   packagePath?: string
-  bin?: string
+  /** Arguments the built binary is started with in dev (default: []). */
   binArgs?: string[]
   delay?: number
   killDelay?: number
@@ -31,10 +46,11 @@ export interface PluginGolangOptions {
   build?: GoBuildOptions
 }
 
-interface ResolvedBuildOptions {
+interface ResolvedTarget {
+  name: string
   outputDir: string
-  outputBin: string
-  embedDir: string
+  /** Absolute-ish path of the binary, as passed to `go build -o`. */
+  binPath: string
   args: string[]
   buildTags: string[]
   buildFlags: string[]
@@ -43,6 +59,7 @@ interface ResolvedBuildOptions {
 
 interface GoPluginDefaults {
   cmd: string
+  packagePath: string
   binArgs: string[]
   delay: number
   killDelay: number
@@ -51,11 +68,14 @@ interface GoPluginDefaults {
   excludeRegex: string[]
   extensions: string[]
   log: boolean
-  build: Required<GoBuildOptions>
+  build: Required<Pick<GoBuildOptions, 'outputBin' | 'embedDir' | 'devTarget'>> & {
+    targets: Record<string, GoTargetOptions>
+  }
 }
 
 const defaults: GoPluginDefaults = {
   cmd: 'go',
+  packagePath: '.',
   binArgs: [],
   delay: 1000,
   killDelay: 300,
@@ -65,14 +85,18 @@ const defaults: GoPluginDefaults = {
   extensions: ['go', 'tmpl'],
   log: true,
   build: {
-    args: [],
-    packagePath: '.',
-    outputDir: '',
     outputBin: '',
     embedDir: 'web/output',
-    buildTags: [],
-    buildFlags: [],
-    ldflags: []
+    devTarget: 'debug',
+    targets: {
+      debug: { outputDir: 'build/debug', buildTags: ['debug'] },
+      release: {
+        outputDir: 'build/release',
+        buildTags: ['release'],
+        buildFlags: ['-trimpath', '-buildmode=pie', '-buildvcs=false'],
+        ldflags: ['-w -s -extldflags -static']
+      }
+    }
   }
 }
 
@@ -86,8 +110,6 @@ const C = {
 
 const PREFIX = `${C.cyan}[go]${C.reset}`
 
-const isProduction = () => process.env.NODE_ENV === 'production'
-
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
@@ -98,60 +120,47 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`
 }
 
-function formatBuildInfo(buildOpts: ResolvedBuildOptions): Array<{ label: string; value: string }> {
-  const mode = isProduction() || buildOpts.buildTags.includes('release') ? 'release' : 'debug'
-  const tags = buildOpts.buildTags.length > 0 ? buildOpts.buildTags.join(', ') : 'none'
+// One arg builder for both paths (dev rebuilds and production targets): flags
+// before the package argument, so every target gets exactly the same shape.
+function resolveTarget(
+  name: string,
+  target: GoTargetOptions,
+  packagePath: string,
+  outputBin: string
+): ResolvedTarget {
+  const buildTags = target.buildTags ?? []
+  const buildFlags = target.buildFlags ?? []
+  const ldflags = target.ldflags ?? []
+  const binPath = `${target.outputDir}/${outputBin}`
+
+  const args = ['build']
+  if (buildTags.length > 0) args.push('-tags', buildTags.join(','))
+  args.push(...buildFlags)
+  if (ldflags.length > 0) args.push('-ldflags', ldflags.join(' '))
+  args.push('-o', binPath, packagePath)
+
+  return { name, outputDir: target.outputDir, binPath, args, buildTags, buildFlags, ldflags }
+}
+
+function formatBuildInfo(target: ResolvedTarget): Array<{ label: string; value: string }> {
+  const tags = target.buildTags.length > 0 ? target.buildTags.join(', ') : 'none'
 
   const lines: Array<{ label: string; value: string }> = [
-    { label: 'mode', value: mode },
+    { label: 'target', value: target.name },
     { label: 'tags', value: tags }
   ]
 
-  if (buildOpts.buildFlags.length > 0) {
-    lines.push({ label: 'flags', value: buildOpts.buildFlags.join(' ') })
+  if (target.buildFlags.length > 0) {
+    lines.push({ label: 'flags', value: target.buildFlags.join(' ') })
   }
 
-  for (const [index, flag] of buildOpts.ldflags.entries()) {
+  for (const [index, flag] of target.ldflags.entries()) {
     lines.push({ label: `ldflags[${index}]`, value: flag })
   }
 
-  lines.push({ label: 'embed', value: buildOpts.embedDir })
-  lines.push({ label: 'output', value: `${buildOpts.outputDir}/${buildOpts.outputBin}` })
+  lines.push({ label: 'output', value: target.binPath })
 
   return lines
-}
-
-function resolveBuildOptions(
-  userBuild: GoBuildOptions | undefined,
-  userPkg: string,
-  packageName: string
-): ResolvedBuildOptions {
-  const outputDir = userBuild?.outputDir || (isProduction() ? 'build/release' : 'build/debug')
-  const outputBin = userBuild?.outputBin || packageName
-  const embedDir = userBuild?.embedDir || 'web/output'
-  const buildFlags = userBuild?.buildFlags || []
-  const ldflags = userBuild?.ldflags || []
-  const buildTags = userBuild?.buildTags || defaults.build.buildTags
-  const pkg = userBuild?.packagePath || userPkg
-
-  const buildArgs =
-    userBuild?.args && userBuild.args.length > 0
-      ? [...userBuild.args]
-      : ['build', '-o', `${outputDir}/${outputBin}`, pkg]
-
-  if (buildTags.length > 0) {
-    buildArgs.splice(1, 0, '-tags', buildTags.join(','))
-  }
-
-  if (buildFlags.length > 0) {
-    buildArgs.splice(1, 0, ...buildFlags)
-  }
-
-  if (ldflags.length > 0) {
-    buildArgs.splice(1, 0, '-ldflags', ldflags.join(' '))
-  }
-
-  return { outputDir, outputBin, embedDir, args: buildArgs, buildFlags, ldflags, buildTags }
 }
 
 interface GoBuildResult {
@@ -194,16 +203,9 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     return { name: 'vite-plugin-go' }
   }
 
-  const name = userOptions.packageName
-  const pkgPath = userOptions.packagePath || defaults.build.packagePath
-  const defaultBin = `build/debug/${name}`
-  const defaultArgs = ['build', '-o', defaultBin, pkgPath]
-
   const opts = {
-    ...defaults,
     cmd: userOptions.cmd ?? defaults.cmd,
-    args: userOptions.args ?? defaultArgs,
-    bin: userOptions.bin || defaultBin,
+    packageName: userOptions.packageName,
     binArgs: userOptions.binArgs ?? defaults.binArgs,
     delay: userOptions.delay ?? defaults.delay,
     killDelay: userOptions.killDelay ?? defaults.killDelay,
@@ -211,16 +213,42 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     excludeDir: userOptions.excludeDir ?? defaults.excludeDir,
     excludeRegex: userOptions.excludeRegex ?? defaults.excludeRegex,
     extensions: userOptions.extensions ?? defaults.extensions,
-    log: userOptions.log ?? defaults.log,
-    build: { ...defaults.build, ...userOptions.build }
+    log: userOptions.log ?? defaults.log
+  }
+
+  // Precedence: build.packagePath > packagePath > "." — the defaults must not
+  // shadow an explicit top-level packagePath.
+  const packagePath =
+    userOptions.build?.packagePath ?? userOptions.packagePath ?? defaults.packagePath
+  const outputBin = userOptions.build?.outputBin ?? userOptions.packageName
+  const embedDir = userOptions.build?.embedDir ?? defaults.build.embedDir
+  const devTargetName = userOptions.build?.devTarget ?? defaults.build.devTarget
+  const targetOptions = userOptions.build?.targets ?? defaults.build.targets
+
+  const targets = Object.fromEntries(
+    Object.entries(targetOptions).map(([name, target]) => [
+      name,
+      resolveTarget(name, target, packagePath, outputBin)
+    ])
+  ) as Record<string, ResolvedTarget>
+
+  // The dev server runs exactly one target; `vite build` runs all of them.
+  // An unknown devTarget falls back to the first configured target.
+  const devName = devTargetName in targets ? devTargetName : (Object.keys(targets)[0] ?? 'debug')
+  const devTarget: ResolvedTarget = targets[devName] ?? {
+    name: devName,
+    outputDir: 'build/debug',
+    binPath: `build/debug/${outputBin}`,
+    args: ['build', '-o', `build/debug/${outputBin}`, packagePath],
+    buildTags: [devName],
+    buildFlags: [],
+    ldflags: []
   }
 
   const excludePatterns = [
     ...opts.excludeDir.map((d) => new RegExp(`[\\/]${path.normalize(d)}[\\/]`)),
     ...opts.excludeRegex.map((r) => new RegExp(r))
   ]
-
-  const buildOpts = resolveBuildOptions(userOptions.build, pkgPath, name)
 
   let viteRoot = process.cwd()
   let command: 'serve' | 'build' = 'serve'
@@ -272,7 +300,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
   }
 
   function startBinary() {
-    const binPath = path.resolve(viteRoot, opts.bin)
+    const binPath = path.resolve(viteRoot, devTarget.binPath)
     const proc = spawn(binPath, opts.binArgs, {
       cwd: viteRoot,
       stdio: 'inherit',
@@ -295,11 +323,13 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     if (proc.pid) log(`started (pid ${proc.pid})`)
   }
 
-  async function runBuild(stage: 'initial' | 'rebuild'): Promise<boolean> {
+  async function runBuild(target: ResolvedTarget, stage: 'initial' | 'rebuild'): Promise<boolean> {
     isBuilding = true
-    log(stage === 'rebuild' ? 'rebuilding...' : 'building debug binary...')
+    log(
+      stage === 'rebuild' ? `rebuilding (${target.name})...` : `building ${target.name} binary...`
+    )
 
-    const { code, output, duration } = await runGoBuild(opts.cmd, opts.args, viteRoot)
+    const { code, output, duration } = await runGoBuild(opts.cmd, target.args, viteRoot)
     isBuilding = false
 
     if (code !== 0) {
@@ -319,7 +349,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
     if (buildTimer) clearTimeout(buildTimer)
 
     buildTimer = setTimeout(() => {
-      void runBuild('rebuild').then((ok) => {
+      void runBuild(devTarget, 'rebuild').then((ok) => {
         buildTimer = null
 
         if (!ok && opts.stopOnError) killGo()
@@ -342,7 +372,7 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
   }
 
   async function initialBuild() {
-    const ok = await runBuild('initial')
+    const ok = await runBuild(devTarget, 'initial')
     if (disposed || !ok) return
     startBinary()
   }
@@ -387,48 +417,50 @@ export default function VitePlugin(userOptions: PluginGolangOptions): Plugin {
       order: 'post',
       async handler() {
         // Vite also fires closeBundle when the dev server shuts down or
-        // restarts — only run the production build for `vite build`.
+        // restarts — only run the production builds for `vite build`.
         if (command !== 'build') {
           dispose()
           return
         }
 
-        const embedPath = path.resolve(viteRoot, buildOpts.embedDir)
+        const embedPath = path.resolve(viteRoot, embedDir)
         if (!fs.existsSync(embedPath)) {
-          log(`embed directory "${buildOpts.embedDir}" not found, skipping go build`)
+          log(`embed directory "${embedDir}" not found, skipping go builds`)
           process.exitCode = 1
           return
         }
 
-        fs.mkdirSync(path.resolve(viteRoot, buildOpts.outputDir), { recursive: true })
+        for (const target of Object.values(targets)) {
+          fs.mkdirSync(path.resolve(viteRoot, target.outputDir), { recursive: true })
 
-        const buildMode = buildOpts.buildTags.includes('debug') ? 'debug' : 'release'
-        log(`building binary (${buildMode})...`)
+          log(`building binary (${target.name})...`)
 
-        const infoLines = formatBuildInfo(buildOpts)
-        const gutter = Math.max(...infoLines.map((line) => line.label.length)) + 1
-        for (const line of infoLines) {
-          logInfo(line.label, line.value, gutter)
+          const infoLines = formatBuildInfo(target)
+          const gutter = Math.max(...infoLines.map((line) => line.label.length)) + 1
+          for (const line of infoLines) {
+            logInfo(line.label, line.value, gutter)
+          }
+
+          const { code, output, duration } = await runGoBuild(opts.cmd, target.args, viteRoot)
+
+          if (code !== 0) {
+            log(`${C.red}build failed (exit code ${code}) in ${formatDuration(duration)}${C.reset}`)
+            logOutput(output)
+            process.exitCode = 1
+            return
+          }
+
+          let size = ''
+          try {
+            size = ` (${formatFileSize(fs.statSync(path.resolve(viteRoot, target.binPath)).size)})`
+          } catch {
+            // binary missing after a successful build is highly unlikely; keep summary short
+          }
+
+          log(
+            `${C.green}binary built → ${target.binPath}${size} in ${formatDuration(duration)}${C.reset}\n`
+          )
         }
-
-        const { code, output, duration } = await runGoBuild(opts.cmd, buildOpts.args, viteRoot)
-        const binPath = `${buildOpts.outputDir}/${buildOpts.outputBin}`
-
-        if (code !== 0) {
-          log(`${C.red}build failed (exit code ${code}) in ${formatDuration(duration)}${C.reset}`)
-          logOutput(output)
-          process.exitCode = 1
-          return
-        }
-
-        let size = ''
-        try {
-          size = ` (${formatFileSize(fs.statSync(path.resolve(viteRoot, binPath)).size)})`
-        } catch {
-          // binary missing after a successful build is highly unlikely; keep summary short
-        }
-
-        log(`${C.green}binary built → ${binPath}${size} in ${formatDuration(duration)}${C.reset}`)
       }
     }
   }

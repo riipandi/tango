@@ -118,6 +118,43 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
   let hasPendingChanges = false
   let disposed = false
 
+  // Template file names awaiting a dev rebuild; empty means "compile everything".
+  const pending = new Set<string>()
+
+  // Compiles one template into its _html and _text pair. Returns the template
+  // name on success, null on failure (already logged).
+  async function buildOne(
+    absTemplates: string,
+    absOutput: string,
+    file: string
+  ): Promise<string | null> {
+    const templateName = file.replace('.tsx', '')
+    const start = Date.now()
+
+    try {
+      const importedModule = await importTemplate(path.join(absTemplates, file), Date.now())
+      const Component = (importedModule.default ?? getFirstExport(importedModule)) as EmailTemplate
+
+      if (!Component) {
+        throw new Error('no component export found')
+      }
+
+      if (!Component.TemplateProps) {
+        throw new Error('no TemplateProps export found')
+      }
+
+      await buildTemplateFile(Component, Component.TemplateProps, templateName, absOutput, false) // HTML
+      await buildTemplateFile(Component, Component.TemplateProps, templateName, absOutput, true) // Text
+
+      log(`  ${C.green}✓ ${templateName}${C.reset} in ${formatDuration(Date.now() - start)}`)
+      return templateName
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      logError(`  ✗ ${templateName}: ${message}`)
+      return null
+    }
+  }
+
   async function buildAll(): Promise<boolean> {
     const absTemplates = path.resolve(viteRoot, opts.templateDir)
     const absOutput = path.resolve(viteRoot, opts.outputDir)
@@ -134,53 +171,59 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
     logInfo('output', opts.outputDir)
 
     const startedAt = Date.now()
-    const cacheBust = startedAt
+    const files = fs.readdirSync(absTemplates).filter((file) => file.endsWith('.tsx'))
     let built = 0
     let failed = 0
 
-    for (const file of fs.readdirSync(absTemplates)) {
-      if (!file.endsWith('.tsx')) continue
-
-      const templateName = file.replace('.tsx', '')
-      const start = Date.now()
-
-      try {
-        const importedModule = await importTemplate(path.join(absTemplates, file), cacheBust)
-        const Component = (importedModule.default ??
-          getFirstExport(importedModule)) as EmailTemplate
-
-        if (!Component) {
-          throw new Error('no component export found')
-        }
-
-        if (!Component.TemplateProps) {
-          throw new Error('no TemplateProps export found')
-        }
-
-        await buildTemplateFile(Component, Component.TemplateProps, templateName, absOutput, false) // HTML
-        await buildTemplateFile(Component, Component.TemplateProps, templateName, absOutput, true) // Text
-
-        built++
-        log(`  ${C.green}✓ ${templateName}${C.reset} in ${formatDuration(Date.now() - start)}`)
-      } catch (error) {
+    for (const file of files) {
+      const name = await buildOne(absTemplates, absOutput, file)
+      if (name === null) {
         failed++
-        const message = error instanceof Error ? error.message : String(error)
-        logError(`  ✗ ${templateName}: ${message}`)
+      } else {
+        built++
       }
     }
 
-    const total = built + failed
     const duration = formatDuration(Date.now() - startedAt)
 
     if (built > 0) {
       log(
-        `${C.green}built ${built}/${total} templates → ${opts.outputDir} in ${duration}${C.reset}`
+        `${C.green}built ${built}/${files.length} templates → ${opts.outputDir} in ${duration}${C.reset}\n`
       )
-    } else if (total === 0) {
+    } else if (files.length === 0) {
       log(`no templates found in ${opts.templateDir}`)
     }
 
     return failed === 0
+  }
+
+  // A dev rebuild touches only the templates that changed; the untouched
+  // compiled pairs keep their files, so the Go embed sees no churn.
+  async function rebuildChanged(): Promise<boolean> {
+    const absTemplates = path.resolve(viteRoot, opts.templateDir)
+    const absOutput = path.resolve(viteRoot, opts.outputDir)
+    const files = [...pending]
+    pending.clear()
+
+    const startedAt = Date.now()
+    let built = 0
+    let ok = true
+
+    for (const file of files) {
+      const name = await buildOne(absTemplates, absOutput, file)
+      if (name === null) {
+        ok = false
+      } else {
+        built++
+      }
+    }
+
+    if (built > 0) {
+      log(
+        `${C.green}rebuilt ${built}/${files.length} template(s) in ${formatDuration(Date.now() - startedAt)}${C.reset}`
+      )
+    }
+    return ok
   }
 
   async function rebuild() {
@@ -190,8 +233,10 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
     }
 
     isBuilding = true
-    await buildAll()
+    const ok = pending.size === 0 ? await buildAll() : await rebuildChanged()
     isBuilding = false
+
+    if (!ok) return
 
     if (hasPendingChanges) {
       hasPendingChanges = false
@@ -199,7 +244,8 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
     }
   }
 
-  function schedule() {
+  function schedule(file?: string) {
+    if (file) pending.add(path.basename(file))
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       timer = null
@@ -235,12 +281,18 @@ export default function VitePluginEmail(userOptions: PluginEmailOptions = {}): P
 
       const onFile = (file: string) => {
         if (disposed || !shouldWatch(file)) return
-        schedule()
+        schedule(file)
       }
 
       server.watcher.on('change', onFile)
       server.watcher.on('add', onFile)
-      server.watcher.on('unlink', onFile)
+      // A removed template cannot be rebuilt alone; a full pass reconciles the
+      // compiled pairs with what is on disk.
+      server.watcher.on('unlink', (file: string) => {
+        if (disposed || !shouldWatch(file)) return
+        pending.clear()
+        schedule()
+      })
 
       server.httpServer?.once('close', cleanup)
     },

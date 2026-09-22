@@ -41,25 +41,25 @@ Run `task` to list every target. Most targets live in `tasks/`, one file per gro
 `Taskfile.yml` declares the shared variables, includes them (flattened — `task db:migrate`, never
 `task database:db:migrate`), and keeps the `compose:*` targets itself.
 
-| Command             | Description                                         |
-| ------------------- | --------------------------------------------------- |
-| `task dev`          | Vite dev server (:3000) + Go API server (:3080)     |
-| `task run`          | Run the CLI directly (debug build)                  |
-| `task build`        | Build the frontend and the Go binary (single file)  |
-| `task start`        | Run the production binary                           |
-| `task test`         | Run the frontend and backend tests                  |
-| `task typecheck`    | Run TypeScript type checking                        |
-| `task lint`         | Run all linters (Go and JS)                         |
-| `task check`        | Run `go vet` and the formatting check               |
-| `task format`       | Format all files (Go and JS)                        |
-| `task key:generate` | Generate the application secret keys                |
-| `task cert:generate`| Generate local HTTPS certificates into `storage/certs`|
-| `task cert:trust`   | Trust the local CA in the system trust store        |
-| `task rpc:generate` | Generate Go and TypeScript from the proto contracts |
-| `task rpc:stale`    | Fail when generated code is out of date             |
-| `task metrics:up`   | Start the observability stack (collector, VictoriaMetrics/Logs/Traces, Perses) |
-| `task compose:up`   | Start the docker compose services                   |
-| `task compose:down` | Stop the docker compose services                    |
+| Command             | Description                                            |
+| ------------------- | ------------------------------------------------------ |
+| `task dev`          | Vite dev server (:3000) + Go API server (:3080)        |
+| `task run`          | Run the CLI directly (debug build)                     |
+| `task build`        | Build the frontend and both Go binaries                |
+| `task start`        | Run the production binary                              |
+| `task test`         | Run the frontend and backend tests                     |
+| `task typecheck`    | Run TypeScript type checking                           |
+| `task lint`         | Run all linters (Go and JS)                            |
+| `task check`        | Run `go vet` and the formatting check                  |
+| `task format`       | Format all files (Go and JS)                           |
+| `task key:generate` | Generate the application secret keys                   |
+| `task cert:generate`| Generate local HTTPS certificates into `storage/certs` |
+| `task cert:trust`   | Trust the local CA in the system trust store           |
+| `task rpc:generate` | Generate Go and TypeScript from the proto contracts    |
+| `task rpc:stale`    | Fail when generated code is out of date                |
+| `task metrics:up`   | Start the observability stack (OpenTelemetry)          |
+| `task compose:up`   | Start the docker compose services                      |
+| `task compose:down` | Stop the docker compose services                       |
 
 ## The Short Version
 
