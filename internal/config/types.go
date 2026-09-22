@@ -364,6 +364,10 @@ type Mailer struct {
 	SMTPPassword string `koanf:"smtp_password" json:"smtp_password"`
 	// SMTPSecure selects implicit TLS on connect instead of STARTTLS.
 	SMTPSecure bool `koanf:"smtp_secure" json:"smtp_secure"`
+	// Timeout bounds one send: the dial, the handshake, the commands, and the
+	// message body. A submission that hangs must fail rather than hold the
+	// caller for as long as the kernel's own connect timeout allows.
+	Timeout time.Duration `koanf:"timeout" json:"timeout"`
 }
 
 // Queue holds the background task queue settings. The queue runs on the same

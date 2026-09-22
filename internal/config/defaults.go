@@ -172,6 +172,11 @@ func DefaultUserAgent() string {
 	return AppIdentifier + "/" + AppVersion + " (+https://github.com/riipandi/tango)"
 }
 
+// DefaultMailerTimeout bounds one mail submission. It is longer than the
+// outbound HTTP attempt: an SMTP session is several round trips, and the last
+// of them carries the whole message.
+const DefaultMailerTimeout = 15 * time.Second
+
 // DefaultAssetsURL is where the browser fetches static assets from when a
 // deployment names none: the /static mount the application itself serves.
 // A deployment may point app.assets_url at an S3 bucket or a CDN origin —
@@ -291,6 +296,7 @@ func Default() Config {
 			FromEmail: "mailer@example.com",
 			FromName:  "Tango Mailer",
 			SMTPPort:  587,
+			Timeout:   DefaultMailerTimeout,
 		},
 		RateLimit: RateLimit{
 			Driver: RateLimitDB,

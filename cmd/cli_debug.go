@@ -36,6 +36,7 @@ var rootCmd = &cli.Command{
 		configPrintCmd,
 		loggerSmokeCmd,
 		otelSmokeCmd,
+		mailerSmokeCmd,
 	},
 	Flags: []cli.Flag{
 		&cli.StringFlag{

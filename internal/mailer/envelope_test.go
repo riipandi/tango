@@ -1,0 +1,333 @@
+package mailer
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"io"
+	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
+	"net/mail"
+	"strings"
+	"testing"
+
+	"github.com/emersion/go-smtp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/riipandi/tango/internal/config"
+)
+
+func testConfig() config.Config {
+	cfg := config.Default()
+	cfg.Mailer.SMTPHost = "smtp.example.com"
+	cfg.Mailer.SMTPPort = 587
+	cfg.Mailer.FromEmail = "no-reply@example.com"
+	cfg.Mailer.FromName = "Tango"
+	return cfg
+}
+
+func testMailer(t *testing.T) *Mailer {
+	t.Helper()
+	client, err := New(testConfig(), nil)
+	require.NoError(t, err)
+	return client
+}
+
+// parsed is a rendered message taken apart the way a receiving client would.
+type parsed struct {
+	header mail.Header
+	body   string
+}
+
+func parseMessage(t *testing.T, raw []byte) parsed {
+	t.Helper()
+	msg, err := mail.ReadMessage(bufio.NewReader(strings.NewReader(string(raw))))
+	require.NoError(t, err)
+	body, err := readBody(msg)
+	require.NoError(t, err)
+	return parsed{header: msg.Header, body: body}
+}
+
+func readBody(msg *mail.Message) (string, error) {
+	body, err := io.ReadAll(msg.Body)
+	return string(body), err
+}
+
+func TestEnvelopeWritesBothBodiesAsAlternatives(t *testing.T) {
+	m := testMailer(t)
+	env, err := m.envelope(Message{
+		To:      []string{"user@example.com"},
+		Subject: "Hello",
+		HTML:    "<p>Hello</p>",
+		Text:    "Hello",
+	})
+	require.NoError(t, err)
+
+	msg := parseMessage(t, env.raw)
+	mediaType, params, err := mime.ParseMediaType(msg.header.Get("Content-Type"))
+	require.NoError(t, err)
+	assert.Equal(t, "multipart/alternative", mediaType)
+
+	// The text part comes first: a client that cannot show the HTML falls back
+	// to the last part it understands.
+	mr := multipart.NewReader(strings.NewReader(msg.body), params["boundary"])
+	var kinds []string
+	for {
+		part, err := mr.NextPart()
+		if err != nil {
+			break
+		}
+		partType, _, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
+		kinds = append(kinds, partType)
+	}
+	assert.Equal(t, []string{"text/plain", "text/html"}, kinds)
+}
+
+func TestEnvelopeWritesOneBodyWithoutAMultipartWrapper(t *testing.T) {
+	m := testMailer(t)
+	env, err := m.envelope(Message{To: []string{"user@example.com"}, Subject: "Hello", Text: "Hello"})
+	require.NoError(t, err)
+
+	msg := parseMessage(t, env.raw)
+	mediaType, params, err := mime.ParseMediaType(msg.header.Get("Content-Type"))
+	require.NoError(t, err)
+	assert.Equal(t, "text/plain", mediaType)
+	assert.Equal(t, "utf-8", params["charset"])
+	assert.NotContains(t, msg.body, "multipart")
+}
+
+func TestEnvelopeOmitsAnEmptyToHeader(t *testing.T) {
+	// A message may be addressed only through Cc. An empty "To:" line is worse
+	// than none at all, so the header is written only when it has an address.
+	m := testMailer(t)
+	env, err := m.envelope(Message{
+		Cc:      []string{"watcher@example.com"},
+		Subject: "Hello",
+		Text:    "Hello",
+	})
+	require.NoError(t, err)
+
+	msg := parseMessage(t, env.raw)
+	assert.Empty(t, msg.header.Get("To"))
+	assert.Equal(t, "watcher@example.com", msg.header.Get("Cc"))
+	assert.Equal(t, []string{"watcher@example.com"}, env.rcpt)
+}
+
+func TestEnvelopeKeepsBccOffTheHeaders(t *testing.T) {
+	m := testMailer(t)
+	env, err := m.envelope(Message{
+		To:      []string{"user@example.com"},
+		Bcc:     []string{"audit@example.com"},
+		Subject: "Hello",
+		Text:    "Hello",
+	})
+	require.NoError(t, err)
+
+	// The blind recipient is an envelope recipient only.
+	assert.Equal(t, []string{"user@example.com", "audit@example.com"}, env.rcpt)
+	assert.NotContains(t, string(env.raw), "audit@example.com")
+	assert.Empty(t, parseMessage(t, env.raw).header.Get("Bcc"))
+}
+
+func TestEnvelopeEncodesNonASCII(t *testing.T) {
+	m := testMailer(t)
+	env, err := m.envelope(Message{
+		To:      []string{"user@example.com"},
+		Subject: "Pendaftaran — selesai",
+		HTML:    "<p>Halo, Andi</p>",
+	})
+	require.NoError(t, err)
+
+	msg := parseMessage(t, env.raw)
+	// A header is ASCII on the wire, so a non-ASCII subject is an encoded word
+	// the client decodes back.
+	assert.NotContains(t, msg.header.Get("Subject"), "—")
+	subject, err := new(mime.WordDecoder).DecodeHeader(msg.header.Get("Subject"))
+	require.NoError(t, err)
+	assert.Equal(t, "Pendaftaran — selesai", subject)
+}
+
+func TestEnvelopeEncodesTheBodyAsQuotedPrintable(t *testing.T) {
+	m := testMailer(t)
+	env, err := m.envelope(Message{
+		To:      []string{"user@example.com"},
+		Subject: "Hello",
+		Text:    "Halo — panjang " + strings.Repeat("x", 200),
+	})
+	require.NoError(t, err)
+
+	msg := parseMessage(t, env.raw)
+	assert.Equal(t, "quoted-printable", msg.header.Get("Content-Transfer-Encoding"))
+	// Every line of an SMTP body is CRLF terminated; the transport rewraps
+	// anything longer.
+	for _, line := range strings.Split(strings.TrimSuffix(msg.body, "\r\n"), "\r\n") {
+		assert.LessOrEqual(t, len(line), 76, "quoted-printable lines stay under 76 characters")
+	}
+}
+
+func TestEnvelopeRefusesHeaderInjection(t *testing.T) {
+	m := testMailer(t)
+
+	_, err := m.envelope(Message{
+		To:      []string{"user@example.com\r\nBcc: attacker@example.com"},
+		Subject: "Hello",
+		Text:    "Hello",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "line break")
+
+	_, err = m.envelope(Message{
+		To:      []string{"user@example.com"},
+		Subject: "Hello",
+		Text:    "Hello",
+		Headers: map[string]string{"X-Note": "value\r\nBcc: attacker@example.com"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "line break")
+}
+
+func TestEnvelopeRefusesAnEmptyMessage(t *testing.T) {
+	m := testMailer(t)
+
+	for name, msg := range map[string]Message{
+		"no recipient": {Subject: "Hello", Text: "Hello"},
+		"no subject":   {To: []string{"user@example.com"}, Text: "Hello"},
+		"no body":      {To: []string{"user@example.com"}, Subject: "Hello"},
+		"bad address":  {To: []string{"not-an-address"}, Subject: "Hello", Text: "Hello"},
+	} {
+		_, err := m.envelope(msg)
+		assert.Error(t, err, name)
+	}
+}
+
+func TestSendReportsAnUnconfiguredMailer(t *testing.T) {
+	client, err := New(config.Default(), nil)
+	require.NoError(t, err)
+
+	assert.False(t, client.Configured())
+	assert.Equal(t, "mailer: not configured", client.String())
+
+	err = client.Send(t.Context(), Message{To: []string{"a@b.c"}, Subject: "x", Text: "x"})
+	assert.ErrorIs(t, err, ErrNotConfigured)
+}
+
+func TestSendRefusesWithoutAServer(t *testing.T) {
+	// The port is not listening, so the dial fails rather than hanging: the
+	// class a caller matches says the server was never reached.
+	cfg := config.Default()
+	cfg.Mailer.SMTPHost = "127.0.0.1"
+	cfg.Mailer.SMTPPort = 1
+	client, err := New(cfg, nil)
+	require.NoError(t, err)
+
+	err = client.Send(t.Context(), Message{
+		To:      []string{"user@example.com"},
+		Subject: "Hello",
+		Text:    "Hello",
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNetwork)
+	assert.NotErrorIs(t, err, ErrNotConfigured)
+}
+
+func TestSendHonoursACancelledContext(t *testing.T) {
+	client := testMailer(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := client.Send(ctx, Message{To: []string{"a@b.c"}, Subject: "x", Text: "x"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrCanceled)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestClassifyKeepsTheServerReplyCode(t *testing.T) {
+	// The first digit of an SMTP reply is the whole rule, and a caller acts on
+	// it differently: a 5xx is permanent, a 4xx may be sent again.
+	cases := map[string]struct {
+		code int
+		want error
+	}{
+		"permanent": {550, ErrRejected},
+		"transient": {451, ErrTemporary},
+	}
+	for name, tc := range cases {
+		err := classify(OpSend, "smtp.example.com:587", &smtp.SMTPError{Code: tc.code, Message: "no"})
+		assert.ErrorIs(t, err, tc.want, name)
+		var failure *Error
+		require.ErrorAs(t, err, &failure)
+		assert.Equal(t, tc.code, failure.Code)
+	}
+}
+
+func TestClassifyNamesTheOperationWithoutTheMessage(t *testing.T) {
+	err := classify(OpAuth, "smtp.example.com:587", &smtp.SMTPError{Code: 535, Message: "bad credentials"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrAuth)
+
+	text := err.Error()
+	assert.Contains(t, text, "auth")
+	assert.Contains(t, text, "smtp.example.com:587")
+	assert.Contains(t, text, "535")
+	// The server's own text is not repeated: it is the server's, and it can
+	// quote the credential that was tried.
+	assert.NotContains(t, text, "bad credentials")
+}
+
+func TestClassifyTreatsATransportFailureAsNetwork(t *testing.T) {
+	err := classify(OpDial, "smtp.example.com:587", errors.New("connection refused"))
+	assert.ErrorIs(t, err, ErrNetwork)
+}
+
+func TestLocalNameIsTheSendersDomain(t *testing.T) {
+	assert.Equal(t, "example.com", localName("no-reply@example.com"))
+	assert.Equal(t, "localhost", localName("no-reply"))
+}
+
+func TestAddressIsHostAndPort(t *testing.T) {
+	assert.Equal(t, "smtp.example.com:587", testMailer(t).Address())
+}
+
+func TestStringHidesTheCredential(t *testing.T) {
+	cfg := testConfig()
+	cfg.Mailer.SMTPUsername = "bot"
+	cfg.Mailer.SMTPPassword = "hunter2"
+	client, err := New(cfg, nil)
+	require.NoError(t, err)
+
+	text := client.String()
+	assert.NotContains(t, text, "hunter2")
+	assert.NotContains(t, text, "bot")
+	assert.Contains(t, text, "smtp.example.com:587")
+}
+
+func TestNewRefusesAHostWithoutAPort(t *testing.T) {
+	cfg := config.Default()
+	cfg.Mailer.SMTPHost = "smtp.example.com"
+	cfg.Mailer.SMTPPort = 0
+
+	_, err := New(cfg, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "smtp_port")
+}
+
+// decodeQuotedPrintable is the check the receiving client performs: the body
+// must decode back to what the caller wrote.
+func decodeQuotedPrintable(t *testing.T, body string) string {
+	t.Helper()
+	decoded, err := io.ReadAll(quotedprintable.NewReader(strings.NewReader(body)))
+	require.NoError(t, err)
+	return string(decoded)
+}
+
+func TestEnvelopeBodyDecodesBackToTheOriginal(t *testing.T) {
+	const body = "Halo — baris kedua dengan karakter non-ASCII: ünïcödé"
+	m := testMailer(t)
+	env, err := m.envelope(Message{To: []string{"a@b.c"}, Subject: "x", Text: body})
+	require.NoError(t, err)
+
+	msg := parseMessage(t, env.raw)
+	assert.Equal(t, body, strings.TrimRight(decodeQuotedPrintable(t, msg.body), "\r\n"))
+}

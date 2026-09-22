@@ -16,6 +16,7 @@ import (
 
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/fetcher"
+	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/scheduler"
@@ -81,6 +82,15 @@ file decides.`,
 		// configuration it cannot use fails the run here. Shutdown closes
 		// its idle connections with the injector.
 		if _, err = do.Invoke[*fetcher.Client](injector); err != nil {
+			return fmt.Errorf("serve: %w", err)
+		}
+
+		// The mailer and its templates are built here too: a template that
+		// cannot be parsed is a broken build, and a run should report that
+		// before it starts serving rather than on the first send. A run with
+		// no smtp_host builds a mailer that refuses to send, which is not a
+		// failure.
+		if _, err = do.Invoke[*mailer.Service](injector); err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}
 

@@ -43,7 +43,6 @@
         "/codegen/**",
         "/public/**",
         "/storage/**",
-        "/temp/**",
-        "/index.html"
+        "/temp/**"
     ]
 }

@@ -112,6 +112,14 @@ func TestValidationRejectsAPasswordWithoutAUsername(t *testing.T) {
 	assert.Contains(t, err.Error(), "mailer.smtp_username")
 }
 
+func TestValidationRejectsANonPositiveMailerTimeout(t *testing.T) {
+	// A submission with no budget would wait out the library's own five-minute
+	// default, which is not a bound this process chose.
+	err := resolveFile(t, `"mailer": {"timeout": 0}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "mailer.timeout")
+}
+
 func TestRedactedHidesTheSMTPPassword(t *testing.T) {
 	cfg, err := resolveAndValidate(t, config.Options{
 		ConfigFile: configFile(t, `"mailer": {"smtp_username": "bot", "smtp_password": "hunter2"}`),

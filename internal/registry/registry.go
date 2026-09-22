@@ -27,6 +27,7 @@ import (
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/jobs"
+	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/scheduler"
 	"github.com/riipandi/tango/internal/storage"
@@ -85,6 +86,23 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 			}),
 			health.WithInfoFunc(uptime),
 		), nil
+	})
+
+	do.Provide(injector, func(i do.Injector) (*mailer.Service, error) {
+		c := do.MustInvoke[*config.Config](i)
+		log := do.MustInvoke[*slog.Logger](i)
+		client, err := mailer.New(*c, log)
+		if err != nil {
+			return nil, err
+		}
+		// The templates are embedded, so a parse failure here is a broken
+		// build rather than a bad configuration; it still fails the run, before
+		// the listener opens, rather than the first send.
+		templates, err := mailer.NewTemplates(mailer.SenderFrom(*c))
+		if err != nil {
+			return nil, err
+		}
+		return mailer.NewService(client, templates), nil
 	})
 
 	do.Provide(injector, func(i do.Injector) (chi.Router, error) {

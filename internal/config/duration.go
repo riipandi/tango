@@ -28,6 +28,7 @@ var durationKeys = []string{
 	"fetcher.retry_wait",
 	"fetcher.timeout",
 	"log.otlp.timeout",
+	"mailer.timeout",
 	"otel.metrics.export_timeout",
 	"otel.metrics.interval",
 	"otel.tracing.batch_timeout",

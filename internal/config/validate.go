@@ -267,6 +267,7 @@ func (c Config) Validate() error {
 		"mailer.smtp_port: %d must be between 1 and 65535", c.Mailer.SMTPPort)
 	check(c.Mailer.SMTPPassword == "" || c.Mailer.SMTPUsername != "",
 		"mailer.smtp_username: required when mailer.smtp_password is set")
+	check(c.Mailer.Timeout > 0, "mailer.timeout: must be positive")
 
 	check(isOneOf(c.RateLimit.Driver, RateLimitDB, RateLimitKV),
 		"rate_limit.driver: %q is not one of %s", c.RateLimit.Driver, joinValues(RateLimitDB, RateLimitKV))
