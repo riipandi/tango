@@ -8,7 +8,7 @@ tasks:
     deps: [rpc:generate]
     cmds:
       - BUILD_MODE=release pnpm exec vite build
-      - BUILD_MODE=debug pnpm exec vite build
+      # - BUILD_MODE=debug pnpm exec vite build
 
   start:
     desc: Run the release binary on :3000
