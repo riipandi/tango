@@ -64,6 +64,7 @@ require (
 	golang.org/x/term v0.46.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
+	resty.dev/v3 v3.0.0-rc.4
 )
 
 require (

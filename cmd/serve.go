@@ -15,6 +15,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/scheduler"
@@ -75,6 +76,14 @@ file decides.`,
 		// server is what opens the pool: an unreachable database fails the run
 		// here, before the listener opens.
 		injector := registry.New(ctx, cfg, obs.MetricsHandler(), log.Slog())
+
+		// The outbound client is built before the listener opens. A
+		// configuration it cannot use fails the run here. Shutdown closes
+		// its idle connections with the injector.
+		if _, err = do.Invoke[*fetcher.Client](injector); err != nil {
+			return fmt.Errorf("serve: %w", err)
+		}
+
 		server, err := do.Invoke[*http.Server](injector)
 		if err != nil {
 			return fmt.Errorf("serve: %w", err)

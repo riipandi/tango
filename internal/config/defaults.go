@@ -147,6 +147,27 @@ const (
 // the only zone that needs no data file and reads the same on every host.
 const DefaultSchedulerTimezone = "UTC"
 
+// Defaults for the outbound HTTP client. The waits are long enough that a
+// blip is retried and short enough that a dead upstream is abandoned, and
+// the breaker opens only after more failures than one call can produce.
+const (
+	DefaultFetcherTimeout         = 10 * time.Second
+	DefaultFetcherRetryCount      = 2
+	DefaultFetcherRetryWait       = time.Second
+	DefaultFetcherRetryMaxWait    = 8 * time.Second
+	DefaultFetcherCircuitFailures = 5
+	DefaultFetcherCircuitSuccess  = 2
+	DefaultFetcherCircuitReset    = 30 * time.Second
+)
+
+// DefaultUserAgent is the product token the outbound client sends when a
+// deployment does not name its own. The comment is a URL a person can open.
+// It is not a browser token: an upstream that special-cases browsers would
+// be answering a client this process is not.
+func DefaultUserAgent() string {
+	return AppIdentifier + "/" + AppVersion + " (+https://github.com/riipandi/tango)"
+}
+
 // DefaultAssetsURL is where the browser fetches static assets from when a
 // deployment names none: the /static mount the application itself serves.
 // A deployment may point app.assets_url at an S3 bucket or a CDN origin —
@@ -179,6 +200,16 @@ func Default() Config {
 			// A budget the deployment can reason about: most of a small
 			// container's memory must not belong to the cache by default.
 			MaxMemory: DefaultCacheMaxMemory,
+		},
+		Fetcher: Fetcher{
+			UserAgent:               DefaultUserAgent(),
+			Timeout:                 DefaultFetcherTimeout,
+			RetryCount:              DefaultFetcherRetryCount,
+			RetryWait:               DefaultFetcherRetryWait,
+			RetryMaxWait:            DefaultFetcherRetryMaxWait,
+			CircuitFailureThreshold: DefaultFetcherCircuitFailures,
+			CircuitSuccessThreshold: DefaultFetcherCircuitSuccess,
+			CircuitResetTimeout:     DefaultFetcherCircuitReset,
 		},
 		Database: Database{
 			MaxConns:        10,

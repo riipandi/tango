@@ -83,6 +83,8 @@ Run `task` to list every target. Most targets live in `tasks/`, one file per gro
   [`internal/health/README.md`](./internal/health/README.md).
 - **Cache & key-value store** — the cache is off by default; the optional Valkey backend
   (`kvstore.enable`) is never required. Details: [`internal/cache/README.md`](./internal/cache/README.md).
+- **Outbound HTTP** — one client for external services, with timeouts, retries, and a
+  circuit breaker. Details: [`internal/fetcher/README.md`](./internal/fetcher/README.md).
 - **File storage** — chunked, content-addressed uploads over the local data directory or S3,
   manifest in Postgres, uploads on the durable queue. Details:
   [`internal/storage/README.md`](./internal/storage/README.md).

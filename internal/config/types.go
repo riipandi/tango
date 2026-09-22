@@ -18,6 +18,7 @@ type Config struct {
 	Auth      Auth      `koanf:"auth" json:"auth"`
 	Cache     Cache     `koanf:"cache" json:"cache"`
 	Database  Database  `koanf:"database" json:"database"`
+	Fetcher   Fetcher   `koanf:"fetcher" json:"fetcher"`
 	KVStore   KVStore   `koanf:"kvstore" json:"kvstore"`
 	Log       Log       `koanf:"log" json:"log"`
 	Mailer    Mailer    `koanf:"mailer" json:"mailer"`
@@ -100,6 +101,42 @@ type Database struct {
 	// SearchPath and Timezone are applied to every pooled connection.
 	SearchPath string `koanf:"search_path" json:"search_path"`
 	Timezone   string `koanf:"timezone" json:"timezone"`
+}
+
+// Fetcher holds the outbound HTTP client used to call external services.
+//
+// One client serves every integration: a base URL is optional because callers
+// pass absolute URLs, and the resilience values apply to every call so a
+// feature cannot quietly retry harder than the deployment allows.
+type Fetcher struct {
+	// BaseURL is prepended to a relative request URL. Empty means every
+	// request carries its own absolute URL. It never carries userinfo: a
+	// credential belongs on the request, where it is not part of the
+	// configured address.
+	BaseURL string `koanf:"base_url" json:"base_url"`
+	// UserAgent is the product token sent on every request. It names this
+	// application. It is not a browser token and not another client's token.
+	UserAgent string `koanf:"user_agent" json:"user_agent"`
+	// Timeout bounds one attempt. A caller's context deadline still ends the
+	// whole call, retries included.
+	Timeout time.Duration `koanf:"timeout" json:"timeout"`
+	// RetryCount is how many extra attempts follow a transient failure.
+	// Zero disables retry. POST and PATCH are not retried: a second
+	// submission can apply the operation twice.
+	RetryCount int `koanf:"retry_count" json:"retry_count"`
+	// RetryWait is the floor of the exponential backoff, and RetryMaxWait
+	// is the ceiling. The wait is jittered so retries from many processes
+	// do not land together.
+	RetryWait    time.Duration `koanf:"retry_wait" json:"retry_wait"`
+	RetryMaxWait time.Duration `koanf:"retry_max_wait" json:"retry_max_wait"`
+	// CircuitFailureThreshold is how many failed attempts open the breaker.
+	// It stays above RetryCount so the retries of one call cannot open it.
+	CircuitFailureThreshold int `koanf:"circuit_failure_threshold" json:"circuit_failure_threshold"`
+	// CircuitSuccessThreshold is how many successful probes close an open
+	// breaker. CircuitResetTimeout is how long it stays open before the
+	// first probe.
+	CircuitSuccessThreshold int           `koanf:"circuit_success_threshold" json:"circuit_success_threshold"`
+	CircuitResetTimeout     time.Duration `koanf:"circuit_reset_timeout" json:"circuit_reset_timeout"`
 }
 
 // KVStore holds the optional key-value backend settings, for a Valkey or Redis

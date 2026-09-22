@@ -24,6 +24,7 @@ import (
 	"github.com/riipandi/tango/internal/cache"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/queue"
@@ -43,6 +44,12 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 
 	do.ProvideValue(injector, &cfg)
 	do.ProvideValue(injector, logger)
+
+	do.Provide(injector, func(i do.Injector) (*fetcher.Client, error) {
+		c := do.MustInvoke[*config.Config](i)
+		log := do.MustInvoke[*slog.Logger](i)
+		return fetcher.New(*c, log)
+	})
 
 	do.Provide(injector, func(i do.Injector) (*datastore.Postgres, error) {
 		c := do.MustInvoke[*config.Config](i)

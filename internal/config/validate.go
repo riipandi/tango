@@ -64,6 +64,23 @@ func (c Config) Validate() error {
 	check(c.Database.SearchPath != "", "database.search_path: must not be empty")
 	check(c.Database.Timezone != "", "database.timezone: must not be empty")
 
+	check(c.Fetcher.BaseURL == "" || isHTTPURLWithoutUserinfo(c.Fetcher.BaseURL),
+		"fetcher.base_url: %q must be an absolute http or https URL without userinfo", c.Fetcher.BaseURL)
+	check(isHeaderValue(c.Fetcher.UserAgent),
+		"fetcher.user_agent: must be a single header value of at most 256 characters")
+	check(c.Fetcher.Timeout > 0, "fetcher.timeout: must be positive")
+	check(c.Fetcher.RetryCount >= 0 && c.Fetcher.RetryCount <= maxFetcherRetries,
+		"fetcher.retry_count: %d must be between 0 and %d", c.Fetcher.RetryCount, maxFetcherRetries)
+	check(c.Fetcher.RetryWait > 0, "fetcher.retry_wait: must be positive")
+	check(c.Fetcher.RetryMaxWait >= c.Fetcher.RetryWait,
+		"fetcher.retry_max_wait: must not be shorter than fetcher.retry_wait")
+	check(c.Fetcher.CircuitFailureThreshold > c.Fetcher.RetryCount,
+		"fetcher.circuit_failure_threshold: %d must exceed fetcher.retry_count: %d",
+		c.Fetcher.CircuitFailureThreshold, c.Fetcher.RetryCount)
+	check(c.Fetcher.CircuitSuccessThreshold > 0, "fetcher.circuit_success_threshold: must be positive")
+	check(c.Fetcher.CircuitResetTimeout >= c.Fetcher.Timeout,
+		"fetcher.circuit_reset_timeout: must not be shorter than fetcher.timeout")
+
 	check(isOneOf(c.Log.Level, LogDebug, LogInfo, LogWarn, LogError),
 		"log.level: %q is not one of %s", c.Log.Level, joinValues(LogDebug, LogInfo, LogWarn, LogError))
 	check(len(c.Log.Transport) > 0, "log.transport: at least one transport is required")
@@ -516,6 +533,10 @@ func isPostgresDSN(value string) bool {
 	return err == nil
 }
 
+// maxFetcherRetries is the most extra attempts one call may make. Past this
+// a typo in the file becomes a retry storm against someone else's service.
+const maxFetcherRetries = 5
+
 // isHTTPURL reports whether value is an absolute http or https URL.
 func isHTTPURL(value string) bool {
 	parsed, err := url.Parse(value)
@@ -526,6 +547,31 @@ func isHTTPURL(value string) bool {
 		return false
 	}
 	return parsed.Host != ""
+}
+
+// isHTTPURLWithoutUserinfo reports whether value is an absolute http or https
+// URL that carries no userinfo. Userinfo in a configured base URL is a
+// credential stored beside the address, and it would be sent on every call.
+func isHTTPURLWithoutUserinfo(value string) bool {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.User != nil {
+		return false
+	}
+	return isHTTPURL(value)
+}
+
+// isHeaderValue reports whether value can be one HTTP header field value:
+// non-empty, no control characters, and short enough to be a product token.
+func isHeaderValue(value string) bool {
+	if value == "" || len(value) > 256 {
+		return false
+	}
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // corsWildcard is the origin entry that opens the policy to every origin.

@@ -8,7 +8,7 @@ Full design rationale per package: **`llms/architecture.md`** — read the secti
 
 - Built from `cmd/`. Commands: `serve`, `migrate:up|down|status|version` (plus `migrate:create|reset|seed|validate` in debug builds), `db:export`/`db:import`, `key:generate`/`key:rotate`, `health` (framework: `urfave/cli/v3`). Implemented: `key:generate`, `health`, every `migrate:*`, `db:export`/`db:import`, and `serve` (the basic surface: `/api` landing endpoint, `/api/healthz`, the SPA mount, the metrics exposition, and the request id, logger, recoverer, CORS, timeout, and rate limit middleware; ConnectRPC routes and the auth middleware still wait for their pieces). The rest print `not yet implemented`.
 - The SPA (React 19 + TanStack + Vite) builds into `web/output/` and embeds into the same binary. The Vite dev server proxies `/api`, `/rpc`, `/.well-known`, `/static` to the Go server on `:3080`.
-- Mid-rebuild. Implemented: `database`, `internal/{config,datastore,health,logger,cache,queue,jobs,scheduler,storage}`, `pkg/{crypto,envfile,jwtutils,responder,validate,testutils,printext}`, `api/connect`, `email/templates`, `web`. Scaffolds only: most of `internal/**`, all of `modules/**` are single-line packages with no API.
+- Mid-rebuild. Implemented: `database`, `internal/{config,datastore,health,logger,cache,fetcher,queue,jobs,scheduler,storage}`, `pkg/{crypto,envfile,jwtutils,responder,validate,testutils,printext}`, `api/connect`, `email/templates`, `web`. Scaffolds only: most of `internal/**`, all of `modules/**` are single-line packages with no API.
 - Never add, remove, or rename a top-level package or directory without an explicit request. Extend an existing package instead.
 - Porting a plan or doc into code means implementing it, not copying it. Several docs describe a larger surface than the code has.
 
@@ -49,6 +49,7 @@ Implemented today — treat as the contract. One line each here; the reasoning, 
 - `pkg/responder` / `pkg/validate` — API envelope + request validation; no hand-built envelopes. `pkg/jwtutils` — typed JWT claims. `pkg/testutils` — shared testcontainers.
 - `internal/datastore` — the single `pgxpool`, `Querier`/`WithTx`, `OpenMigrationDB` for goose, optional `Valkey` client (opt-in via `kvstore.enable`).
 - `internal/cache` — one `Cache` contract; Noop whenever caching does not run; in-memory driver (fastcache design, maphash, collision-safe) and Valkey driver (`tango:cache:` prefix).
+- `internal/fetcher` — outbound HTTP client on Resty (`resty.dev/v3`); one process-wide client from `config.Fetcher`; attempt timeout, jittered backoff, count-based circuit breaker; errors distinguish network, timeout, cancellation, retry exhaustion, an open circuit, and HTTP status; bodies and credentials are not logged.
 - `internal/health` — check engine; check names are generic (`database`, `kvstore`, `storage`), never the product; JSON wire form in `helper.go`: `took_ms`, details ordered, info flattened to top level.
 - `internal/logger` — LogLayer behind `*slog.Logger`; sinks `console|file|otlp`; `Slog()` is the only frontend; async zero-drop console/file sinks; `echoSink` fallback on stderr.
 - `internal/observer` — traces and metrics; explicit exporter options (no env fallback); Prometheus bridge at `otel.metrics.prometheus_path`.
