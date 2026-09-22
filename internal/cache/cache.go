@@ -30,12 +30,23 @@ type Cache interface {
 	// found and not expired. The returned slice is dst grown by append, so
 	// it is valid until the caller reuses dst.
 	Get(ctx context.Context, dst []byte, key string) ([]byte, bool)
+	// GetMany reads the entries the named keys hold and returns only the
+	// ones found and not expired. The map is the price a batch pays for
+	// its round-trip saving on the remote driver: a single hot read stays
+	// on Get, which appends into the caller's buffer and allocates
+	// nothing.
+	GetMany(ctx context.Context, keys []string) map[string][]byte
 	// Set stores value under key until ttl elapses. A ttl of zero or less
 	// means the driver's configured default. Set overwrites the value of
 	// the same key; it never disturbs an entry under a different key.
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration)
+	// SetMany stores every item until ttl elapses, each the way Set stores
+	// it. A ttl of zero or less means the driver's configured default.
+	SetMany(ctx context.Context, items map[string][]byte, ttl time.Duration)
 	// Del removes the entry under key, if any.
 	Del(ctx context.Context, key string)
+	// DelMany removes the entries under every named key, if any.
+	DelMany(ctx context.Context, keys []string)
 }
 
 // Noop is the driver that caches nothing: every read is a miss, every write
@@ -48,11 +59,20 @@ type Noop struct{}
 // Get always misses.
 func (Noop) Get(context.Context, []byte, string) ([]byte, bool) { return nil, false }
 
+// GetMany always misses.
+func (Noop) GetMany(context.Context, []string) map[string][]byte { return nil }
+
 // Set drops the write.
 func (Noop) Set(context.Context, string, []byte, time.Duration) {}
 
+// SetMany drops the writes.
+func (Noop) SetMany(context.Context, map[string][]byte, time.Duration) {}
+
 // Del drops the delete.
 func (Noop) Del(context.Context, string) {}
+
+// DelMany drops the deletes.
+func (Noop) DelMany(context.Context, []string) {}
 
 // New hands back the driver the configuration names, or Noop where caching
 // does not run:

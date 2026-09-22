@@ -22,6 +22,16 @@ const memoryChunkSize = 64 << 10
 // the count stays a power of two.
 const memoryShardCount = 64
 
+// cacheEpoch is the monotonic baseline every expiry lives against: an entry
+// stores its deadline as an offset from it, so a wall-clock step — an NTP
+// correction, a manual change — can neither age an entry early nor
+// resurrect an expired one. time.Since reads the process's monotonic clock,
+// which never jumps.
+var cacheEpoch = time.Now()
+
+// monotonicNow reads the clock expiry deadlines are measured on.
+func monotonicNow() int64 { return int64(time.Since(cacheEpoch)) }
+
 // Memory is the in-process Cache driver.
 //
 // The design is adopted from VictoriaMetrics/fastcache without the
@@ -69,7 +79,8 @@ type memoryShard struct {
 
 // memoryEntry locates the bytes of one entry: the key and the value sit
 // contiguously in the shard's ring, starting at chunk/off, and the value may
-// reach past that chunk into the following ones. The fields are plain ints —
+// reach past that chunk into the following ones. expiresAt is measured on
+// the monotonic clock (see cacheEpoch). The fields are plain ints —
 // no pointer among them keeps the index outside of the garbage collector's
 // work.
 type memoryEntry struct {
@@ -121,7 +132,7 @@ func (c *Memory) Get(_ context.Context, dst []byte, key string) ([]byte, bool) {
 
 	shard.mu.RLock()
 	entry, ok := shard.lookup(h, key)
-	if ok && time.Now().UnixNano() < entry.expiresAt {
+	if ok && entry.expiresAt > monotonicNow() {
 		dst = shard.appendValue(dst, entry)
 		shard.mu.RUnlock()
 		return dst, true
@@ -152,7 +163,7 @@ func (c *Memory) Set(_ context.Context, key string, value []byte, ttl time.Durat
 
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
-	shard.set(h, key, value, time.Now().Add(ttl).UnixNano())
+	shard.set(h, key, value, monotonicNow()+int64(ttl))
 }
 
 // Del implements Cache. Deleting removes the entry whose key bytes match; a
@@ -170,6 +181,33 @@ func (c *Memory) Del(_ context.Context, key string) {
 	}
 	if entry, ok := shard.collisions[h]; ok && shard.matches(entry, key) {
 		delete(shard.collisions, h)
+	}
+}
+
+// GetMany implements Cache. The in-process driver has no round trip to
+// amortize, so a batch is a loop over Get — the sharded locks already keep
+// the keys out of each other's way.
+func (c *Memory) GetMany(ctx context.Context, keys []string) map[string][]byte {
+	found := make(map[string][]byte, len(keys))
+	for _, key := range keys {
+		if value, ok := c.Get(ctx, nil, key); ok {
+			found[key] = value
+		}
+	}
+	return found
+}
+
+// SetMany implements Cache.
+func (c *Memory) SetMany(ctx context.Context, items map[string][]byte, ttl time.Duration) {
+	for key, value := range items {
+		c.Set(ctx, key, value, ttl)
+	}
+}
+
+// DelMany implements Cache.
+func (c *Memory) DelMany(ctx context.Context, keys []string) {
+	for _, key := range keys {
+		c.Del(ctx, key)
 	}
 }
 

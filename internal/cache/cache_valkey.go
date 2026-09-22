@@ -29,6 +29,7 @@ type Valkey struct {
 // a test free of a real server by handing in a mock of the same shape.
 type valkeyClient interface {
 	Do(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult
+	DoMulti(ctx context.Context, multi ...valkey.Completed) []valkey.ValkeyResult
 	B() valkey.Builder
 }
 
@@ -70,4 +71,72 @@ func (c *Valkey) Set(ctx context.Context, key string, value []byte, ttl time.Dur
 // Del implements Cache.
 func (c *Valkey) Del(ctx context.Context, key string) {
 	c.client.Do(ctx, c.client.B().Del().Key(c.prefix+key).Build())
+}
+
+// GetMany implements Cache. One MGET answers for every key — the round trip
+// a batch exists to save. A key the backend does not hold, and a failure of
+// any kind, are a miss, never an error.
+func (c *Valkey) GetMany(ctx context.Context, keys []string) map[string][]byte {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	resp, err := c.client.Do(ctx, c.client.B().Mget().Key(c.prefixed(keys)...).Build()).ToArray()
+	if err != nil {
+		return nil
+	}
+
+	found := make(map[string][]byte, len(keys))
+	for i, msg := range resp {
+		if msg.IsNil() {
+			continue
+		}
+		value, err := msg.AsBytes()
+		if err != nil {
+			continue
+		}
+		found[keys[i]] = value
+	}
+	return found
+}
+
+// SetMany implements Cache. The writes travel as one pipeline of SETs — one
+// round trip, the server applies each entry on its own.
+func (c *Valkey) SetMany(ctx context.Context, items map[string][]byte, ttl time.Duration) {
+	if len(items) == 0 {
+		return
+	}
+	if ttl <= 0 {
+		ttl = c.ttl
+	}
+
+	cmds := make([]valkey.Completed, 0, len(items))
+	for key, value := range items {
+		// BinaryString hands the bytes to the command without a copy: the
+		// builder owns them for the duration of the request.
+		cmds = append(cmds, c.client.B().Set().
+			Key(c.prefix+key).
+			Value(valkey.BinaryString(value)).
+			Px(ttl).
+			Build())
+	}
+	c.client.DoMulti(ctx, cmds...)
+}
+
+// DelMany implements Cache. One DEL removes every named entry in a single
+// round trip.
+func (c *Valkey) DelMany(ctx context.Context, keys []string) {
+	if len(keys) == 0 {
+		return
+	}
+	c.client.Do(ctx, c.client.B().Del().Key(c.prefixed(keys)...).Build())
+}
+
+// prefixed names the keys within the namespace the driver owns.
+func (c *Valkey) prefixed(keys []string) []string {
+	names := make([]string, len(keys))
+	for i, key := range keys {
+		names[i] = c.prefix + key
+	}
+	return names
 }

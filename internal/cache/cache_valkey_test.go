@@ -93,6 +93,22 @@ func TestValkeyDeletes(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestValkeyBatchRoundTrips(t *testing.T) {
+	c, _ := newValkeyCache(t)
+
+	c.SetMany(t.Context(), map[string][]byte{"a": []byte("1"), "b": []byte("2")}, 0)
+
+	// One MGET answers for the whole batch, and a key the backend does not
+	// hold is simply absent from the answer.
+	found := c.GetMany(t.Context(), []string{"a", "b", "absent"})
+	require.Len(t, found, 2)
+	assert.Equal(t, "1", string(found["a"]))
+	assert.Equal(t, "2", string(found["b"]))
+
+	c.DelMany(t.Context(), []string{"a", "b"})
+	assert.Empty(t, c.GetMany(t.Context(), []string{"a", "b"}))
+}
+
 func TestValkeyTreatsABrokenBackendAsAMiss(t *testing.T) {
 	// A closed backend makes every read fail: a cache may degrade, the
 	// feature behind it may not. The builder stays real (a command is
@@ -110,9 +126,13 @@ func TestValkeyTreatsABrokenBackendAsAMiss(t *testing.T) {
 	assert.False(t, ok)
 	assert.Empty(t, value)
 
-	// Writes and deletes must not panic on the failure either.
+	// Writes, batch writes, and deletes must not panic on the failure
+	// either; a batch read is a miss.
 	c.Set(t.Context(), "k", []byte("v"), 0)
+	c.SetMany(t.Context(), map[string][]byte{"k": []byte("v")}, 0)
 	c.Del(t.Context(), "k")
+	c.DelMany(t.Context(), []string{"k"})
+	assert.Nil(t, c.GetMany(t.Context(), []string{"k"}))
 }
 
 // brokenClient answers every command with an error, the state of a backend
@@ -123,6 +143,10 @@ type brokenClient struct {
 
 func (brokenClient) Do(context.Context, valkey.Completed) valkey.ValkeyResult {
 	return valkey.NewErrorResult(assert.AnError)
+}
+
+func (brokenClient) DoMulti(context.Context, ...valkey.Completed) []valkey.ValkeyResult {
+	return []valkey.ValkeyResult{valkey.NewErrorResult(assert.AnError)}
 }
 
 func (b brokenClient) B() valkey.Builder { return b.build }

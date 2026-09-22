@@ -228,6 +228,18 @@ func TestNewMemoryScalesTheShardsWithTheBudget(t *testing.T) {
 	assert.Equal(t, memoryShardCount, len(NewMemory(0, time.Minute).shards))
 }
 
+func TestMemoryBatchRoundTrips(t *testing.T) {
+	c := NewMemory(0, 5*time.Minute)
+
+	c.SetMany(t.Context(), map[string][]byte{"a": []byte("1"), "b": []byte("2")}, 0)
+
+	found := c.GetMany(t.Context(), []string{"a", "b", "absent"})
+	assert.Equal(t, map[string][]byte{"a": []byte("1"), "b": []byte("2")}, found)
+
+	c.DelMany(t.Context(), []string{"a", "b"})
+	assert.Empty(t, c.GetMany(t.Context(), []string{"a", "b"}))
+}
+
 func TestMemoryResetDropsEveryEntry(t *testing.T) {
 	c := NewMemory(0, 5*time.Minute)
 	for i := range 10 {
