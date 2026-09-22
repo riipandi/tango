@@ -2,7 +2,7 @@
 
 Modular-monolith Go boilerplate (`tango`): one binary serving an HTTP/ConnectRPC API, an embedded SPA, and a CLI.
 
-Full design rationale per package: **`llms/architecture.md`** — read the section for the package you are changing before assuming behavior. This file holds the rules; that file holds the reasoning.
+Full design rationale per package: **`.llms/architecture.md`** — read the section for the package you are changing before assuming behavior. This file holds the rules; that file holds the reasoning.
 
 ## Project Overview
 
@@ -32,7 +32,7 @@ Full design rationale per package: **`llms/architecture.md`** — read the secti
 
 ## Architecture
 
-Implemented today — treat as the contract. One line each here; the reasoning, invariants, and traps per package live in `llms/architecture.md`.
+Implemented today — treat as the contract. One line each here; the reasoning, invariants, and traps per package live in `.llms/architecture.md`.
 
 - `database/migrations/` — goose SQL migrations, the single source of schema truth. Never embed DDL or create tables at runtime.
 - `database/migrator.go` — engine over goose v3; returns plain structs so `cmd/` never imports goose; runs on one pinned connection, never the pool.
@@ -58,14 +58,14 @@ Implemented today — treat as the contract. One line each here; the reasoning, 
 - `internal/jobs` — concrete jobs on the queue; recurring jobs re-enqueue their own next instance.
 - `internal/scheduler` — durable cron scheduler; Postgres row lock claims a tick, the queue executes it.
 - `internal/storage` — chunked file engine over local FS or S3; content-addressed chunks, manifest in Postgres, staging watcher, upload on the durable queue; flexible multi-purpose keys (`storage.Key`), per-file JSONB metadata, checkpointed resumable uploads, progress counters (endpoint stubbed, see architecture.md TODO(notification)); `BeforeSyncHook`/`AfterSyncHook` extension points (nil default, idempotence contract).
-- `internal/config` (implemented) / `internal/kernel`, `internal/transport`, `internal/registry` — see `llms/architecture.md` for the full contract of each.
+- `internal/config` (implemented) / `internal/kernel`, `internal/transport`, `internal/registry` — see `.llms/architecture.md` for the full contract of each.
 - `api/connect/*.proto` — ConnectRPC contracts. `email/templates` — React Email sources. `web` — SPA embed and static serving.
 
 ## Library Documentation
 
 - Before writing code against a third-party package, look it up instead of guessing: Context7 MCP (`mcp_context7__resolve_library_id`, then `mcp_context7__query_docs`) for API usage, DeepWiki MCP (`mcp_deepwiki__ask_question` with `owner/repo`) for design intent. Use when the answer depends on a version, the README is thin, or two candidates are compared. Do not use for this repo's own code — read the source.
 - The pinned source of truth is the module cache (`go env GOMODCACHE`). When docs and code disagree, the code wins; say so and follow the code.
-- Settled library comparisons (cache, kvstore client, schedulers, River, LogLayer/OTel pins) are recorded in `llms/architecture.md` → "Library decision records", so they do not get re-run. Record a new outcome there when a comparison settles a decision.
+- Settled library comparisons (cache, kvstore client, schedulers, River, LogLayer/OTel pins) are recorded in `.llms/architecture.md` → "Library decision records", so they do not get re-run. Record a new outcome there when a comparison settles a decision.
 - The OTel `otel/log` pin (v0.19.0, three modules held for the `otellog` transport) is fragile: after any `go get`, re-check the pinned versions and `go mod edit -require` them back.
 
 ## Conventions
@@ -111,7 +111,7 @@ Implemented today — treat as the contract. One line each here; the reasoning, 
 - The root `--env-file` flag adds a dotenv file to the table the config file's directives resolve from; it is not a config layer and never a write target. A subcommand that writes a file (`key:generate`) declares its own flag of that name.
 - `app.config.json` is required and is the single source of truth, so resolution is **deferred**: `initConfig` stores the result *and* the failure on the context; only the command that reads it reports it. Never move resolution into a hard failure in `Before` — it would break `config:generate` and `key:generate`.
 - Never print a literal secret. `Redacted`/`RedactDSN`/`RedactKVURL` cover every rendering path; all read the one `secretKeys` list, so a new secret is added there and nowhere else.
-- Keep the README lean — setup steps, task table, certificates, deployment, license — and free of architecture detail. The "Implemented today" list here, `llms/architecture.md`, and the code are the source of truth for what runs; update them when a scaffold package becomes real.
+- Keep the README lean — setup steps, task table, certificates, deployment, license — and free of architecture detail. The "Implemented today" list here, `.llms/architecture.md`, and the code are the source of truth for what runs; update them when a scaffold package becomes real.
 - Do not require valkey, S3, or SMTP for the default local path; Postgres plus local storage must be enough.
 - Never rewrite a dotenv file the user owns without consent. Destructive overwrite needs an explicit flag.
 - Do not run destructive database commands (`migrate:reset`, volume removal) against a database holding state you did not create.
@@ -130,5 +130,5 @@ Never run: `git reset --hard`, `git checkout .`, `git clean -fd`, `git stash`, `
 
 ## Related Agent Instructions
 
-- `llms/architecture.md` — per-package design rationale and library decision records (agent-facing; `docs/` is for humans).
+- `.llms/architecture.md` — per-package design rationale and library decision records (agent-facing; `docs/` is for humans).
 - `AGENTS.md` is the single instruction source for all agents (Codex, Elph, Copilot, Cursor, Gemini CLI).

@@ -28,7 +28,7 @@ type DB interface {
 
 // Progress is the upload state of one key, the data a status endpoint reads
 // while the queue works. The transport that carries it to a frontend is not
-// wired yet — see the TODO in llms/architecture.md, storage section.
+// wired yet — see the TODO in .llms/architecture.md, storage section.
 type Progress struct {
 	// Status is pending while chunks travel, ready once the manifest is
 	// committed.

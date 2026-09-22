@@ -5,10 +5,10 @@ request checklist: one request per row, named `<METHOD> <path>` for REST and
 `<METHOD> /rpc/<package>.<Service>/<Method>` for ConnectRPC. Status vocabulary:
 **done** (implemented with test evidence in the Evidence column), **partial**
 (implemented with a noted deviation), **planned** (unimplemented — owning phase
-named), **excluded** (out of scope per `llms/tango-deviations.md` — never parity work).
+named), **excluded** (out of scope per `.llms/tango-deviations.md` — never parity work).
 
 Tango-only extensions (not in the upstream spec) and all structural deviations (envelope,
-pagination, snake_case) are documented in `llms/tango-deviations.md` — read it before porting
+pagination, snake_case) are documented in `.llms/tango-deviations.md` — read it before porting
 upstream handlers.
 
 ## Transport split
@@ -28,7 +28,7 @@ Cookie presence never authorizes an RPC.
 Every procedure is called with `POST`; `GET` is reserved for procedures that declare
 `idempotency_level = NO_SIDE_EFFECTS`, and no procedure in `api/connect/` does, so a `GET` on any
 procedure answers `405` with `Allow: POST` (`internal/transport.TestRPCRejectsWrongMethods`).
-`llms/connectrpc-plan/endpoint-reference.md`
+`.llms/connectrpc-plan/endpoint-reference.md`
 is the authoritative transport decision record and service/method matrix; the retained REST set is
 pinned by `internal/registry.TestRetainedRESTInventory` and the machine-credential boundary by
 `internal/registry.TestRPCMachineCredentialBoundary`.
@@ -62,7 +62,7 @@ password changes, and reset requests/completions without logging secrets.
 ## MFA TOTP (tango-only)
 
 Upstream Pocket ID has no TOTP; this surface is tango-only and follows the database contract in
-`llms/porting-plan/database.md` (`user_mfa_totp`, `user_mfa_recovery_codes`,
+`.llms/porting-plan/database.md` (`user_mfa_totp`, `user_mfa_recovery_codes`,
 `user_mfa_pending`).
 
 | Method | Procedure | Summary / Yaak Title | Status | Evidence |
@@ -86,7 +86,7 @@ requires the current password and clears every MFA row.
 ## Webhooks (tango-only)
 
 Upstream Pocket ID has no webhooks; this surface is tango-only and follows the database contract
-in `llms/porting-plan/database.md` (`webhook_endpoints`, `webhook_deliveries`,
+in `.llms/porting-plan/database.md` (`webhook_endpoints`, `webhook_deliveries`,
 `webhook_delivery_attempts`).
 
 | Method | Procedure | Summary / Yaak Title | Status | Evidence |

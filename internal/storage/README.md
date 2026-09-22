@@ -41,7 +41,7 @@ runs on the durable queue.
   owner); written at stage time, rewritten by `UpdateMetadata`, carried but never read by the
   engine
 - **Upload progress** — the workers bump `chunks_done` as chunks land; `Manager.Progress`
-  reads it (the endpoint wiring is still a stub — see `llms/architecture.md`,
+  reads it (the endpoint wiring is still a stub — see `.llms/architecture.md`,
   TODO(notification))
 - **Upload hooks** — `WithBeforeSync` (the gate: validate, preprocess) and `WithAfterSync`
   (the post-processing point: thumbnail, notification), nil by default, idempotence their
