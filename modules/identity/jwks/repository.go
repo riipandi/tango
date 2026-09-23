@@ -30,22 +30,17 @@ func NewRepository(db datastore.Querier) *Repository {
 // take the published keyset down for every client.
 func (r *Repository) ActiveSigningKeys(ctx context.Context) ([]StoredKey, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select(
-		ColumnKeyID,
-		ColumnAlgorithm,
-		ColumnPublicKey,
-		ColumnExpiresAt,
-	)
+	sb.Select("key_id", "algorithm", "public_key", "expires_at")
 	sb.From(TableJWKS)
 	sb.Where(
-		sb.Equal(ColumnIsActive, true),
-		sb.Equal(ColumnUseFor, UseSignature),
+		sb.Equal("is_active", true),
+		sb.Equal("use_for", UseSignature),
 		sb.Or(
-			sb.IsNull(ColumnExpiresAt),
-			sb.GreaterThan(ColumnExpiresAt, time.Now()),
+			sb.IsNull("expires_at"),
+			sb.GreaterThan("expires_at", time.Now()),
 		),
 	)
-	sb.OrderBy(ColumnKeyID)
+	sb.OrderBy("key_id")
 	query, args := sb.Build()
 
 	rows, err := r.db.Query(ctx, query, args...)

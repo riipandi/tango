@@ -41,7 +41,7 @@ The default records a fresh database needs, behind `migrate:seed`. `Seeder` is `
 
 ### modules/identity/<feature>/schema.go
 
-The table constants and row structs for that feature, so a table rename touches one line and a repository or seeder never hardcodes a name. `db` tags are the column names the query builder reads; structs list only the columns the application writes, so a migration can add a column with a default without touching Go code.
+The table constants and row structs for that feature, so a table rename touches one line and a repository or seeder never hardcodes a name. A table constant is the one constant worth having; a constant per column is not, and is not used anywhere: each column is named where its query is, the way `internal/queue/store.go` and `internal/storage/manifest.go` do it, because a `Column*` constant is still a string by the time Postgres sees it and each one is named in a single statement. What actually makes the columns agree with the struct is `sqlbuilder.NewStruct` — `Columns()`, `Addr()`, `Values()` read one definition — so it is the right tool for a feature with full CRUD and many columns; it cannot express `Returning`, `ForUpdate().SkipLocked()`, `Incr()`, or a CTE, which is why the queue and the storage manifests use the builder directly. `db` tags are the column names `NewStruct` reads, and a struct used that way lists only the columns the application writes, so a migration can add a column with a default without touching Go code. A row struct that is *not* built through `NewStruct` carries no tags and needs none: it is the reduced shape the feature reads, not a mirror of the table.
 
 ## cmd
 

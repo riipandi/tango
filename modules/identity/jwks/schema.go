@@ -9,16 +9,6 @@ import (
 // this module.
 const TableJWKS = "jwks"
 
-// Column names, so a rename touches one line.
-const (
-	ColumnKeyID     = "key_id"
-	ColumnAlgorithm = "algorithm"
-	ColumnPublicKey = "public_key"
-	ColumnUseFor    = "use_for"
-	ColumnIsActive  = "is_active"
-	ColumnExpiresAt = "expires_at"
-)
-
 // UseSignature is the `use_for` value of a key that signs and verifies.
 // A published JWKS carries only these; an `enc` key is never handed to a
 // client that asked how to check a signature.
