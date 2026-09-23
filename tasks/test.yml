@@ -29,5 +29,14 @@ tasks:
   coverage:
     desc: Run Go tests with coverage report
     cmds:
-      - gotestsum --format testname -- -coverprofile=.output/coverage.out ./...
+      - |
+        gotestsum --format testname -- \
+        -covermode=atomic -coverprofile=.output/coverage.out \
+        $(go list ./... | egrep -v '(/test|/codegen)$$')
       - go tool cover -func=.output/coverage.out | tail -1
+
+  coverage:report:
+    desc: Open HTML coverage report in browser (detailed line coverage)
+    deps: [coverage]
+    cmds:
+      - go tool cover -html=.output/coverage.out
