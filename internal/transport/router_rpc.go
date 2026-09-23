@@ -103,13 +103,13 @@ func rpcHandlerOptions() []connect.HandlerOption {
 	}
 }
 
-// mountRPC registers the ConnectRPC surface on the router. It is the only
-// place the surface is named, so the router in http.go reads as a list of
-// mounts.
-func mountRPC(r chi.Router, opts Options) {
+// mountRPC registers the ConnectRPC surface on the router. It receives
+// exactly what the surface serves — the checker and the modules — so the RPC
+// registration never reads how the router got its dependencies.
+func mountRPC(r chi.Router, checker *health.Checker, modules []kernel.Module) {
 	// The prefix is stripped because chi only shifts its own route context: a
 	// generated Connect handler matches its procedure path exactly.
-	r.Mount(RPCPath, http.StripPrefix(RPCPath, rpcRouter(opts.Checker, opts.Modules)))
+	r.Mount(RPCPath, http.StripPrefix(RPCPath, rpcRouter(checker, modules)))
 }
 
 // rpcRouter builds the Connect handler tree served below RPCPath.

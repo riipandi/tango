@@ -90,7 +90,7 @@ func NewRouter(opts Options) chi.Router {
 		// a REST route. It mounts before the modules: a module that claims a
 		// path under the RPC prefix would be a defect, and chi reports the
 		// conflict at startup rather than answering two handlers for one path.
-		mountRPC(throttled, opts)
+		mountRPC(throttled, opts.Checker, opts.Modules)
 
 		// The modules mount inside the group too, so every route a module
 		// claims is throttled by the same policy as the API's own.
