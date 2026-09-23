@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -39,16 +40,31 @@ const retryDelay = time.Second
 type dispatcher struct {
 	// client is the client this dispatcher belongs to.
 	client *Client
-	// ctx is the context the dispatcher was started with, and the parent of
-	// every task execution.
+	// ctx is the context the dispatcher was started with. It ends the
+	// dispatcher's own goroutines — the triggerer, the fetcher, the workers —
+	// and it is deliberately not the parent of a task execution: it is the
+	// run's signal context, which is already cancelled by the time a graceful
+	// stop begins, and a task that inherited it would be abandoned rather
+	// than drained.
 	ctx context.Context
+	// taskCtx is the parent of every task execution. It is cancelled when the
+	// process must stop at once, never by the signal that starts a graceful
+	// drain, so an in-flight task keeps a live context until the drain window
+	// expires. It is created in start and released in stop.
+	taskCtx    context.Context
+	releaseCtx context.CancelFunc
 	// shutdownCtx cancels when a graceful stop is asked for. It is separate
 	// from ctx so a stop is observable while the start context is still live.
-	shutdownCtx      context.Context
-	shutdown         context.CancelFunc
-	numWorkers       int
-	releaseAfter     time.Duration
-	running          atomic.Bool
+	shutdownCtx  context.Context
+	shutdown     context.CancelFunc
+	numWorkers   int
+	releaseAfter time.Duration
+	running      atomic.Bool
+	// workers tracks the worker goroutines, so a stop waits for them to exit
+	// rather than inferring it from the free-worker tokens: a worker that
+	// leaves because the start context ended never returns its token, and
+	// counting tokens therefore missed it.
+	workers          sync.WaitGroup
 	ticker           *time.Ticker
 	tasks            chan *taskRow
 	availableWorkers chan struct{}
@@ -78,6 +94,10 @@ func (d *dispatcher) start(ctx context.Context) {
 
 	d.ctx = ctx
 	d.shutdownCtx, d.shutdown = context.WithCancel(context.Background())
+	// The signal that ends the dispatcher's own goroutines must not end a
+	// task in flight: WithoutCancel keeps the values and drops the
+	// cancellation, so a task's context stays live until stop releases it.
+	d.taskCtx, d.releaseCtx = context.WithCancel(context.WithoutCancel(ctx))
 	d.tasks = make(chan *taskRow, d.numWorkers)
 	d.ticker = time.NewTicker(fallbackPoll)
 	d.ticker.Stop() // No need to poll yet.
@@ -87,6 +107,7 @@ func (d *dispatcher) start(ctx context.Context) {
 	d.running.Store(true)
 
 	for range d.numWorkers {
+		d.workers.Add(1)
 		go d.worker()
 		d.availableWorkers <- struct{}{}
 	}
@@ -100,21 +121,47 @@ func (d *dispatcher) start(ctx context.Context) {
 // either the context is cancelled or every worker is done with its task.
 func (d *dispatcher) stop(ctx context.Context) bool {
 	if !d.running.Load() {
+		// The dispatcher already ended on its own, which is what a cancelled
+		// start context does. The task context is still released here, or a
+		// run that ended that way would hold one for the life of the process.
+		d.releaseTaskContext()
 		return true
 	}
 
 	d.shutdown()
-	var count int
-	for {
-		select {
-		case <-ctx.Done():
-			return false
-		case <-d.availableWorkers:
-			count++
-			if count == d.numWorkers {
-				return true
-			}
-		}
+
+	// The task context stays live for the whole drain: it is released only
+	// once the wait below ends, so an in-flight task is never cancelled by
+	// the signal that asked for a graceful stop. Reaching the drain deadline
+	// is the one case where the task context is released while a task is
+	// still running — the run is out of time, and the task is reclaimed by
+	// its release window rather than left holding the process open.
+	defer d.releaseTaskContext()
+
+	// The wait measures the workers leaving, not the tokens they hold: a
+	// worker that exits because the start context ended returns no token, so
+	// counting tokens never reached the total on that path.
+	done := make(chan struct{})
+	go func() {
+		d.workers.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-done:
+		return true
+	}
+}
+
+// releaseTaskContext releases the parent of every task execution, once. A
+// dispatcher that was never started has none to release, and the two paths
+// into a stop — an explicit stop and a cancelled start context — must not
+// both reach it.
+func (d *dispatcher) releaseTaskContext() {
+	if d.releaseCtx != nil {
+		d.releaseCtx()
 	}
 }
 
@@ -163,6 +210,8 @@ func (d *dispatcher) fetcher() {
 
 // worker processes incoming tasks until the dispatcher stops.
 func (d *dispatcher) worker() {
+	defer d.workers.Done()
+
 	for {
 		select {
 		case task := <-d.tasks:
@@ -282,13 +331,15 @@ func (d *dispatcher) processTask(task *taskRow) {
 
 	cfg := queue.Config()
 
-	// The execution context is the dispatcher's, deadlined by the queue's
+	// The execution context is the task context, deadlined by the queue's
 	// timeout when it sets one, and it carries the client so a task can
-	// enqueue the task that follows it.
-	ctx := d.ctx
+	// enqueue the task that follows it. It is deliberately not the start
+	// context: that one is cancelled by the signal which begins a drain, and
+	// a task that inherited it would be abandoned mid-flight.
+	ctx := d.taskCtx
 	if cfg.Timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(d.ctx, now().Add(cfg.Timeout))
+		ctx, cancel = context.WithDeadline(d.taskCtx, now().Add(cfg.Timeout))
 		defer cancel()
 	}
 	ctx = context.WithValue(ctx, ctxKeyClient{}, d.client)
