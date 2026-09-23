@@ -11,4 +11,9 @@ spec:
   plugin:
     kind: "JaegerDatasource"
     spec:
-      directUrl: "http://localhost:33803/select/jaeger"
+      # No directUrl: the browser queries the Perses proxy instead of the store,
+      # which has no CORS headers of its own.
+      proxy:
+        kind: "HTTPProxy"
+        spec:
+          url: "http://victoria-traces:10428/select/jaeger"

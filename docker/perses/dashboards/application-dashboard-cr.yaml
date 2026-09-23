@@ -98,23 +98,26 @@ spec:
                               kind: PrometheusTimeSeriesQuery
                               spec:
                                   query: 'sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name="tango", instance=~"$instance"}[5m]))'
-        active-requests:
+        request-errors:
             kind: Panel
             spec:
                 display:
-                    name: In-flight requests
+                    name: Errors per second (5xx)
+                    description: Server-side failures. `or vector(0)` keeps the line on zero when the window is clean, so a flat zero is a reading, not an absence.
                 plugin:
                     kind: TimeSeriesChart
                     spec:
                         visual:
+                            areaOpacity: 0.2
                             display: line
+                            lineWidth: 2
                 queries:
                     - kind: TimeSeriesQuery
                       spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'http_server_active_requests{service_name="tango", instance=~"$instance"}'
+                                  query: 'sum(rate(http_server_request_duration_seconds_count{service_name="tango", http_response_status_code=~"5..", instance=~"$instance"}[5m])) or vector(0)'
         rpc-latency:
             kind: Panel
             spec:
@@ -202,7 +205,7 @@ spec:
                     width: 8
                     height: 8
                     content:
-                        $ref: '#/spec/panels/active-requests'
+                        $ref: '#/spec/panels/request-errors'
                   - x: 8
                     y: 8
                     width: 8

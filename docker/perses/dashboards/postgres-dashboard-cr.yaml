@@ -188,6 +188,27 @@ spec:
                               kind: PrometheusTimeSeriesQuery
                               spec:
                                   query: 'rate(pg_stat_database_temp_bytes{instance=~"$instance", datname=~"$datname"}[5m])'
+        longest-transaction:
+            kind: Panel
+            spec:
+                display:
+                    name: Longest open transaction
+                    description: The max transaction duration by state. One that climbs without falling is the transaction a lock wait is stuck behind.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            display: line
+                        yAxis:
+                          format:
+                            unit: seconds
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'max by (state) (pg_stat_activity_max_tx_duration{instance=~"$instance", datname=~"$datname"})'
         locks:
             kind: Panel
             spec:
@@ -257,7 +278,13 @@ spec:
                         $ref: '#/spec/panels/temp-bytes'
                   - x: 8
                     y: 12
-                    width: 16
+                    width: 8
+                    height: 8
+                    content:
+                        $ref: '#/spec/panels/longest-transaction'
+                  - x: 16
+                    y: 12
+                    width: 8
                     height: 8
                     content:
                         $ref: '#/spec/panels/locks'

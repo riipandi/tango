@@ -12,5 +12,10 @@ spec:
   plugin:
     kind: "PrometheusDatasource"
     spec:
-      directUrl: "http://localhost:33802"
+      # No directUrl: the browser queries the Perses proxy instead of the store,
+      # which has no CORS headers of its own.
       scrapeInterval: "15s"
+      proxy:
+        kind: "HTTPProxy"
+        spec:
+          url: "http://victoria-metrics:8428"

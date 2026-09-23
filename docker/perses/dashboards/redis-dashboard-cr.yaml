@@ -67,6 +67,7 @@ spec:
             spec:
                 display:
                     name: Memory used
+                    description: Used against the server's maxmemory; the gap between the two lines is the headroom before eviction starts.
                 plugin:
                     kind: TimeSeriesChart
                     spec:
@@ -83,6 +84,12 @@ spec:
                               kind: PrometheusTimeSeriesQuery
                               spec:
                                   query: 'redis_memory_used_bytes{instance=~"$instance"}'
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'redis_memory_max_bytes{instance=~"$instance"} > 0'
         keys:
             kind: Panel
             spec:
@@ -139,6 +146,26 @@ spec:
                               kind: PrometheusTimeSeriesQuery
                               spec:
                                   query: 'rate(redis_evicted_keys_total{instance=~"$instance"}[5m])'
+        rejected-connections:
+            kind: Panel
+            spec:
+                display:
+                    name: Rejected connections
+                    description: Connections refused at the maxclients boundary — always a finding, never an expected rate.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            areaOpacity: 0.2
+                            display: line
+                            lineWidth: 2
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'rate(redis_rejected_connections_total{instance=~"$instance"}[5m]) or vector(0)'
         commands:
             kind: Panel
             spec:
@@ -195,9 +222,15 @@ spec:
                     width: 8
                     height: 8
                     content:
-                        $ref: '#/spec/panels/commands'
+                        $ref: '#/spec/panels/rejected-connections'
                   - x: 0
                     y: 12
+                    width: 24
+                    height: 8
+                    content:
+                        $ref: '#/spec/panels/commands'
+                  - x: 0
+                    y: 20
                     width: 24
                     height: 8
                     content:
