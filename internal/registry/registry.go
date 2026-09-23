@@ -27,12 +27,14 @@ import (
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/jobs"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/scheduler"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/pkg/crypto"
 )
 
@@ -105,17 +107,35 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 		return mailer.NewService(client, templates), nil
 	})
 
+	do.Provide(injector, func(i do.Injector) (*jwks.Service, error) {
+		c := do.MustInvoke[*config.Config](i)
+		log := do.MustInvoke[*slog.Logger](i)
+		pool := do.MustInvoke[*datastore.Postgres](i)
+		return jwks.NewService(*c, jwks.NewRepository(pool), log), nil
+	})
+
 	do.Provide(injector, func(i do.Injector) (chi.Router, error) {
 		c := do.MustInvoke[*config.Config](i)
 		checker := do.MustInvoke[*health.Checker](i)
 		log := do.MustInvoke[*slog.Logger](i)
 		limiter := do.MustInvoke[middleware.Limiter](i)
+		// The key set is resolved here so a configuration whose key pair
+		// cannot be read fails the run, before the listener opens, rather
+		// than on the first client that fetches it.
+		keySet, err := do.Invoke[*jwks.Service](i)
+		if err != nil {
+			return nil, err
+		}
+		if err := keySet.Err(); err != nil {
+			return nil, err
+		}
 		return transport.NewRouter(transport.Options{
 			Config:      *c,
 			Checker:     checker,
 			Metrics:     metrics,
 			Logger:      log,
 			RateLimiter: limiter,
+			Modules:     []kernel.Module{jwks.NewModule(keySet)},
 		}), nil
 	})
 

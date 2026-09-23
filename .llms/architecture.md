@@ -188,6 +188,16 @@ The upload round has two feature extension points, both nil by default and wired
 
 **TODO(notification): upload progress to the frontend is stubbed, not wired.** The data is live — `storage_files.chunks_done`/`chunk_count` are bumped by the upload workers (`Manager.Progress` reads them, `SetProgress`/`BumpProgress` write them) — but nothing serves it: the ConnectRPC and REST wiring does not exist yet. When it does, a handler maps `Progress` onto either a polling response (simplest, one GET per key) or a ConnectRPC server-streaming channel (push updates; needs stream lifecycle and a poll interval behind it). Decide then; do not build a second progress source beside the row. Push-style "upload finished" events, on the other hand, already have their place: an `AfterSyncHook`.
 
+## Implemented modules
+
+### modules/identity/jwks
+
+The published key set, at `GET /.well-known/jwks.json`. Two sources feed one set: the configured key pair (`auth.private_key` / `auth.public_key`, base64 raw-unpadded JWK JSON, the form `pkg/crypto`'s `KeyGenerator` writes) is the default signing key for stateless JWTs, and `public.jwks` (migration `00004`) holds the keys of a deployment that acts as an OAuth provider. `Service` implements `jwtutils.KeyProvider`, so the endpoint that publishes the set and the code that verifies a token read one source — a key that is not published is not accepted, and a key that is published is accepted with no second list to keep in step.
+
+`VerifyKeySet` returns the configured key first, then every row that is `is_active`, `use_for = 'sig'`, and either without an expiry or not yet expired. Three behaviors are deliberate and pinned by tests: the **configured key wins a duplicate `kid`** (a set naming one key twice is a set a client cannot index); a **stored row that cannot be parsed is skipped, not fatal** (one bad row must not take the keyset down for every client); and a **`Source` failure degrades the set to the configured key and logs**, because the configured key is the one the application signs with — refusing every verification because a future feature's table is unreachable would turn a partial outage into a total one. An unreadable *configured* key is different: `NewService` parses it once, `Err()` reports it, and the registry resolves the key set when it builds the router, so a broken key pair fails the run before the listener opens rather than as a 500 on a client's first fetch. `jwk.AssignKeyID`'s thumbprint is the `kid` of the configured key; a stored row keeps the `kid` it was stored under.
+
+The published document is a bare JWK Set (the RFC 7517 `{"keys":[...]}`), **not** the API envelope: every standard JWKS client parses that shape, and wrapping it would make the endpoint unreadable to them. A failure still goes through the responder envelope, and the request id travels in its header either way. The `Repository` never selects `private_key`, and each key is marshalled by jwx after `jwk.PublicKeyOf`, so a private half cannot reach the document by either path — both are pinned by tests, including one that inserts a row with a sealed private key. `jwks_factory.go` remains an empty stub: no seeder writes these rows yet, because nothing generates a provider key pair.
+
 ## Planned layout
 
 The target shape of the scaffold packages.
