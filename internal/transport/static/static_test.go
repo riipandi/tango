@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/riipandi/tango/internal/static"
+	"github.com/riipandi/tango/internal/transport/static"
 )
 
 // serve runs one request through the handler over dir.

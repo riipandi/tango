@@ -11,8 +11,8 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/kernel"
-	"github.com/riipandi/tango/internal/static"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/internal/transport/static"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/web"
 )

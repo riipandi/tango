@@ -1,10 +1,12 @@
 // Package static serves the files a feature wrote under the data directory's
-// uploads subdirectory.
+// uploads subdirectory, at the route prefix app.assets_url points at.
 //
-// It is separate from web.SetupStatic, which serves the compiled SPA: the two
-// answer different questions, and keeping them apart is what lets this one be
-// a plain file server with no fallback — a missing upload is a 404, never an
-// HTML page.
+// It lives under transport because it is part of the HTTP surface, beside
+// middleware: it is a mount the router composes, not a service a module owns,
+// and nothing outside transport imports it. It is separate from
+// web.SetupStatic, which serves the compiled SPA: the two answer different
+// questions, and keeping them apart is what lets this one be a plain file
+// server with no fallback — a missing upload is a 404, never an HTML page.
 package static
 
 import (
@@ -13,6 +15,8 @@ import (
 	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/riipandi/tango/internal/config"
 )
 
 // Path is the route prefix the uploads are served under. It is the path
@@ -59,5 +63,5 @@ func Dir(dataDir string) string {
 	if dataDir == "" {
 		dataDir = "."
 	}
-	return filepath.Join(dataDir, "uploads")
+	return filepath.Join(dataDir, config.UploadsDir)
 }
