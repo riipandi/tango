@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"testing"
 
@@ -61,7 +62,7 @@ func newManager(t *testing.T) (*Manager, *FS, string) {
 	pool := migratedPool(t)
 	store := NewFS(t.TempDir())
 	staging := t.TempDir()
-	manager, err := NewManager(store, pool, 32, staging, 2)
+	manager, err := NewManager(store, pool, 32, staging, 2, slog.New(slog.DiscardHandler))
 	require.NoError(t, err)
 	return manager, store, staging
 }

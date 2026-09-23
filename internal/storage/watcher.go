@@ -23,6 +23,7 @@ import (
 type Watcher struct {
 	dir      string
 	debounce time.Duration
+	log      *slog.Logger
 	// onSettle is called with the file's key — its path relative to the
 	// staging directory — once the path has gone quiet. It must not block:
 	// the loop runs it inline, and a slow callback would delay every
@@ -31,8 +32,8 @@ type Watcher struct {
 }
 
 // NewWatcher builds the staging watcher.
-func NewWatcher(dir string, debounce time.Duration, onSettle func(key string)) *Watcher {
-	return &Watcher{dir: dir, debounce: debounce, onSettle: onSettle}
+func NewWatcher(dir string, debounce time.Duration, log *slog.Logger, onSettle func(key string)) *Watcher {
+	return &Watcher{dir: dir, debounce: debounce, log: log, onSettle: onSettle}
 }
 
 // Start runs the watch until ctx is cancelled. It creates the staging
@@ -103,7 +104,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 			if !ok {
 				return nil
 			}
-			slog.WarnContext(ctx, "storage: watch error", "err", err)
+			w.log.WarnContext(ctx, "storage: watch error", "err", err)
 
 		case key := <-settled:
 			// The timer fires on its own goroutine and only sends; the map

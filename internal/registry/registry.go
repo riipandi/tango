@@ -35,6 +35,7 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/health"
+	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/scheduler"
@@ -45,11 +46,9 @@ import (
 
 // New registers the shared services of a serve run.
 //
-// The configuration and the logger are registered as values because the command
-// lifecycle owns them; they are services like any other, so a provider below
-// resolves them instead of closing over them. The metrics handler is the one
-// exception: it is built by the observer the command holds, so it is captured
-// here rather than registered, and only the router reads it.
+// The configuration, the logger, and the metrics handler are registered as
+// values because the command lifecycle owns them; they are services like any
+// other, so a provider below resolves them instead of closing over them.
 //
 // The areas of this application are mounted, followed by any the caller
 // passes. A consumer outside this repository therefore serves its own area
@@ -61,10 +60,14 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 	return do.New(
 		do.Eager(&cfg),
 		do.Eager(logger),
+		do.Eager(metrics),
 		infrastructure(ctx),
 		areaPackages(areas),
+		// The area list is composition input, not a service — it reaches the
+		// router through this closure, the way the run's context reaches
+		// infrastructure.
 		do.Lazy(func(i do.Injector) (chi.Router, error) {
-			return newRouter(i, metrics, areas)
+			return newRouter(i, areas)
 		}),
 		do.Lazy(newServer),
 	)
@@ -76,11 +79,12 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 // This is the join point, so it is the one provider that resolves from both
 // halves — the health checker and the limiter come from infrastructure, the
 // module list from the areas.
-func newRouter(i do.Injector, metrics http.Handler, areas []Area) (chi.Router, error) {
+func newRouter(i do.Injector, areas []Area) (chi.Router, error) {
 	c := do.MustInvoke[*config.Config](i)
 	checker := do.MustInvoke[*health.Checker](i)
 	log := do.MustInvoke[*slog.Logger](i)
 	limiter := do.MustInvoke[middleware.Limiter](i)
+	metrics := do.MustInvoke[http.Handler](i)
 
 	mounted, err := mountAreas(i, areas)
 	if err != nil {
@@ -104,19 +108,28 @@ func newServer(i do.Injector) (*http.Server, error) {
 	return transport.NewServer(*c, router), nil
 }
 
-// Prewarm resolves every service a serve run blocks on: the components whose
-// construction fails when a dependency is down or a configuration is unusable.
-// The command calls it after New and before the listener opens, so such a
-// failure is a failed run carrying the service's own message, not a 500 on the
-// first request. The runners resolve here too — the queue's construction
-// registers and seeds its jobs — and the router's resolution builds the areas,
-// whose Mount validates what they cannot work without.
-func Prewarm(i do.Injector) error {
+// Prewarm resolves every service a serve run blocks on and seeds the
+// recurring jobs: the components whose construction fails when a dependency
+// is down or a configuration is unusable. The command calls it after New and
+// before the listener opens, so such a failure is a failed run carrying the
+// service's own message, not a 500 on the first request. The runners resolve
+// here too — the scheduler's resolution claims onto a queue whose processors
+// were wired when the queue was built — and the router's resolution builds
+// the areas, whose Mount validates what they cannot work without. The
+// seeding runs last of the queue's steps, against the client it resolves.
+func Prewarm(ctx context.Context, i do.Injector) error {
 	for _, resolve := range []func(do.Injector) error{
 		func(i do.Injector) error { _, err := do.Invoke[*fetcher.Client](i); return err },
 		func(i do.Injector) error { _, err := do.Invoke[*mailer.Service](i); return err },
 		func(i do.Injector) error { _, err := do.Invoke[*queue.Client](i); return err },
 		func(i do.Injector) error { _, err := do.Invoke[*scheduler.Scheduler](i); return err },
+		func(i do.Injector) error {
+			seeder, err := do.Invoke[*jobs.Seeder](i)
+			if err != nil {
+				return err
+			}
+			return seeder.Seed(ctx)
+		},
 		func(i do.Injector) error { _, err := do.Invoke[chi.Router](i); return err },
 		func(i do.Injector) error { _, err := do.Invoke[*http.Server](i); return err },
 	} {

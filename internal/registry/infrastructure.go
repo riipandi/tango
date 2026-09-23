@@ -126,10 +126,11 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			c := do.MustInvoke[*config.Config](i)
 			pool := do.MustInvoke[*datastore.Postgres](i)
 			store := do.MustInvoke[storage.Store](i)
+			log := do.MustInvoke[*slog.Logger](i)
 			// The uploads hold one chunk buffer each; the budget keeps a sync's
 			// memory at budget × chunk size, whatever the file's size is.
 			return storage.NewManager(store, pool, c.Storage.ChunkSize,
-				filepath.Join(c.Storage.LocalPath, "staging"), 4)
+				filepath.Join(c.Storage.LocalPath, "staging"), 4, log)
 		}),
 
 		do.Lazy(func(i do.Injector) (*queue.Client, error) {
@@ -159,25 +160,33 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 				return nil, err
 			}
 
-			// The job list is registered beside the engine it runs on: a queue
-			// with no jobs is a worker pool with nothing to do.
-			if err := jobs.Register(ctx, client, c.Queue.CleanupInterval, uploader); err != nil {
-				return nil, err
-			}
+			// The processors are wired onto the engine here — pure wiring, no
+			// connection is touched. The recurring seeds are the Seeder's
+			// service, resolved by the prewarm walk.
+			jobs.Register(client, c.Queue.CleanupInterval, uploader)
 			return client, nil
+		}),
+
+		do.Lazy(func(i do.Injector) (*jobs.Seeder, error) {
+			c := do.MustInvoke[*config.Config](i)
+			client := do.MustInvoke[*queue.Client](i)
+			uploader := do.MustInvoke[*storage.Manager](i)
+			log := do.MustInvoke[*slog.Logger](i)
+			return jobs.NewSeeder(client, c.Queue.CleanupInterval, uploader, log), nil
 		}),
 
 		do.Lazy(func(i do.Injector) (*storage.Watcher, error) {
 			c := do.MustInvoke[*config.Config](i)
+			log := do.MustInvoke[*slog.Logger](i)
 			manager := do.MustInvoke[*storage.Manager](i)
 			client := do.MustInvoke[*queue.Client](i)
-			return storage.NewWatcher(manager.Staging(), c.Storage.Watch.Debounce,
+			return storage.NewWatcher(manager.Staging(), c.Storage.Watch.Debounce, log,
 				func(key string) {
 					if _, err := client.Add(jobs.ChunkUploadTask{Key: key}).Save(); err != nil {
 						// The staging file is still on disk, so the loss is a
 						// delayed upload, not a lost one: the next scan or the
 						// next write re-enqueues it.
-						slog.Error("storage: enqueue upload", "key", key, "err", err)
+						log.Error("storage: enqueue upload", "key", key, "err", err)
 					}
 				}), nil
 		}),

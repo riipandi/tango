@@ -68,6 +68,7 @@ type Manager struct {
 	manifests *Manifests
 	chunker   *Chunker
 	staging   string
+	log       *slog.Logger
 	// uploads caps the chunk uploads in flight. Each holds one chunk buffer,
 	// so this — not the file size — is what a sync costs in memory.
 	uploads int
@@ -81,7 +82,7 @@ type Manager struct {
 // next file into; uploads is the parallel chunk upload budget. A non-positive
 // budget falls back to four, so a misconfigured run cannot serialize uploads
 // by accident or spend its memory on a hundred of them.
-func NewManager(store Store, db DB, chunkSize int, staging string, uploads int) (*Manager, error) {
+func NewManager(store Store, db DB, chunkSize int, staging string, uploads int, log *slog.Logger) (*Manager, error) {
 	chunker, err := NewChunker(chunkSize)
 	if err != nil {
 		return nil, err
@@ -96,6 +97,7 @@ func NewManager(store Store, db DB, chunkSize int, staging string, uploads int) 
 		chunker:   chunker,
 		staging:   staging,
 		uploads:   uploads,
+		log:       log,
 	}, nil
 }
 
@@ -357,7 +359,7 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 		return err
 	}
 	if !reuse && done > 0 {
-		slog.InfoContext(ctx, "storage: file synced",
+		m.log.InfoContext(ctx, "storage: file synced",
 			"key", key, "chunks", len(chunks), "uploaded", done, "size", fingerprint.size)
 	}
 

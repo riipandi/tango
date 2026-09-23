@@ -3,6 +3,7 @@ package jobs
 import (
 	"bytes"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,9 +22,9 @@ func TestChunkUploadJobSyncsAStagedFile(t *testing.T) {
 
 	pool, client := migratedClient(t, dsn)
 	store := storage.NewFS(t.TempDir())
-	manager, err := storage.NewManager(store, pool, 32, t.TempDir(), 2)
+	manager, err := storage.NewManager(store, pool, 32, t.TempDir(), 2, slog.New(slog.DiscardHandler))
 	require.NoError(t, err)
-	require.NoError(t, Register(t.Context(), client, time.Hour, manager))
+	Register(client, time.Hour, manager)
 
 	data := bytes.Repeat([]byte("queued"), 40)
 	require.NoError(t, manager.Stage(t.Context(), "uploads/report.bin", bytes.NewReader(data), nil))

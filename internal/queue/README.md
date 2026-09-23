@@ -163,7 +163,8 @@ client, err := queue.NewClient(queue.ClientConfig{
     ReleaseAfter: cfg.Queue.ReleaseAfter,
 })
 
-jobs.Register(ctx, client, cfg.Queue.CleanupInterval) // job queues + recurring seeds
+jobs.Register(client, cfg.Queue.CleanupInterval, uploader) // processor wiring, pure
+jobs.NewSeeder(client, cfg.Queue.CleanupInterval, uploader, logger).Seed(ctx) // recurring seeds
 client.Start(ctx)
 ```
 

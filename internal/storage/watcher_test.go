@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -40,7 +41,7 @@ func startWatcher(t *testing.T, debounce time.Duration) (context.CancelFunc, *se
 	staging := t.TempDir()
 	spy := &settleSpy{}
 	ctx, cancel := context.WithCancel(t.Context())
-	go func() { _ = NewWatcher(staging, debounce, spy.settled).Start(ctx) }()
+	go func() { _ = NewWatcher(staging, debounce, slog.New(slog.DiscardHandler), spy.settled).Start(ctx) }()
 	t.Cleanup(cancel)
 	return cancel, spy, staging
 }
@@ -88,7 +89,7 @@ func TestWatcherDebounceCollapsesABurstOfWritesIntoOneSettle(t *testing.T) {
 	// backend's delivery latency must not decide this test, so the burst
 	// is driven through the same resetTimer the event loop calls, and the
 	// test drains the settle channel the way the loop would.
-	w := NewWatcher(t.TempDir(), 60*time.Millisecond, func(string) {})
+	w := NewWatcher(t.TempDir(), 60*time.Millisecond, slog.New(slog.DiscardHandler), func(string) {})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -124,7 +125,9 @@ func TestWatcherSettlesTheFilesAlreadyInStaging(t *testing.T) {
 	spy := &settleSpy{}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- NewWatcher(staging, time.Minute, spy.settled).Start(ctx) }()
+	go func() {
+		done <- NewWatcher(staging, time.Minute, slog.New(slog.DiscardHandler), spy.settled).Start(ctx)
+	}()
 	t.Cleanup(cancel)
 
 	waitFor(t, spy, "leftover.txt")

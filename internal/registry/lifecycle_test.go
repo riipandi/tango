@@ -16,9 +16,8 @@ import (
 )
 
 // servedInjector builds the container over a fresh migrated database, the
-// state a serve run reaches before the listener opens: the queue's
-// construction seeds its jobs, which reads the database, so a real one backs
-// the walk.
+// state a serve run reaches before the listener opens: the prewarm walk seeds
+// the recurring jobs, which reads the database, so a real one backs the walk.
 func servedInjector(t *testing.T) *do.RootScope {
 	t.Helper()
 
@@ -44,12 +43,44 @@ func servedInjector(t *testing.T) *do.RootScope {
 // TestPrewarmResolvesEveryBlockingService is the warm-up contract: a run with
 // a database that answers prewarms clean, and the router behind the server is
 // built — the areas' Mount ran — by the time it returns.
+//
+// The second half is the anti-drift check: every service the container holds
+// must have been invoked by the walk, because a lazy service left cold after
+// Prewarm is one whose failure would surface as a 500 on the first request —
+// exactly what the warm-up exists to prevent. Registering a service without
+// wiring it into the walk fails here, at test time.
 func TestPrewarmResolvesEveryBlockingService(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
 	injector := servedInjector(t)
 
-	require.NoError(t, registry.Prewarm(injector))
+	require.NoError(t, registry.Prewarm(t.Context(), injector))
+
+	// A service is cold by exception only, each with the reason it must be:
+	// the Valkey client is opt-in and this run did not opt in, the cache
+	// faces modules and stays cold until a feature resolves it, and the
+	// watcher belongs to Runners — resolved there when storage.watch.enable
+	// is on, and its construction cannot fail on a dependency.
+	cold := map[string]string{
+		"*github.com/riipandi/tango/internal/datastore.Valkey": "opt-in backend, disabled in this run",
+		"github.com/riipandi/tango/internal/cache.Cache":       "module-facing, cold until a feature resolves it",
+		"*github.com/riipandi/tango/internal/storage.Watcher":  "runner-owned, not on the prewarm walk",
+	}
+
+	invoked := make(map[string]bool)
+	for _, d := range injector.ListInvokedServices() {
+		invoked[d.ScopeID+"/"+d.Service] = true
+	}
+	for _, d := range injector.ListProvidedServices() {
+		if _, ok := invoked[d.ScopeID+"/"+d.Service]; ok {
+			continue
+		}
+		if _, ok := cold[d.Service]; ok {
+			continue
+		}
+		t.Errorf("service %q in scope %q was not invoked by Prewarm: a service left cold fails on the first request, not at startup — wire it into the prewarm walk or list it among the cold exceptions with a reason",
+			d.Service, d.ScopeName)
+	}
 }
 
 // TestRunnersAreTheLongRunningComponentsInStartOrder pins the list the serve

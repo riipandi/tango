@@ -74,7 +74,7 @@ file decides.`,
 		// configuration or a dependency one of them cannot work with fails
 		// the run here, before the listener opens.
 		injector := registry.New(ctx, cfg, obs.MetricsHandler(), log.Slog())
-		err = registry.Prewarm(injector)
+		err = registry.Prewarm(ctx, injector)
 		if err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}

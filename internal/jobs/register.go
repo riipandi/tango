@@ -10,22 +10,15 @@ import (
 	"github.com/riipandi/tango/internal/storage"
 )
 
-// Register registers every job the application runs and seeds the recurring
-// ones. It is the one place the job list is spelled out, and the one call the
-// composition root makes.
-//
-// Seeding is guarded by the pending count, so every process start that finds
-// no task of a recurring queue pending adds exactly one: the schedule
-// survives restarts without multiplying. Two processes starting together may
-// seed twice, which is harmless — the jobs are idempotent and each run
-// re-enqueues one successor, so the population stays at what the race left.
+// Register wires the task processors onto a client. It is pure wiring — no
+// database, no context — so a client can be built without touching a
+// connection; the recurring seeds are the Seeder's job.
 //
 // uploader is the storage engine the chunk upload and the garbage collection
-// run through; the composition root hands it over with everything else.
-func Register(ctx context.Context, client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager) error {
+// run through. A nil uploader registers none of its jobs: a queue that
+// cannot answer its tasks is not a schedule, it is a failure.
+func Register(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager) {
 	client.Register(queue.NewQueue[CleanupTask](cleanupProcessor))
-	// A run without the storage engine registers none of its jobs: a queue
-	// that cannot answer its tasks is not a schedule, it is a failure.
 	if uploader != nil {
 		client.Register(queue.NewQueue[ChunkUploadTask](func(ctx context.Context, task ChunkUploadTask) error {
 			return uploadProcessor(ctx, task, uploader)
@@ -34,33 +27,59 @@ func Register(ctx context.Context, client *queue.Client, cleanupInterval time.Du
 			return gcProcessor(ctx, task, uploader)
 		}))
 	}
+}
 
-	if err := seedOnce(ctx, client, CleanupName, cleanupSeed(cleanupInterval), cleanupInterval); err != nil {
+// Seeder seeds the recurring jobs. It is a service of its own — not a side
+// effect of building the queue — so seeding against the database is an
+// explicit step the prewarm walk makes, ordered after the queue exists, and
+// its failure fails the run before the listener opens.
+//
+// Seeding is guarded by the pending count, so every process start that finds
+// no task of a recurring queue pending adds exactly one: the schedule
+// survives restarts without multiplying. Two processes starting together may
+// seed twice, which is harmless — the jobs are idempotent and each run
+// re-enqueues one successor, so the population stays at what the race left.
+type Seeder struct {
+	client          *queue.Client
+	cleanupInterval time.Duration
+	uploader        *storage.Manager
+	log             *slog.Logger
+}
+
+// NewSeeder builds the seeder over the client whose processors Register
+// wired.
+func NewSeeder(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager, log *slog.Logger) *Seeder {
+	return &Seeder{client: client, cleanupInterval: cleanupInterval, uploader: uploader, log: log}
+}
+
+// Seed seeds every recurring job while none of its tasks is pending.
+func (s *Seeder) Seed(ctx context.Context) error {
+	if err := s.seedOnce(ctx, CleanupName, cleanupSeed(s.cleanupInterval), s.cleanupInterval); err != nil {
 		return err
 	}
-	if uploader == nil {
+	if s.uploader == nil {
 		return nil
 	}
-	return seedOnce(ctx, client, StorageGCName, gcSeed(DefaultStorageGCInterval), DefaultStorageGCInterval)
+	return s.seedOnce(ctx, StorageGCName, gcSeed(DefaultStorageGCInterval), DefaultStorageGCInterval)
 }
 
 // seedOnce seeds one recurring job while none of its tasks is pending. The
 // interval is both the first run's delay and the schedule the task carries
 // in its payload, so the run a restart seeds keeps the schedule it was
 // seeded with.
-func seedOnce(ctx context.Context, client *queue.Client, name string, task queue.Task, interval time.Duration) error {
-	pending, err := client.Pending(ctx, name)
+func (s *Seeder) seedOnce(ctx context.Context, name string, task queue.Task, interval time.Duration) error {
+	pending, err := s.client.Pending(ctx, name)
 	if err != nil {
 		return err
 	}
 	if pending > 0 {
 		return nil
 	}
-	if _, err := client.Add(task).Ctx(ctx).Wait(interval).Save(); err != nil {
+	if _, err := s.client.Add(task).Ctx(ctx).Wait(interval).Save(); err != nil {
 		return err
 	}
 
-	slog.InfoContext(ctx, "queue: recurring job seeded",
+	s.log.InfoContext(ctx, "queue: recurring job seeded",
 		"queue", name, "interval", interval.String())
 	return nil
 }
