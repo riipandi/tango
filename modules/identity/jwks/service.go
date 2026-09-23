@@ -15,21 +15,29 @@ package jwks
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/lestrrat-go/jwx/v3/jwk"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/pkg/crypto"
 )
 
 // ErrNoSigningKey reports a configuration with no private key to sign with.
 // The HMAC-only configuration is a valid one, so this is reported by the
 // caller that needs a key pair rather than refused at start-up.
 var ErrNoSigningKey = errors.New("jwks: no signing key configured")
+
+// KeyCacheTTL is how long a built key set is reused before the source is read
+// again. It is short because the value is cheap to rebuild and a rotation
+// must be picked up promptly; it is not zero because a client that verifies
+// many tokens must not turn each verification into a query. The HTTP
+// `max-age` a client honours is a separate, longer window.
+const KeyCacheTTL = time.Minute
 
 // Source reads the published keys a deployment stores itself.
 type Source interface {
@@ -73,7 +81,7 @@ func (s *Service) parse(cfg config.Config) {
 		if cfg.Auth.PublicKey == "" {
 			return
 		}
-		public, err := decodeKey(cfg.Auth.PublicKey)
+		public, err := crypto.DecodeJWK(cfg.Auth.PublicKey)
 		if err != nil {
 			s.parseErr = fmt.Errorf("jwks: auth.public_key: %w", err)
 			return
@@ -90,7 +98,7 @@ func (s *Service) parse(cfg config.Config) {
 		if cfg.Auth.PrivateKey == "" {
 			return
 		}
-		private, err := decodeKey(cfg.Auth.PrivateKey)
+		private, err := crypto.DecodeJWK(cfg.Auth.PrivateKey)
 		if err != nil {
 			s.parseErr = fmt.Errorf("jwks: auth.private_key: %w", err)
 			return
@@ -214,18 +222,4 @@ func parseStoredKey(key StoredKey) (jwk.Key, error) {
 		return nil, fmt.Errorf("set use: %w", err)
 	}
 	return public, nil
-}
-
-// decodeKey reads a base64 (raw, unpadded) JWK JSON value, the form
-// pkg/crypto's KeyGenerator writes and the env file carries.
-func decodeKey(encoded string) (jwk.Key, error) {
-	raw, err := base64.RawStdEncoding.DecodeString(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
-	}
-	key, err := jwk.ParseKey(raw)
-	if err != nil {
-		return nil, fmt.Errorf("parse JWK: %w", err)
-	}
-	return key, nil
 }

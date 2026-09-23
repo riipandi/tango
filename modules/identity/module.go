@@ -12,6 +12,7 @@ import (
 
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity/jwks"
+	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
 // ModuleName is the name the area reports under.
@@ -21,8 +22,10 @@ const ModuleName = "identity"
 // registry resolves them; the area decides which feature takes which, so a
 // feature's dependencies are named here rather than at the call site.
 type Deps struct {
-	// KeySet publishes the JSON Web Key Set.
-	KeySet *jwks.Service
+	// KeySet supplies the keys the JSON Web Key Set publishes. It is the
+	// provider interface rather than the service, so the cache in front of
+	// the service is invisible to the feature.
+	KeySet jwtutils.KeyProvider
 }
 
 // Module mounts every identity feature.

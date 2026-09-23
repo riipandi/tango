@@ -37,6 +37,7 @@ import (
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/pkg/crypto"
+	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
 // New registers the shared services of a serve run. The metrics handler and
@@ -115,19 +116,37 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 		return jwks.NewService(*c, jwks.NewRepository(pool), log), nil
 	})
 
+	// The published key set is read behind a cache: a client that verifies
+	// many tokens must not turn each verification into a query, and a
+	// rotation is still picked up within the TTL. The cache is wired here
+	// rather than inside the service, because how long a key set is reused is
+	// a deployment decision, not a property of the set.
+	//
+	// The service is still resolved on its own for the fail-fast check below:
+	// the cache would answer a broken configuration with an error on the
+	// first request instead of failing the run.
+	do.Provide(injector, func(i do.Injector) (jwtutils.KeyProvider, error) {
+		service := do.MustInvoke[*jwks.Service](i)
+		return jwtutils.NewCachedKeyProvider(service, jwks.KeyCacheTTL), nil
+	})
+
 	do.Provide(injector, func(i do.Injector) (chi.Router, error) {
 		c := do.MustInvoke[*config.Config](i)
 		checker := do.MustInvoke[*health.Checker](i)
 		log := do.MustInvoke[*slog.Logger](i)
 		limiter := do.MustInvoke[middleware.Limiter](i)
-		// The key set is resolved here so a configuration whose key pair
-		// cannot be read fails the run, before the listener opens, rather
-		// than on the first client that fetches it.
-		keySet, err := do.Invoke[*jwks.Service](i)
+		keySet, err := do.Invoke[jwtutils.KeyProvider](i)
 		if err != nil {
 			return nil, err
 		}
-		if err := keySet.Err(); err != nil {
+		// The service is resolved beside the provider so a configuration
+		// whose key pair cannot be read fails the run, before the listener
+		// opens, rather than as a 500 on the first client that fetches it.
+		service, err := do.Invoke[*jwks.Service](i)
+		if err != nil {
+			return nil, err
+		}
+		if err := service.Err(); err != nil {
 			return nil, err
 		}
 		return transport.NewRouter(transport.Options{

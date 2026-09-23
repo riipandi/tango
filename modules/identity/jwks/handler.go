@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 
+	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -28,12 +29,14 @@ const cacheControl = "public, max-age=3600"
 
 // Module mounts the key set endpoint.
 type Module struct {
-	service *Service
+	keys jwtutils.KeyProvider
 }
 
-// NewModule builds the module over the service.
-func NewModule(service *Service) *Module {
-	return &Module{service: service}
+// NewModule builds the module over a key provider. The provider is the
+// interface rather than the service, so a cache in front of the service is
+// invisible here.
+func NewModule(keys jwtutils.KeyProvider) *Module {
+	return &Module{keys: keys}
 }
 
 // Name reports the module in composition reports.
@@ -52,7 +55,16 @@ func (m *Module) Mount(r chi.Router) {
 // goes through the envelope, and the request id travels in its header either
 // way, so a failure can be correlated with the log.
 func (m *Module) handle(w http.ResponseWriter, r *http.Request) {
-	set, err := m.service.VerifyKeySet(r.Context())
+	if m.keys == nil {
+		// An area mounted without its dependency is a wiring defect, and the
+		// registry fails the run before this is reachable. Answering an empty
+		// set is the safe response if it ever is: a client must not be told
+		// that every key is valid.
+		responder.Fail(w, r, http.StatusInternalServerError, "key set unavailable")
+		return
+	}
+
+	set, err := m.keys.VerifyKeySet(r.Context())
 	if err != nil {
 		// The configured key is unreadable, which is a broken deployment
 		// rather than a bad request. The error text is not published: it

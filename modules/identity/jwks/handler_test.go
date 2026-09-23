@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lestrrat-go/jwx/v3/jwk"
@@ -237,6 +238,54 @@ func TestSignKeyRefusesWithoutAKeyPair(t *testing.T) {
 // the verifier read through.
 func TestServiceSatisfiesTheKeyProvider(t *testing.T) {
 	var _ jwtutilsKeyProvider = (*Service)(nil)
+}
+
+// countingSource counts how many times the source was read, so the cache in
+// front of it can be observed.
+type countingSource struct {
+	calls int
+	keys  []StoredKey
+	err   error
+}
+
+func (s *countingSource) ActiveSigningKeys(context.Context) ([]StoredKey, error) {
+	s.calls++
+	return s.keys, s.err
+}
+
+// TestTheCachedProviderReadsTheSourceOncePerTTL pins the reason the cache is
+// wired at all: a client that verifies many tokens must not turn each
+// verification into a query.
+func TestTheCachedProviderReadsTheSourceOncePerTTL(t *testing.T) {
+	source := &countingSource{}
+	service := NewService(testConfig(t), source, nil)
+	cached := jwtutils.NewCachedKeyProvider(service, time.Hour)
+
+	router := chi.NewRouter()
+	NewModule(cached).Mount(router)
+
+	for range 5 {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, Path, nil))
+		require.Equal(t, http.StatusOK, rec.Code)
+	}
+
+	assert.Equal(t, 1, source.calls,
+		"five fetches inside the TTL must cost one read of the source")
+}
+
+// TestAMountedModuleWithoutAProviderFailsClosed covers the wiring defect: an
+// endpoint with no key provider must never answer an empty set, which a
+// client would read as "no key is valid".
+func TestAMountedModuleWithoutAProviderFailsClosed(t *testing.T) {
+	router := chi.NewRouter()
+	NewModule(nil).Mount(router)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, Path, nil))
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.NotContains(t, rec.Body.String(), `"keys"`)
 }
 
 // TestModuleNameIsReported keeps the composition report readable.

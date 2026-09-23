@@ -181,6 +181,21 @@ func encodeJWK(key jwk.Key) (string, error) {
 	return base64.RawStdEncoding.EncodeToString(encoded), nil
 }
 
+// DecodeJWK reads a key from the base64-encoded JSON encodeJWK writes. It is
+// the other half of that pair, so a caller reading AUTH_PRIVATE_KEY or
+// AUTH_PUBLIC_KEY does not restate the encoding.
+func DecodeJWK(encoded string) (jwk.Key, error) {
+	raw, err := base64.RawStdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: decode JWK: %w", err)
+	}
+	key, err := jwk.ParseKey(raw)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse JWK: %w", err)
+	}
+	return key, nil
+}
+
 // keyMaterial holds a generated raw private key.
 type keyMaterial struct {
 	private any

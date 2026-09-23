@@ -110,6 +110,49 @@ func TestGeneratedKeysAreUnique(t *testing.T) {
 	assert.NotEqual(t, first[EnvAuthSecretKey], second[EnvAuthSecretKey])
 }
 
+func TestDecodeJWKIsTheOtherHalfOfTheGenerator(t *testing.T) {
+	generator, err := NewKeyGenerator("ES256")
+	require.NoError(t, err)
+	keys, err := generator.Generate()
+	require.NoError(t, err)
+
+	// The round trip is what a caller reading AUTH_PUBLIC_KEY depends on: the
+	// value the generator writes is the value DecodeJWK reads.
+	public, err := DecodeJWK(keys[EnvAuthPublicKey])
+	require.NoError(t, err)
+	assert.Equal(t, jwa.EC(), public.KeyType())
+	assert.NotEmpty(t, mustKeyID(t, public))
+	_, isPrivate := public.(jwk.ECDSAPrivateKey)
+	assert.False(t, isPrivate, "the public half must carry no private material")
+
+	private, err := DecodeJWK(keys[EnvAuthPrivateKey])
+	require.NoError(t, err)
+	_, isPrivate = private.(jwk.ECDSAPrivateKey)
+	assert.True(t, isPrivate, "the private half is a private key")
+
+	// Both halves carry the same kid, which is what a token header names.
+	assert.Equal(t, mustKeyID(t, public), mustKeyID(t, private))
+}
+
+func TestDecodeJWKRejectsAMalformedValue(t *testing.T) {
+	// A value that is not base64 fails before the JWK parse, and one that is
+	// base64 but not a key fails at the parse: both are a broken
+	// configuration, reported rather than returned as a nil key.
+	_, err := DecodeJWK("not base64!")
+	assert.Error(t, err)
+
+	_, err = DecodeJWK(base64.RawStdEncoding.EncodeToString([]byte("not a jwk")))
+	assert.Error(t, err)
+}
+
+func mustKeyID(t *testing.T, key jwk.Key) string {
+	t.Helper()
+
+	kid, ok := key.KeyID()
+	require.True(t, ok, "a generated key carries a thumbprint kid")
+	return kid
+}
+
 func TestGeneratedKeysSignAndVerify(t *testing.T) {
 	generator, err := NewKeyGenerator("ES256")
 	require.NoError(t, err)
