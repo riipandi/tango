@@ -44,19 +44,7 @@ spec:
                           plugin:
                               kind: VictoriaLogsTimeSeriesQuery
                               spec:
-                                  query: '{service.name="tango", severity_text=~"error|fatal"} $filter'
-                    - kind: TimeSeriesQuery
-                      spec:
-                          plugin:
-                              kind: VictoriaLogsTimeSeriesQuery
-                              spec:
-                                  query: '{service.name="tango", severity_text=~"warn"} $filter'
-                    - kind: TimeSeriesQuery
-                      spec:
-                          plugin:
-                              kind: VictoriaLogsTimeSeriesQuery
-                              spec:
-                                  query: '{service.name="tango", severity_text=~"info|debug"} $filter'
+                                  query: '{service.name="tango"} | stats by (severity_text) count(*)'
         error-rate:
             kind: Panel
             spec:
@@ -74,7 +62,7 @@ spec:
                           plugin:
                               kind: VictoriaLogsTimeSeriesQuery
                               spec:
-                                  query: '{service.name="tango", severity_text=~"error|fatal"} $filter'
+                                  query: '{service.name="tango", severity_text=~"error|fatal"} | stats count(*)'
         all-logs:
             kind: Panel
             spec:
@@ -92,7 +80,7 @@ spec:
                           plugin:
                               kind: VictoriaLogsTimeSeriesQuery
                               spec:
-                                  query: '{service.name="tango"} $filter'
+                                  query: '{service.name="tango"} | stats count(*)'
         log-lines:
             kind: Panel
             spec:
