@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_FtYSitZ7o3
 createdAt: 2026-09-19T12:32:56.625669
-updatedAt: 2026-09-19T12:32:56.625669
+updatedAt: 2026-09-23T16:40:59.421810
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_RCex2QKoSF
 authentication: {}
@@ -12,9 +12,9 @@ bodyType: null
 description: ''
 headers: []
 method: GET
-name: Responds to healthchecks
+name: System Health Check via REST
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/healthz
+url: ${[ apiBaseURL ]}/api/healthz
 urlParameters: []
 settingSendCookies:
   enabled: false

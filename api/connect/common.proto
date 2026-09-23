@@ -1,35 +1,38 @@
-// Shared contract messages for every internal list RPC.
+// Shared wire types every internal RPC response carries.
+//
+// The two transports answer one contract (docs/api-response.md): REST writes
+// the envelope in pkg/responder, and ConnectRPC writes the same metadata block
+// under protobuf field names. The service codec in internal/transport
+// serializes under the declared field names, so a field here spells the same
+// snake_case key the REST envelope emits.
 syntax = "proto3";
 
 package tango.common.v1;
 
 option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/common/v1;commonv1";
 
-// PageRequest bounds one list call. The field contract mirrors the REST
-// pagination parameters (pkg/responder): `page` starts at 1, `limit`
-// defaults to 25 and caps at 100, and -1 in either field returns every
-// record. A zero or unset limit takes the default rather than returning
-// an unbounded result. `query` is the free-text filter (ILIKE over the
-// names the domain lists). List responses echo the effective values in
-// ResponseMetadata.
-message PageRequest {
-  int32 page = 1;
-  int32 limit = 2;
-  string query = 3;
-}
-
 // ResponseMetadata mirrors the REST envelope metadata block
-// (pkg/responder.Metadata) field for field: the transport status, the
-// request correlation id, the rate-limit window, and the pagination
-// block. Every wrapper response carries one, so a client reads the
-// same metadata shape from either transport. Unknown values stay unset
-// and are omitted from the JSON.
+// (pkg/responder.Metadata) field for field: the transport status, the request
+// correlation id, the rate-limit window, and the pagination block. Every
+// response message that answers a client carries one, so a client reads the
+// same metadata shape from either transport.
+//
+// Every field is optional, because the REST block omits a value it does not
+// have (`omitzero`) rather than writing a zero: an unset field is omitted from
+// the JSON, which is what makes the two transports agree byte for byte.
 message ResponseMetadata {
+  // status_code is the HTTP status the transport answered with.
   optional int32 status_code = 1;
+
+  // request_id is the correlation id internal/transport assigned the request.
   optional string request_id = 2;
+
+  // rate_limit is the window the address was checked against, absent when the
+  // request spent no rate-limit check.
   RateLimit rate_limit = 3;
 
-  // Pagination, flat like the REST block. The item indices are zero-based.
+  // Pagination, flat like the REST block. The item indices are zero-based and
+  // inclusive, and a block is written only by a list response.
   optional int32 page = 4;
   optional int32 limit = 5;
   optional int32 total_pages = 6;
@@ -40,7 +43,10 @@ message ResponseMetadata {
 
 // RateLimit reports the per-window allowance of the rate limiter.
 message RateLimit {
+  // limit is the maximum number of requests allowed in the current window.
   optional int32 limit = 1;
+  // remaining is the number of requests left in the current window.
   optional int32 remaining = 2;
+  // reset is the unix timestamp when the window resets.
   optional int64 reset = 3;
 }

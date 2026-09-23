@@ -2,7 +2,10 @@
 // transport can serve a route without knowing which module owns it.
 package kernel
 
-import "github.com/go-chi/chi/v5"
+import (
+	"connectrpc.com/connect"
+	"github.com/go-chi/chi/v5"
+)
 
 // Module is one feature slice the server mounts. A module owns its package
 // (schema, repository, service, handlers) and registers its endpoints through
@@ -23,5 +26,36 @@ type Module interface {
 func Mount(r chi.Router, modules ...Module) {
 	for _, module := range modules {
 		module.Mount(r)
+	}
+}
+
+// RPCModule is a module that also serves ConnectRPC procedures.
+//
+// It is a separate interface rather than a second method on Module, so a module
+// that serves no procedure says so by not implementing it: the transport asks
+// with a type assertion instead of calling a method that would have to do
+// nothing.
+type RPCModule interface {
+	Module
+	// MountRPC registers the module's procedures on the RPC router. The router
+	// is mounted with the RPC prefix stripped, so the paths are the procedure
+	// paths a generated Connect handler answers. MountRPC runs once, before the
+	// listener opens.
+	//
+	// The handler options are the transport's, and a module passes them to every
+	// generated handler it registers. They carry the shared JSON codec — the one
+	// that serializes snake_case, so a procedure answers in the same field names
+	// its REST twin writes — and the panic boundary. A module that registers a
+	// handler without them answers in protobuf's default camelCase instead.
+	MountRPC(r chi.Router, opts ...connect.HandlerOption)
+}
+
+// MountRPC registers the procedures of every module that serves any. A module
+// without procedures is skipped, so one list can carry both kinds.
+func MountRPC(r chi.Router, opts []connect.HandlerOption, modules ...Module) {
+	for _, module := range modules {
+		if rpc, ok := module.(RPCModule); ok {
+			rpc.MountRPC(r, opts...)
+		}
 	}
 }

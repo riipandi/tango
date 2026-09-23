@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_PWa9yMokFq
 createdAt: 2026-09-18T17:35:52.966112
-updatedAt: 2026-09-19T14:54:38.308424
+updatedAt: 2026-09-23T16:40:47.128224
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_RCex2QKoSF
 authentication: {}
@@ -22,8 +22,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Connect transport smoke
-sortPriority: 0.0
+name: System Health Check via RPC
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/rpc/tango.system.v1.HealthService/Check
 urlParameters: []
 settingSendCookies:

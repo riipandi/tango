@@ -27,11 +27,17 @@ Cookie presence never authorizes an RPC.
 
 Every procedure is called with `POST`; `GET` is reserved for procedures that declare
 `idempotency_level = NO_SIDE_EFFECTS`, and no procedure in `api/connect/` does, so a `GET` on any
-procedure answers `405` with `Allow: POST` (`internal/transport.TestRPCRejectsWrongMethods`).
-`.llms/connectrpc-plan/endpoint-reference.md`
-is the authoritative transport decision record and service/method matrix; the retained REST set is
-pinned by `internal/registry.TestRetainedRESTInventory` and the machine-credential boundary by
-`internal/registry.TestRPCMachineCredentialBoundary`.
+procedure answers `405` with `Allow: POST` (`internal/transport.TestRPCRejectsGet`).
+
+The contracts frozen so far are `tango.common.v1` (`common.proto`: the shared response metadata
+block) and `tango.system.v1` (`system.proto`: `HealthService`). The transport rules — snake_case
+field naming on both surfaces, and an unknown `/rpc` path answering the Connect error document —
+are pinned by `internal/transport/handler_rpc_test.go`.
+
+> **Most rows below are stale.** The matrix was written for a tree that was later reset, so it
+> names routes, modules, and tests that do not exist today. Do not read a **done** row as a working
+> route. `docs/api-endpoint.md` is the target surface, the code is the only record of what is
+> served, and the Health rows further down are the part re-verified against the current tree.
 
 ## Authentication (tango-only)
 
@@ -198,9 +204,9 @@ ConnectRPC.
 
 | Method | Endpoint | Summary / Yaak Title | Status | Evidence |
 | ------ | -------- | -------------------- | ------ | -------- |
-| GET | `/healthz` | Responds to healthchecks | REST — liveness, dependencies untouched | `internal/transport.TestNewHTTPServerRoutes` |
-| GET | `/api/healthz` | Readiness document | REST — per-dependency results | `internal/transport.TestNewHTTPServerRoutes` |
-| POST | `/rpc/tango.system.v1.HealthService/Check` | Connect transport smoke | done — public smoke target | `internal/transport.TestRPCRouteTable` |
+| GET | `/healthz` | Responds to healthchecks | REST — liveness, dependencies untouched | `internal/transport.TestAPIHealthzReportsTheChecker` |
+| GET | `/api/healthz` | Readiness document | REST — per-dependency results | `internal/transport.TestAPIHealthzReportsTheChecker` |
+| POST | `/rpc/tango.system.v1.HealthService/Check` | Readiness over ConnectRPC | done — the same checker and the same result as `/api/healthz`; fails with `unavailable` naming the checks that are down | `internal/transport.TestRPCCheckAnswersTheReadinessDocument`, `internal/transport.TestRPCUnhealthyAnswersUnavailable` |
 
 ## OIDC
 

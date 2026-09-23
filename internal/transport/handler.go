@@ -85,6 +85,12 @@ func NewRouter(opts Options) chi.Router {
 			}
 		})
 
+		// The ConnectRPC surface is mounted inside the group too, so a
+		// procedure call is throttled by the same policy as a REST route. The
+		// prefix is stripped because chi only shifts its own route context: a
+		// generated Connect handler matches its procedure path exactly.
+		throttled.Mount(RPCPath, http.StripPrefix(RPCPath, rpcRouter(opts.Checker, opts.Modules)))
+
 		// The modules mount inside the group, so every route a module claims
 		// is throttled by the same policy as the API's own.
 		kernel.Mount(throttled, opts.Modules...)

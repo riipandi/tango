@@ -1,39 +1,59 @@
-// Canonical internal RPC contract for transport-owned system surfaces.
-// The public health endpoints stay REST; HealthService exists only as
-// the Connect transport smoke target.
+// The contract for the surfaces the transport itself owns.
+//
+// The public health endpoints stay on HTTP (`/healthz` liveness and
+// `/api/healthz` readiness); HealthService answers the same readiness result
+// to a client that speaks ConnectRPC.
 syntax = "proto3";
 
 package tango.system.v1;
 
+import "common.proto";
+
 option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/system/v1;systemv1";
 
-// HealthService is the transport smoke target for the /rpc mount.
+// HealthService reports the availability of the dependencies the process runs
+// on.
 service HealthService {
+  // Check answers the current readiness. A healthy system answers the result;
+  // an unhealthy one fails with `unavailable`, and the error message names the
+  // checks that are down.
   rpc Check(CheckRequest) returns (CheckResponse);
 }
 
-// VersionService exposes the deployed build metadata. Current mirrors
-// the REST route's session requirement; Latest answers the cached
-// release tag anonymously.
-service VersionService {
-  rpc Current(CurrentRequest) returns (CurrentResponse);
-  rpc Latest(LatestRequest) returns (LatestResponse);
-}
-
-message CurrentRequest {}
-
-message CurrentResponse {
-  string current_version = 1;
-}
-
-message LatestRequest {}
-
-message LatestResponse {
-  string latest_version = 1;
-}
-
+// CheckRequest is empty: the check set is fixed at startup, and the caller
+// chooses nothing about it.
 message CheckRequest {}
 
+// CheckResponse is the readiness document. It carries the same facts the
+// `/api/healthz` body publishes, so the two surfaces never disagree.
 message CheckResponse {
+  // status is the aggregated availability, `healthy` or `unhealthy`.
   string status = 1;
+
+  // details holds one entry per check, in check-name order.
+  repeated CheckDetail details = 2;
+
+  // took_ms is how long the whole check call took.
+  double took_ms = 3;
+
+  // metadata is the shared response metadata block.
+  tango.common.v1.ResponseMetadata metadata = 4;
+}
+
+// CheckDetail is the outcome of one dependency check.
+message CheckDetail {
+  // name identifies the dependency: a generic word such as `database` or
+  // `storage`, never a product name and never an address.
+  string name = 1;
+  // status is the component's own availability: `up` or `down`.
+  string status = 2;
+  // target names what was inspected, and stays empty on a surface a caller
+  // outside the machine reads.
+  string target = 3;
+  // error is the failure message, empty when the check passed.
+  string error = 4;
+  // optional marks a check that is reported without affecting the aggregate.
+  bool optional = 5;
+  // took_ms is how long this check took.
+  double took_ms = 6;
 }
