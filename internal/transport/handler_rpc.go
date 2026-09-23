@@ -40,9 +40,6 @@ func (s *rpcHealthService) Check(ctx context.Context, _ *connect.Request[systemv
 
 	result := s.checker.Check(ctx)
 	if !result.Healthy() {
-		// The correlation id travels in the error's metadata, set for every
-		// procedure by the transport's interceptor — the one place both
-		// transports can always name the request.
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New(health.Message(result)))
 	}
 

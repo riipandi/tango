@@ -1,6 +1,7 @@
 /.idea
 /.pnp
 /.husky
+/.atlas
 .pnp.js
 .DS_Store
 .DS_Store?
@@ -24,6 +25,7 @@ npm-debug.log*
 !.vscode/launch.json
 !.vscode/mcp.json
 !.vscode/tasks.json
+
 *.bak
 
 # SQLite
@@ -104,4 +106,3 @@ terraform.tfvars*
 !terraform.tfvars.example
 fly*.toml*
 !fly*.toml.example
-.atlas/

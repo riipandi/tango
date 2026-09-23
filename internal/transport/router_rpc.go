@@ -14,7 +14,6 @@ import (
 	systemv1connect "github.com/riipandi/tango/codegen/proto/go/tango/system/v1/systemv1connect"
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/kernel"
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // RPCPath is the route prefix the ConnectRPC surface is mounted on. The SPA,
@@ -84,50 +83,14 @@ func protoMessage(message any) (proto.Message, error) {
 	return msg, nil
 }
 
-// requestIDInterceptor copies the correlation id the request middleware
-// tagged onto every procedure answer: the response header on a successful
-// call, the error metadata on a failed one. The REST envelope carries the id
-// in its metadata block; here the protocol carries it, so a Connect client
-// reads it from the same place whichever procedure it calls.
-type requestIDInterceptor struct{}
-
-var _ connect.Interceptor = requestIDInterceptor{}
-
-func (requestIDInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
-	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		res, err := next(ctx, req)
-		if id := responder.RequestIDFromContext(ctx); id != "" {
-			var cerr *connect.Error
-			switch {
-			case err != nil && errors.As(err, &cerr):
-				cerr.Meta().Set(responder.RequestIDHeader, id)
-			case err == nil && res != nil:
-				res.Header().Set(responder.RequestIDHeader, id)
-			}
-		}
-		return res, err
-	}
-}
-
-func (requestIDInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
-	// Handler option only: a client-side call is not intercepted here.
-	return next
-}
-
-func (requestIDInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
-	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
-		if id := responder.RequestIDFromContext(ctx); id != "" {
-			conn.ResponseHeader().Set(responder.RequestIDHeader, id)
-		}
-		return next(ctx, conn)
-	}
-}
-
 // rpcHandlerOptions are the options every service on this surface is
-// registered with: the shared codec pair, the panic boundary, and the
-// correlation-id interceptor. A module that serves procedures receives them
-// and passes them to every generated handler it registers, so a module's
-// procedure answers exactly like the transport's own.
+// registered with: the shared codec pair and the panic boundary. A module
+// that serves procedures receives them and passes them to every generated
+// handler it registers, so a module's procedure answers exactly like the
+// transport's own. The correlation id is not here on purpose: the request
+// middleware writes it on the writer before any handler runs, and connect
+// merges handler-set headers by appending, so a second writer would answer
+// with the header twice.
 func rpcHandlerOptions() []connect.HandlerOption {
 	return []connect.HandlerOption{
 		connect.WithCodec(rpcJSONCodec{name: rpcCodecJSON}),
@@ -140,7 +103,6 @@ func rpcHandlerOptions() []connect.HandlerOption {
 			// and the middleware logs it with the stack and the request id.
 			return connect.NewError(connect.CodeInternal, errors.New("internal error"))
 		}),
-		connect.WithInterceptors(requestIDInterceptor{}),
 	}
 }
 

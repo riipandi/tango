@@ -75,6 +75,8 @@ func TestRPCCheckAnswersTheReadinessDocument(t *testing.T) {
 	assert.Equal(t, "healthy", body.Status)
 	assert.True(t, strings.HasPrefix(rec.Header().Get("X-Request-Id"), "req_"),
 		"the response header names the request the middleware tagged")
+	assert.Len(t, rec.Header().Values("X-Request-Id"), 1,
+		"the middleware is the header's only writer; connect appends handler-set headers, so a second writer duplicates it")
 	require.Len(t, body.Details, 1)
 	assert.Equal(t, "database", body.Details[0].Name)
 	assert.Equal(t, "up", body.Details[0].Status)
@@ -123,6 +125,8 @@ func TestRPCUnhealthyAnswersUnavailable(t *testing.T) {
 	assert.Contains(t, body.Message, "database", "the message must name the failing check")
 	assert.True(t, strings.HasPrefix(rec.Header().Get("X-Request-Id"), "req_"),
 		"a failed call still carries the correlation id")
+	assert.Len(t, rec.Header().Values("X-Request-Id"), 1,
+		"the middleware's header survives an error answer; no handler may write it again")
 }
 
 // TestRPCUnknownProcedureAnswersConnectError covers the not-found boundary:
@@ -172,6 +176,8 @@ func TestRPCCheckIsCallableByTheGeneratedClient(t *testing.T) {
 	assert.Equal(t, "healthy", resp.Msg.GetStatus())
 	assert.True(t, strings.HasPrefix(resp.Header().Get("X-Request-Id"), "req_"),
 		"the generated client reads the correlation id from the response header")
+	assert.Len(t, resp.Header().Values("X-Request-Id"), 1,
+		"the generated client must read one id, not a duplicated pair")
 }
 
 // rpcFeature is a module that serves a procedure, the way an application

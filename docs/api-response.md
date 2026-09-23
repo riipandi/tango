@@ -181,9 +181,11 @@ parsing a body:
 
 - **Status** is the connect code: `ok` on success, `unavailable` for a
   dependency that is down, `unimplemented` for an unknown procedure.
-- **The correlation id** is the `X-Request-Id` response header, copied from
-  the request middleware's tag by the transport's interceptor on every
-  procedure answer, success or failure.
+- **The correlation id** is the `X-Request-Id` response header the request
+  middleware writes on every answer — success, failure, and the not-found
+  boundary — before any handler runs. No handler or interceptor writes it
+  again: connect merges handler-set headers by appending, so a second writer
+  answers with the id twice.
 - **Rate-limit state** is the `X-RateLimit-*` response headers the limiter
   middleware writes.
 - **A structured failure** is a message attached to the connect error's
