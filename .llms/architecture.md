@@ -134,7 +134,7 @@ Checks (check names are generic — `database`, `kvstore`, `storage` — never t
 
 ### tasks/metrics.yml
 
-`metrics:up|down|health|endpoints|query|traces|targets|smoke|smoke:otel`, the shortcuts for the stack. `metrics:query` takes a LogsQL query after `--`, `metrics:smoke` runs the logging smoke command with `.env.local`, and `metrics:smoke:otel` runs the trace and metric one. The compose targets stay in the root `Taskfile.yml` next to the compose file they drive; this group only drives the tasks a developer runs while wiring the application to the stack. A Task variable holding a space is quoted into one word, so a loop over several values is written as plain shell inside one `cmd`, not as a Task `for`.
+`metrics:up|down|health|endpoints|query|traces|targets|smoke|smoke:otel`, the shortcuts for the stack. The host ports are the mapping to remember: **Perses 3380, Perses MCP 3880, VictoriaLogs 33801, VictoriaMetrics 33802, VictoriaTraces 33803** (the collector keeps 4317/4318) — the container ports stay the backends' own, so anything container-to-container (the collector's exporters, the scrapes) names the internal port and only the browser-facing datasource URLs and the host-side task curls use the mapped ones. `metrics:query` takes a LogsQL query after `--`, `metrics:smoke` runs the logging smoke command with `.env.local`, and `metrics:smoke:otel` runs the trace and metric one. The compose targets stay in the root `Taskfile.yml` next to the compose file they drive; this group only drives the tasks a developer runs while wiring the application to the stack. A Task variable holding a space is quoted into one word, so a loop over several values is written as plain shell inside one `cmd`, not as a Task `for`.
 
 ### pkg/testutils/victorialogs.go
 

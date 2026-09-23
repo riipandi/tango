@@ -12,7 +12,5 @@ spec:
   plugin:
     kind: "PrometheusDatasource"
     spec:
-      # directUrl keeps the query on the browser side, so a developer can read
-      # the store without routing every request through the Perses proxy.
-      directUrl: "http://localhost:8428"
+      directUrl: "http://localhost:33802"
       scrapeInterval: "15s"

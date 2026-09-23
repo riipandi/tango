@@ -12,4 +12,4 @@ spec:
   plugin:
     kind: "VictoriaLogsDatasource"
     spec:
-      directUrl: "http://localhost:9428"
+      directUrl: "http://localhost:33801"
