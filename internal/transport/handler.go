@@ -11,6 +11,7 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/static"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/web"
@@ -88,6 +89,13 @@ func NewRouter(opts Options) chi.Router {
 		// is throttled by the same policy as the API's own.
 		kernel.Mount(throttled, opts.Modules...)
 	})
+
+	// The uploads are served outside the group: a page that loads an image
+	// spends no rate-limit check, the budget belonging to the API a client
+	// calls rather than to the assets it renders. It is mounted before the
+	// SPA, whose not-found handler would otherwise answer a missing upload
+	// with index.html.
+	static.Mount(r, static.Dir(opts.Config.Storage.LocalPath))
 
 	web.SetupStatic(r)
 	return r
