@@ -1,6 +1,7 @@
 package registry_test
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/registry"
+	"github.com/riipandi/tango/internal/transport/middleware"
 )
 
 // reportsArea is an area a consumer wrote outside this repository. It owns one
@@ -57,6 +59,13 @@ func TestAConsumerServesItsOwnArea(t *testing.T) {
 	// about reaching a database, and the health check that holds the pool runs
 	// on request rather than at construction.
 	do.OverrideValue(injector, &datastore.Postgres{})
+	// The limiter is stubbed for the same reason. It reads the pool by
+	// default, and the stub above has no connections: the throttling itself is
+	// covered by internal/transport, and what this test asserts is that an
+	// area passed to New reaches the served router.
+	do.Override[middleware.Limiter](injector, func(do.Injector) (middleware.Limiter, error) {
+		return allowAll{}, nil
+	})
 
 	router, err := do.Invoke[chi.Router](injector)
 	require.NoError(t, err)
@@ -67,6 +76,14 @@ func TestAConsumerServesItsOwnArea(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code,
 		"an area passed to New must be mounted on the served router")
 	assert.Equal(t, "pong", rec.Body.String())
+}
+
+// allowAll is a limiter that never throttles, so a test can exercise the
+// routing above it without a backend.
+type allowAll struct{}
+
+func (allowAll) Allow(context.Context, string) (middleware.Result, error) {
+	return middleware.Result{Limit: 60, Remaining: 60}, nil
 }
 
 // TestTheApplicationAreasAreListedOnce keeps the built-in list honest: the

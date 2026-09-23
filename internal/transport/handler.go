@@ -46,10 +46,15 @@ type Options struct {
 // recovery around every route; CORS, so a policy question is answered before
 // a route runs; the request timeout; then the endpoints.
 //
-// The rate limiter is the API surface's middleware and not the router's: a
-// static asset or a metrics scrape spends no rate-limit check, the budget
-// belonging to the API a client calls. Paths that must never be throttled
-// are listed in rateLimitExclusions above.
+// The rate limiter wraps the routes a client calls, and a static asset or a
+// metrics scrape is outside it: the budget belongs to the API, not to the
+// page that embeds it. The throttled surface is a chi group rather than the
+// /api subrouter, because a module mounts its own routes — a feature under
+// /api, a protocol endpoint at /.well-known — on the router it is handed, and
+// middleware attached to the /api subrouter never reaches them. The group is
+// what makes the limiter cover every mounted route without also covering the
+// SPA. Paths that must never be throttled are listed in rateLimitExclusions
+// above.
 //
 // The SPA is mounted last: its handler answers whatever the routes above it
 // did not claim, and its own not-found rule keeps API and protocol paths from
@@ -67,17 +72,22 @@ func NewRouter(opts Options) chi.Router {
 		r.Handle(opts.Config.OTEL.Metrics.PrometheusPath, opts.Metrics)
 	}
 
-	r.Route("/api", func(api chi.Router) {
+	r.Group(func(throttled chi.Router) {
 		if opts.RateLimiter != nil {
-			api.Use(middleware.RateLimit(opts.RateLimiter, rateLimitExclusions...))
+			throttled.Use(middleware.RateLimit(opts.RateLimiter, rateLimitExclusions...))
 		}
-		api.Get("/", apiRoot(opts.Config))
-		if opts.Checker != nil {
-			api.Get("/healthz", health.Handler(opts.Checker))
-		}
-	})
 
-	kernel.Mount(r, opts.Modules...)
+		throttled.Route("/api", func(api chi.Router) {
+			api.Get("/", apiRoot(opts.Config))
+			if opts.Checker != nil {
+				api.Get("/healthz", health.Handler(opts.Checker))
+			}
+		})
+
+		// The modules mount inside the group, so every route a module claims
+		// is throttled by the same policy as the API's own.
+		kernel.Mount(throttled, opts.Modules...)
+	})
 
 	web.SetupStatic(r)
 	return r
