@@ -52,6 +52,12 @@ var nullKeys = []string{
 // replaces it.
 var omittedKeys = []string{
 	"fetcher.user_agent",
+	// auth.jwt_algorithm is empty in every deployment that configures one
+	// signing stack, because the answer is then derived: the key pair's own
+	// `alg`, or the HMAC secret's length. It is set only by a deployment that
+	// configures both stacks, so listing it would invite a choice that is
+	// already made.
+	"auth.jwt_algorithm",
 }
 
 // envKeys are the keys a generated file writes as an env: directive even though

@@ -1,11 +1,17 @@
 // Package jwks publishes the JSON Web Key Set the application signs with and
 // verifies against.
 //
-// Two sources feed one set. The configuration holds the application's own key
-// pair (`auth.private_key` / `auth.public_key`), which is the default signing
-// key for stateless JWTs. The database holds the keys of a deployment that
-// acts as an OAuth provider, which is how a second key joins the set without
-// a redeploy.
+// Signing is dual stack. The configuration holds an asymmetric key pair
+// (`auth.private_key` / `auth.public_key`) and an HMAC secret
+// (`auth.secret_key`); which one signs a given token is the caller's choice,
+// made where the token is created. The database holds the keys of a deployment
+// that acts as an OAuth provider, which is how a further key joins the set
+// without a redeploy.
+//
+// Only the asymmetric keys are published. A JWKS is a public document, and a
+// symmetric key's "public" form is the secret itself, so the HMAC secret
+// verifies locally and never leaves the process. That is what the HS* half of
+// the dual stack costs, and it is the same trade every deployment makes.
 //
 // The service satisfies jwtutils.KeyProvider, so the endpoint that publishes
 // the set and the code that verifies a token read the same source: a key that
@@ -28,9 +34,10 @@ import (
 	"github.com/riipandi/tango/pkg/crypto"
 )
 
-// ErrNoSigningKey reports a configuration with no private key to sign with.
-// The HMAC-only configuration is a valid one, so this is reported by the
-// caller that needs a key pair rather than refused at start-up.
+// ErrNoSigningKey reports a configuration with no key to sign with. It is
+// returned by the accessor for the stack the deployment did not configure,
+// not refused at start-up: a run with only the key pair is a valid one, and so
+// is a run with only the HMAC secret.
 var ErrNoSigningKey = errors.New("jwks: no signing key configured")
 
 // KeyCacheTTL is how long a built key set is reused before the source is read
@@ -45,22 +52,33 @@ type Source interface {
 	ActiveSigningKeys(ctx context.Context) ([]StoredKey, error)
 }
 
-// Service owns the published key set.
+// Service owns the published key set and the configured signing material.
 type Service struct {
 	source Source
 	log    *slog.Logger
 
-	// once guards the parse of the configured key pair: it is read from a
-	// string that does not change for the life of the process, and a parse
+	// once guards the parse of the configured keys: they are read from
+	// strings that do not change for the life of the process, and a parse
 	// failure is remembered rather than retried on every request.
-	once       sync.Once
+	once sync.Once
+
+	// privateKey and publicKey are the asymmetric half of the dual stack.
 	privateKey jwk.Key
 	publicKey  jwk.Key
-	parseErr   error
+
+	// hmacKey is the symmetric half, from auth.secret_key. It signs and
+	// verifies locally and is never published.
+	hmacKey jwk.Key
+
+	// configured is auth.jwt_algorithm, empty when the deployment lets the
+	// material decide.
+	configured string
+
+	parseErr error
 }
 
 // NewService builds the service. source may be nil, which is a run with no
-// OAuth provider tables to read: the published set is then the configured key
+// OAuth provider tables to read: the published set is then the configured keys
 // alone.
 func NewService(cfg config.Config, source Source, log *slog.Logger) *Service {
 	if log == nil {
@@ -74,53 +92,185 @@ func NewService(cfg config.Config, source Source, log *slog.Logger) *Service {
 	return service
 }
 
-// parse reads the configured key pair once. A missing pair is not an error —
-// a deployment that signs with the HMAC secret alone has none — but a pair
-// that is present and unreadable is.
+// parse reads the configured keys once. A missing half is not an error — a
+// deployment may configure either stack — but a value that is present and
+// unreadable is.
 func (s *Service) parse(cfg config.Config) {
 	s.once.Do(func() {
-		if cfg.Auth.PublicKey == "" {
+		s.configured = cfg.Auth.JWTAlgorithm
+		if err := s.parseKeyPair(cfg); err != nil {
+			s.parseErr = err
 			return
 		}
-		public, err := crypto.DecodeJWK(cfg.Auth.PublicKey)
-		if err != nil {
-			s.parseErr = fmt.Errorf("jwks: auth.public_key: %w", err)
+		s.parseHMAC(cfg)
+		if s.parseErr != nil {
 			return
 		}
-		// A symmetric key has no public half: its "public" form is the secret
-		// itself, so publishing it would disclose the signing key. An HS*
-		// deployment signs with auth.secret_key, which is never published.
-		if symErr := rejectSymmetric(public); symErr != nil {
-			s.parseErr = fmt.Errorf("jwks: auth.public_key: %w", symErr)
-			return
-		}
-		// The `use` is stamped here, once, rather than at publish time: the
-		// key is shared by every request, so mutating it while serving would
-		// be a data race.
-		if setErr := public.Set(jwk.KeyUsageKey, KeyUsageSignature); setErr != nil {
-			s.parseErr = fmt.Errorf("jwks: auth.public_key: set use: %w", setErr)
-			return
-		}
-		s.publicKey = public
-
-		if cfg.Auth.PrivateKey == "" {
-			return
-		}
-		private, err := crypto.DecodeJWK(cfg.Auth.PrivateKey)
-		if err != nil {
-			s.parseErr = fmt.Errorf("jwks: auth.private_key: %w", err)
-			return
-		}
-		s.privateKey = private
+		s.parseErr = s.checkConfiguredAlgorithm()
 	})
 }
 
-// Err reports the parse failure of the configured key pair, if any.
+// checkConfiguredAlgorithm reports a named algorithm whose material is
+// missing. Configuration validation refuses the same mismatch, so a validated
+// run never reaches here; the check exists because the service is also built
+// directly, and signing with a key the deployment did not configure is a
+// failure worth reporting at construction rather than at the first token.
+func (s *Service) checkConfiguredAlgorithm() error {
+	if s.configured == "" {
+		return nil
+	}
+	alg, ok := jwa.LookupSignatureAlgorithm(s.configured)
+	if !ok {
+		return fmt.Errorf("jwks: auth.jwt_algorithm: %q is not a signature algorithm", s.configured)
+	}
+	if alg.IsSymmetric() && s.hmacKey == nil {
+		return fmt.Errorf("jwks: auth.jwt_algorithm: %q requires auth.secret_key", s.configured)
+	}
+	if !alg.IsSymmetric() && s.privateKey == nil {
+		return fmt.Errorf("jwks: auth.jwt_algorithm: %q requires auth.private_key", s.configured)
+	}
+	return nil
+}
+
+// parseKeyPair reads the asymmetric half.
+func (s *Service) parseKeyPair(cfg config.Config) error {
+	if cfg.Auth.PublicKey == "" {
+		return nil
+	}
+	public, err := crypto.DecodeJWK(cfg.Auth.PublicKey)
+	if err != nil {
+		return fmt.Errorf("jwks: auth.public_key: %w", err)
+	}
+	// A symmetric key has no public half: its "public" form is the secret
+	// itself, so publishing it would disclose the signing key. An HS*
+	// deployment signs with auth.secret_key, which is never published.
+	if symErr := rejectSymmetric(public); symErr != nil {
+		return fmt.Errorf("jwks: auth.public_key: %w", symErr)
+	}
+	// The `use` is stamped here, once, rather than at publish time: the key
+	// is shared by every request, so mutating it while serving would be a
+	// data race.
+	if setErr := public.Set(jwk.KeyUsageKey, KeyUsageSignature); setErr != nil {
+		return fmt.Errorf("jwks: auth.public_key: set use: %w", setErr)
+	}
+	s.publicKey = public
+
+	if cfg.Auth.PrivateKey == "" {
+		return nil
+	}
+	private, err := crypto.DecodeJWK(cfg.Auth.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("jwks: auth.private_key: %w", err)
+	}
+	if symErr := rejectSymmetric(private); symErr != nil {
+		return fmt.Errorf("jwks: auth.private_key: %w", symErr)
+	}
+	// The private key is the one the published key was derived from. A pair
+	// that does not agree would sign tokens no client could verify, so it is
+	// refused here rather than discovered by a rejected token.
+	if err := keyPairAgrees(private, public); err != nil {
+		return fmt.Errorf("jwks: auth.private_key: %w", err)
+	}
+	s.privateKey = private
+	return nil
+}
+
+// parseHMAC reads the symmetric half.
+func (s *Service) parseHMAC(cfg config.Config) {
+	if cfg.Auth.SecretKey == "" {
+		return
+	}
+	// The secret is hex, the form key:generate writes. Its length follows the
+	// algorithm (32, 48, or 64 bytes), so it does not go through the AES-256
+	// reader that insists on exactly 32.
+	raw, err := crypto.ParseHMACKeyHex(cfg.Auth.SecretKey)
+	if err != nil {
+		s.parseErr = fmt.Errorf("jwks: auth.secret_key: %w", err)
+		return
+	}
+	key, err := jwk.Import(raw)
+	if err != nil {
+		s.parseErr = fmt.Errorf("jwks: auth.secret_key: %w", err)
+		return
+	}
+	if setErr := key.Set(jwk.KeyUsageKey, KeyUsageSignature); setErr != nil {
+		s.parseErr = fmt.Errorf("jwks: auth.secret_key: set use: %w", setErr)
+		return
+	}
+	s.hmacKey = key
+}
+
+// keyPairAgrees reports whether the public key is the one the private key
+// yields. A private key carries its own public part, so the comparison is
+// local and needs no configuration.
+func keyPairAgrees(private, public jwk.Key) error {
+	derived, err := jwk.PublicKeyOf(private)
+	if err != nil {
+		return fmt.Errorf("derive public key: %w", err)
+	}
+	if !jwk.Equal(derived, public) {
+		return errors.New("does not match auth.public_key")
+	}
+	return nil
+}
+
+// SigningAlgorithm reports the algorithm a token is signed with.
+//
+// The configured auth.jwt_algorithm wins when it is set: that is the value a
+// deployment gives when it configures both stacks, and the only way it can say
+// which one signs. When it is unset the answer is derived — the key pair's own
+// `alg` if there is a key pair, the HMAC secret's length otherwise — so a
+// deployment with one stack never has to state what its material already says.
+func (s *Service) SigningAlgorithm() (jwa.SignatureAlgorithm, error) {
+	if s.parseErr != nil {
+		return jwa.NoSignature(), s.parseErr
+	}
+	if s.configured != "" {
+		alg, ok := jwa.LookupSignatureAlgorithm(s.configured)
+		if !ok {
+			return jwa.NoSignature(), fmt.Errorf("jwks: auth.jwt_algorithm: %q is not a signature algorithm", s.configured)
+		}
+		// The named algorithm must match the material. A symmetric one needs
+		// the secret; an asymmetric one needs the key pair. Configuration
+		// validation refuses the mismatch at start-up, so reaching here is a
+		// caller that built a Service without validating.
+		if alg.IsSymmetric() && s.hmacKey == nil {
+			return jwa.NoSignature(), fmt.Errorf("jwks: auth.jwt_algorithm: %q requires auth.secret_key", s.configured)
+		}
+		if !alg.IsSymmetric() && s.privateKey == nil {
+			return jwa.NoSignature(), fmt.Errorf("jwks: auth.jwt_algorithm: %q requires auth.private_key", s.configured)
+		}
+		return alg, nil
+	}
+
+	if s.privateKey != nil {
+		alg, ok := s.privateKey.Algorithm()
+		if !ok {
+			// The generator always stamps `alg`, so a key pair without one was
+			// written by hand. The curve determines the algorithm, but the
+			// mapping lives in an internal jwx package, so rather than
+			// restating it here the deployment is asked to say what it means.
+			return jwa.NoSignature(), errors.New(
+				"jwks: auth.private_key carries no alg; set auth.jwt_algorithm")
+		}
+		looked, ok := jwa.LookupSignatureAlgorithm(alg.String())
+		if !ok {
+			return jwa.NoSignature(), fmt.Errorf("jwks: auth.private_key: %q is not a signature algorithm", alg)
+		}
+		return looked, nil
+	}
+	if s.hmacKey != nil {
+		return s.HMACAlgorithm()
+	}
+	return jwa.NoSignature(), ErrNoSigningKey
+}
+
+// Err reports the parse failure of the configured keys, if any.
 func (s *Service) Err() error { return s.parseErr }
 
-// SignKey returns the configured private key. It is the application's own
-// key, so stateless JWTs are signed with it in every deployment, whether or
-// not the database holds more keys.
+// SignKey returns the asymmetric private key, the default for stateless JWTs.
+// It is the key a client verifies against the published set, so it is what a
+// token meant for an outside caller is signed with.
 func (s *Service) SignKey(context.Context) (jwk.Key, error) {
 	if s.parseErr != nil {
 		return nil, s.parseErr
@@ -131,9 +281,57 @@ func (s *Service) SignKey(context.Context) (jwk.Key, error) {
 	return s.privateKey, nil
 }
 
+// HMACKey returns the symmetric signing key. It is the other half of the dual
+// stack: a token signed with it is verified by the same process, using
+// auth.secret_key, and is never verifiable from the published set — a
+// symmetric key cannot be published without disclosing it.
+func (s *Service) HMACKey(context.Context) (jwk.Key, error) {
+	if s.parseErr != nil {
+		return nil, s.parseErr
+	}
+	if s.hmacKey == nil {
+		return nil, ErrNoSigningKey
+	}
+	return s.hmacKey, nil
+}
+
+// HMACAlgorithm returns the algorithm the configured HMAC secret is used
+// with, chosen by its length: 32 bytes is HS256, 48 is HS384, 64 is HS512.
+//
+// The length is the only signal available — a hex secret carries no algorithm
+// of its own — and it is the same rule key:generate follows when it picks the
+// secret's size, so the two agree without a second configuration key.
+func (s *Service) HMACAlgorithm() (jwa.SignatureAlgorithm, error) {
+	key, err := s.HMACKey(context.Background())
+	if err != nil {
+		return jwa.NoSignature(), err
+	}
+	secret, ok := key.(jwk.SymmetricKey)
+	if !ok {
+		return jwa.NoSignature(), fmt.Errorf("jwks: auth.secret_key: not a symmetric key")
+	}
+	octets, ok := secret.Octets()
+	if !ok {
+		return jwa.NoSignature(), fmt.Errorf("jwks: auth.secret_key: no key material")
+	}
+	switch {
+	case len(octets) >= 64:
+		return jwa.HS512(), nil
+	case len(octets) >= 48:
+		return jwa.HS384(), nil
+	default:
+		return jwa.HS256(), nil
+	}
+}
+
 // VerifyKeySet returns the public keys a token may be verified against: the
 // configured public key first, then every active signing key the database
 // holds.
+//
+// The HMAC secret is deliberately absent. A JWKS is a public document, and a
+// symmetric key's "public" form is the secret itself, so publishing it would
+// hand every reader the ability to mint tokens. A caller that must verify an
+// HS* token takes HMACKey instead.
 //
 // A database that cannot be read degrades the set to the configured key
 // rather than failing the call. The configured key is the one the application

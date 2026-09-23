@@ -327,17 +327,7 @@ func (c Config) Validate() error {
 			s3.SignedURLExpires, maxS3SignedURLExpires)
 	}
 
-	// The key pair and the HMAC secret are alternatives: a token is signed with
-	// one or the other, so at least one must be present.
-	check(c.Auth.PrivateKey != "" || c.Auth.SecretKey != "",
-		"auth: set auth.private_key or auth.secret_key")
-	check(c.Auth.PrivateKey == "" || c.Auth.PublicKey != "",
-		"auth.public_key: required when auth.private_key is set")
-	check(c.Auth.Issuer != "", "auth.issuer: must not be empty")
-	check(c.Auth.AccessTTL > 0, "auth.access_ttl: must be positive")
-	check(c.Auth.RefreshTTL > 0, "auth.refresh_ttl: must be positive")
-	check(c.Auth.RefreshTTL >= c.Auth.AccessTTL,
-		"auth.refresh_ttl: must not be shorter than auth.access_ttl")
+	checkAuth(&c, check)
 
 	if len(problems) == 0 {
 		return nil
@@ -815,6 +805,55 @@ func RedactKVURL(rawURL string) string {
 		target += "/" + db
 	}
 	return target
+}
+
+// JWTAlgorithms are the signature algorithms auth.jwt_algorithm accepts. They
+// are listed here rather than read from the JWS library so this package stays
+// free of that dependency; a test in modules/identity/jwks asserts the two
+// lists agree, so a library that grows an algorithm fails there instead of
+// accepting a value this list rejects.
+var JWTAlgorithms = []string{
+	"HS256", "HS384", "HS512",
+	"RS256", "RS384", "RS512",
+	"ES256", "ES256K", "ES384", "ES512",
+	"PS256", "PS384", "PS512",
+	"EdDSA", "Ed25519",
+}
+
+// IsHMACAlgorithm reports whether an algorithm is one of the symmetric ones.
+// It is what tells the HMAC half of the dual stack from the key-pair half.
+func IsHMACAlgorithm(algorithm string) bool {
+	return strings.HasPrefix(algorithm, "HS")
+}
+
+// checkAuth validates the JWT signing material.
+func checkAuth(c *Config, check func(ok bool, format string, args ...any)) {
+	// The key pair and the HMAC secret are alternatives: a token is signed with
+	// one or the other, so at least one must be present.
+	check(c.Auth.PrivateKey != "" || c.Auth.SecretKey != "",
+		"auth: set auth.private_key or auth.secret_key")
+	check(c.Auth.PrivateKey == "" || c.Auth.PublicKey != "",
+		"auth.public_key: required when auth.private_key is set")
+	check(c.Auth.JWTAlgorithm == "" || isOneOf(c.Auth.JWTAlgorithm, JWTAlgorithms...),
+		"auth.jwt_algorithm: %q is not one of %s", c.Auth.JWTAlgorithm, joinValues(JWTAlgorithms...))
+	// A named algorithm must match the material the deployment configured. A
+	// symmetric algorithm needs the secret; an asymmetric one needs the pair.
+	// Both are checked only when the algorithm is named, so an unset value
+	// derives the right answer from whatever is configured.
+	if c.Auth.JWTAlgorithm != "" {
+		if IsHMACAlgorithm(c.Auth.JWTAlgorithm) {
+			check(c.Auth.SecretKey != "",
+				"auth.jwt_algorithm: %q requires auth.secret_key", c.Auth.JWTAlgorithm)
+		} else {
+			check(c.Auth.PrivateKey != "",
+				"auth.jwt_algorithm: %q requires auth.private_key", c.Auth.JWTAlgorithm)
+		}
+	}
+	check(c.Auth.Issuer != "", "auth.issuer: must not be empty")
+	check(c.Auth.AccessTTL > 0, "auth.access_ttl: must be positive")
+	check(c.Auth.RefreshTTL > 0, "auth.refresh_ttl: must be positive")
+	check(c.Auth.RefreshTTL >= c.Auth.AccessTTL,
+		"auth.refresh_ttl: must not be shorter than auth.access_ttl")
 }
 
 // String renders the configuration with every secret redacted, so an accidental

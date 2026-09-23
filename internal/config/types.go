@@ -59,6 +59,15 @@ type Auth struct {
 	PublicKey  string `koanf:"public_key" json:"public_key"`
 	// SecretKey is the hex-encoded HMAC key, used when no key pair is given.
 	SecretKey string `koanf:"secret_key" json:"secret_key"`
+	// JWTAlgorithm names the algorithm a token is signed with when the
+	// deployment configures both stacks. An empty value derives it: the key
+	// pair's own `alg` when there is one, the HMAC secret's length otherwise.
+	//
+	// It exists because two configured stacks are otherwise ambiguous, and
+	// which one signs is a deployment decision. It is not part of the sample
+	// file: a deployment that configures one stack never needs it, and the
+	// derived answer is the right one for every such deployment.
+	JWTAlgorithm string `koanf:"jwt_algorithm" json:"jwt_algorithm"`
 	// Issuer is the iss claim placed in every token.
 	Issuer string `koanf:"issuer" json:"issuer"`
 	// AccessTTL is the lifetime of an access token.
