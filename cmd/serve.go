@@ -15,12 +15,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/fetcher"
-	"github.com/riipandi/tango/internal/mailer"
-	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/registry"
-	"github.com/riipandi/tango/internal/scheduler"
-	"github.com/riipandi/tango/internal/storage"
 )
 
 var serveCmd = &cli.Command{
@@ -73,66 +68,33 @@ file decides.`,
 		}
 
 		// The container wires the pool, the health checker, the queue, and the
-		// server, so the command only names what it blocks on. Resolving the
-		// server is what opens the pool: an unreachable database fails the run
-		// here, before the listener opens.
+		// server, so the command only names what it blocks on. Prewarm
+		// resolves every service the run depends on — the pool, the mailer,
+		// the queue with its jobs seeded, the areas' wiring — so a
+		// configuration or a dependency one of them cannot work with fails
+		// the run here, before the listener opens.
 		injector := registry.New(ctx, cfg, obs.MetricsHandler(), log.Slog())
-
-		// The outbound client is built before the listener opens. A
-		// configuration it cannot use fails the run here. Shutdown closes
-		// its idle connections with the injector.
-		if _, err = do.Invoke[*fetcher.Client](injector); err != nil {
+		err = registry.Prewarm(injector)
+		if err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}
 
-		// The mailer and its templates are built here too: a template that
-		// cannot be parsed is a broken build, and a run should report that
-		// before it starts serving rather than on the first send. A run with
-		// no smtp_host builds a mailer that refuses to send, which is not a
-		// failure.
-		if _, err = do.Invoke[*mailer.Service](injector); err != nil {
+		// The runners are the long-running components of the run, in start
+		// order: the queue, the scheduler, and the staging watcher when it is
+		// enabled. The order and each runner's drain live in the registry.
+		runners, err := registry.Runners(injector)
+		if err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}
+		for _, runner := range runners {
+			runner.Start(ctx)
+		}
 
+		// The listener is the one service the command resolves by name: it is
+		// what the run blocks on, and its address is what the log reports.
 		server, err := do.Invoke[*http.Server](injector)
 		if err != nil {
 			return fmt.Errorf("serve: %w", err)
-		}
-
-		// The queue starts with the server and stops with the injector: its
-		// Shutdown drains the in-flight tasks after the HTTP drain ends.
-		queueClient, err := do.Invoke[*queue.Client](injector)
-		if err != nil {
-			return fmt.Errorf("serve: %w", err)
-		}
-		queueClient.Start(ctx)
-
-		// The scheduler fires after the queue it enqueues onto, so its first
-		// tick claims into a running dispatcher; it stops before the drain,
-		// and its fires in flight join the queue's own drain.
-		jobScheduler, err := do.Invoke[*scheduler.Scheduler](injector)
-		if err != nil {
-			return fmt.Errorf("serve: %w", err)
-		}
-		jobScheduler.Start(ctx)
-
-		// The staging watcher runs only when it is switched on: a run that
-		// does not watch stages nothing, and resolving it would still be
-		// harmless, but starting it would enqueue uploads no caller asked
-		// for. It stops before the scheduler, its enqueues are durable, and
-		// a settle in flight is one task either enqueued or not.
-		if cfg.Storage.Watch.Enable {
-			stagingWatcher, err := do.Invoke[*storage.Watcher](injector)
-			if err != nil {
-				return fmt.Errorf("serve: %w", err)
-			}
-			watchErr := make(chan error, 1)
-			go func() { watchErr <- stagingWatcher.Start(ctx) }()
-			defer func() {
-				if err := <-watchErr; err != nil {
-					log.Slog().ErrorContext(ctx, "serve: staging watch ended", "err", err)
-				}
-			}()
 		}
 
 		// The console-less echo: a deployment that ships its logs elsewhere
@@ -153,7 +115,6 @@ file decides.`,
 				serveErr <- err
 			}
 		}()
-
 		log.Slog().InfoContext(ctx, "starting",
 			"mode", cfg.App.Mode,
 			"transport", cfg.Log.Transport,
@@ -175,12 +136,17 @@ file decides.`,
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.Server.ShutdownTimeout)
 		defer cancel()
 
-		// The scheduler stops before the HTTP drain: a fire in flight
-		// finishes its enqueue — an enqueued task is durable, so the queue's
-		// own drain after this cannot lose one — and no new fire starts
-		// while the listener is closing.
-		if !jobScheduler.Stop(shutdownCtx) {
-			log.Slog().WarnContext(ctx, "serve: scheduler left fires running")
+		// The runners stop in reverse start order, inside the drain window. A
+		// runner without a Stop drains elsewhere: the queue through the
+		// container's shutdown walk after the listener closes, the watcher
+		// through the run's context the caller cancelled.
+		for _, runner := range slices.Backward(runners) {
+			if runner.Stop == nil {
+				continue
+			}
+			if !runner.Stop(shutdownCtx) {
+				log.Slog().WarnContext(ctx, "serve: runner left work running", "runner", runner.Name)
+			}
 		}
 
 		// Shutdown closes the listener first, so a request that arrives during

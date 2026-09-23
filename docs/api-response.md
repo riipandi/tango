@@ -1,10 +1,12 @@
 # API Response
 
-Two transports, one contract: REST answers the envelope below, and
-ConnectRPC answers the same metadata block under protobuf field names.
-The rules are defined once in `pkg/responder` and both transports use
-them, so a client reads the same page, limit, totals, and item range
-from either surface.
+Two transports, one contract: ConnectRPC serves the internal backoffice and
+is the primary protocol; REST serves external integrations, and the
+OAuth2/OIDC identity-provider features will land on it. The contract the two
+share is semantic — field naming, the pagination rules, the error semantics —
+and each transport writes it in its own idiom. The rules are defined once in
+`pkg/responder` and both transports use them, so a client reads the same
+page, limit, totals, and item range from either surface.
 
 ## Field naming
 
@@ -19,25 +21,37 @@ would disagree on field naming.
 Requests are tolerant: protojson accepts both spellings, so a body may
 send `display_name` or `displayName` and unmarshal the same way.
 
-Two protocol surfaces keep camelCase because their specifications
-require it, and neither is part of this envelope contract:
+Three protocol surfaces keep camelCase because their specifications
+require it, and none is part of this envelope contract:
 
 - SCIM 2.0 (`/scim/v2/*`) — `userName`, `displayName`, `givenName`, `Resources`, `totalResults`.
 - WebAuthn (`/api/webauthn/*`) — `publicKey`, `rp`, `user`, `challenge`.
+- OIDC (planned) — its endpoints answer the shapes the specification
+  defines, not the envelope.
 
-| REST envelope              | ConnectRPC                                                          |
-| -------------------------- | ------------------------------------------------------------------- |
-| `status`                   | the Connect error code (`ok` is the absence of an error)            |
-| `message`                  | the Connect error message                                           |
-| `data`                     | the response message's own payload field (`users`, `api_keys`, ...) |
-| `metadata.status_code`     | `metadata.status_code`                                              |
-| `metadata.request_id`      | `metadata.request_id`                                               |
-| `metadata.rate_limit`      | `metadata.rate_limit`                                               |
-| `metadata.page`            | `metadata.page`                                                     |
-| `metadata.last_item_index` | `metadata.last_item_index`                                          |
-| `links`                    | not modelled yet; RPCs that need it add the field explicitly        |
+## Where each fact lives
 
-Minimal sucess response:
+| Fact                | ConnectRPC (internal, primary)                        | REST (external)                          |
+| ------------------- | ----------------------------------------------------- | ---------------------------------------- |
+| Status              | the connect code (`ok` is the absence of an error)    | `status` + `metadata.status_code`        |
+| Error message       | the connect error message                             | `message` in the error envelope          |
+| Structured error    | a typed message attached as a connect error detail    | `error` in the error envelope            |
+| Request/trace id    | the `X-Request-Id` response header                    | `metadata.request_id` + the same header  |
+| Rate limit          | the `X-RateLimit-*` response headers                  | `metadata.rate_limit` + the same headers |
+| Pagination          | a `tango.common.v1.ListMetadata` block on the message | `metadata` pagination fields             |
+| Payload             | the response message's own typed fields               | `data` in the envelope                   |
+| Links (HATEOAS)     | not modelled; a page token when a list needs one      | the `links` map                          |
+
+Envelope-in-body is right where the fact is domain (pagination) and an
+anti-pattern where the protocol already carries it: a Connect client raises
+on an error, so an error envelope inside an RPC body is unreadable exactly
+where it would matter. The shared block the REST envelope writes and the RPC
+metadata block used to mirror is why `common.proto` once carried
+`status_code` and `request_id`; it carries the pagination block alone now.
+
+## REST envelope
+
+Minimal success response:
 
 ```json
 {
@@ -157,3 +171,20 @@ ApiRateLimit:
     reset: number // unix timestamp when the limit resets
 }
 ```
+
+## ConnectRPC surface
+
+A procedure answers its response message alone: typed payload fields, and the
+`tango.common.v1.ListMetadata` block on a list message. The facts around the
+payload travel with the protocol, and a generated client reads them without
+parsing a body:
+
+- **Status** is the connect code: `ok` on success, `unavailable` for a
+  dependency that is down, `unimplemented` for an unknown procedure.
+- **The correlation id** is the `X-Request-Id` response header, copied from
+  the request middleware's tag by the transport's interceptor on every
+  procedure answer, success or failure.
+- **Rate-limit state** is the `X-RateLimit-*` response headers the limiter
+  middleware writes.
+- **A structured failure** is a message attached to the connect error's
+  details, the typed counterpart of the REST envelope's `error` field.

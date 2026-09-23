@@ -4,17 +4,13 @@ import (
 	"context"
 	"errors"
 	"maps"
-	"net/http"
 	"slices"
 	"time"
 
 	"connectrpc.com/connect"
-	"google.golang.org/protobuf/proto"
 
-	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	systemv1 "github.com/riipandi/tango/codegen/proto/go/tango/system/v1"
 	"github.com/riipandi/tango/internal/health"
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // rpcHealthService answers the readiness procedure over ConnectRPC.
@@ -44,33 +40,17 @@ func (s *rpcHealthService) Check(ctx context.Context, _ *connect.Request[systemv
 
 	result := s.checker.Check(ctx)
 	if !result.Healthy() {
-		err := connect.NewError(connect.CodeUnavailable, errors.New(health.Message(result)))
-		// A failed call carries no metadata block, so the correlation id
-		// travels in the header instead — the one place both transports can
-		// always name the request.
-		if id := responder.RequestIDFromContext(ctx); id != "" {
-			err.Meta().Set(responder.RequestIDHeader, id)
-		}
-		return nil, err
+		// The correlation id travels in the error's metadata, set for every
+		// procedure by the transport's interceptor — the one place both
+		// transports can always name the request.
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New(health.Message(result)))
 	}
 
 	return connect.NewResponse(&systemv1.CheckResponse{
-		Metadata: rpcMetadata(ctx, http.StatusOK),
-		Status:   string(result.Status),
-		Details:  rpcCheckDetails(result),
-		TookMs:   milliseconds(result.Duration),
+		Status:  string(result.Status),
+		Details: rpcCheckDetails(result),
+		TookMs:  milliseconds(result.Duration),
 	}), nil
-}
-
-// rpcMetadata builds the shared metadata block for one response. It writes
-// what the REST envelope writes for the same request, so a client reads one
-// status code and one correlation id from either transport.
-func rpcMetadata(ctx context.Context, statusCode int32) *commonv1.ResponseMetadata {
-	meta := &commonv1.ResponseMetadata{StatusCode: proto.Int32(statusCode)}
-	if id := responder.RequestIDFromContext(ctx); id != "" {
-		meta.RequestId = new(id)
-	}
-	return meta
 }
 
 // rpcCheckDetails renders the per-check results in check-name order, which is

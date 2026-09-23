@@ -4,6 +4,8 @@ package kernel
 
 import (
 	"connectrpc.com/connect"
+	"fmt"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -20,11 +22,31 @@ type Module interface {
 	Mount(r chi.Router)
 }
 
-// Mount registers every module on the router in the order given. chi replaces
-// the handler of a pattern registered twice, so a module that must shadow
-// another's route registers last.
+// Mount registers every module on the router in the order given.
+//
+// Each module's routes are read back from a scratch router before they are
+// registered on the real one, so two modules claiming the same pattern fails
+// the run naming both, instead of chi's last-wins registration handing the
+// route to whichever module mounted later. Mounting twice is safe: Mount is
+// registration only, so it has no effect beyond the handlers it registers.
+// A conflict inside one module's own registration is chi's last-wins and is
+// the module's own defect; the boundary policed here is between modules.
 func Mount(r chi.Router, modules ...Module) {
+	claims := map[string]string{}
 	for _, module := range modules {
+		name := module.Name()
+		scratch := chi.NewRouter()
+		module.Mount(scratch)
+		for _, route := range scratch.Routes() {
+			for method := range route.Handlers {
+				key := method + " " + route.Pattern
+				if owner, taken := claims[key]; taken {
+					panic(fmt.Sprintf("kernel: module %q claims route %s already claimed by module %q",
+						name, key, owner))
+				}
+				claims[key] = name
+			}
+		}
 		module.Mount(r)
 	}
 }
@@ -52,10 +74,29 @@ type RPCModule interface {
 
 // MountRPC registers the procedures of every module that serves any. A module
 // without procedures is skipped, so one list can carry both kinds.
+//
+// Like Mount, the procedures are read back from a scratch router first, so two
+// modules registering one procedure path fails the run naming both — the
+// generated handler would otherwise answer whichever registered last.
 func MountRPC(r chi.Router, opts []connect.HandlerOption, modules ...Module) {
+	claims := map[string]string{}
 	for _, module := range modules {
-		if rpc, ok := module.(RPCModule); ok {
-			rpc.MountRPC(r, opts...)
+		rpc, ok := module.(RPCModule)
+		if !ok {
+			continue
 		}
+		// The path alone is the claim: the generated handler answers its
+		// procedure path for every method, so two modules on one path conflict
+		// however the methods read back.
+		scratch := chi.NewRouter()
+		rpc.MountRPC(scratch, opts...)
+		for _, route := range scratch.Routes() {
+			if owner, taken := claims[route.Pattern]; taken {
+				panic(fmt.Sprintf("kernel: module %q claims procedure %s already claimed by module %q",
+					module.Name(), route.Pattern, owner))
+			}
+			claims[route.Pattern] = module.Name()
+		}
+		rpc.MountRPC(r, opts...)
 	}
 }

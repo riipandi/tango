@@ -104,3 +104,4 @@ terraform.tfvars*
 !terraform.tfvars.example
 fly*.toml*
 !fly*.toml.example
+.atlas/

@@ -4,9 +4,8 @@ import (
 	"time"
 )
 
-// TableJWKS is the table the published key set reads. It is owned by
-// migration 00004; the rows are written by the OAuth provider work, not by
-// this module.
+// TableJWKS is the table the published key set reads. The rows
+// are written by the OAuth provider work, not by this module.
 const TableJWKS = "jwks"
 
 // UseSignature is the `use_for` value of a key that signs and verifies.

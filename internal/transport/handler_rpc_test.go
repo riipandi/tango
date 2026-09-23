@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	systemv1 "github.com/riipandi/tango/codegen/proto/go/tango/system/v1"
 	"github.com/riipandi/tango/codegen/proto/go/tango/system/v1/systemv1connect"
 	"github.com/riipandi/tango/internal/config"
@@ -65,11 +64,7 @@ func TestRPCCheckAnswersTheReadinessDocument(t *testing.T) {
 	require.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 
 	var body struct {
-		Status   string `json:"status"`
-		Metadata struct {
-			StatusCode int    `json:"status_code"`
-			RequestID  string `json:"request_id"`
-		} `json:"metadata"`
+		Status  string `json:"status"`
 		Details []struct {
 			Name   string `json:"name"`
 			Status string `json:"status"`
@@ -78,9 +73,8 @@ func TestRPCCheckAnswersTheReadinessDocument(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 
 	assert.Equal(t, "healthy", body.Status)
-	assert.Equal(t, http.StatusOK, body.Metadata.StatusCode)
-	assert.True(t, strings.HasPrefix(body.Metadata.RequestID, "req_"),
-		"the metadata block names the request the middleware tagged")
+	assert.True(t, strings.HasPrefix(rec.Header().Get("X-Request-Id"), "req_"),
+		"the response header names the request the middleware tagged")
 	require.Len(t, body.Details, 1)
 	assert.Equal(t, "database", body.Details[0].Name)
 	assert.Equal(t, "up", body.Details[0].Status)
@@ -96,10 +90,8 @@ func TestRPCFieldsAreSnakeCase(t *testing.T) {
 	router.ServeHTTP(rec, rpcRequest(t, "/tango.system.v1.HealthService/Check", "{}"))
 
 	body := rec.Body.String()
-	assert.Contains(t, body, `"status_code"`, "metadata must use the proto field name")
-	assert.Contains(t, body, `"request_id"`)
-	assert.NotContains(t, body, `"statusCode"`, "the default lowerCamelCase mapping must not be used")
-	assert.NotContains(t, body, `"requestId"`)
+	assert.Contains(t, body, `"took_ms"`, "the body must use the proto field name")
+	assert.NotContains(t, body, `"tookMs"`, "the default lowerCamelCase mapping must not be used")
 }
 
 // TestRPCUnhealthyAnswersUnavailable pins the failure contract: a probe reads
@@ -178,7 +170,8 @@ func TestRPCCheckIsCallableByTheGeneratedClient(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "healthy", resp.Msg.GetStatus())
-	assert.Equal(t, int32(http.StatusOK), resp.Msg.GetMetadata().GetStatusCode())
+	assert.True(t, strings.HasPrefix(resp.Header().Get("X-Request-Id"), "req_"),
+		"the generated client reads the correlation id from the response header")
 }
 
 // rpcFeature is a module that serves a procedure, the way an application
@@ -245,9 +238,9 @@ func TestModuleProcedureGetsTheSnakeCaseCodec(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Contains(t, rec.Body.String(), `"status_code"`,
+	assert.Contains(t, rec.Body.String(), `"took_ms"`,
 		"a module's handler must serialize under the proto field names")
-	assert.NotContains(t, rec.Body.String(), `"statusCode"`)
+	assert.NotContains(t, rec.Body.String(), `"tookMs"`)
 
 	// Negative control: the same handler without the options falls back to
 	// protobuf's own mapping. Without this the assertion above would also pass
@@ -260,7 +253,7 @@ func TestModuleProcedureGetsTheSnakeCaseCodec(t *testing.T) {
 	_, plain := systemv1connect.NewHealthServiceHandler(stubHealthService{})
 	control := httptest.NewRecorder()
 	plain.ServeHTTP(control, controlReq)
-	assert.Contains(t, control.Body.String(), `"statusCode"`,
+	assert.Contains(t, control.Body.String(), `"tookMs"`,
 		"the default mapping is camelCase, so the shared codec is what changes it")
 }
 
@@ -269,9 +262,8 @@ func TestModuleProcedureGetsTheSnakeCaseCodec(t *testing.T) {
 type stubHealthService struct{}
 
 func (stubHealthService) Check(context.Context, *connect.Request[systemv1.CheckRequest]) (*connect.Response[systemv1.CheckResponse], error) {
-	code := int32(http.StatusOK)
 	return connect.NewResponse(&systemv1.CheckResponse{
-		Metadata: &commonv1.ResponseMetadata{StatusCode: &code},
-		Status:   "healthy",
+		Status: "healthy",
+		TookMs: 1.5,
 	}), nil
 }

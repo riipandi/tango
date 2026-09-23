@@ -33,7 +33,12 @@ import (
 	"github.com/samber/do/v2"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/health"
+	"github.com/riipandi/tango/internal/mailer"
+	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/internal/scheduler"
+	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/internal/transport/middleware"
 )
@@ -97,6 +102,94 @@ func newServer(i do.Injector) (*http.Server, error) {
 	c := do.MustInvoke[*config.Config](i)
 	router := do.MustInvoke[chi.Router](i)
 	return transport.NewServer(*c, router), nil
+}
+
+// Prewarm resolves every service a serve run blocks on: the components whose
+// construction fails when a dependency is down or a configuration is unusable.
+// The command calls it after New and before the listener opens, so such a
+// failure is a failed run carrying the service's own message, not a 500 on the
+// first request. The runners resolve here too — the queue's construction
+// registers and seeds its jobs — and the router's resolution builds the areas,
+// whose Mount validates what they cannot work without.
+func Prewarm(i do.Injector) error {
+	for _, resolve := range []func(do.Injector) error{
+		func(i do.Injector) error { _, err := do.Invoke[*fetcher.Client](i); return err },
+		func(i do.Injector) error { _, err := do.Invoke[*mailer.Service](i); return err },
+		func(i do.Injector) error { _, err := do.Invoke[*queue.Client](i); return err },
+		func(i do.Injector) error { _, err := do.Invoke[*scheduler.Scheduler](i); return err },
+		func(i do.Injector) error { _, err := do.Invoke[chi.Router](i); return err },
+		func(i do.Injector) error { _, err := do.Invoke[*http.Server](i); return err },
+	} {
+		if err := resolve(i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Runner is one long-running component of a serve run. Start launches the
+// component's work and returns; the component runs until the context the
+// command cancels on a signal, or until Stop. Stop is the drain: it waits,
+// inside the shutdown window, for the in-flight work to finish and reports
+// whether everything did. A nil Stop means the component ends with the run's
+// context or hands its drain to the container's shutdown walk.
+type Runner struct {
+	Name  string
+	Start func(ctx context.Context)
+	Stop  func(ctx context.Context) bool
+}
+
+// Runners are the long-running components of a serve run, in start order, and
+// the stop order is the reverse of it.
+//
+// This list is where the ordering a serve run depends on lives: the queue is
+// first, so the scheduler's first tick claims into a running dispatcher; the
+// scheduler stops before the listener drains, so no fire starts while the
+// listener is closing and a fire in flight joins the queue's own drain; the
+// staging watcher runs only when it is switched on, because a run that does
+// not watch stages nothing.
+func Runners(i do.Injector) ([]Runner, error) {
+	queueClient, err := do.Invoke[*queue.Client](i)
+	if err != nil {
+		return nil, err
+	}
+	jobScheduler, err := do.Invoke[*scheduler.Scheduler](i)
+	if err != nil {
+		return nil, err
+	}
+
+	runners := []Runner{
+		// The queue outlives the listener, so its drain is the container's
+		// shutdown walk: Shutdown is what the injector calls, after the
+		// HTTP drain ends.
+		{Name: "queue", Start: queueClient.Start},
+		// The scheduler fires onto the queue, and a fire in flight finishes
+		// its enqueue here — an enqueued task is durable, so the queue's own
+		// drain after this cannot lose one.
+		{Name: "scheduler", Start: jobScheduler.Start, Stop: jobScheduler.Stop},
+	}
+
+	// The watcher ends with the run's context: a settle in flight is one
+	// task either enqueued or not, and its enqueues are durable either way.
+	c := do.MustInvoke[*config.Config](i)
+	if c.Storage.Watch.Enable {
+		watcher, err := do.Invoke[*storage.Watcher](i)
+		if err != nil {
+			return nil, err
+		}
+		log := do.MustInvoke[*slog.Logger](i)
+		runners = append(runners, Runner{
+			Name: "staging watch",
+			Start: func(ctx context.Context) {
+				go func() {
+					if err := watcher.Start(ctx); err != nil {
+						log.ErrorContext(ctx, "serve: staging watch ended", "err", err)
+					}
+				}()
+			},
+		})
+	}
+	return runners, nil
 }
 
 // uptime is the computed health metadata: how long the process has been up.

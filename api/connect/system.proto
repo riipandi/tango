@@ -7,8 +7,6 @@ syntax = "proto3";
 
 package tango.system.v1;
 
-import "common.proto";
-
 option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/system/v1;systemv1";
 
 // HealthService reports the availability of the dependencies the process runs
@@ -25,7 +23,9 @@ service HealthService {
 message CheckRequest {}
 
 // CheckResponse is the readiness document. It carries the same facts the
-// `/api/healthz` body publishes, so the two surfaces never disagree.
+// `/api/healthz` body publishes, so the two surfaces never disagree. Status
+// travels as the connect code (`unavailable` on an unhealthy system) and the
+// correlation id as a response header — the protocol, not the body.
 message CheckResponse {
   // status is the aggregated availability, `healthy` or `unhealthy`.
   string status = 1;
@@ -35,9 +35,6 @@ message CheckResponse {
 
   // took_ms is how long the whole check call took.
   double took_ms = 3;
-
-  // metadata is the shared response metadata block.
-  tango.common.v1.ResponseMetadata metadata = 4;
 }
 
 // CheckDetail is the outcome of one dependency check.
