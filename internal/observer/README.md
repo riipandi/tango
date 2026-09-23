@@ -21,6 +21,10 @@ every OTLP exporter of the process shares — including the logger's log sink.
   unreachable, or absent collector costs dropped telemetry and never a slow request
 - **Bounded queues, oldest dropped** — `otel.queue.max_size` bounds what each signal buffers;
   when full, the oldest item is dropped and the SDK counts it; nothing waits for room
+- **Prometheus bridge** — the metric reader also exposes a scrape endpoint at
+  `otel.metrics.prometheus_path`, served from a fresh registry so only this
+  application's instruments appear; the Go runtime and the process collectors
+  are registered there deliberately, in one place
 - **The environment is not a source** — transport credentials, TLS, compression, headers, and
   signal routes are all set explicitly, which is what stops an exporter from applying
   `OTEL_EXPORTER_OTLP_*` on its own

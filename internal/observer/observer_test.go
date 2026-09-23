@@ -229,10 +229,11 @@ func TestThePrometheusEndpointServesWhatWasRecorded(t *testing.T) {
 }
 
 func TestThePrometheusExpositionIsPrivateToThisProcess(t *testing.T) {
-	// The exposition is served from a registry this package owns, so it reports
-	// this application's instruments and nothing a dependency registered
-	// globally. Otherwise a scrape would attribute a library's metrics to this
-	// service, and the Go runtime's collectors would appear on every endpoint.
+	// The exposition is served from a registry this package owns. The process
+	// collectors are registered deliberately in newRegistry — the runtime and
+	// the process are what this service reports — and nothing a dependency
+	// registered globally appears: a library's instruments on the default
+	// registry would otherwise be attributed to this service.
 	obs, err := observer.New(context.Background(), metricConfig("http://127.0.0.1:1"))
 	require.NoError(t, err)
 	t.Cleanup(func() { shutdownDraining(t, obs) })
@@ -244,9 +245,10 @@ func TestThePrometheusExpositionIsPrivateToThisProcess(t *testing.T) {
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 
 	body := recorder.Body.String()
-	assert.NotContains(t, body, "go_goroutines",
-		"the process collectors are registered deliberately, never inherited")
-	assert.NotContains(t, body, "promhttp_metric_handler_requests_total")
+	assert.Contains(t, body, "go_goroutines",
+		"the process collectors are registered deliberately, in one place")
+	assert.NotContains(t, body, "promhttp_metric_handler_requests_total",
+		"nothing the default registry holds is inherited")
 }
 
 func TestSetGlobalsInstallsOnlyEnabledSignals(t *testing.T) {

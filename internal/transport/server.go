@@ -20,8 +20,10 @@ package transport
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/riipandi/tango/internal/config"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // The paths the limiter never counts, one list per transport: the namespaces
@@ -41,12 +43,27 @@ var rpcRateLimitExclusions = []string{
 // timeouts the configuration holds. The caller owns the listener and the
 // graceful drain; the server here is only the bound handler and its timeouts.
 //
+// The handler is wrapped in the OpenTelemetry HTTP instrumentation, so every
+// API request the server answers carries a server span and the http duration
+// histogram — REST and RPC together, the SPA assets and a metrics scrape left
+// out: they are not API traffic, and their spans would be volume without
+// signal. The wrapper reads the global providers the observer installs, so a
+// signal that is switched off costs a no-op rather than a configuration check
+// here.
+//
 // It reads the same `server` section the router's request deadline is read
 // from, so a timeout is decided in one place on both sides of the boundary.
 func NewServer(cfg config.Config, handler http.Handler) *http.Server {
+	observed := otelhttp.NewHandler(handler, "tango", otelhttp.WithFilter(
+		func(r *http.Request) bool {
+			path := r.URL.Path
+			return strings.HasPrefix(path, "/api") || strings.HasPrefix(path, RPCPath)
+		},
+	))
+
 	return &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-		Handler:           handler,
+		Handler:           observed,
 		ReadTimeout:       cfg.Server.ReadTimeout,
 		ReadHeaderTimeout: cfg.Server.ReadTimeout,
 		WriteTimeout:      cfg.Server.WriteTimeout,

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
+	"connectrpc.com/otelconnect"
 	"github.com/go-chi/chi/v5"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -87,14 +88,27 @@ func protoMessage(message any) (proto.Message, error) {
 	return msg, nil
 }
 
+// otelInterceptor is the OpenTelemetry interceptor every procedure is served
+// behind: it creates the server span a trace follows and records the rpc
+// duration and size histograms. It reads the global providers the observer
+// installs, so a signal that is switched off costs a no-op.
+func otelInterceptor() connect.Interceptor {
+	interceptor, err := otelconnect.NewInterceptor()
+	if err != nil {
+		// New with no options cannot fail — the error guards an SDK the
+		// repository pins — but the signature demands the check, and a broken
+		// SDK is a build defect, not a configuration a run can survive.
+		panic(fmt.Sprintf("transport: otelconnect: %s", err))
+	}
+	return interceptor
+}
+
 // rpcHandlerOptions are the options every service on this surface is
-// registered with: the shared codec pair and the panic boundary. A module
-// that serves procedures receives them and passes them to every generated
-// handler it registers, so a module's procedure answers exactly like the
-// transport's own. The correlation id is not here on purpose: the request
-// middleware writes it on the writer before any handler runs, and connect
-// merges handler-set headers by appending, so a second writer would answer
-// with the header twice.
+// registered with: the shared codec pair, the panic boundary, and the
+// OpenTelemetry interceptor. A module that serves procedures receives them
+// and passes them to every generated handler it registers, so a module's
+// procedure answers exactly like the transport's own — the codec, the panic
+// boundary, and the telemetry included.
 func rpcHandlerOptions() []connect.HandlerOption {
 	return []connect.HandlerOption{
 		connect.WithCodec(rpcJSONCodec{name: rpcCodecJSON}),
@@ -107,6 +121,7 @@ func rpcHandlerOptions() []connect.HandlerOption {
 			// and the middleware logs it with the stack and the request id.
 			return connect.NewError(connect.CodeInternal, errors.New("internal error"))
 		}),
+		connect.WithInterceptors(otelInterceptor()),
 	}
 }
 

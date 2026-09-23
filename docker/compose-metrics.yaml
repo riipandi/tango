@@ -29,20 +29,15 @@ services:
       victoria-traces: { condition: service_started }
       otel-collector: { condition: service_started }
 
-  # perses-mcp:
-  #   <<: *common
-  #   image: docker.io/persesdev/mcp-server:${PERSES_MCP_VERSION:-v0.2-distroless}
-  #   hostname: perses-mcp
-  #   ports: ['3880:3880']
-  #   configs: [{ source: perses_mcp_config, target: /etc/perses-mcp-config.yaml }]
-  #   command: '--config=/etc/perses-mcp-config.yaml'
-  #   # healthcheck:
-  #   #   test: ['CMD', '/bin/perses-mcp-server', 'healthcheck']
-  #   #   interval: 3s
-  #   #   timeout: 5s
-  #   #   retries: 3
-  #   depends_on:
-  #     perses: { condition: service_healthy }
+  perses-mcp:
+    <<: *common
+    image: docker.io/persesdev/mcp-server:${PERSES_MCP_VERSION:-v0.2-distroless}
+    hostname: perses-mcp
+    ports: ['3880:3880']
+    configs: [{ source: perses_mcp_config, target: /etc/perses-mcp-config.yaml }]
+    command: '--config=/etc/perses-mcp-config.yaml'
+    depends_on:
+      perses: { condition: service_healthy }
 
   otel-collector:
     <<: *common

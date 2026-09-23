@@ -1,0 +1,139 @@
+# The application logs, read back from VictoriaLogs over LogsQL. The log
+# stream is what the logger's OTLP sink ships: service_name is the resource
+# attribute the observer sets, severity_text is the level the SDK carries from
+# slog. The time-series panels read the hit counts the LogsQL filter returns;
+# the table shows the log lines themselves.
+#
+# Native provisioning format: kind Dashboard with a project, because a
+# dashboard is project-scoped in Perses.
+kind: Dashboard
+metadata:
+    name: application-logs
+    project: tango
+spec:
+    display:
+        name: Application Logs
+    duration: 1h
+    refreshInterval: 30s
+    variables:
+        - kind: TextVariable
+          spec:
+              display:
+                  name: Filter
+                  description: A LogsQL filter pipe appended to every query (e.g. `| body=~"(?i)timeout"`)
+              value: ""
+              name: filter
+    panels:
+        logs-by-severity:
+            kind: Panel
+            spec:
+                display:
+                    name: Logs by severity
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: table
+                            position: bottom
+                        visual:
+                            display: line
+                            lineWidth: 1
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: VictoriaLogsTimeSeriesQuery
+                              spec:
+                                  query: '{service.name="tango", severity_text=~"error|fatal"} $filter'
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: VictoriaLogsTimeSeriesQuery
+                              spec:
+                                  query: '{service.name="tango", severity_text=~"warn"} $filter'
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: VictoriaLogsTimeSeriesQuery
+                              spec:
+                                  query: '{service.name="tango", severity_text=~"info|debug"} $filter'
+        error-rate:
+            kind: Panel
+            spec:
+                display:
+                    name: Errors per second
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            display: line
+                            lineWidth: 2
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: VictoriaLogsTimeSeriesQuery
+                              spec:
+                                  query: '{service.name="tango", severity_text=~"error|fatal"} $filter'
+        all-logs:
+            kind: Panel
+            spec:
+                display:
+                    name: Logs per second
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            areaOpacity: 0.2
+                            display: line
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: VictoriaLogsTimeSeriesQuery
+                              spec:
+                                  query: '{service.name="tango"} $filter'
+        log-lines:
+            kind: Panel
+            spec:
+                display:
+                    name: Log lines
+                plugin:
+                    kind: LogsTable
+                    spec:
+                        showTime: true
+                queries:
+                    - kind: LogQuery
+                      spec:
+                          plugin:
+                              kind: VictoriaLogsLogQuery
+                              spec:
+                                  query: '{service.name="tango"} $filter'
+    layouts:
+        - kind: Grid
+          spec:
+              items:
+                  - x: 0
+                    y: 0
+                    width: 12
+                    height: 8
+                    content:
+                        $ref: '#/spec/panels/logs-by-severity'
+                  - x: 12
+                    y: 0
+                    width: 6
+                    height: 8
+                    content:
+                        $ref: '#/spec/panels/error-rate'
+                  - x: 18
+                    y: 0
+                    width: 6
+                    height: 8
+                    content:
+                        $ref: '#/spec/panels/all-logs'
+                  - x: 0
+                    y: 8
+                    width: 24
+                    height: 16
+                    content:
+                        $ref: '#/spec/panels/log-lines'

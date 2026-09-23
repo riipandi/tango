@@ -68,7 +68,7 @@ Implemented today — treat as the contract. Reasoning/invariants/traps per pack
 
 ## Library Documentation
 
-- Before writing code against a third-party package, look it up: Context7 MCP (`mcp_context7__resolve_library_id`, then `mcp_context7__query_docs`) for API usage, DeepWiki MCP (`mcp_deepwiki__ask_question` with `owner/repo`) for design intent. Use when answer depends on version, README is thin, or comparing candidates. Do not use for this repo's own code — read the source.
+- When writing code or configs against a library, always look up the ACTUAL documentation first — via MCP Context7, MCP DeepWiki, or the official docs pages.
 - Pinned source of truth is module cache (`go env GOMODCACHE`). When docs and code disagree, code wins; say so and follow code.
 - Settled library comparisons (cache, kvstore client, schedulers, River, LogLayer/OTel pins) are recorded in `.llms/architecture.md` → "Library decision records". Record new outcome there when comparison settles a decision.
 - OTel `otel/log` pin (v0.19.0, three modules held for `otellog` transport) is fragile: after any `go get`, re-check pinned versions and `go mod edit -require` them back.

@@ -1,774 +1,263 @@
-apiVersion: perses.dev/v1alpha1
-kind: PersesDashboard
+# The PostgreSQL the application runs on, read from postgres-exporter. The
+# instance label is the one the VictoriaMetrics scrape config names
+# (pg-server-01); the datname label on the stat_database series is the
+# database, so the panels break a multi-database server down per database.
+#
+# Native provisioning format: kind Dashboard with a project.
+kind: Dashboard
 metadata:
-    namespace: ""
     name: postgres-database
+    project: tango
 spec:
     display:
         name: PostgreSQL Database
+    duration: 3h
+    refreshInterval: 30s
     variables:
         - kind: ListVariable
           spec:
-            display:
-                name: datasource
-                hidden: false
-            allowAllValue: false
-            allowMultiple: false
-            plugin:
-                kind: DatasourceVariable
-                spec:
-                    datasourcePluginKind: PrometheusDatasource
-            name: DS_VICTORIA_METRICS
+              display:
+                  name: Instance
+                  hidden: false
+              allowAllValue: true
+              allowMultiple: false
+              plugin:
+                  kind: PrometheusLabelValuesVariable
+                  spec:
+                      labelName: instance
+                      matchers:
+                          - pg_up
+              name: instance
         - kind: ListVariable
           spec:
-            display:
-                name: Interval
-                hidden: false
-            defaultValue: $__auto_interval_interval
-            allowAllValue: false
-            allowMultiple: false
-            plugin:
-                kind: StaticListVariable
-                spec:
-                    values:
-                        - label: auto
-                          value: $__auto_interval_interval
-                        - 1s
-                        - 5s
-                        - 1m
-                        - 5m
-                        - 1h
-                        - 6h
-                        - 1d
-            name: interval
-        - kind: ListVariable
-          spec:
-            display:
-                name: Namespace
-                hidden: false
-            allowAllValue: false
-            allowMultiple: false
-            sort: alphabetical-asc
-            plugin:
-                kind: PrometheusPromQLVariable
-                spec:
-                    expr: query_result(pg_exporter_last_scrape_duration_seconds)
-                    labelName: migration_from_grafana_not_supported
-            name: namespace
-        - kind: ListVariable
-          spec:
-            display:
-                name: Release
-                hidden: false
-            allowAllValue: false
-            allowMultiple: false
-            sort: alphabetical-asc
-            plugin:
-                kind: PrometheusPromQLVariable
-                spec:
-                    expr: query_result(pg_exporter_last_scrape_duration_seconds{kubernetes_namespace="$namespace"})
-                    labelName: migration_from_grafana_not_supported
-            name: release
-        - kind: ListVariable
-          spec:
-            display:
-                name: Instance
-                hidden: false
-            allowAllValue: false
-            allowMultiple: false
-            sort: alphabetical-asc
-            plugin:
-                kind: PrometheusPromQLVariable
-                spec:
-                    expr: query_result(pg_up{release="$release"})
-                    labelName: migration_from_grafana_not_supported
-            name: instance
-        - kind: ListVariable
-          spec:
-            display:
-                name: Database
-                hidden: false
-            allowAllValue: true
-            allowMultiple: true
-            sort: alphabetical-asc
-            plugin:
-                kind: PrometheusLabelValuesVariable
-                spec:
-                    labelName: datname
-                    matchers: []
-            name: datname
-        - kind: ListVariable
-          spec:
-            display:
-                name: Lock table
-                hidden: false
-            allowAllValue: true
-            allowMultiple: true
-            sort: none
-            plugin:
-                kind: PrometheusLabelValuesVariable
-                spec:
-                    labelName: mode
-                    matchers:
-                        - '{mode=~"accessexclusivelock|accesssharelock|exclusivelock|rowexclusivelock|rowsharelock|sharelock|sharerowexclusivelock|shareupdateexclusivelock"}'
-            name: mode
+              display:
+                  name: Database
+                  hidden: false
+              allowAllValue: true
+              allowMultiple: false
+              plugin:
+                  kind: PrometheusLabelValuesVariable
+                  spec:
+                      labelName: datname
+                      matchers:
+                          - pg_stat_database_xact_commit{instance=~"$instance"}
+              name: datname
     panels:
-        "0_0":
+        up:
             kind: Panel
             spec:
                 display:
-                    name: Version
+                    name: Exporter up
                 plugin:
-                    kind: Markdown
+                    kind: StatChart
                     spec:
-                        text: '**Migration from Grafana not supported !**'
-        "0_1":
+                        calculation: last-number
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'pg_up{instance=~"$instance"}'
+        connections:
             kind: Panel
             spec:
                 display:
-                    name: Start Time
-                    description: start time of the process
+                    name: Connections by state
                 plugin:
-                    kind: Markdown
+                    kind: TimeSeriesChart
                     spec:
-                        text: '**Migration from Grafana not supported !**'
-        "0_2":
+                        legend:
+                            mode: table
+                            position: bottom
+                        visual:
+                            areaOpacity: 0.2
+                            display: line
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'sum by (state) (pg_stat_activity_count{instance=~"$instance", datname=~"$datname"})'
+        transactions:
             kind: Panel
             spec:
                 display:
-                    name: Current fetch data
+                    name: Transactions per second
                 plugin:
-                    kind: Markdown
+                    kind: TimeSeriesChart
                     spec:
-                        text: '**Migration from Grafana not supported !**'
-        "0_3":
+                        legend:
+                            mode: table
+                            position: bottom
+                        visual:
+                            display: line
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'rate(pg_stat_database_xact_commit{instance=~"$instance", datname=~"$datname"}[5m])'
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'rate(pg_stat_database_xact_rollback{instance=~"$instance", datname=~"$datname"}[5m])'
+        cache-hit-ratio:
             kind: Panel
             spec:
                 display:
-                    name: Current insert data
+                    name: Cache hit ratio
+                    description: Blocks read from the buffer cache against blocks read from disk. Below ~0.99 on a busy database is a memory question.
                 plugin:
-                    kind: Markdown
+                    kind: TimeSeriesChart
                     spec:
-                        text: '**Migration from Grafana not supported !**'
-        "0_4":
+                        visual:
+                            display: line
+                        yAxis:
+                          format:
+                            unit: percent
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'rate(pg_stat_database_blks_hit{instance=~"$instance", datname=~"$datname"}[5m]) / (rate(pg_stat_database_blks_hit{instance=~"$instance", datname=~"$datname"}[5m]) + rate(pg_stat_database_blks_read{instance=~"$instance", datname=~"$datname"}[5m]))'
+        deadlocks:
             kind: Panel
             spec:
                 display:
-                    name: Current update data
+                    name: Deadlocks
                 plugin:
-                    kind: Markdown
+                    kind: TimeSeriesChart
                     spec:
-                        text: '**Migration from Grafana not supported !**'
-        "0_5":
+                        visual:
+                            display: line
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'rate(pg_stat_database_deadlocks{instance=~"$instance", datname=~"$datname"}[5m])'
+        database-size:
             kind: Panel
             spec:
                 display:
-                    name: Max Connections
+                    name: Database size
                 plugin:
-                    kind: Markdown
+                    kind: TimeSeriesChart
                     spec:
-                        text: '**Migration from Grafana not supported !**'
-        "0_6":
-            kind: Panel
-            spec:
-                display:
-                    name: Average CPU Usage
-                    description: Average user and system CPU time spent in seconds.
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
+                        legend:
+                            mode: table
+                            position: bottom
+                        visual:
+                            display: line
+                        yAxis:
+                          format:
+                            unit: bytes
                 queries:
                     - kind: TimeSeriesQuery
                       spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "0_7":
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'sum by (datname) (pg_database_size_bytes{instance=~"$instance"})'
+        temp-bytes:
             kind: Panel
             spec:
                 display:
-                    name: Average Memory Usage
-                    description: Virtual and Resident memory size in bytes, averages over 5 min interval
+                    name: Temp files written
+                    description: Bytes written to temporary files — the signature of a sort or a hash that spilled.
                 plugin:
                     kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "0_8":
-            kind: Panel
-            spec:
-                display:
-                    name: Open File Descriptors
-                    description: Number of open file descriptors
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "1_0":
-            kind: Panel
-            spec:
-                display:
-                    name: Shared Buffers
-                plugin:
-                    kind: Markdown
                     spec:
-                        text: '**Migration from Grafana not supported !**'
-        "1_1":
+                        visual:
+                            display: line
+                        yAxis:
+                          format:
+                            unit: bytes
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'rate(pg_stat_database_temp_bytes{instance=~"$instance", datname=~"$datname"}[5m])'
+        locks:
             kind: Panel
             spec:
                 display:
-                    name: Effective Cache
+                    name: Locks held by mode
                 plugin:
-                    kind: Markdown
+                    kind: TimeSeriesChart
                     spec:
-                        text: '**Migration from Grafana not supported !**'
-        "1_2":
-            kind: Panel
-            spec:
-                display:
-                    name: Maintenance Work Mem
-                plugin:
-                    kind: Markdown
-                    spec:
-                        text: '**Migration from Grafana not supported !**'
-        "1_3":
-            kind: Panel
-            spec:
-                display:
-                    name: Work Mem
-                plugin:
-                    kind: Markdown
-                    spec:
-                        text: '**Migration from Grafana not supported !**'
-        "1_4":
-            kind: Panel
-            spec:
-                display:
-                    name: Max WAL Size
-                plugin:
-                    kind: Markdown
-                    spec:
-                        text: '**Migration from Grafana not supported !**'
-        "1_5":
-            kind: Panel
-            spec:
-                display:
-                    name: Random Page Cost
-                plugin:
-                    kind: Markdown
-                    spec:
-                        text: '**Migration from Grafana not supported !**'
-        "1_6":
-            kind: Panel
-            spec:
-                display:
-                    name: Seq Page Cost
-                plugin:
-                    kind: Markdown
-                    spec:
-                        text: '**Migration from Grafana not supported !**'
-        "1_7":
-            kind: Panel
-            spec:
-                display:
-                    name: Max Worker Processes
-                plugin:
-                    kind: Markdown
-                    spec:
-                        text: '**Migration from Grafana not supported !**'
-        "1_8":
-            kind: Panel
-            spec:
-                display:
-                    name: Max Parallel Workers
-                plugin:
-                    kind: Markdown
-                    spec:
-                        text: '**Migration from Grafana not supported !**'
-        "2_0":
-            kind: Panel
-            spec:
-                display:
-                    name: Active sessions
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
+                        legend:
+                            mode: table
+                            position: bottom
+                        visual:
+                            areaOpacity: 0.2
+                            display: line
                 queries:
                     - kind: TimeSeriesQuery
                       spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_1":
-            kind: Panel
-            spec:
-                display:
-                    name: Transactions
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_2":
-            kind: Panel
-            spec:
-                display:
-                    name: Update data
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_3":
-            kind: Panel
-            spec:
-                display:
-                    name: Fetch data (SELECT)
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_4":
-            kind: Panel
-            spec:
-                display:
-                    name: Insert data
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_5":
-            kind: Panel
-            spec:
-                display:
-                    name: Lock tables
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_6":
-            kind: Panel
-            spec:
-                display:
-                    name: Return data
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_7":
-            kind: Panel
-            spec:
-                display:
-                    name: Idle sessions
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_8":
-            kind: Panel
-            spec:
-                display:
-                    name: Delete data
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_9":
-            kind: Panel
-            spec:
-                display:
-                    name: Cache Hit Rate
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_10":
-            kind: Panel
-            spec:
-                display:
-                    name: Buffers (bgwriter)
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_11":
-            kind: Panel
-            spec:
-                display:
-                    name: Conflicts/Deadlocks
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_12":
-            kind: Panel
-            spec:
-                display:
-                    name: Temp File (Bytes)
-                    description: Total amount of data written to temporary files by queries in this database. All temporary files are counted, regardless of why the temporary file was created, and regardless of the log_temp_files setting.
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-        "2_13":
-            kind: Panel
-            spec:
-                display:
-                    name: Checkpoint Stats
-                plugin:
-                    kind: TimeSeriesChart
-                    spec: {}
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
-                    - kind: TimeSeriesQuery
-                      spec:
-                        plugin:
-                            kind: PrometheusTimeSeriesQuery
-                            spec:
-                                query: migration_from_grafana_not_supported
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'sum by (mode) (pg_locks_count{instance=~"$instance", datname=~"$datname"})'
     layouts:
         - kind: Grid
           spec:
-            display:
-                title: General Counters, CPU, Memory and File Descriptor Stats
-                collapse:
-                    open: true
-            items:
-                - x: 0
-                  "y": 1
-                  width: 4
-                  height: 2
-                  content:
-                    $ref: '#/spec/panels/0_0'
-                - x: 4
-                  "y": 1
-                  width: 4
-                  height: 2
-                  content:
-                    $ref: '#/spec/panels/0_1'
-                - x: 8
-                  "y": 1
-                  width: 4
-                  height: 2
-                  content:
-                    $ref: '#/spec/panels/0_2'
-                - x: 12
-                  "y": 1
-                  width: 4
-                  height: 2
-                  content:
-                    $ref: '#/spec/panels/0_3'
-                - x: 16
-                  "y": 1
-                  width: 4
-                  height: 2
-                  content:
-                    $ref: '#/spec/panels/0_4'
-                - x: 20
-                  "y": 1
-                  width: 4
-                  height: 2
-                  content:
-                    $ref: '#/spec/panels/0_5'
-                - x: 0
-                  "y": 3
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/0_6'
-                - x: 8
-                  "y": 3
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/0_7'
-                - x: 16
-                  "y": 3
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/0_8'
-        - kind: Grid
-          spec:
-            display:
-                title: Settings
-                collapse:
-                    open: true
-            items:
-                - x: 0
-                  "y": 11
-                  width: 3
-                  height: 3
-                  content:
-                    $ref: '#/spec/panels/1_0'
-                - x: 3
-                  "y": 11
-                  width: 3
-                  height: 3
-                  content:
-                    $ref: '#/spec/panels/1_1'
-                - x: 6
-                  "y": 11
-                  width: 3
-                  height: 3
-                  content:
-                    $ref: '#/spec/panels/1_2'
-                - x: 9
-                  "y": 11
-                  width: 3
-                  height: 3
-                  content:
-                    $ref: '#/spec/panels/1_3'
-                - x: 12
-                  "y": 11
-                  width: 3
-                  height: 3
-                  content:
-                    $ref: '#/spec/panels/1_4'
-                - x: 15
-                  "y": 11
-                  width: 3
-                  height: 3
-                  content:
-                    $ref: '#/spec/panels/1_5'
-                - x: 18
-                  "y": 11
-                  width: 2
-                  height: 3
-                  content:
-                    $ref: '#/spec/panels/1_6'
-                - x: 20
-                  "y": 11
-                  width: 2
-                  height: 3
-                  content:
-                    $ref: '#/spec/panels/1_7'
-                - x: 22
-                  "y": 11
-                  width: 2
-                  height: 3
-                  content:
-                    $ref: '#/spec/panels/1_8'
-        - kind: Grid
-          spec:
-            display:
-                title: Database Stats
-                collapse:
-                    open: true
-            items:
-                - x: 0
-                  "y": 15
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_0'
-                - x: 8
-                  "y": 15
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_1'
-                - x: 16
-                  "y": 15
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_2'
-                - x: 0
-                  "y": 22
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_3'
-                - x: 8
-                  "y": 22
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_4'
-                - x: 16
-                  "y": 22
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_5'
-                - x: 0
-                  "y": 29
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_6'
-                - x: 8
-                  "y": 29
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_7'
-                - x: 16
-                  "y": 29
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_8'
-                - x: 0
-                  "y": 36
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_9'
-                - x: 8
-                  "y": 36
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_10'
-                - x: 16
-                  "y": 36
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_11'
-                - x: 0
-                  "y": 43
-                  width: 8
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_12'
-                - x: 8
-                  "y": 43
-                  width: 16
-                  height: 7
-                  content:
-                    $ref: '#/spec/panels/2_13'
-    duration: 1h
-
+              items:
+                  - x: 0
+                    y: 0
+                    width: 6
+                    height: 4
+                    content:
+                        $ref: '#/spec/panels/up'
+                  - x: 6
+                    y: 0
+                    width: 9
+                    height: 4
+                    content:
+                        $ref: '#/spec/panels/database-size'
+                  - x: 15
+                    y: 0
+                    width: 9
+                    height: 4
+                    content:
+                        $ref: '#/spec/panels/cache-hit-ratio'
+                  - x: 0
+                    y: 4
+                    width: 8
+                    height: 8
+                    content:
+                        $ref: '#/spec/panels/connections'
+                  - x: 8
+                    y: 4
+                    width: 8
+                    height: 8
+                    content:
+                        $ref: '#/spec/panels/transactions'
+                  - x: 16
+                    y: 4
+                    width: 8
+                    height: 8
+                    content:
+                        $ref: '#/spec/panels/deadlocks'
+                  - x: 0
+                    y: 12
+                    width: 8
+                    height: 8
+                    content:
+                        $ref: '#/spec/panels/temp-bytes'
+                  - x: 8
+                    y: 12
+                    width: 16
+                    height: 8
+                    content:
+                        $ref: '#/spec/panels/locks'

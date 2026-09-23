@@ -1,0 +1,50 @@
+# The distributed traces the process ships over OTLP, read back from
+# VictoriaTraces through its Jaeger query API. The service is the resource
+# attribute the observer sets (otel.service_name, default "tango"); the
+# variable keeps a second service name — a caller's, a second binary's — one
+# edit away.
+#
+# Native provisioning format: kind Dashboard with a project.
+kind: Dashboard
+metadata:
+    name: distributed-traces
+    project: tango
+spec:
+    display:
+        name: Distributed Traces
+    duration: 3h
+    refreshInterval: 30s
+    variables:
+        - kind: TextVariable
+          spec:
+              display:
+                  name: Service
+              value: tango
+              name: service
+    panels:
+        traces:
+            kind: Panel
+            spec:
+                display:
+                    name: Traces
+                    description: The most recent traces the service recorded. Click one to open its spans.
+                plugin:
+                    kind: TraceTable
+                    spec: {}
+                queries:
+                    - kind: TraceQuery
+                      spec:
+                          plugin:
+                              kind: JaegerTraceQuery
+                              spec:
+                                  service: $service
+    layouts:
+        - kind: Grid
+          spec:
+              items:
+                  - x: 0
+                    y: 0
+                    width: 24
+                    height: 24
+                    content:
+                        $ref: '#/spec/panels/traces'
