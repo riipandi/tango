@@ -288,6 +288,52 @@ func TestAMountedModuleWithoutAProviderFailsClosed(t *testing.T) {
 	assert.NotContains(t, rec.Body.String(), `"keys"`)
 }
 
+// TestASymmetricStoredKeyIsNeverPublished is the disclosure rule: an HMAC
+// key's "public" form is the secret itself, so a row carrying one must be
+// refused rather than served to every client.
+func TestASymmetricStoredKeyIsNeverPublished(t *testing.T) {
+	secret := []byte("a-32-byte-hmac-secret-goes-here")
+	oct, err := jwk.Import(secret)
+	require.NoError(t, err)
+	require.NoError(t, oct.Set(jwk.KeyIDKey, "hmac-key"))
+	encoded, err := json.Marshal(oct)
+	require.NoError(t, err)
+
+	source := stubSource{keys: []StoredKey{{
+		KeyID:     "hmac-key",
+		Algorithm: "HS256",
+		PublicKey: encoded,
+	}}}
+	service := NewService(testConfig(t), source, nil)
+
+	rec := serve(t, service)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "hmac-key",
+		"a symmetric key must not reach the published document")
+	// The configured key is still published: one refused row must not empty
+	// the set.
+	assert.Len(t, decodeKeys(t, rec), 1)
+}
+
+// TestASymmetricConfiguredKeyFailsTheRun covers the other path into the set:
+// an auth.public_key that holds a shared secret is a broken deployment, and it
+// must fail before the listener opens rather than publish the secret.
+func TestASymmetricConfiguredKeyFailsTheRun(t *testing.T) {
+	secret := []byte("a-32-byte-hmac-secret-goes-here")
+	oct, err := jwk.Import(secret)
+	require.NoError(t, err)
+	encoded, err := json.Marshal(oct)
+	require.NoError(t, err)
+
+	cfg := testConfig(t)
+	cfg.Auth.PublicKey = base64.RawStdEncoding.EncodeToString(encoded)
+
+	service := NewService(cfg, nil, nil)
+
+	require.ErrorIs(t, service.Err(), ErrSymmetricKey)
+}
+
 // TestModuleNameIsReported keeps the composition report readable.
 func TestModuleNameIsReported(t *testing.T) {
 	assert.Equal(t, "jwks", NewModule(nil).Name())

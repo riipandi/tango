@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 
 	"github.com/riipandi/tango/internal/config"
@@ -84,6 +85,13 @@ func (s *Service) parse(cfg config.Config) {
 		public, err := crypto.DecodeJWK(cfg.Auth.PublicKey)
 		if err != nil {
 			s.parseErr = fmt.Errorf("jwks: auth.public_key: %w", err)
+			return
+		}
+		// A symmetric key has no public half: its "public" form is the secret
+		// itself, so publishing it would disclose the signing key. An HS*
+		// deployment signs with auth.secret_key, which is never published.
+		if symErr := rejectSymmetric(public); symErr != nil {
+			s.parseErr = fmt.Errorf("jwks: auth.public_key: %w", symErr)
 			return
 		}
 		// The `use` is stamped here, once, rather than at publish time: the
@@ -187,6 +195,22 @@ func (s *Service) storedKeys(ctx context.Context) ([]StoredKey, error) {
 	return s.source.ActiveSigningKeys(ctx)
 }
 
+// ErrSymmetricKey reports a key that cannot be published. A symmetric key has
+// no public half — its "public" form is the secret itself — so a JWKS that
+// carried one would hand every client the key it signs with.
+var ErrSymmetricKey = errors.New("jwks: a symmetric key cannot be published")
+
+// rejectSymmetric refuses a key whose type is a shared secret. It guards both
+// paths that feed the published set: the configured key pair and a stored row.
+// HMAC signing is supported — it uses auth.secret_key, which is never
+// published — so this rejects publication, not the algorithm.
+func rejectSymmetric(key jwk.Key) error {
+	if key.KeyType() == jwa.OctetSeq() {
+		return fmt.Errorf("%w (kty=%s)", ErrSymmetricKey, key.KeyType())
+	}
+	return nil
+}
+
 // parseStoredKey turns one stored row into a public JWK.
 //
 // The stored public key is JWK JSON, which is what the OAuth provider work
@@ -201,6 +225,9 @@ func parseStoredKey(key StoredKey) (jwk.Key, error) {
 	parsed, err := jwk.ParseKey(key.PublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("parse public key: %w", err)
+	}
+	if symErr := rejectSymmetric(parsed); symErr != nil {
+		return nil, symErr
 	}
 
 	// A stored private key would parse as a private JWK; the public half is
