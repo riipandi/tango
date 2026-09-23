@@ -95,7 +95,7 @@ func NewRouter(opts Options) chi.Router {
 	// calls rather than to the assets it renders. It is mounted before the
 	// SPA, whose not-found handler would otherwise answer a missing upload
 	// with index.html.
-	static.Mount(r, static.Dir(opts.Config.Storage.LocalPath))
+	static.Mount(r, static.NewLocal(static.Dir(opts.Config.Storage.LocalPath)))
 
 	web.SetupStatic(r)
 	return r
