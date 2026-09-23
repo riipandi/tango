@@ -152,12 +152,15 @@ One file per stage of a Config's life — a single-function file is refused:
 | File | Stage |
 | ---- | ----- |
 | `types.go` | The schema: `Config` and every section |
+| `values.go` | The accepted values: driver, protocol, sampler, and transport names |
 | `defaults.go` | `Default()` and the default constants |
 | `keys.go` | Dotted key names, `secretKeys`, `envKeys` |
 | `file.go` | The JSON file layer: locate, read, flatten |
 | `env.go` | Interpolation: `env:NAME`, `${NAME}`, the dotenv table |
 | `flags.go` | `flagBindings` — the only door a flag passes |
 | `validate.go` | The rules a resolved configuration must satisfy |
+| `predicates.go` | The shape checks one value is held to |
+| `redact.go` | `Redacted`, `Masked`, `RedactDSN`, `RedactKVURL` |
 | `duration.go`, `lists.go` | Normalization: seconds, comma-separated lists, inline maps |
 | `config.go` | `Load`, merge, origin tracking |
 | `sample.go`, `meta.go` | The generated sample file and metadata (`config:generate`) |
