@@ -20,7 +20,7 @@ func newValkeyCache(t *testing.T) (*Valkey, *datastore.Valkey) {
 	backend := testutils.StartValkeyWithTimeout(t)
 	kv, err := datastore.NewValkey(t.Context(), datastore.ValkeyOptions{URL: backend.URL})
 	require.NoError(t, err)
-	t.Cleanup(kv.Close)
+	t.Cleanup(func() { kv.Shutdown(context.Background()) })
 	return NewValkey(kv, time.Minute), kv
 }
 
@@ -74,7 +74,7 @@ func TestValkeyNamesItsKeysWithinThePrefix(t *testing.T) {
 		URL: testutils.StartValkeyWithTimeout(t).URL,
 	})
 	require.NoError(t, err)
-	defer probe.Close()
+	defer probe.Shutdown(context.Background())
 
 	value, err := probe.Client().Do(t.Context(),
 		probe.Client().B().Get().Key(ValkeyKeyPrefix+"user:1").Build()).ToString()
@@ -117,7 +117,7 @@ func TestValkeyTreatsABrokenBackendAsAMiss(t *testing.T) {
 	backend := testutils.StartValkeyWithTimeout(t)
 	kv, err := datastore.NewValkey(t.Context(), datastore.ValkeyOptions{URL: backend.URL})
 	require.NoError(t, err)
-	defer kv.Close()
+	defer kv.Shutdown(context.Background())
 
 	c := NewValkey(kv, time.Minute)
 	c.client = brokenClient{build: c.client.B()}

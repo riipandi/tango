@@ -74,7 +74,7 @@ func TestKVStoreCheckAgainstRealClient(t *testing.T) {
 
 	kv, err := datastore.NewValkey(t.Context(), datastore.ValkeyOptions{URL: container.URL})
 	require.NoError(t, err)
-	t.Cleanup(kv.Close)
+	t.Cleanup(func() { kv.Shutdown(context.Background()) })
 
 	result := health.NewChecker(health.WithCheck(health.KVStoreCheck(kv, container.URL))).Check(t.Context())
 	assert.Equal(t, health.GlobalHealthy, result.Status)
@@ -82,7 +82,7 @@ func TestKVStoreCheckAgainstRealClient(t *testing.T) {
 
 	// Once the client is closed the probe must fail, which is what a lost
 	// backend looks like from the process.
-	kv.Close()
+	kv.Shutdown(context.Background())
 
 	result = health.NewChecker(
 		health.WithCheck(health.KVStoreCheck(kv, container.URL)),

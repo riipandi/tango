@@ -160,7 +160,7 @@ func runDBExport(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	defer store.Close()
+	defer store.Shutdown(context.Background())
 
 	if err = printDatabase(p, dsn); err != nil {
 		return err
@@ -446,7 +446,7 @@ func runDBImport(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	defer store.Close()
+	defer store.Shutdown(context.Background())
 
 	if err = printDatabase(p, dsn); err != nil {
 		return err

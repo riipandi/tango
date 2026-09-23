@@ -35,7 +35,7 @@ func newSeededPool(t *testing.T) *datastore.Postgres {
 
 	pool, err := datastore.NewPostgres(t.Context(), datastore.PostgresOptions{DSN: dsn})
 	require.NoError(t, err)
-	t.Cleanup(pool.Close)
+	t.Cleanup(func() { pool.Shutdown(context.Background()) })
 	return pool
 }
 

@@ -172,8 +172,22 @@ func (p *Postgres) Stats() *pgxpool.Stat {
 	return p.pool.Stat()
 }
 
-// Close drains and closes the pool.
-func (p *Postgres) Close() {
+// Shutdown drains and closes the pool, and is what the container calls when
+// the run ends.
+//
+// It is named Shutdown rather than Close because that is the interface
+// samber/do looks for: the container calls `Shutdown` on every service that
+// implements it and ignores `Close` entirely, so a pool exposing only Close
+// was never closed by a run that shut down through the container. There is no
+// error to report — pgxpool.Close does not fail — so this is the
+// context-only form of the interface.
+func (p *Postgres) Shutdown(context.Context) {
+	// A handle that was never opened is not a failure to report: the
+	// container calls this on whatever it holds, and a test that registers a
+	// stub registers a zero value.
+	if p == nil || p.pool == nil {
+		return
+	}
 	p.pool.Close()
 }
 

@@ -115,7 +115,7 @@ func checkHealth(ctx context.Context, cmd *cli.Command, cfg config.Config, dsn s
 		result.Info = mergeInfo(info, uptime(ctx))
 		return result
 	}
-	defer pool.Close()
+	defer pool.Shutdown(context.Background())
 
 	checks := []health.Check{
 		health.DatabaseCheck(pool, config.RedactDSN(dsn)),
@@ -136,7 +136,7 @@ func checkHealth(ctx context.Context, cmd *cli.Command, cfg config.Config, dsn s
 		if err != nil {
 			checks = append(checks, failedCheck(health.CheckNameKVStore, err))
 		} else {
-			defer kv.Close()
+			defer kv.Shutdown(context.Background())
 			checks = append(checks, health.KVStoreCheck(kv, config.RedactKVURL(cfg.KVStore.URL)))
 		}
 	}

@@ -75,7 +75,7 @@ func TestDatabaseCheckAgainstRealPool(t *testing.T) {
 
 	pool, err := datastore.NewPostgres(t.Context(), datastore.PostgresOptions{DSN: dsn})
 	require.NoError(t, err)
-	t.Cleanup(pool.Close)
+	t.Cleanup(func() { pool.Shutdown(context.Background()) })
 
 	result := health.NewChecker(health.WithCheck(health.DatabaseCheck(pool, "localhost:5432/test"))).Check(t.Context())
 	assert.Equal(t, health.GlobalHealthy, result.Status)
@@ -83,7 +83,7 @@ func TestDatabaseCheckAgainstRealPool(t *testing.T) {
 
 	// Once the pool is closed the probe must fail, which is what a lost
 	// database looks like from the process.
-	pool.Close()
+	pool.Shutdown(context.Background())
 
 	result = health.NewChecker(
 		health.WithCheck(health.DatabaseCheck(pool, "localhost:5432/test")),

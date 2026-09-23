@@ -130,7 +130,7 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	defer pool.Close()
+	defer pool.Shutdown(context.Background())
 
 	p := printext.NewPalette(cmd.Root().Writer)
 	if err := reportTarget(p, dsn); err != nil {

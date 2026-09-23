@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -42,7 +43,7 @@ func countUsers(t *testing.T, envFile string) int {
 
 	pool, err := datastore.NewPostgres(t.Context(), datastore.PostgresOptions{DSN: dsn})
 	require.NoError(t, err)
-	t.Cleanup(pool.Close)
+	t.Cleanup(func() { pool.Shutdown(context.Background()) })
 
 	var count int
 	require.NoError(t, pool.QueryRow(t.Context(), "SELECT count(*) FROM public.users").Scan(&count))

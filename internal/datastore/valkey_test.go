@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,7 +19,7 @@ func TestValkeyAnswersAPing(t *testing.T) {
 		ApplicationName: "tango-test",
 	})
 	require.NoError(t, err)
-	defer v.Close()
+	defer v.Shutdown(context.Background())
 
 	require.NoError(t, v.Ping(t.Context()))
 }
@@ -33,7 +34,7 @@ func TestValkeySelectsTheConfiguredDatabase(t *testing.T) {
 		DB:  5,
 	})
 	require.NoError(t, err)
-	defer five.Close()
+	defer five.Shutdown(context.Background())
 
 	client := five.Client()
 	require.NoError(t, client.Do(t.Context(),
@@ -43,7 +44,7 @@ func TestValkeySelectsTheConfiguredDatabase(t *testing.T) {
 	// options named is the one the connection selected.
 	zero, err := NewValkey(t.Context(), ValkeyOptions{URL: backend.URL})
 	require.NoError(t, err)
-	defer zero.Close()
+	defer zero.Shutdown(context.Background())
 
 	err = zero.Client().Do(t.Context(),
 		zero.Client().B().Get().Key("isolated").Build()).Error()

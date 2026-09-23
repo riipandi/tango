@@ -23,7 +23,7 @@ func newTestPostgres(t *testing.T) *datastore.Postgres {
 		ApplicationName: "tango-test",
 	})
 	require.NoError(t, err)
-	t.Cleanup(pg.Close)
+	t.Cleanup(func() { pg.Shutdown(context.Background()) })
 	return pg
 }
 
@@ -142,7 +142,7 @@ func TestPostgresKeepsSessionDefaultsOnReusedConnection(t *testing.T) {
 		MinConns: 1,
 	})
 	require.NoError(t, err)
-	t.Cleanup(pg.Close)
+	t.Cleanup(func() { pg.Shutdown(context.Background()) })
 	ctx := t.Context()
 
 	var timezone string

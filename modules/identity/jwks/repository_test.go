@@ -1,6 +1,7 @@
 package jwks
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func migratedPool(t *testing.T) *datastore.Postgres {
 		ApplicationName: "jwks_test",
 	})
 	require.NoError(t, err)
-	t.Cleanup(pool.Close)
+	t.Cleanup(func() { pool.Shutdown(context.Background()) })
 	return pool
 }
 

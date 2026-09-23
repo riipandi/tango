@@ -3,6 +3,7 @@ package database_test
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"testing"
@@ -101,7 +102,7 @@ func dumper(t *testing.T, dsn string) *datastore.Postgres {
 	t.Helper()
 	store, err := datastore.NewPostgres(t.Context(), datastore.PostgresOptions{DSN: dsn})
 	require.NoError(t, err)
-	t.Cleanup(store.Close)
+	t.Cleanup(func() { store.Shutdown(context.Background()) })
 	return store
 }
 

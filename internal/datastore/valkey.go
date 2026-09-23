@@ -86,8 +86,18 @@ func (v *Valkey) Client() valkey.Client {
 	return v.client
 }
 
-// Close releases the client. Further commands report ErrClosing.
-func (v *Valkey) Close() {
+// Shutdown releases the client, and is what the container calls when the run
+// ends. It is named Shutdown rather than Close because that is the interface
+// samber/do looks for: the container calls `Shutdown` on every service that
+// implements it and ignores `Close` entirely, so a client exposing only Close
+// was never released by a run that shut down through the container.
+func (v *Valkey) Shutdown(context.Context) {
+	// A handle that was never opened is not a failure to report: the
+	// container calls this on whatever it holds, and a test that registers a
+	// stub registers a zero value.
+	if v == nil || v.client == nil {
+		return
+	}
 	v.client.Close()
 }
 

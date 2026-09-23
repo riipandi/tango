@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -29,7 +30,7 @@ func migratedClient(t *testing.T, dsn string) (*datastore.Postgres, *queue.Clien
 		ApplicationName: "queue_test",
 	})
 	require.NoError(t, err)
-	t.Cleanup(pool.Close)
+	t.Cleanup(func() { pool.Shutdown(context.Background()) })
 
 	client, err := queue.NewClient(queue.ClientConfig{
 		Store:        pool,
