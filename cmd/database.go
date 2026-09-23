@@ -234,6 +234,16 @@ func compressDump(p printext.Palette, path string, format database.Compression) 
 // ErrDumpFileExists is returned when a dump would overwrite an existing file.
 var ErrDumpFileExists = errors.New("database: dump file already exists")
 
+// dumpFileMode is the permission a dump is created with: owner read and write,
+// nothing for anyone else.
+//
+// A dump is the whole database in one file — every row of every table, which
+// includes the credential columns and the personal data the schema holds. A
+// world-readable dump is the same exposure as a world-readable password file,
+// so it is created owner-only rather than at whatever the umask makes of
+// 0o666, the rule pkg/envfile already applies to a file of secrets.
+const dumpFileMode fs.FileMode = 0o600
+
 // createExportFile opens the dump for writing.
 //
 // A generated path gets its directory created, because the default location
@@ -254,13 +264,11 @@ var ErrDumpFileExists = errors.New("database: dump file already exists")
 //
 // A path the user typed is used as it is: it is truncated like any other file
 // the user named, and its directory is not created, so a typo stays visible.
+// Its permission is not the user's to choose here — a dump is a file of secrets
+// whoever named it.
 func createExportFile(path string, generated, force bool, final string) (*os.File, error) {
 	if !generated {
-		file, err := os.Create(path)
-		if err != nil {
-			return nil, fmt.Errorf("database: create dump file: %w", err)
-		}
-		return file, nil
+		return openDump(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -268,11 +276,7 @@ func createExportFile(path string, generated, force bool, final string) (*os.Fil
 	}
 
 	if force {
-		file, err := os.Create(path)
-		if err != nil {
-			return nil, fmt.Errorf("database: create dump file: %w", err)
-		}
-		return file, nil
+		return openDump(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 	}
 
 	if _, err := os.Stat(final); err == nil {
@@ -282,13 +286,32 @@ func createExportFile(path string, generated, force bool, final string) (*os.Fil
 		return nil, fmt.Errorf("database: check dump file: %w", err)
 	}
 
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, dumpFileMode)
 	if errors.Is(err, fs.ErrExist) {
 		return nil, fmt.Errorf("%w: %s; pass --output to pick another name, or --overwrite to replace it",
 			ErrDumpFileExists, path)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("database: create dump file: %w", err)
+	}
+	return file, nil
+}
+
+// openDump opens an existing-or-new dump for writing and applies the dump
+// permission to it.
+//
+// The chmod is what makes the permission hold on a replacement. O_CREATE's mode
+// applies only when the file is created, so truncating a dump that was left
+// world-readable — by an older version, by a copy, by an editor — would keep it
+// that way. A dump is a file of secrets however it got there.
+func openDump(path string, flag int) (*os.File, error) {
+	file, err := os.OpenFile(path, flag, dumpFileMode)
+	if err != nil {
+		return nil, fmt.Errorf("database: create dump file: %w", err)
+	}
+	if err := file.Chmod(dumpFileMode); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("database: set dump permissions: %w", err)
 	}
 	return file, nil
 }

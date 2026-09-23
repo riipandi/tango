@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -390,6 +391,52 @@ func TestDBExportGeneratedNameCarriesTheSuffixOnce(t *testing.T) {
 	require.Len(t, entries, 1)
 	assert.Regexp(t, `^tango-\d{8}_\d{4}\.sql\.gz$`, entries[0].Name(), "the suffix must appear once")
 	assert.Contains(t, out, entries[0].Name())
+}
+
+// A dump is the whole database in one file, so it must not be readable by
+// anyone but its owner — whichever path wrote it.
+func TestDBExportWritesADumpOnlyItsOwnerCanRead(t *testing.T) {
+	envFile := migratedDatabase(t)
+
+	t.Run("generated name", func(t *testing.T) {
+		dataDir := filepath.Join(t.TempDir(), "storage")
+		_, err := runDBExportCmdIn(t, dataDir, "--env-file="+envFile)
+		require.NoError(t, err)
+
+		entries, err := os.ReadDir(filepath.Join(dataDir, backupDir))
+		require.NoError(t, err)
+		require.Len(t, entries, 1)
+		assertOwnerOnly(t, filepath.Join(dataDir, backupDir, entries[0].Name()))
+	})
+
+	t.Run("output path", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "dump.sql")
+		_, err := runDBExportCmd(t, "--env-file="+envFile, "--output="+path)
+		require.NoError(t, err)
+		assertOwnerOnly(t, path)
+	})
+
+	t.Run("overwrite", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "dump.sql")
+		// A file that already exists with looser permissions: --overwrite must
+		// not leave the dump readable just because the old file was.
+		require.NoError(t, os.WriteFile(path, []byte("stale"), 0o644))
+
+		_, err := runDBExportCmd(t, "--env-file="+envFile, "--output="+path, "--overwrite")
+		require.NoError(t, err)
+		assertOwnerOnly(t, path)
+	})
+}
+
+// assertOwnerOnly reports the permission bits of a written dump: read and write
+// for the owner, nothing for the group or anyone else.
+func assertOwnerOnly(t *testing.T, path string) {
+	t.Helper()
+
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, fs.FileMode(0o600), info.Mode().Perm(),
+		"%s must be readable by its owner alone", path)
 }
 
 // A generated name that already exists is refused for the file the run would

@@ -10,13 +10,18 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 )
 
-// fallbackPoll is the longest the dispatcher stays idle between fetches when
-// nothing is scheduled. The engine is event-driven — a save, a notify, or a
-// scheduled task wakes it — but a task whose worker was lost is only
-// reclaimable after ReleaseAfter, and nothing else fires then, so the
-// fallback keeps the reclaim bounded. One cheap indexed query a minute is
-// what a quiet queue costs.
-const fallbackPoll = time.Minute
+// defaultFallbackPoll is the longest the dispatcher stays idle between fetches
+// when nothing is scheduled. The engine is event-driven — a save, a notify, or
+// a scheduled task wakes it — but a task whose worker was lost is only
+// reclaimable after ReleaseAfter, and nothing else fires then, so the fallback
+// keeps the reclaim bounded. One cheap indexed query a minute is what a quiet
+// queue costs.
+//
+// The dispatcher carries it as a field so a test can shorten it, the way
+// releaseAfter already works: the fallback is what bounds a wakeup that could
+// not be delivered, and a test of that path has to reach it without waiting a
+// minute.
+const defaultFallbackPoll = time.Minute
 
 // requeueDelay is how long a task whose queue was never registered waits
 // before the dispatcher looks at it again. It cannot be processed and cannot
@@ -72,6 +77,9 @@ type dispatcher struct {
 	shutdown     context.CancelFunc
 	numWorkers   int
 	releaseAfter time.Duration
+	// fallbackPoll is how long the dispatcher stays idle when nothing is
+	// scheduled; defaultFallbackPoll unless a test shortened it.
+	fallbackPoll time.Duration
 	running      atomic.Bool
 	// workers tracks the worker goroutines, so a stop waits for them to exit
 	// rather than inferring it from the free-worker tokens: a worker that
@@ -95,6 +103,7 @@ func (d *dispatcher) init(client *Client, numWorkers int, releaseAfter time.Dura
 	d.client = client
 	d.numWorkers = numWorkers
 	d.releaseAfter = releaseAfter
+	d.fallbackPoll = defaultFallbackPoll
 }
 
 // start starts the dispatcher. To hard-stop it, cancel the provided context;
@@ -112,7 +121,7 @@ func (d *dispatcher) start(ctx context.Context) {
 	// cancellation, so a task's context stays live until stop releases it.
 	d.taskCtx, d.releaseCtx = context.WithCancel(context.WithoutCancel(ctx))
 	d.tasks = make(chan *taskRow, d.numWorkers)
-	d.ticker = time.NewTicker(fallbackPoll)
+	d.ticker = time.NewTicker(d.fallbackPoll)
 	d.ticker.Stop() // No need to poll yet.
 	d.ready = make(chan struct{}, 1000)
 	d.trigger = make(chan struct{}, 10)
@@ -126,7 +135,7 @@ func (d *dispatcher) start(ctx context.Context) {
 	}
 	go d.triggerer()
 	go d.fetcher()
-	d.ready <- struct{}{}
+	d.signalReady()
 	d.client.log.InfoContext(ctx, "task dispatcher started", "workers", d.numWorkers)
 }
 
@@ -189,7 +198,14 @@ func (d *dispatcher) triggerer() {
 		select {
 		case <-d.ready:
 			if d.triggered.CompareAndSwap(false, true) {
-				d.trigger <- struct{}{}
+				// The trigger is a wakeup, never a payload: a full buffer means
+				// a trigger is already waiting, which is the same instruction
+				// this one carries. Sending on it would block the one goroutine
+				// that turns ready signals into fetches.
+				select {
+				case d.trigger <- struct{}{}:
+				default:
+				}
 			}
 		case <-d.shutdownCtx.Done():
 			return
@@ -235,12 +251,48 @@ func (d *dispatcher) worker() {
 				break
 			}
 			d.processTask(task)
-			d.availableWorkers <- struct{}{}
+			d.releaseWorker()
 		case <-d.shutdownCtx.Done():
 			return
 		case <-d.ctx.Done():
 			return
 		}
+	}
+}
+
+// releaseWorker returns the worker's token, or drops it when the channel is
+// already full.
+//
+// A full channel means every worker is already counted free, so this token is
+// redundant and dropping it keeps the count right. It is not merely an
+// optimisation: the token is the last thing a worker does before its deferred
+// Done, and a send that blocked here would keep the worker alive — a worker
+// that took the nil from a closed tasks channel returns a token nothing took,
+// and the stop that waits on the WaitGroup would then never return.
+func (d *dispatcher) releaseWorker() {
+	select {
+	case d.availableWorkers <- struct{}{}:
+	default:
+	}
+}
+
+// signalReady asks for another fetch without waiting for room, and reports
+// whether the signal was taken.
+//
+// A notification dropped because the buffer is full costs nothing: the fetch an
+// earlier signal armed covers the tasks that arrived since, and the fallback
+// poll covers a task nothing else wakes for. Waiting for room, on the other
+// hand, hangs the caller — a worker settling its last outcome, or the fetcher
+// arming the next fetch — which is the stall the non-blocking send avoids.
+//
+// The bool is for the one caller that cannot afford to lose the wakeup: see
+// schedule, which arms the fallback clock when the buffer was full.
+func (d *dispatcher) signalReady() bool {
+	select {
+	case d.ready <- struct{}{}:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -300,23 +352,36 @@ func (d *dispatcher) schedule(exists bool, wait *time.Time) {
 	d.ticker.Stop()
 
 	if !exists {
-		d.ticker.Reset(fallbackPoll)
+		d.ticker.Reset(d.fallbackPoll)
 		return
 	}
 	if wait == nil {
-		d.ready <- struct{}{}
+		d.fetchNow()
 		return
 	}
 
 	delay := time.Until(*wait)
 	if delay <= 0 {
-		d.ready <- struct{}{}
+		d.fetchNow()
 		return
 	}
-	if delay > fallbackPoll {
-		delay = fallbackPoll
+	if delay > d.fallbackPoll {
+		delay = d.fallbackPoll
 	}
 	d.ticker.Reset(delay)
+}
+
+// fetchNow asks for the fetch that follows a task which is already due.
+//
+// Unlike notify, losing this wakeup costs the task its promptness: nothing else
+// is armed to fetch it, so the fallback clock is what bounds the delay. The
+// signal is tried first and the clock arms only when it could not be delivered,
+// which keeps the fast path free of a ticker reset while making the slow path
+// bounded either way.
+func (d *dispatcher) fetchNow() {
+	if !d.signalReady() {
+		d.ticker.Reset(d.fallbackPoll)
+	}
 }
 
 // notify tells the dispatcher that new tasks were added. A notification
@@ -324,7 +389,7 @@ func (d *dispatcher) schedule(exists bool, wait *time.Time) {
 // armed covers the tasks that arrived since.
 func (d *dispatcher) notify() {
 	if d.running.Load() {
-		d.ready <- struct{}{}
+		d.signalReady()
 	}
 }
 
@@ -441,7 +506,11 @@ func (d *dispatcher) taskFailure(ctx context.Context, queue Queue, task *taskRow
 		if err := requeueTask(ctx, d.client.store, task.ID, now().Add(queue.Config().Backoff)); err != nil {
 			d.client.log.ErrorContext(ctx, "queue: failed to requeue task", "err", err.Error())
 		}
-		d.ready <- struct{}{}
+		// The task is due again after its backoff and nothing else wakes the
+		// dispatcher for it, so the wakeup is armed rather than merely
+		// signalled: a signal dropped on a full buffer would leave the retry to
+		// the fallback clock.
+		d.fetchNow()
 		return
 	}
 

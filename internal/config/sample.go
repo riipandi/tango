@@ -21,8 +21,9 @@ import (
 // redactHeaders), and a generated file asks for the one variable that carries
 // them all.
 //
-// A test asserts this list is exactly the set of keys Redacted replaces, so the
-// two cannot drift: adding a secret to one without the other fails.
+// A test asserts this list is exactly the set of keys Redacted replaces
+// (TestRedactedCoversExactlyTheSecretKeys), so the two cannot drift: adding a
+// secret to one without the other fails.
 var secretKeys = []string{
 	"app.secret_key",
 	"auth.private_key",

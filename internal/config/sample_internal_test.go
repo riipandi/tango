@@ -4,6 +4,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -285,7 +286,74 @@ func TestMaskedShowsNothingOfAShortSecret(t *testing.T) {
 	assert.NotContains(t, cfg.Masked().Mailer.SMTPPassword, "hunter")
 }
 
-// valueAt reads a config key back out of a Config, so the redaction assertion
+// TestRedactedCoversExactlyTheSecretKeys is the invariant sample.go states:
+// the list a generated file hides and the fields Redacted replaces are the
+// same set. The two live apart — one is a list of key names, the other is the
+// assignments in withSecrets — so nothing but this test keeps them in step.
+//
+// The check runs both ways, and it has to. A secret added to withSecrets alone
+// would be redacted in a report but written as a literal into a generated
+// file, which is the leak the list exists to prevent; a key added to the list
+// alone would be asked for as a variable and then printed in full. Reading the
+// set of keys that actually changed, rather than asserting each list entry by
+// hand, is what catches the first case: a key this test never heard of still
+// shows up as changed.
+func TestRedactedCoversExactlyTheSecretKeys(t *testing.T) {
+	cfg := Default()
+	// Every string leaf is filled, not just the ones secretKeys names: a key
+	// left empty renders as empty either way, so it could be redacted or not
+	// and the comparison below would not see it.
+	fillStrings(reflect.ValueOf(&cfg).Elem(), probeSecret)
+
+	before := Values(cfg)
+	after := Values(cfg.Redacted())
+
+	var changed []string
+	for key, value := range before {
+		// A map-valued key (otel.headers) is not comparable with ==, so the
+		// comparison goes through DeepEqual.
+		if !reflect.DeepEqual(after[key], value) {
+			changed = append(changed, key)
+		}
+	}
+	slices.Sort(changed)
+
+	expected := slices.Clone(secretKeys)
+	slices.Sort(expected)
+	assert.Equal(t, expected, changed,
+		"the keys Redacted replaces must be exactly secretKeys")
+}
+
+// fillStrings sets every string leaf of a Config to probe, walking the same
+// shape flatten does. It exists so the test above can name no key: a secret it
+// does not know about is filled like any other, and the rendering that hides it
+// is then visible as a changed value.
+func fillStrings(value reflect.Value, probe string) {
+	for i := range value.NumField() {
+		field := value.Field(i)
+		if !field.CanSet() {
+			continue
+		}
+		switch field.Kind() {
+		case reflect.String:
+			field.SetString(probe)
+		case reflect.Struct:
+			if !isValueStruct(field.Type()) {
+				fillStrings(field, probe)
+			}
+		case reflect.Map:
+			if field.Type().Elem().Kind() != reflect.String {
+				continue
+			}
+			// otel.headers is the one map-valued secret, and its names are
+			// the user's, so a key is added rather than assumed.
+			if field.IsNil() {
+				field.Set(reflect.MakeMap(field.Type()))
+			}
+			field.SetMapIndex(reflect.ValueOf("authorization"), reflect.ValueOf(probe))
+		}
+	}
+} // valueAt reads a config key back out of a Config, so the redaction assertion
 // covers every key in the list without naming each field. A map-valued key is
 // read as its values joined, which is what a rendering has to hide.
 func valueAt(cfg Config, key string) string {
