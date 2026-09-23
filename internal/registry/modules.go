@@ -1,71 +1,72 @@
 package registry
 
 import (
-	"log/slog"
-
 	"github.com/samber/do/v2"
 
-	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity"
-	"github.com/riipandi/tango/modules/identity/jwks"
-	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
-// modules registers the services a module owns and the list the router mounts.
-// This is the module half of the composition root: it names every area the
-// application serves, and it reaches infrastructure only by invoking it from
-// the container.
+// Area is one area the application serves, together with the services it owns.
 //
-// An area owns its own features, so its `features` list is the one place a
-// feature is named. What is named here is the area and the services that area
-// needs from outside itself.
-func modules() func(do.Injector) {
-	return do.Package(
-		do.Lazy(func(i do.Injector) (*jwks.Service, error) {
-			c := do.MustInvoke[*config.Config](i)
-			log := do.MustInvoke[*slog.Logger](i)
-			pool := do.MustInvoke[*datastore.Postgres](i)
-			return jwks.NewService(*c, jwks.NewRepository(pool), log), nil
-		}),
-
-		// The published key set is read behind a cache: a client that verifies
-		// many tokens must not turn each verification into a query, and a
-		// rotation is still picked up within the TTL. The cache is wired here
-		// rather than inside the service, because how long a key set is reused
-		// is a deployment decision, not a property of the set.
-		//
-		// The service is still resolved on its own by mountedModules, which is
-		// what turns a broken configuration into a failed run: the cache would
-		// answer it with an error on the first request instead.
-		do.Lazy(func(i do.Injector) (jwtutils.KeyProvider, error) {
-			service := do.MustInvoke[*jwks.Service](i)
-			return jwtutils.NewCachedKeyProvider(service, jwks.KeyCacheTTL), nil
-		}),
-	)
+// It is the whole seam between this package and a module: the composition root
+// knows an area provides services and produces a module, and knows nothing
+// about which services those are or what the area does with them. The wiring
+// inside an area — which service its features are built from, which of them
+// must be validated before the listener opens — lives in the area, not here.
+//
+// A consumer outside this repository embeds its own area by passing one to
+// New. It needs no edit to this package, which is what makes the module half
+// composable rather than merely separate.
+type Area struct {
+	// Name reports the area in composition reports and logs.
+	Name string
+	// Package registers the services the area owns. It is called while the
+	// container is built, so it must only register: a service is constructed
+	// when something resolves it.
+	Package func(do.Injector)
+	// Mount resolves what the area's features need and builds the module the
+	// router mounts. An error here fails the run before the listener opens.
+	Mount func(do.Injector) (kernel.Module, error)
 }
 
-// mountedModules builds the module list the router mounts, one entry per area.
+// Areas are the areas this application serves, in mount order.
 //
-// It resolves what each area needs before handing it over, so a configuration
-// an area cannot work with fails the run here, before the listener opens,
-// rather than as a 500 on the first request that reaches it.
-func mountedModules(i do.Injector) ([]kernel.Module, error) {
-	// A missing dependency panics here and is turned back into an error by the
-	// invocation that reached this provider, so only the validation below is
-	// returned by hand.
-	keySet := do.MustInvoke[jwtutils.KeyProvider](i)
-
-	// The service is resolved beside the provider it is wrapped in, so a
-	// configuration whose key pair cannot be read is reported by Err() rather
-	// than left for the first client that fetches the key set.
-	service := do.MustInvoke[*jwks.Service](i)
-	if err := service.Err(); err != nil {
-		return nil, err
+// This list is the one place an area is named, so adding one is a line here
+// plus whatever that area needs of its own. Nothing about an area's internals
+// appears beside it.
+func Areas() []Area {
+	return []Area{
+		{Name: identity.ModuleName, Package: identity.Package, Mount: identity.Mount},
 	}
+}
 
-	return []kernel.Module{
-		identity.NewModule(identity.Deps{KeySet: keySet}),
-	}, nil
+// areaPackages assembles the services every area owns into one package, so the
+// container is built from the areas themselves rather than from a registration
+// list this package keeps in step with them by hand.
+func areaPackages(areas []Area) func(do.Injector) {
+	packages := make([]func(do.Injector), 0, len(areas))
+	for _, area := range areas {
+		if area.Package != nil {
+			packages = append(packages, area.Package)
+		}
+	}
+	return do.Package(packages...)
+}
+
+// mountAreas builds the module list the router mounts, one entry per area.
+//
+// Each area resolves its own dependencies here, so a configuration an area
+// cannot work with fails the run before the listener opens, rather than as a
+// 500 on the first request that reaches it.
+func mountAreas(i do.Injector, areas []Area) ([]kernel.Module, error) {
+	modules := make([]kernel.Module, 0, len(areas))
+	for _, area := range areas {
+		module, err := area.Mount(i)
+		if err != nil {
+			return nil, err
+		}
+		modules = append(modules, module)
+	}
+	return modules, nil
 }

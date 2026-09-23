@@ -6,8 +6,10 @@
 //   - infrastructure.go registers what the process runs on — the pool, the
 //     cache, the queue, the storage engine, the outbound client. It names no
 //     module, and importing one there would be visible in a one-line diff.
-//   - modules.go registers what the application mounts, and reaches
-//     infrastructure only by invoking it from the container.
+//   - modules.go registers what the application mounts. An area owns its own
+//     wiring and reaches infrastructure only by invoking it from the
+//     container, so this file never names an area's internals — it holds the
+//     list, and a consumer can append to it.
 //   - this file joins the two. The router and the server are the only things
 //     that need both, so they are the only ones that name both.
 //
@@ -43,14 +45,21 @@ import (
 // resolves them instead of closing over them. The metrics handler is the one
 // exception: it is built by the observer the command holds, so it is captured
 // here rather than registered, and only the router reads it.
-func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *slog.Logger) *do.RootScope {
+//
+// The areas of this application are mounted, followed by any the caller
+// passes. A consumer outside this repository therefore serves its own area
+// without editing this package — it appends to the list, and the last one to
+// claim a route wins.
+func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *slog.Logger, extra ...Area) *do.RootScope {
+	areas := append(Areas(), extra...)
+
 	return do.New(
 		do.Eager(&cfg),
 		do.Eager(logger),
 		infrastructure(ctx),
-		modules(),
+		areaPackages(areas),
 		do.Lazy(func(i do.Injector) (chi.Router, error) {
-			return newRouter(i, metrics)
+			return newRouter(i, metrics, areas)
 		}),
 		do.Lazy(newServer),
 	)
@@ -61,14 +70,14 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 //
 // This is the join point, so it is the one provider that resolves from both
 // halves — the health checker and the limiter come from infrastructure, the
-// module list from modules.go.
-func newRouter(i do.Injector, metrics http.Handler) (chi.Router, error) {
+// module list from the areas.
+func newRouter(i do.Injector, metrics http.Handler, areas []Area) (chi.Router, error) {
 	c := do.MustInvoke[*config.Config](i)
 	checker := do.MustInvoke[*health.Checker](i)
 	log := do.MustInvoke[*slog.Logger](i)
 	limiter := do.MustInvoke[middleware.Limiter](i)
 
-	mounted, err := mountedModules(i)
+	mounted, err := mountAreas(i, areas)
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,81 @@
+package registry_test
+
+import (
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/samber/do/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/registry"
+)
+
+// reportsArea is an area a consumer wrote outside this repository. It owns one
+// service and one route, and it needs nothing from identity.
+type reportsArea struct{}
+
+func (reportsArea) Name() string { return "reports" }
+
+func (reportsArea) Mount(r chi.Router) {
+	r.Get("/reports/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+}
+
+// TestAConsumerServesItsOwnArea is the composability contract: an area that
+// lives outside this repository reaches the running server by being passed to
+// New, with no edit to internal/registry.
+//
+// It is the test that failed before the seam existed — the area mounted
+// nowhere and its route answered 404.
+func TestAConsumerServesItsOwnArea(t *testing.T) {
+	cfg := config.Default()
+	cfg.Auth.PrivateKey = ""
+	cfg.Auth.PublicKey = ""
+	cfg.Auth.SecretKey = ""
+	cfg.Database.URL = "postgres://u:p@127.0.0.1:1/none?connect_timeout=1"
+
+	extra := registry.Area{
+		Name:    "reports",
+		Package: do.Package(do.Eager(reportsArea{})),
+		Mount: func(i do.Injector) (kernel.Module, error) {
+			return do.MustInvoke[reportsArea](i), nil
+		},
+	}
+
+	injector := registry.New(t.Context(), cfg, nil, slog.New(slog.DiscardHandler), extra)
+	t.Cleanup(func() { injector.Shutdown() })
+
+	// The pool is replaced with a stub: this test is about the area seam, not
+	// about reaching a database, and the health check that holds the pool runs
+	// on request rather than at construction.
+	do.OverrideValue(injector, &datastore.Postgres{})
+
+	router, err := do.Invoke[chi.Router](injector)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/reports/ping", nil))
+
+	require.Equal(t, http.StatusOK, rec.Code,
+		"an area passed to New must be mounted on the served router")
+	assert.Equal(t, "pong", rec.Body.String())
+}
+
+// TestTheApplicationAreasAreListedOnce keeps the built-in list honest: the
+// identity area is reachable, and the list carries it by name.
+func TestTheApplicationAreasAreListedOnce(t *testing.T) {
+	areas := registry.Areas()
+	require.Len(t, areas, 1)
+
+	assert.Equal(t, "identity", areas[0].Name)
+	assert.NotNil(t, areas[0].Package, "an area must register its own services")
+	assert.NotNil(t, areas[0].Mount, "an area must build its own module")
+}
