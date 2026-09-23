@@ -1,0 +1,216 @@
+package registry
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"path/filepath"
+	"time"
+
+	"github.com/samber/do/v2"
+
+	"github.com/riipandi/tango/internal/cache"
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/fetcher"
+	"github.com/riipandi/tango/internal/health"
+	"github.com/riipandi/tango/internal/jobs"
+	"github.com/riipandi/tango/internal/mailer"
+	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/internal/scheduler"
+	"github.com/riipandi/tango/internal/storage"
+	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/pkg/crypto"
+)
+
+// infrastructure registers what the process runs on: the pool, the cache, the
+// queue, the storage engine, the outbound client, and the services built on
+// them. Nothing here names a module, so this file cannot depend on one — a
+// module reaches these services by invoking them from the container.
+//
+// The context is captured rather than registered. It is the run's own context,
+// which the command cancels on a signal, so it is a property of this run
+// instead of a service anything could resolve and replace.
+func infrastructure(ctx context.Context) func(do.Injector) {
+	return do.Package(
+		do.Lazy(func(i do.Injector) (*fetcher.Client, error) {
+			c := do.MustInvoke[*config.Config](i)
+			log := do.MustInvoke[*slog.Logger](i)
+			return fetcher.New(*c, log)
+		}),
+
+		do.Lazy(func(i do.Injector) (*datastore.Postgres, error) {
+			c := do.MustInvoke[*config.Config](i)
+			return datastore.NewPostgres(ctx, datastore.PostgresOptions{
+				DSN:             c.Database.URL,
+				ApplicationName: config.AppIdentifier,
+				SearchPath:      c.Database.SearchPath,
+				Timezone:        c.Database.Timezone,
+				MaxConns:        c.Database.MaxConns,
+				MinConns:        c.Database.MinConns,
+				MaxConnLifetime: c.Database.MaxConnLifetime,
+				MaxConnIdleTime: c.Database.MaxConnIdleTime,
+				ConnectTimeout:  c.Database.ConnectTimeout,
+			})
+		}),
+
+		do.Lazy(func(i do.Injector) (*datastore.Valkey, error) {
+			c := do.MustInvoke[*config.Config](i)
+			return datastore.NewValkey(ctx, datastore.ValkeyOptions{
+				URL:             c.KVStore.URL,
+				DB:              c.KVStore.DB,
+				ApplicationName: config.AppIdentifier,
+			})
+		}),
+
+		do.Lazy(func(i do.Injector) (cache.Cache, error) {
+			c := do.MustInvoke[*config.Config](i)
+			// The backend client is resolved only while it is enabled: a run
+			// without it never opens a connection, and the cache factory
+			// answers the missing client with the no-op driver.
+			var kv *datastore.Valkey
+			if c.KVStore.Enable {
+				kv = do.MustInvoke[*datastore.Valkey](i)
+			}
+			return cache.New(*c, kv), nil
+		}),
+
+		do.Lazy(func(i do.Injector) (*health.Checker, error) {
+			c := do.MustInvoke[*config.Config](i)
+			pool := do.MustInvoke[*datastore.Postgres](i)
+			checks := []health.Check{
+				health.DatabaseCheck(pool, config.RedactDSN(c.Database.URL)),
+				health.StorageCheck(c.Storage.LocalPath),
+			}
+			if c.KVStore.Enable {
+				kv := do.MustInvoke[*datastore.Valkey](i)
+				checks = append(checks, health.KVStoreCheck(kv, config.RedactKVURL(c.KVStore.URL)))
+			}
+			return health.NewChecker(
+				health.WithChecks(checks...),
+				health.WithInfo(map[string]string{
+					"version": config.AppVersion,
+					"mode":    c.App.Mode,
+				}),
+				health.WithInfoFunc(uptime),
+			), nil
+		}),
+
+		do.Lazy(func(i do.Injector) (*mailer.Service, error) {
+			c := do.MustInvoke[*config.Config](i)
+			log := do.MustInvoke[*slog.Logger](i)
+			client, err := mailer.New(*c, log)
+			if err != nil {
+				return nil, err
+			}
+			// The templates are embedded, so a parse failure here is a broken
+			// build rather than a bad configuration; it still fails the run,
+			// before the listener opens, rather than the first send.
+			templates, err := mailer.NewTemplates(mailer.SenderFrom(*c))
+			if err != nil {
+				return nil, err
+			}
+			return mailer.NewService(client, templates), nil
+		}),
+
+		do.Lazy(func(i do.Injector) (storage.Store, error) {
+			c := do.MustInvoke[*config.Config](i)
+			return storage.New(*c)
+		}),
+
+		do.Lazy(func(i do.Injector) (*storage.Manager, error) {
+			c := do.MustInvoke[*config.Config](i)
+			pool := do.MustInvoke[*datastore.Postgres](i)
+			store := do.MustInvoke[storage.Store](i)
+			// The uploads hold one chunk buffer each; the budget keeps a sync's
+			// memory at budget × chunk size, whatever the file's size is.
+			return storage.NewManager(store, pool, c.Storage.ChunkSize,
+				filepath.Join(c.Storage.LocalPath, "staging"), 4)
+		}),
+
+		do.Lazy(func(i do.Injector) (*queue.Client, error) {
+			c := do.MustInvoke[*config.Config](i)
+			pool := do.MustInvoke[*datastore.Postgres](i)
+			log := do.MustInvoke[*slog.Logger](i)
+			uploader := do.MustInvoke[*storage.Manager](i)
+			var encryptor *crypto.Cipher
+			if c.Queue.Encrypt {
+				// Validation refuses an encrypted queue without a usable secret,
+				// so a failing parse here is a broken deployment, not a silent
+				// switch to plaintext.
+				cipher, err := crypto.NewCipherFromHex(c.App.SecretKey)
+				if err != nil {
+					return nil, err
+				}
+				encryptor = cipher
+			}
+			client, err := queue.NewClient(queue.ClientConfig{
+				Store:        pool,
+				Logger:       log,
+				NumWorkers:   c.Queue.NumWorkers,
+				ReleaseAfter: c.Queue.ReleaseAfter,
+				Encryptor:    encryptor,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			// The job list is registered beside the engine it runs on: a queue
+			// with no jobs is a worker pool with nothing to do.
+			if err := jobs.Register(ctx, client, c.Queue.CleanupInterval, uploader); err != nil {
+				return nil, err
+			}
+			return client, nil
+		}),
+
+		do.Lazy(func(i do.Injector) (*storage.Watcher, error) {
+			c := do.MustInvoke[*config.Config](i)
+			manager := do.MustInvoke[*storage.Manager](i)
+			client := do.MustInvoke[*queue.Client](i)
+			return storage.NewWatcher(manager.Staging(), c.Storage.Watch.Debounce,
+				func(key string) {
+					if _, err := client.Add(jobs.ChunkUploadTask{Key: key}).Save(); err != nil {
+						// The staging file is still on disk, so the loss is a
+						// delayed upload, not a lost one: the next scan or the
+						// next write re-enqueues it.
+						slog.Error("storage: enqueue upload", "key", key, "err", err)
+					}
+				}), nil
+		}),
+
+		do.Lazy(func(i do.Injector) (*scheduler.Scheduler, error) {
+			c := do.MustInvoke[*config.Config](i)
+			pool := do.MustInvoke[*datastore.Postgres](i)
+			client := do.MustInvoke[*queue.Client](i)
+			log := do.MustInvoke[*slog.Logger](i)
+			location, err := time.LoadLocation(c.Scheduler.Timezone)
+			if err != nil {
+				return nil, err
+			}
+			return scheduler.New(scheduler.Config{
+				Store:    pool,
+				Client:   client,
+				Logger:   log,
+				Location: location,
+				Jobs:     jobs.Scheduled(),
+			})
+		}),
+
+		do.Lazy(func(i do.Injector) (middleware.Limiter, error) {
+			c := do.MustInvoke[*config.Config](i)
+			switch c.RateLimit.Driver {
+			case config.RateLimitDB:
+				pool := do.MustInvoke[*datastore.Postgres](i)
+				return middleware.NewDatabaseLimiter(pool, c.RateLimit), nil
+			case config.RateLimitKV:
+				// Validation refuses a kvstore driver while the backend is
+				// disabled, so resolving the client here is always a run that
+				// asked for it.
+				kv := do.MustInvoke[*datastore.Valkey](i)
+				return middleware.NewKVStoreLimiter(kv.Client(), c.RateLimit), nil
+			default:
+				return nil, fmt.Errorf("registry: rate_limit.driver: unknown driver %q", c.RateLimit.Driver)
+			}
+		}),
+	)
+}

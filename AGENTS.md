@@ -18,7 +18,7 @@ Full design rationale per package: **`.llms/architecture.md`** — read the sect
 - Target: `go-chi/chi`, Postgres via pgx, optional valkey, `samber/do` DI, goose as library, koanf JSON config, LogLayer Go with `log/slog` adapter, OpenTelemetry, S3 + local storage.
 - Optional backends are opt-in: cache defaults to in-memory; session store and rate limit default to Postgres (`public.rate_limits` + `fn_check_rate_limit` under advisory locks). Valkey replaces them only when configured.
 - LogLayer (`go.loglayer.dev/v3`): CLI pretty, structured file via lumberjack, OTel. Application code logs through `log/slog`; wire LogLayer as slog handler (`integrations/sloghandler`), never call LogLayer directly in feature code.
-- DI is explicit: constructors registered with `samber/do`, composed in `internal/registry`. No global singletons, no package-level `init`. Use skill `golang-samber-do`.
+- DI is explicit: constructors registered with `samber/do`, composed in `internal/registry` as `do.Package` values — `infrastructure.go` names no module, `modules.go` names no infrastructure constructor, and `registry.go` joins them. No global singletons, no package-level `init`. Use skill `golang-samber-do`.
 
 ## Build / Test / Lint
 

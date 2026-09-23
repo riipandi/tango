@@ -1,7 +1,18 @@
 // Package registry is the composition root: the one place the shared
-// dependencies are registered with samber/do and wired onto each other. It is
-// the only package that names constructors together, so a wiring change happens
-// in one reviewable file.
+// dependencies are registered with samber/do and wired onto each other.
+//
+// The package is split along one boundary:
+//
+//   - infrastructure.go registers what the process runs on — the pool, the
+//     cache, the queue, the storage engine, the outbound client. It names no
+//     module, and importing one there would be visible in a one-line diff.
+//   - modules.go registers what the application mounts, and reaches
+//     infrastructure only by invoking it from the container.
+//   - this file joins the two. The router and the server are the only things
+//     that need both, so they are the only ones that name both.
+//
+// Each half is a `do.Package`, so `do.New` reads as the composition list
+// itself: the values the command owns, the infrastructure, the modules.
 //
 // Services are lazy: the pool and the health checker are built when the first
 // service that needs them is invoked, which is the moment serve resolves the
@@ -12,286 +23,71 @@ package registry
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/samber/do/v2"
 
-	"github.com/riipandi/tango/internal/cache"
 	"github.com/riipandi/tango/internal/config"
-	"github.com/riipandi/tango/internal/datastore"
-	"github.com/riipandi/tango/internal/fetcher"
 	"github.com/riipandi/tango/internal/health"
-	"github.com/riipandi/tango/internal/jobs"
-	"github.com/riipandi/tango/internal/kernel"
-	"github.com/riipandi/tango/internal/mailer"
-	"github.com/riipandi/tango/internal/queue"
-	"github.com/riipandi/tango/internal/scheduler"
-	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/internal/transport/middleware"
-	"github.com/riipandi/tango/modules/identity"
-	"github.com/riipandi/tango/modules/identity/jwks"
-	"github.com/riipandi/tango/pkg/crypto"
-	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
-// New registers the shared services of a serve run. The metrics handler and
-// the logger come from the caller because both are built and closed by the
-// command lifecycle, not by the container; they are registered as values so
-// the services below resolve them like any other dependency.
+// New registers the shared services of a serve run.
+//
+// The configuration and the logger are registered as values because the command
+// lifecycle owns them; they are services like any other, so a provider below
+// resolves them instead of closing over them. The metrics handler is the one
+// exception: it is built by the observer the command holds, so it is captured
+// here rather than registered, and only the router reads it.
 func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *slog.Logger) *do.RootScope {
-	injector := do.New()
+	return do.New(
+		do.Eager(&cfg),
+		do.Eager(logger),
+		infrastructure(ctx),
+		modules(),
+		do.Lazy(func(i do.Injector) (chi.Router, error) {
+			return newRouter(i, metrics)
+		}),
+		do.Lazy(newServer),
+	)
+}
 
-	do.ProvideValue(injector, &cfg)
-	do.ProvideValue(injector, logger)
+// newRouter builds the HTTP surface: the API, the static mount, and the
+// modules mounted on the root router.
+//
+// This is the join point, so it is the one provider that resolves from both
+// halves — the health checker and the limiter come from infrastructure, the
+// module list from modules.go.
+func newRouter(i do.Injector, metrics http.Handler) (chi.Router, error) {
+	c := do.MustInvoke[*config.Config](i)
+	checker := do.MustInvoke[*health.Checker](i)
+	log := do.MustInvoke[*slog.Logger](i)
+	limiter := do.MustInvoke[middleware.Limiter](i)
 
-	do.Provide(injector, func(i do.Injector) (*fetcher.Client, error) {
-		c := do.MustInvoke[*config.Config](i)
-		log := do.MustInvoke[*slog.Logger](i)
-		return fetcher.New(*c, log)
-	})
+	mounted, err := mountedModules(i)
+	if err != nil {
+		return nil, err
+	}
 
-	do.Provide(injector, func(i do.Injector) (*datastore.Postgres, error) {
-		c := do.MustInvoke[*config.Config](i)
-		return datastore.NewPostgres(ctx, datastore.PostgresOptions{
-			DSN:             c.Database.URL,
-			ApplicationName: config.AppIdentifier,
-			SearchPath:      c.Database.SearchPath,
-			Timezone:        c.Database.Timezone,
-			MaxConns:        c.Database.MaxConns,
-			MinConns:        c.Database.MinConns,
-			MaxConnLifetime: c.Database.MaxConnLifetime,
-			MaxConnIdleTime: c.Database.MaxConnIdleTime,
-			ConnectTimeout:  c.Database.ConnectTimeout,
-		})
-	})
+	return transport.NewRouter(transport.Options{
+		Config:      *c,
+		Checker:     checker,
+		Metrics:     metrics,
+		Logger:      log,
+		RateLimiter: limiter,
+		Modules:     mounted,
+	}), nil
+}
 
-	do.Provide(injector, func(i do.Injector) (*health.Checker, error) {
-		c := do.MustInvoke[*config.Config](i)
-		pool := do.MustInvoke[*datastore.Postgres](i)
-		checks := []health.Check{
-			health.DatabaseCheck(pool, config.RedactDSN(c.Database.URL)),
-			health.StorageCheck(c.Storage.LocalPath),
-		}
-		if c.KVStore.Enable {
-			kv := do.MustInvoke[*datastore.Valkey](i)
-			checks = append(checks, health.KVStoreCheck(kv, config.RedactKVURL(c.KVStore.URL)))
-		}
-		return health.NewChecker(
-			health.WithChecks(checks...),
-			health.WithInfo(map[string]string{
-				"version": config.AppVersion,
-				"mode":    c.App.Mode,
-			}),
-			health.WithInfoFunc(uptime),
-		), nil
-	})
-
-	do.Provide(injector, func(i do.Injector) (*mailer.Service, error) {
-		c := do.MustInvoke[*config.Config](i)
-		log := do.MustInvoke[*slog.Logger](i)
-		client, err := mailer.New(*c, log)
-		if err != nil {
-			return nil, err
-		}
-		// The templates are embedded, so a parse failure here is a broken
-		// build rather than a bad configuration; it still fails the run, before
-		// the listener opens, rather than the first send.
-		templates, err := mailer.NewTemplates(mailer.SenderFrom(*c))
-		if err != nil {
-			return nil, err
-		}
-		return mailer.NewService(client, templates), nil
-	})
-
-	do.Provide(injector, func(i do.Injector) (*jwks.Service, error) {
-		c := do.MustInvoke[*config.Config](i)
-		log := do.MustInvoke[*slog.Logger](i)
-		pool := do.MustInvoke[*datastore.Postgres](i)
-		return jwks.NewService(*c, jwks.NewRepository(pool), log), nil
-	})
-
-	// The published key set is read behind a cache: a client that verifies
-	// many tokens must not turn each verification into a query, and a
-	// rotation is still picked up within the TTL. The cache is wired here
-	// rather than inside the service, because how long a key set is reused is
-	// a deployment decision, not a property of the set.
-	//
-	// The service is still resolved on its own for the fail-fast check below:
-	// the cache would answer a broken configuration with an error on the
-	// first request instead of failing the run.
-	do.Provide(injector, func(i do.Injector) (jwtutils.KeyProvider, error) {
-		service := do.MustInvoke[*jwks.Service](i)
-		return jwtutils.NewCachedKeyProvider(service, jwks.KeyCacheTTL), nil
-	})
-
-	do.Provide(injector, func(i do.Injector) (chi.Router, error) {
-		c := do.MustInvoke[*config.Config](i)
-		checker := do.MustInvoke[*health.Checker](i)
-		log := do.MustInvoke[*slog.Logger](i)
-		limiter := do.MustInvoke[middleware.Limiter](i)
-		keySet, err := do.Invoke[jwtutils.KeyProvider](i)
-		if err != nil {
-			return nil, err
-		}
-		// The service is resolved beside the provider so a configuration
-		// whose key pair cannot be read fails the run, before the listener
-		// opens, rather than as a 500 on the first client that fetches it.
-		service, err := do.Invoke[*jwks.Service](i)
-		if err != nil {
-			return nil, err
-		}
-		if err := service.Err(); err != nil {
-			return nil, err
-		}
-		return transport.NewRouter(transport.Options{
-			Config:      *c,
-			Checker:     checker,
-			Metrics:     metrics,
-			Logger:      log,
-			RateLimiter: limiter,
-			// One module per area: the identity area mounts its own features,
-			// so the registry names the area and resolves what it needs rather
-			// than naming each feature it holds.
-			Modules: []kernel.Module{
-				identity.NewModule(identity.Deps{KeySet: keySet}),
-			},
-		}), nil
-	})
-
-	do.Provide(injector, func(i do.Injector) (*datastore.Valkey, error) {
-		c := do.MustInvoke[*config.Config](i)
-		return datastore.NewValkey(ctx, datastore.ValkeyOptions{
-			URL:             c.KVStore.URL,
-			DB:              c.KVStore.DB,
-			ApplicationName: config.AppIdentifier,
-		})
-	})
-
-	do.Provide(injector, func(i do.Injector) (cache.Cache, error) {
-		c := do.MustInvoke[*config.Config](i)
-		// The backend client is resolved only while it is enabled: a run
-		// without it never opens a connection, and the cache factory
-		// answers the missing client with the no-op driver.
-		var kv *datastore.Valkey
-		if c.KVStore.Enable {
-			kv = do.MustInvoke[*datastore.Valkey](i)
-		}
-		return cache.New(*c, kv), nil
-	})
-
-	do.Provide(injector, func(i do.Injector) (*queue.Client, error) {
-		c := do.MustInvoke[*config.Config](i)
-		pool := do.MustInvoke[*datastore.Postgres](i)
-		log := do.MustInvoke[*slog.Logger](i)
-		uploader := do.MustInvoke[*storage.Manager](i)
-		var encryptor *crypto.Cipher
-		if c.Queue.Encrypt {
-			// Validation refuses an encrypted queue without a usable secret,
-			// so a failing parse here is a broken deployment, not a silent
-			// switch to plaintext.
-			cipher, err := crypto.NewCipherFromHex(c.App.SecretKey)
-			if err != nil {
-				return nil, err
-			}
-			encryptor = cipher
-		}
-		client, err := queue.NewClient(queue.ClientConfig{
-			Store:        pool,
-			Logger:       log,
-			NumWorkers:   c.Queue.NumWorkers,
-			ReleaseAfter: c.Queue.ReleaseAfter,
-			Encryptor:    encryptor,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		// The job list is registered beside the engine it runs on: a queue
-		// with no jobs is a worker pool with nothing to do.
-		if err := jobs.Register(ctx, client, c.Queue.CleanupInterval, uploader); err != nil {
-			return nil, err
-		}
-		return client, nil
-	})
-
-	do.Provide(injector, func(i do.Injector) (storage.Store, error) {
-		c := do.MustInvoke[*config.Config](i)
-		return storage.New(*c)
-	})
-
-	do.Provide(injector, func(i do.Injector) (*storage.Manager, error) {
-		c := do.MustInvoke[*config.Config](i)
-		pool := do.MustInvoke[*datastore.Postgres](i)
-		store := do.MustInvoke[storage.Store](i)
-		// The uploads hold one chunk buffer each; the budget keeps a sync's
-		// memory at budget × chunk size, whatever the file's size is.
-		return storage.NewManager(store, pool, c.Storage.ChunkSize,
-			filepath.Join(c.Storage.LocalPath, "staging"), 4)
-	})
-
-	do.Provide(injector, func(i do.Injector) (*storage.Watcher, error) {
-		c := do.MustInvoke[*config.Config](i)
-		manager := do.MustInvoke[*storage.Manager](i)
-		client := do.MustInvoke[*queue.Client](i)
-		return storage.NewWatcher(manager.Staging(), c.Storage.Watch.Debounce,
-			func(key string) {
-				if _, err := client.Add(jobs.ChunkUploadTask{Key: key}).Save(); err != nil {
-					// The staging file is still on disk, so the loss is a
-					// delayed upload, not a lost one: the next scan or the
-					// next write re-enqueues it.
-					slog.Error("storage: enqueue upload", "key", key, "err", err)
-				}
-			}), nil
-	})
-
-	do.Provide(injector, func(i do.Injector) (*scheduler.Scheduler, error) {
-		c := do.MustInvoke[*config.Config](i)
-		pool := do.MustInvoke[*datastore.Postgres](i)
-		client := do.MustInvoke[*queue.Client](i)
-		log := do.MustInvoke[*slog.Logger](i)
-		location, err := time.LoadLocation(c.Scheduler.Timezone)
-		if err != nil {
-			return nil, err
-		}
-		return scheduler.New(scheduler.Config{
-			Store:    pool,
-			Client:   client,
-			Logger:   log,
-			Location: location,
-			Jobs:     jobs.Scheduled(),
-		})
-	})
-
-	do.Provide(injector, func(i do.Injector) (middleware.Limiter, error) {
-		c := do.MustInvoke[*config.Config](i)
-		switch c.RateLimit.Driver {
-		case config.RateLimitDB:
-			pool := do.MustInvoke[*datastore.Postgres](i)
-			return middleware.NewDatabaseLimiter(pool, c.RateLimit), nil
-		case config.RateLimitKV:
-			// Validation refuses a kvstore driver while the backend is
-			// disabled, so resolving the client here is always a run that
-			// asked for it.
-			kv := do.MustInvoke[*datastore.Valkey](i)
-			return middleware.NewKVStoreLimiter(kv.Client(), c.RateLimit), nil
-		default:
-			return nil, fmt.Errorf("registry: rate_limit.driver: unknown driver %q", c.RateLimit.Driver)
-		}
-	})
-
-	do.Provide(injector, func(i do.Injector) (*http.Server, error) {
-		c := do.MustInvoke[*config.Config](i)
-		router := do.MustInvoke[chi.Router](i)
-		return transport.NewServer(*c, router), nil
-	})
-
-	return injector
+// newServer wraps the router in the configured HTTP server.
+func newServer(i do.Injector) (*http.Server, error) {
+	c := do.MustInvoke[*config.Config](i)
+	router := do.MustInvoke[chi.Router](i)
+	return transport.NewServer(*c, router), nil
 }
 
 // uptime is the computed health metadata: how long the process has been up.
