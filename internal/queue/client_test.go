@@ -131,7 +131,7 @@ func newTestClient(t *testing.T) *Client {
 		Store:        migratedPool(t),
 		Logger:       slog.Default(),
 		NumWorkers:   2,
-		ReleaseAfter: 10 * time.Second,
+		ReleaseAfter: time.Hour,
 	})
 	require.NoError(t, err)
 	return client
@@ -174,6 +174,58 @@ func TestNewClientValidatesItsConfig(t *testing.T) {
 
 // nopStore is a store that answers nothing: the config tests never call it.
 type nopStore struct{}
+
+// TestRegisterRefusesATimeoutAtOrPastReleaseAfter is the invariant that keeps
+// a task from running twice. ReleaseAfter is how long a claim survives without
+// a heartbeat, so a task still running when it elapses is handed to another
+// worker while the first keeps going. A queue Timeout that reaches it permits
+// exactly that, and both values are known only here.
+func TestRegisterRefusesATimeoutAtOrPastReleaseAfter(t *testing.T) {
+	cases := []struct {
+		name      string
+		timeout   time.Duration
+		release   time.Duration
+		wantPanic bool
+	}{
+		{"below the release window", 30 * time.Second, time.Minute, false},
+		{"equal to the release window", time.Minute, time.Minute, true},
+		{"past the release window", 2 * time.Minute, time.Minute, true},
+		{"no timeout at all", 0, time.Minute, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := NewClient(ClientConfig{
+				Store:        nopStore{},
+				NumWorkers:   1,
+				ReleaseAfter: tc.release,
+			})
+			require.NoError(t, err)
+
+			queue := &stubQueue{config: QueueConfig{
+				Name:        "timed_probe",
+				MaxAttempts: 1,
+				Timeout:     tc.timeout,
+			}}
+
+			if tc.wantPanic {
+				assert.Panics(t, func() { client.Register(queue) })
+			} else {
+				assert.NotPanics(t, func() { client.Register(queue) })
+			}
+		})
+	}
+}
+
+// stubQueue is a Queue whose config a test sets directly, which NewQueue
+// cannot do: it reads Config from the task's zero value.
+type stubQueue struct {
+	config QueueConfig
+}
+
+func (s *stubQueue) Config() *QueueConfig { return &s.config }
+
+func (s *stubQueue) Process(context.Context, []byte) error { return nil }
 
 func (nopStore) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
 	return pgconn.CommandTag{}, nil

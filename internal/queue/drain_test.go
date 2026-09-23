@@ -34,7 +34,7 @@ func TestASignalDoesNotCancelAnInFlightTask(t *testing.T) {
 		Store:        migratedPool(t),
 		Logger:       slog.Default(),
 		NumWorkers:   1,
-		ReleaseAfter: 60 * time.Second,
+		ReleaseAfter: time.Hour,
 	})
 	require.NoError(t, err)
 

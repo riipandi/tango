@@ -35,7 +35,7 @@ func migratedClient(t *testing.T, dsn string) (*datastore.Postgres, *queue.Clien
 	client, err := queue.NewClient(queue.ClientConfig{
 		Store:        pool,
 		NumWorkers:   2,
-		ReleaseAfter: 10 * time.Second,
+		ReleaseAfter: time.Hour,
 	})
 	require.NoError(t, err)
 	return pool, client

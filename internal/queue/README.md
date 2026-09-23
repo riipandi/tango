@@ -214,14 +214,17 @@ client.Register(queue.NewQueue[OrderTask](func(ctx context.Context, task OrderTa
 | Key                    | Default | Description                                                                     |
 | ---------------------- | ------- | ------------------------------------------------------------------------------- |
 | `queue.num_workers`    | 5       | Worker goroutines that execute queued tasks concurrently                        |
-| `queue.release_after`  | 10m     | How long a claimed task may run before the queue considers its worker lost      |
+| `queue.release_after`  | 1h      | How long a claimed task may run before the queue considers its worker lost      |
 | `queue.cleanup_interval` | 1h    | How often the cleanup job purges the completed records retention has expired    |
 | `queue.encrypt`        | false   | Seal task payloads at rest with `app.secret_key` (AES-256-GCM)                  |
 
 Durations are written as plain numbers of seconds in the config file. `release_after` must
-exceed the longest `Timeout` any queue configures, or a slow task would be claimed twice.
-`queue.encrypt` requires `app.secret_key` to be set — validation refuses the combination of
-an encrypted queue and a missing secret.
+exceed the longest `Timeout` any queue configures, or a slow task would be claimed twice —
+the default is twice the longest job the application runs (the 30-minute chunk upload).
+`Client.Register` refuses a queue whose `Timeout` reaches it, so a mismatch fails the run
+before the listener opens rather than executing the task twice; a deployment that raises a
+job's timeout must raise `release_after` with it. `queue.encrypt` requires `app.secret_key`
+to be set — validation refuses the combination of an encrypted queue and a missing secret.
 
 ### `ClientConfig`
 
@@ -230,7 +233,7 @@ an encrypted queue and a missing secret.
 | `Store`        | `queue.Store`   | Yes      | The shared Postgres pool (`Querier` + `WithTx`)               |
 | `Logger`       | `*slog.Logger`  | No       | The process logger; nil discards every line                  |
 | `NumWorkers`   | `int`           | Yes      | Worker goroutines (must be >= 1)                             |
-| `ReleaseAfter` | `time.Duration` | Yes      | Fail-safe release for tasks whose worker was lost (must be > 0) |
+| `ReleaseAfter` | `time.Duration` | Yes      | Fail-safe release for tasks whose worker was lost (must be > 0, and above every registered queue's `Timeout`) |
 | `Encryptor`    | `*crypto.Cipher`| No       | Seals payloads at rest when set (`queue.encrypt` wires it)   |
 
 ### `QueueConfig`

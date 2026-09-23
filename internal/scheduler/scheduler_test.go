@@ -63,7 +63,7 @@ func newScheduler(t *testing.T, pool *datastore.Postgres, client *queue.Client, 
 			Store:        pool,
 			Logger:       slog.Default(),
 			NumWorkers:   1,
-			ReleaseAfter: 10 * time.Second,
+			ReleaseAfter: time.Hour,
 		})
 		require.NoError(t, err)
 	}
@@ -204,7 +204,7 @@ func TestStartFiresTheScheduleAndStopDrainsIt(t *testing.T) {
 	pool := migratedPool(t)
 
 	client, err := queue.NewClient(queue.ClientConfig{
-		Store: pool, Logger: slog.Default(), NumWorkers: 1, ReleaseAfter: 10 * time.Second,
+		Store: pool, Logger: slog.Default(), NumWorkers: 1, ReleaseAfter: time.Hour,
 	})
 	require.NoError(t, err)
 

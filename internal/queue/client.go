@@ -104,10 +104,31 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	return c, nil
 }
 
-// Register registers a queue so tasks can be added to it. It panics when the
-// name is empty or already registered: both are wiring bugs, and a queue
-// registered twice would silently split its tasks' fate.
+// Register registers a queue so tasks can be added to it.
+//
+// It panics on a wiring bug rather than reporting one: an empty or duplicate
+// name, or a queue whose Timeout reaches past ReleaseAfter.
+//
+// The last one is the invariant that keeps a task from running twice.
+// ReleaseAfter is how long a claim survives without a heartbeat, so a task
+// still running when it elapses is handed to another worker while the first
+// one keeps going. A queue Timeout at or above it therefore permits the same
+// task to execute concurrently, which for a job that uploads or charges is
+// the failure the setting exists to prevent. Both values are known here and
+// nowhere else, so this is where the comparison belongs.
 func (c *Client) Register(queue Queue) {
+	cfg := queue.Config()
+
+	if len(cfg.Name) == 0 {
+		panic("queue: queue name is missing")
+	}
+	if cfg.Timeout > 0 && cfg.Timeout >= c.dispatcher.releaseAfter {
+		panic(fmt.Sprintf(
+			"queue: queue '%s' has Timeout %s, which is not below the client's ReleaseAfter %s: "+
+				"a task could still be running when its claim is released, and would run twice",
+			cfg.Name, cfg.Timeout, c.dispatcher.releaseAfter))
+	}
+
 	c.queues.add(queue)
 }
 

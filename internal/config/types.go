@@ -395,6 +395,12 @@ type Queue struct {
 	// considers its worker lost and hands the task to another one. It must
 	// exceed the longest execution a queue's Timeout allows, or a slow task
 	// would be run twice.
+	//
+	// The default is an hour, twice the longest job the application runs. A
+	// deployment that raises a job's timeout must raise this with it:
+	// queue.Client.Register refuses to register a queue whose Timeout reaches
+	// the value, so the mismatch fails the run before the listener opens
+	// rather than executing the task twice.
 	ReleaseAfter time.Duration `koanf:"release_after" json:"release_after"`
 	// CleanupInterval is how often the maintenance job deletes the completed
 	// records their retention has expired.

@@ -18,7 +18,7 @@ func TestPriorityClaimsHigherFirst(t *testing.T) {
 	client, err := NewClient(ClientConfig{
 		Store:        pool,
 		NumWorkers:   1,
-		ReleaseAfter: time.Second,
+		ReleaseAfter: time.Hour,
 	})
 	require.NoError(t, err)
 

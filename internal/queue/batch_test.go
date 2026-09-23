@@ -188,7 +188,7 @@ func TestEncryptedTasksRestSealedAndRunDecoded(t *testing.T) {
 		Store:        migratedPool(t),
 		Logger:       slog.Default(),
 		NumWorkers:   2,
-		ReleaseAfter: 10 * time.Second,
+		ReleaseAfter: time.Hour,
 		Encryptor:    cipher,
 	})
 	require.NoError(t, err)
@@ -224,7 +224,7 @@ func TestSealingClientReadsAPlaintextTask(t *testing.T) {
 	pool := migratedPool(t)
 
 	plain, err := NewClient(ClientConfig{
-		Store: pool, Logger: slog.Default(), NumWorkers: 1, ReleaseAfter: 10 * time.Second,
+		Store: pool, Logger: slog.Default(), NumWorkers: 1, ReleaseAfter: time.Hour,
 	})
 	require.NoError(t, err)
 	plain.Register(NewQueue(func(ctx context.Context, task probeTask) error { return nil }))
@@ -234,7 +234,7 @@ func TestSealingClientReadsAPlaintextTask(t *testing.T) {
 	cipher, err := crypto.NewCipherFromHex(testKey)
 	require.NoError(t, err)
 	sealed, err := NewClient(ClientConfig{
-		Store: pool, Logger: slog.Default(), NumWorkers: 1, ReleaseAfter: 10 * time.Second,
+		Store: pool, Logger: slog.Default(), NumWorkers: 1, ReleaseAfter: time.Hour,
 		Encryptor: cipher,
 	})
 	require.NoError(t, err)

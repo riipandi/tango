@@ -135,11 +135,17 @@ const (
 )
 
 // Defaults for the background task queue. The worker pool is sized for a
-// small deployment; ReleaseAfter must stay above the longest queue Timeout
-// any feature configures, or a slow task would be claimed twice.
+// small deployment.
+//
+// ReleaseAfter must stay above the longest queue Timeout any feature
+// configures, or a slow task is handed to a second worker while the first one
+// is still running. The longest today is the chunk upload's 30 minutes, so the
+// default is twice that. queue.Client.Register refuses a queue whose Timeout
+// reaches it, so a feature that needs longer fails at wiring rather than
+// running twice.
 const (
 	DefaultQueueNumWorkers     = 5
-	DefaultQueueReleaseAfter   = 10 * time.Minute
+	DefaultQueueReleaseAfter   = time.Hour
 	DefaultQueueCleanupArchive = time.Hour
 )
 
