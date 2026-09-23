@@ -52,6 +52,13 @@ spec:
                     kind: StatChart
                     spec:
                         calculation: last-number
+                        thresholds:
+                            mode: absolute
+                            steps:
+                                - value: 1
+                                  color: '#dc2626'
+                                - value: 1
+                                  color: '#16a34a'
                 queries:
                     - kind: TimeSeriesQuery
                       spec:

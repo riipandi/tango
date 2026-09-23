@@ -175,6 +175,11 @@ configs:
         location / {
           proxy_pass http://silo:9100/devbucket/;
         }
+        # Read by the nginx-exporter's scraper; the metric names the nginx-proxy
+        # dashboard reads are the ones this stub publishes.
+        location /stub_status {
+          stub_status;
+        }
       }
       # server {
       #   http2 on;

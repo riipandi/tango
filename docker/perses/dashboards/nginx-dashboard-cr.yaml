@@ -1,16 +1,19 @@
-# The Valkey the cache and the optional drivers run on, read from the
-# redis-exporter (Valkey speaks the Redis protocol, and the exporter's metric
-# names are redis_*). The instance label is the one the VictoriaMetrics scrape
-# config names (redis-server-01).
+# The edge proxy, read from nginx-exporter over the stub_status endpoint the
+# 9180 server publishes. stub_status is aggregate on purpose: connections and a
+# request counter, no status-code split — a 502 the proxy answers itself never
+# reaches a handler that could count it. The panels here answer the questions
+# stub_status can: is the proxy up, is it saturated, and is request traffic
+# flowing — the split between the layers comes from comparing this request rate
+# against the application's own.
 #
 # Native provisioning format: kind Dashboard with a project.
 kind: Dashboard
 metadata:
-    name: valkey-cache
+    name: nginx-edge
     project: tango
 spec:
     display:
-        name: Valkey Cache
+        name: Nginx Edge
     duration: 3h
     refreshInterval: 30s
     variables:
@@ -26,7 +29,7 @@ spec:
                   spec:
                       labelName: instance
                       matchers:
-                          - redis_up
+                          - nginx_up
               name: instance
     panels:
         up:
@@ -51,136 +54,88 @@ spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'redis_up{instance=~"$instance"}'
-        connected-clients:
+                                  query: 'nginx_up{instance=~"$instance"}'
+        active-connections:
             kind: Panel
             spec:
                 display:
-                    name: Connected clients
+                    name: Active connections
+                    description: Open connections right now. A line that ratchets up and stays there is a slow client or a stuck upstream.
                 plugin:
-                    kind: TimeSeriesChart
+                    kind: StatChart
                     spec:
-                        visual:
-                            display: line
+                        calculation: last-number
                 queries:
                     - kind: TimeSeriesQuery
                       spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'redis_connected_clients{instance=~"$instance"}'
-        memory-used:
+                                  query: 'nginx_connections_active{instance=~"$instance"}'
+        request-rate:
             kind: Panel
             spec:
                 display:
-                    name: Memory used
-                    description: Used against the server's maxmemory; the gap between the two lines is the headroom before eviction starts.
-                plugin:
-                    kind: TimeSeriesChart
-                    spec:
-                        visual:
-                            areaOpacity: 0.2
-                            display: line
-                        yAxis:
-                          format:
-                            unit: bytes
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                          plugin:
-                              kind: PrometheusTimeSeriesQuery
-                              spec:
-                                  query: 'redis_memory_used_bytes{instance=~"$instance"}'
-                    - kind: TimeSeriesQuery
-                      spec:
-                          plugin:
-                              kind: PrometheusTimeSeriesQuery
-                              spec:
-                                  query: 'redis_memory_max_bytes{instance=~"$instance"} > 0'
-        keys:
-            kind: Panel
-            spec:
-                display:
-                    name: Keys stored
-                plugin:
-                    kind: TimeSeriesChart
-                    spec:
-                        visual:
-                            display: line
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                          plugin:
-                              kind: PrometheusTimeSeriesQuery
-                              spec:
-                                  query: 'sum by (db) (redis_db_keys{instance=~"$instance"})'
-        hit-ratio:
-            kind: Panel
-            spec:
-                display:
-                    name: Cache hit ratio
-                    description: Keyspace hits against hits and misses together. A ratio that falls is a cache that stopped paying for itself.
-                plugin:
-                    kind: TimeSeriesChart
-                    spec:
-                        visual:
-                            display: line
-                        yAxis:
-                          format:
-                            unit: percent
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                          plugin:
-                              kind: PrometheusTimeSeriesQuery
-                              spec:
-                                  query: 'rate(redis_keyspace_hits_total{instance=~"$instance"}[5m]) / (rate(redis_keyspace_hits_total{instance=~"$instance"}[5m]) + rate(redis_keyspace_misses_total{instance=~"$instance"}[5m]))'
-        evictions:
-            kind: Panel
-            spec:
-                display:
-                    name: Evicted keys
-                    description: Keys removed because the memory limit was reached — a non-zero rate on a cache this size is a capacity question.
-                plugin:
-                    kind: TimeSeriesChart
-                    spec:
-                        visual:
-                            display: line
-                queries:
-                    - kind: TimeSeriesQuery
-                      spec:
-                          plugin:
-                              kind: PrometheusTimeSeriesQuery
-                              spec:
-                                  query: 'rate(redis_evicted_keys_total{instance=~"$instance"}[5m])'
-        rejected-connections:
-            kind: Panel
-            spec:
-                display:
-                    name: Rejected connections
-                    description: Connections refused at the maxclients boundary — always a finding, never an expected rate.
+                    name: Requests per second
                 plugin:
                     kind: TimeSeriesChart
                     spec:
                         visual:
                             areaOpacity: 0.2
                             display: line
-                            lineWidth: 2
                 queries:
                     - kind: TimeSeriesQuery
                       spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'rate(redis_rejected_connections_total{instance=~"$instance"}[5m]) or vector(0)'
-        commands:
+                                  query: 'rate(nginx_http_requests_total{instance=~"$instance"}[5m])'
+        connection-states:
             kind: Panel
             spec:
                 display:
-                    name: Commands per second
+                    name: Connections by state
+                    description: Reading (receiving the request), writing (answering it), waiting (keep-alive idle). Waiting dominating is healthy; reading piling up is a slowloris or a slow client body.
                 plugin:
                     kind: TimeSeriesChart
                     spec:
+                        legend:
+                            mode: table
+                            position: bottom
+                        visual:
+                            areaOpacity: 0.2
+                            display: line
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'nginx_connections_reading{instance=~"$instance"}'
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'nginx_connections_writing{instance=~"$instance"}'
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'nginx_connections_waiting{instance=~"$instance"}'
+        accepted-vs-handled:
+            kind: Panel
+            spec:
+                display:
+                    name: Accepted vs handled
+                    description: The two counters move together in a healthy worker; a gap that opens is a connection the worker accepted but never processed (typically a worker crash or a listen backlog overflow).
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: table
+                            position: bottom
                         visual:
                             display: line
                 queries:
@@ -189,7 +144,40 @@ spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'rate(redis_commands_processed_total{instance=~"$instance"}[5m])'
+                                  query: 'rate(nginx_connections_accepted_total{instance=~"$instance"}[5m])'
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'rate(nginx_connections_handled_total{instance=~"$instance"}[5m])'
+        edge-vs-app:
+            kind: Panel
+            spec:
+                display:
+                    name: Edge vs application requests
+                    description: nginx's request rate against the application's own. The gap is what the edge absorbed — its own 4xx and 5xx, health probes, or traffic that never became a handler call.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        legend:
+                            mode: table
+                            position: bottom
+                        visual:
+                            display: line
+                queries:
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'rate(nginx_http_requests_total{instance=~"$instance"}[5m])'
+                    - kind: TimeSeriesQuery
+                      spec:
+                          plugin:
+                              kind: PrometheusTimeSeriesQuery
+                              spec:
+                                  query: 'sum(rate(http_server_request_duration_seconds_count{service_name="tango"}[5m]))'
     layouts:
         - kind: Grid
           spec:
@@ -205,40 +193,28 @@ spec:
                     width: 9
                     height: 4
                     content:
-                        $ref: '#/spec/panels/memory-used'
+                        $ref: '#/spec/panels/active-connections'
                   - x: 15
                     y: 0
                     width: 9
                     height: 4
                     content:
-                        $ref: '#/spec/panels/hit-ratio'
+                        $ref: '#/spec/panels/request-rate'
                   - x: 0
                     y: 4
                     width: 8
                     height: 8
                     content:
-                        $ref: '#/spec/panels/connected-clients'
+                        $ref: '#/spec/panels/connection-states'
                   - x: 8
                     y: 4
                     width: 8
                     height: 8
                     content:
-                        $ref: '#/spec/panels/keys'
+                        $ref: '#/spec/panels/accepted-vs-handled'
                   - x: 16
                     y: 4
                     width: 8
                     height: 8
                     content:
-                        $ref: '#/spec/panels/rejected-connections'
-                  - x: 0
-                    y: 12
-                    width: 24
-                    height: 8
-                    content:
-                        $ref: '#/spec/panels/commands'
-                  - x: 0
-                    y: 20
-                    width: 24
-                    height: 8
-                    content:
-                        $ref: '#/spec/panels/evictions'
+                        $ref: '#/spec/panels/edge-vs-app'

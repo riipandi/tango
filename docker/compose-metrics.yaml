@@ -139,6 +139,20 @@ services:
     depends_on:
       valkey: { condition: service_healthy }
 
+  # The edge proxy's metrics, read from the stub_status the nginx config
+  # publishes on the 9180 server. stub_status is aggregate: connections and a
+  # request counter, no status-code split — a 502 the proxy returns never
+  # reaches a handler that could count it, so a latency or refusal question
+  # about the edge is answered from its access log, not this job.
+  nginx-exporter:
+    <<: *common
+    image: docker.io/nginx/nginx-prometheus-exporter:${NGINX_EXPORTER_VERSION:-1.4}
+    hostname: nginx-exporter
+    ports: ['9113:9113']
+    command: ['--nginx.scrape-uri=http://nginx:9180/stub_status']
+    depends_on:
+      nginx: { condition: service_started }
+
 # ================================================================================================
 # Configuration file
 # Behind Cloudflare: proxy_set_header X-Client-IP $http_cf_connecting_ip;
@@ -202,6 +216,18 @@ configs:
         - job_name: redis-exporter
           static_configs:
             - targets: ['redis-exporter:9121']
+        # The collector's own pipeline (accepted, dropped, sent) — the first
+        # place to look when a signal stops arriving.
+        - job_name: otel-collector
+          static_configs:
+            - targets: ['otel-collector:8888']
+        # The edge: nginx is in front of everything external, so its failure
+        # modes (upstream 502s never reach the application) need their own job.
+        - job_name: nginx
+          static_configs:
+            - targets: ['nginx-exporter:9113']
+              labels:
+                instance: nginx-proxy-01
         # The Go server publishes metrics on the port it serves; the target is
         # the host running `task dev`, reached through the extra_hosts entry.
         - job_name: tango
