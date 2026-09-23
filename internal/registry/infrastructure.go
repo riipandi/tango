@@ -79,12 +79,16 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			c := do.MustInvoke[*config.Config](i)
 			pool := do.MustInvoke[*datastore.Postgres](i)
 			checks := []health.Check{
-				health.DatabaseCheck(pool, config.RedactDSN(c.Database.URL)),
+				// The endpoint publishes this report to an unauthenticated
+				// caller, so neither check names the host it dials: the
+				// target-bearing forms are the CLI's, which an operator who
+				// owns the machine reads.
+				health.DatabaseCheck(pool),
 				health.StorageCheck(c.Storage.LocalPath),
 			}
 			if c.KVStore.Enable {
 				kv := do.MustInvoke[*datastore.Valkey](i)
-				checks = append(checks, health.KVStoreCheck(kv, config.RedactKVURL(c.KVStore.URL)))
+				checks = append(checks, health.KVStoreCheck(kv))
 			}
 			return health.NewChecker(
 				health.WithChecks(checks...),

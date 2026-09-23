@@ -25,7 +25,25 @@ type Pinger interface {
 //
 // Ping uses a connection from the pool, so this also fails while the pool is
 // exhausted, which is the state a saturated service is in.
-func DatabaseCheck(pool Pinger, target string) Check {
+//
+// The report carries no target: the REST endpoint publishes this result, and
+// which host the process dials is not something an unauthenticated reader
+// should learn. The CLI report, which an operator who owns the machine reads,
+// uses DatabaseCheckWithTarget instead.
+func DatabaseCheck(pool Pinger) Check {
+	return databaseCheck(pool, "")
+}
+
+// DatabaseCheckWithTarget is DatabaseCheck with the redacted connection
+// string in the result's target, for a surface an operator reads directly.
+// The endpoint publishes the plain check instead.
+func DatabaseCheckWithTarget(pool Pinger, target string) Check {
+	return databaseCheck(pool, target)
+}
+
+// databaseCheck builds the probe. target is what the report names, empty to
+// name nothing.
+func databaseCheck(pool Pinger, target string) Check {
 	return Check{
 		Name:    CheckNameDatabase,
 		Target:  target,

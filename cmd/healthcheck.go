@@ -118,10 +118,10 @@ func checkHealth(ctx context.Context, cmd *cli.Command, cfg config.Config, dsn s
 	defer pool.Shutdown(context.Background())
 
 	checks := []health.Check{
-		health.DatabaseCheck(pool, config.RedactDSN(dsn)),
 		// The CLI report is read by an operator who owns the machine, so the
-		// data directory may be named here; the endpoint publishes the plain
-		// check, which carries no path.
+		// targets may be named here; the endpoint publishes the plain checks,
+		// which carry neither a connection string nor a data directory.
+		health.DatabaseCheckWithTarget(pool, config.RedactDSN(dsn)),
 		health.StorageCheckWithTarget(dataDir(cfg)),
 	}
 	// The backend is probed only while it is enabled, the way the server
@@ -137,7 +137,7 @@ func checkHealth(ctx context.Context, cmd *cli.Command, cfg config.Config, dsn s
 			checks = append(checks, failedCheck(health.CheckNameKVStore, err))
 		} else {
 			defer kv.Shutdown(context.Background())
-			checks = append(checks, health.KVStoreCheck(kv, config.RedactKVURL(cfg.KVStore.URL)))
+			checks = append(checks, health.KVStoreCheckWithTarget(kv, config.RedactKVURL(cfg.KVStore.URL)))
 		}
 	}
 

@@ -42,6 +42,37 @@ func getHealth(t *testing.T, checker *health.Checker) (*http.Response, map[strin
 	return response, body
 }
 
+// TestHandlerPublishesNoTarget is the disclosure rule at the surface that
+// matters: the endpoint is unauthenticated, so its report must not name the
+// host of a dependency. The checks are built the way the registry builds
+// them, so a regression in the wiring is caught here too.
+func TestHandlerPublishesNoTarget(t *testing.T) {
+	checker := health.NewChecker(
+		health.WithCheck(health.DatabaseCheck(&stubPinger{})),
+		health.WithCheck(health.KVStoreCheck(&stubPinger{})),
+	)
+
+	_, body := getHealth(t, checker)
+
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok, "the envelope must carry a data object")
+
+	details, ok := data["details"].([]any)
+	require.True(t, ok, "the data object must carry details")
+
+	for _, entry := range details {
+		detail, ok := entry.(map[string]any)
+		require.True(t, ok)
+		assert.NotContains(t, detail, "target",
+			"the published report must not name the host of %v", detail["name"])
+	}
+}
+
+// stubPinger answers a successful probe for the checks above.
+type stubPinger struct{}
+
+func (stubPinger) Ping(context.Context) error { return nil }
+
 func TestHandlerAnswers200WhenHealthy(t *testing.T) {
 	checker := health.NewChecker(health.WithCheck(health.Check{Name: "postgres", Check: passing}))
 

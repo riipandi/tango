@@ -27,17 +27,26 @@ func (s *stubKV) Ping(context.Context) error {
 func TestKVStoreCheckPassesWhenClientPings(t *testing.T) {
 	kv := &stubKV{}
 
-	result := health.NewChecker(health.WithCheck(health.KVStoreCheck(kv, "localhost:6379/0"))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.KVStoreCheckWithTarget(kv, "localhost:6379/0"))).Check(t.Context())
 
 	assert.True(t, kv.called)
 	assert.Equal(t, health.GlobalHealthy, result.Status)
 	assert.Equal(t, health.CheckNameKVStore, result.Details["kvstore"].Name)
 }
 
+// The report must not carry the connection string: the endpoint publishes
+// this result, and which host the process dials is not something an
+// unauthenticated reader should learn.
+func TestKVStoreCheckHidesTarget(t *testing.T) {
+	check := health.KVStoreCheck(&stubKV{})
+
+	assert.Empty(t, check.Target)
+}
+
 // The target must be reported, so the text output says which backend was
 // reached, and must never carry the password from the URL.
 func TestKVStoreCheckReportsTarget(t *testing.T) {
-	check := health.KVStoreCheck(&stubKV{}, "localhost:6379/0")
+	check := health.KVStoreCheckWithTarget(&stubKV{}, "localhost:6379/0")
 
 	assert.Equal(t, "localhost:6379/0", check.Target)
 	assert.NotContains(t, check.Target, "@")
@@ -48,7 +57,7 @@ func TestKVStoreCheckReportsTarget(t *testing.T) {
 func TestKVStoreCheckWrapsPingError(t *testing.T) {
 	kv := &stubKV{err: errors.New("connection refused")}
 
-	result := health.NewChecker(health.WithCheck(health.KVStoreCheck(kv, "localhost:6379/0"))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.KVStoreCheckWithTarget(kv, "localhost:6379/0"))).Check(t.Context())
 
 	assert.Equal(t, health.GlobalUnhealthy, result.Status)
 	assert.Contains(t, result.Details["kvstore"].Error, "kvstore")
@@ -58,7 +67,7 @@ func TestKVStoreCheckWrapsPingError(t *testing.T) {
 // Like the database, the backend is required once it is wired in: a dead
 // server fails the probe rather than being reported as an optional extra.
 func TestKVStoreCheckIsRequired(t *testing.T) {
-	check := health.KVStoreCheck(&stubKV{}, "localhost:6379/0")
+	check := health.KVStoreCheckWithTarget(&stubKV{}, "localhost:6379/0")
 	assert.False(t, check.Optional)
 
 	// It carries its own timeout, shorter than the checker default, so a
@@ -76,7 +85,7 @@ func TestKVStoreCheckAgainstRealClient(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { kv.Shutdown(context.Background()) })
 
-	result := health.NewChecker(health.WithCheck(health.KVStoreCheck(kv, container.URL))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.KVStoreCheckWithTarget(kv, container.URL))).Check(t.Context())
 	assert.Equal(t, health.GlobalHealthy, result.Status)
 	assert.Empty(t, result.Failed())
 
@@ -85,7 +94,7 @@ func TestKVStoreCheckAgainstRealClient(t *testing.T) {
 	kv.Shutdown(context.Background())
 
 	result = health.NewChecker(
-		health.WithCheck(health.KVStoreCheck(kv, container.URL)),
+		health.WithCheck(health.KVStoreCheckWithTarget(kv, container.URL)),
 		health.WithTimeout(5*time.Second),
 	).Check(t.Context())
 	assert.Equal(t, health.GlobalUnhealthy, result.Status)

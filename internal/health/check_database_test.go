@@ -27,17 +27,26 @@ func (s *stubPool) Ping(context.Context) error {
 func TestDatabaseCheckPassesWhenPoolPings(t *testing.T) {
 	pool := &stubPool{}
 
-	result := health.NewChecker(health.WithCheck(health.DatabaseCheck(pool, "localhost:5432/test"))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.DatabaseCheckWithTarget(pool, "localhost:5432/test"))).Check(t.Context())
 
 	assert.True(t, pool.called)
 	assert.Equal(t, health.GlobalHealthy, result.Status)
 	assert.Equal(t, health.CheckNameDatabase, result.Details["database"].Name)
 }
 
+// The report must not carry the connection string: the endpoint publishes
+// this result, and which host the process dials is not something an
+// unauthenticated reader should learn.
+func TestDatabaseCheckHidesTarget(t *testing.T) {
+	check := health.DatabaseCheck(&stubPool{})
+
+	assert.Empty(t, check.Target)
+}
+
 // The target must be reported, so the text output says which database was
 // reached, and must never carry the password from the DSN.
 func TestDatabaseCheckReportsTarget(t *testing.T) {
-	check := health.DatabaseCheck(&stubPool{}, "localhost:5432/test")
+	check := health.DatabaseCheckWithTarget(&stubPool{}, "localhost:5432/test")
 
 	assert.Equal(t, "localhost:5432/test", check.Target)
 	assert.NotContains(t, check.Target, "@")
@@ -48,7 +57,7 @@ func TestDatabaseCheckReportsTarget(t *testing.T) {
 func TestDatabaseCheckWrapsPingError(t *testing.T) {
 	pool := &stubPool{err: errors.New("connection refused")}
 
-	result := health.NewChecker(health.WithCheck(health.DatabaseCheck(pool, "localhost:5432/test"))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.DatabaseCheckWithTarget(pool, "localhost:5432/test"))).Check(t.Context())
 
 	assert.Equal(t, health.GlobalUnhealthy, result.Status)
 	assert.Contains(t, result.Details["database"].Error, "database")
@@ -58,7 +67,7 @@ func TestDatabaseCheckWrapsPingError(t *testing.T) {
 // The check must be required, so a dead database fails the probe rather than
 // being reported as an optional extra.
 func TestDatabaseCheckIsRequired(t *testing.T) {
-	check := health.DatabaseCheck(&stubPool{}, "localhost:5432/test")
+	check := health.DatabaseCheckWithTarget(&stubPool{}, "localhost:5432/test")
 	assert.False(t, check.Optional)
 
 	// It carries its own timeout, shorter than the checker default, so a
@@ -77,7 +86,7 @@ func TestDatabaseCheckAgainstRealPool(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { pool.Shutdown(context.Background()) })
 
-	result := health.NewChecker(health.WithCheck(health.DatabaseCheck(pool, "localhost:5432/test"))).Check(t.Context())
+	result := health.NewChecker(health.WithCheck(health.DatabaseCheckWithTarget(pool, "localhost:5432/test"))).Check(t.Context())
 	assert.Equal(t, health.GlobalHealthy, result.Status)
 	assert.Empty(t, result.Failed())
 
@@ -86,7 +95,7 @@ func TestDatabaseCheckAgainstRealPool(t *testing.T) {
 	pool.Shutdown(context.Background())
 
 	result = health.NewChecker(
-		health.WithCheck(health.DatabaseCheck(pool, "localhost:5432/test")),
+		health.WithCheck(health.DatabaseCheckWithTarget(pool, "localhost:5432/test")),
 		health.WithTimeout(5*time.Second),
 	).Check(t.Context())
 	assert.Equal(t, health.GlobalUnhealthy, result.Status)
