@@ -29,6 +29,12 @@ const requeueDelay = time.Minute
 // right away.
 const retryDelay = time.Second
 
+// settleTimeout bounds one outcome write. A settle runs on a context no signal
+// cancels, so without a bound of its own a database that stopped answering
+// would hold a worker — and with it the drain — past the window the run allowed
+// for shutdown.
+const settleTimeout = 10 * time.Second
+
 // dispatcher claims queued tasks and hands them to a pool of workers.
 //
 // One start runs one generation of goroutines: a triggerer that folds any
@@ -47,10 +53,17 @@ type dispatcher struct {
 	// stop begins, and a task that inherited it would be abandoned rather
 	// than drained.
 	ctx context.Context
-	// taskCtx is the parent of every task execution. It is cancelled when the
-	// process must stop at once, never by the signal that starts a graceful
-	// drain, so an in-flight task keeps a live context until the drain window
-	// expires. It is created in start and released in stop.
+	// taskCtx is the parent of every task execution, and the context every
+	// outcome write runs on. It is cancelled when the process must stop at
+	// once, never by the signal that starts a graceful drain, so an in-flight
+	// task keeps a live context until the drain window expires. It is created
+	// in start and released in stop.
+	//
+	// A settle deliberately does not use the context the task ran under: that
+	// one is dead exactly when the outcome most needs writing — a task whose
+	// deadline expired, or one that outlived the signal — and a write on a
+	// dead context leaves the task claimed until its release window. See
+	// settle.
 	taskCtx    context.Context
 	releaseCtx context.CancelFunc
 	// shutdownCtx cancels when a graceful stop is asked for. It is separate
@@ -120,27 +133,30 @@ func (d *dispatcher) start(ctx context.Context) {
 // stop attempts to gracefully shut down the dispatcher by blocking until
 // either the context is cancelled or every worker is done with its task.
 func (d *dispatcher) stop(ctx context.Context) bool {
-	if !d.running.Load() {
-		// The dispatcher already ended on its own, which is what a cancelled
-		// start context does. The task context is still released here, or a
-		// run that ended that way would hold one for the life of the process.
-		d.releaseTaskContext()
-		return true
+	// Cancelling the shutdown context asks the fetcher and the workers to stop
+	// taking new work. A dispatcher that never started has nothing to cancel.
+	if d.shutdown != nil {
+		d.shutdown()
 	}
 
-	d.shutdown()
-
-	// The task context stays live for the whole drain: it is released only
-	// once the wait below ends, so an in-flight task is never cancelled by
-	// the signal that asked for a graceful stop. Reaching the drain deadline
-	// is the one case where the task context is released while a task is
-	// still running — the run is out of time, and the task is reclaimed by
-	// its release window rather than left holding the process open.
+	// The task context is released only once the wait below ends, so an
+	// in-flight task keeps a live context across the whole drain — including
+	// the outcome it writes as it finishes, which is the write a context
+	// cancelled underneath it would lose. Reaching the drain deadline is the
+	// one case where a task is still running when this returns: the run is out
+	// of time, and the task is reclaimed by its release window rather than left
+	// holding the process open.
 	defer d.releaseTaskContext()
 
 	// The wait measures the workers leaving, not the tokens they hold: a
 	// worker that exits because the start context ended returns no token, so
 	// counting tokens never reached the total on that path.
+	//
+	// It runs whether or not the dispatcher still looked running, because a
+	// signal ends the fetcher first: the workers are then the only ones left
+	// holding a task, and waiting for them is what keeps their outcome writes
+	// alive. Treating "the fetcher has stopped" as "nothing is in flight" is
+	// what cancelled a context a settling task was still using.
 	done := make(chan struct{})
 	go func() {
 		d.workers.Wait()
@@ -312,6 +328,18 @@ func (d *dispatcher) notify() {
 	}
 }
 
+// settle returns the context an outcome write runs on: the task context,
+// bounded by settleTimeout.
+//
+// The context a task ran under is the wrong one for this. It is derived from
+// the queue's Timeout, so it is already cancelled when the task failed because
+// that timeout expired — the retry would never be written, and the task would
+// sit claimed until its release window. The task context is live for the whole
+// drain, so the write lands whether the run is still serving or stopping.
+func (d *dispatcher) settle() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(d.taskCtx, settleTimeout)
+}
+
 // processTask executes one claimed task and settles its outcome: success
 // deletes it, a retryable failure releases it for its backoff, and a final
 // one archives it. The processor's panic is a failure, not a crash.
@@ -323,8 +351,10 @@ func (d *dispatcher) processTask(task *taskRow) {
 		// attempt is the only one it costs.
 		d.client.log.WarnContext(d.ctx, "queue: task for unregistered queue",
 			"id", task.ID, "queue", task.Queue)
-		if err := requeueTask(d.ctx, d.client.store, task.ID, now().Add(requeueDelay)); err != nil {
-			d.client.log.ErrorContext(d.ctx, "queue: failed to requeue task", "err", err.Error())
+		ctx, cancel := d.settle()
+		defer cancel()
+		if err := requeueTask(ctx, d.client.store, task.ID, now().Add(requeueDelay)); err != nil {
+			d.client.log.ErrorContext(ctx, "queue: failed to requeue task", "err", err.Error())
 		}
 		return
 	}
@@ -351,11 +381,18 @@ func (d *dispatcher) processTask(task *taskRow) {
 	}
 	duration := time.Since(start)
 
+	// The outcome is written on the settle context, never on the execution
+	// context above: a task that failed because its deadline expired, or that
+	// outlived the signal, holds a dead context exactly when its outcome needs
+	// writing.
+	settleCtx, cancelSettle := d.settle()
+	defer cancelSettle()
+
 	if err == nil {
-		d.taskSuccess(ctx, queue, task, start, duration)
+		d.taskSuccess(settleCtx, queue, task, start, duration)
 		return
 	}
-	d.taskFailure(ctx, queue, task, start, duration, err)
+	d.taskFailure(settleCtx, queue, task, start, duration, err)
 }
 
 // runProcessor invokes the queue's callback with the payload opened for
@@ -401,7 +438,7 @@ func (d *dispatcher) taskFailure(ctx context.Context, queue Queue, task *taskRow
 		"attempt", task.Attempts, "remaining", remaining, "err", taskErr.Error())
 
 	if remaining >= 1 {
-		if err := requeueTask(d.ctx, d.client.store, task.ID, now().Add(queue.Config().Backoff)); err != nil {
+		if err := requeueTask(ctx, d.client.store, task.ID, now().Add(queue.Config().Backoff)); err != nil {
 			d.client.log.ErrorContext(ctx, "queue: failed to requeue task", "err", err.Error())
 		}
 		d.ready <- struct{}{}
