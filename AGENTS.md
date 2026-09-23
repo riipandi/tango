@@ -84,6 +84,7 @@ Implemented today — treat as the contract. Reasoning/invariants/traps per pack
 - Do not add compatibility shims, fallback readers, or dual-write paths. Delete obsolete path instead.
 - Fix lint findings at the source. `//nolint` is not an accepted answer.
 - Command output: pluralize through `printext.Plural`, humanize durations through `printext.Duration`, indent per-item lines and leave outcome lines at column zero under `status:` label so `grep '^status:'` works, and print `database:` target line before touching anything. Command a script parses prints only its value (`migrate:version`). Colour comes from `pkg/printext`, never command-specific helper; `--json` output is never coloured.
+- Find the right balance between file size and folder depth. Prioritize package cohesion over arbitrary size limits. Split files when they contain unrelated concerns or become unwieldy to navigate; create subdirectories when a folder naturally groups multiple distinct features. Avoid both monolithic files (thousands of lines) and excessive nesting without clear separation of concerns.
 
 ## Comment Style
 
