@@ -17,8 +17,9 @@ type Module interface {
 	Mount(r chi.Router)
 }
 
-// Mount registers every module on the router in registration order. A module
-// that must shadow another registers first.
+// Mount registers every module on the router in the order given. chi replaces
+// the handler of a pattern registered twice, so a module that must shadow
+// another's route registers last.
 func Mount(r chi.Router, modules ...Module) {
 	for _, module := range modules {
 		module.Mount(r)

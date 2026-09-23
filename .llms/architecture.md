@@ -190,6 +190,14 @@ The upload round has two feature extension points, both nil by default and wired
 
 ## Implemented modules
 
+### modules/identity
+
+The identity **area**: the unit the composition root loads. `identity.Module` holds the feature list and mounts every feature on one router, so `internal/registry` names one module per area rather than one per feature, and a new identity feature is added inside the area without the transport or the registry learning about it.
+
+`NewModule(Deps)` takes the resolved services (`Deps.KeySet` today) and builds the features from them; `features(deps)` is the one place an identity feature is named, and each feature names its own routes — a protocol endpoint (`/.well-known/…`) mounts on the router's root, an application-API feature mounts itself under `/api`. Adding a feature therefore touches its own package and one line in `features`; adding a dependency touches `Deps` and the registry. The same shape applies to every area (`modules/federation` holds `discovery`, `oidc`, `scimsync` the same way).
+
+**Route ordering is last-wins, not first-wins.** `chi` replaces the handler of a pattern registered twice (`node.setEndpoint` overwrites unconditionally, pinned by `modules/identity/module_test.go` and `internal/kernel`'s comment), so the order `features` returns decides nothing except for duplicate patterns — and two features claiming one route is a defect to fix, not an ordering to rely on. `kernel.Mount`'s doc says the same.
+
 ### modules/identity/jwks
 
 The published key set, at `GET /.well-known/jwks.json`. Two sources feed one set: the configured key pair (`auth.private_key` / `auth.public_key`, base64 raw-unpadded JWK JSON, the form `pkg/crypto`'s `KeyGenerator` writes) is the default signing key for stateless JWTs, and `public.jwks` (migration `00004`) holds the keys of a deployment that acts as an OAuth provider. `Service` implements `jwtutils.KeyProvider`, so the endpoint that publishes the set and the code that verifies a token read one source — a key that is not published is not accepted, and a key that is published is accepted with no second list to keep in step.

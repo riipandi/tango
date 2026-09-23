@@ -16,8 +16,9 @@ import (
 // namespace the transport already reserves.
 const Path = "/.well-known/jwks.json"
 
-// ModuleName is the name this module reports under.
-const ModuleName = "identity/jwks"
+// ModuleName is the name this feature reports under. The area it belongs to
+// qualifies it, so the name is the feature alone.
+const ModuleName = "jwks"
 
 // cacheControl is how long a client may reuse a fetched set. A key set
 // changes on a rotation, which is rare and announced by a new `kid`; an hour

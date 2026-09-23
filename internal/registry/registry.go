@@ -34,6 +34,7 @@ import (
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/pkg/crypto"
 )
@@ -135,7 +136,12 @@ func New(ctx context.Context, cfg config.Config, metrics http.Handler, logger *s
 			Metrics:     metrics,
 			Logger:      log,
 			RateLimiter: limiter,
-			Modules:     []kernel.Module{jwks.NewModule(keySet)},
+			// One module per area: the identity area mounts its own features,
+			// so the registry names the area and resolves what it needs rather
+			// than naming each feature it holds.
+			Modules: []kernel.Module{
+				identity.NewModule(identity.Deps{KeySet: keySet}),
+			},
 		}), nil
 	})
 

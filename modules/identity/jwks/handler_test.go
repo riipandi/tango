@@ -241,5 +241,5 @@ func TestServiceSatisfiesTheKeyProvider(t *testing.T) {
 
 // TestModuleNameIsReported keeps the composition report readable.
 func TestModuleNameIsReported(t *testing.T) {
-	assert.Equal(t, "identity/jwks", NewModule(nil).Name())
+	assert.Equal(t, "jwks", NewModule(nil).Name())
 }
