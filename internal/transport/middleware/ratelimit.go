@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/riipandi/tango/pkg/responder"
 )
 
 // The headers a limited client reads back, and the ones the responder's
@@ -36,15 +34,21 @@ type Result struct {
 	RetryAfter time.Duration
 }
 
+// Refuse answers one limited request. Each surface owns the wire form: the
+// REST surface refuses with the responder envelope, the Connect surface with
+// the connect error its client parses. The X-RateLimit-* headers and
+// Retry-After are already on the response when Refuse runs.
+type Refuse func(w http.ResponseWriter, r *http.Request)
+
 // RateLimit throttles the requests a client may make, keyed by its address.
 //
-// A limited request is refused with a 429 envelope and a Retry-After header
-// before any route runs; every response carries the X-RateLimit-* headers, so
-// a well-behaved client can pace itself and the envelope metadata the
-// responder publishes stays filled.
+// A limited request is refused by Refuse — in the protocol of the surface it
+// reached — with a Retry-After header before any route runs; every response
+// carries the X-RateLimit-* headers, so a well-behaved client can pace itself
+// and the envelope metadata the responder publishes stays filled.
 //
 // The excluded prefixes are the paths the limiter never counts — the health
-// endpoint, a webhook a partner posts to. They are named by the caller at
+// endpoints, a webhook a partner posts to. They are named by the caller at
 // the mount site, in the one list the router composes its pipeline from. A
 // prefix matches the paths under it, so an exclusion of "/api/healthz" also
 // spares "/api/healthz/deep".
@@ -58,7 +62,7 @@ type Result struct {
 // address is the proxy's, which makes the limit global rather than per
 // client; a deployment that terminates TLS on the application itself gets
 // honest keys.
-func RateLimit(limiter Limiter, excluded ...string) func(http.Handler) http.Handler {
+func RateLimit(limiter Limiter, refuse Refuse, excluded ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		if limiter == nil {
 			return next
@@ -89,7 +93,7 @@ func RateLimit(limiter Limiter, excluded ...string) func(http.Handler) http.Hand
 			if result.Limited {
 				seconds := max(int64(result.RetryAfter/time.Second), 1)
 				w.Header().Set(RateLimitRetryHeader, strconv.FormatInt(seconds, 10))
-				responder.Fail(w, r, http.StatusTooManyRequests, "rate limit exceeded")
+				refuse(w, r)
 				return
 			}
 
@@ -119,10 +123,7 @@ func sanitizeKey(s string) string {
 	}, s)
 }
 
-// remoteKey is the address the request came from, port stripped; a failure to
-// split leaves the address whole, which sanitizeKey can still reduce.
-
-// retryAfterFromDetail reads the retry hint the check function raises with its
+// retryAfterPattern reads the retry hint the check function raises with its
 // SQLSTATE. The detail is a rendered sentence, so the parse is best effort:
 // the window is the fallback, and a mismatch costs a client one polite wait.
 var retryAfterPattern = regexp.MustCompile(`Retry after:\s*(\d+)`)

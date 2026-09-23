@@ -24,13 +24,17 @@ import (
 	"github.com/riipandi/tango/internal/config"
 )
 
-// rateLimitExclusions are the API path prefixes the rate limiter never
-// counts. One entry per line, the reason beside it. A prefix matches the
-// paths under it, so "/api/healthz" also spares "/api/healthz/deep"; the
-// limiter itself runs on the API surface only, so a static asset or a
+// The paths the limiter never counts, one list per transport: the namespaces
+// the two surfaces answer are disjoint, so each list carries only the paths
+// its own surface is spared for. A prefix matches the paths under it. The
+// limiter itself runs on the API surfaces only, so a static asset or a
 // metrics scrape never reaches a check in the first place.
-var rateLimitExclusions = []string{
+var httpRateLimitExclusions = []string{
 	"/api/healthz", // liveness probes and load-balancer checks
+}
+
+var rpcRateLimitExclusions = []string{
+	healthCheckPath, // the same readiness a monitor watches over ConnectRPC
 }
 
 // NewServer builds the HTTP server the router is served through, with the

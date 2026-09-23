@@ -17,6 +17,7 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
@@ -42,10 +43,16 @@ func (s *stubLimiter) Allow(_ context.Context, key string) (Result, error) {
 	return s.result, s.err
 }
 
+// envelopeRefuse is the refusal the REST surface passes the middleware: the
+// 429 envelope the responder writes.
+func envelopeRefuse(w http.ResponseWriter, r *http.Request) {
+	responder.Fail(w, r, http.StatusTooManyRequests, "rate limit exceeded")
+}
+
 func TestRateLimitWritesTheHeadersAClientPacesBy(t *testing.T) {
 	reset := time.Now().Add(time.Minute).Truncate(time.Second)
 	limiter := &stubLimiter{result: Result{Limit: 60, Remaining: 59, ResetAt: reset}}
-	handler := RateLimit(limiter)(http.HandlerFunc(
+	handler := RateLimit(limiter, envelopeRefuse)(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusAccepted)
 		}))
@@ -70,7 +77,7 @@ func TestRateLimitRefusesAStudentWhoSpentTheWindow(t *testing.T) {
 		Limited: true, Limit: 60, Remaining: 0,
 		RetryAfter: 30 * time.Second,
 	}}
-	handler := RateLimit(limiter)(http.HandlerFunc(
+	handler := RateLimit(limiter, envelopeRefuse)(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			require.Fail(t, "a limited request must not reach the route")
 		}))
@@ -91,7 +98,7 @@ func TestRateLimitRefusesAStudentWhoSpentTheWindow(t *testing.T) {
 
 func TestRateLimitLetsTheRequestThroughWhenTheBackendCannotAnswer(t *testing.T) {
 	limiter := &stubLimiter{err: context.DeadlineExceeded}
-	handler := RateLimit(limiter)(http.HandlerFunc(
+	handler := RateLimit(limiter, envelopeRefuse)(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -106,7 +113,7 @@ func TestRateLimitLetsTheRequestThroughWhenTheBackendCannotAnswer(t *testing.T) 
 }
 
 func TestRateLimitWithoutALimiterIsAPassThrough(t *testing.T) {
-	handler := RateLimit(nil)(http.HandlerFunc(
+	handler := RateLimit(nil, envelopeRefuse)(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -119,7 +126,7 @@ func TestRateLimitWithoutALimiterIsAPassThrough(t *testing.T) {
 
 func TestRateLimitSparesTheExcludedPrefixes(t *testing.T) {
 	limiter := &stubLimiter{}
-	handler := RateLimit(limiter, "/api/healthz")(http.HandlerFunc(
+	handler := RateLimit(limiter, envelopeRefuse, "/api/healthz")(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))

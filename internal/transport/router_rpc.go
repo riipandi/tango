@@ -20,6 +20,10 @@ import (
 // the admin console, and internal tools call the generated clients below it.
 const RPCPath = "/rpc"
 
+// healthCheckPath is the full path the readiness procedure answers below the
+// RPC prefix — the same readiness the REST probe answers at /api/healthz.
+const healthCheckPath = RPCPath + systemv1connect.HealthServiceCheckProcedure
+
 // The names the Connect protocol resolves a codec from, taken from the
 // `Content-Type` a client sends. Both are registered, because a client may
 // spell the JSON content type either way.
@@ -160,4 +164,17 @@ func rpcRouter(checker *health.Checker, modules []kernel.Module) http.Handler {
 // writeRPCError answers a request that reached no procedure, in the protocol the caller used.
 func writeRPCError(writer *connect.ErrorWriter, w http.ResponseWriter, r *http.Request, code connect.Code, message string) {
 	_ = writer.Write(w, r, connect.NewError(code, errors.New(message)))
+}
+
+// rpcRefuse answers a limited procedure call in the protocol the caller used:
+// `resource_exhausted`, the code the Connect specification maps to 429. The
+// X-RateLimit-* and Retry-After headers are already on the response — the
+// middleware wrote them before refusing. The error writer is built from the
+// same handler options the procedures are registered with, so the refusal is
+// serialized under the shared codec, exactly like a refusal from a procedure
+// itself.
+func rpcRefuse(w http.ResponseWriter, r *http.Request) {
+	options := rpcHandlerOptions()
+	writer := connect.NewErrorWriter(options...)
+	writeRPCError(writer, w, r, connect.CodeResourceExhausted, "rate limit exceeded")
 }

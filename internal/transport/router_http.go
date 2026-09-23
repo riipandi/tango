@@ -11,6 +11,7 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/internal/transport/static"
+	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/web"
 )
 
@@ -73,9 +74,22 @@ func NewRouter(opts Options) chi.Router {
 		r.Handle(opts.Config.OTEL.Metrics.PrometheusPath, opts.Metrics)
 	}
 
+	// The rate limiter wraps the routes a client calls, and a static asset
+	// or a metrics scrape is outside it: the budget belongs to the API, not
+	// to the page that embeds it. The throttled surface is two chi groups —
+	// one per transport — because a limited request is refused in the
+	// protocol the caller used: the responder envelope on REST, the connect
+	// error on RPC. Both groups share one limiter, one policy, and one
+	// exclusion list; the groups are what make the limiter cover every
+	// mounted route without also covering the SPA. Paths that must never be
+	// throttled are listed in rateLimitExclusions.
+	//
+	// The SPA is mounted last: its handler answers whatever the routes above
+	// it did not claim, and its own not-found rule keeps API and protocol
+	// paths from being answered with index.html.
 	r.Group(func(throttled chi.Router) {
 		if opts.RateLimiter != nil {
-			throttled.Use(middleware.RateLimit(opts.RateLimiter, rateLimitExclusions...))
+			throttled.Use(middleware.RateLimit(opts.RateLimiter, restRefuse, httpRateLimitExclusions...))
 		}
 
 		throttled.Route("/api", func(api chi.Router) {
@@ -85,16 +99,23 @@ func NewRouter(opts Options) chi.Router {
 			}
 		})
 
-		// The ConnectRPC surface is composed in rpc.go and mounted inside the
-		// same group, so a procedure call is held to the same rate policy as
-		// a REST route. It mounts before the modules: a module that claims a
-		// path under the RPC prefix would be a defect, and chi reports the
-		// conflict at startup rather than answering two handlers for one path.
-		mountRPC(throttled, opts.Checker, opts.Modules)
-
 		// The modules mount inside the group too, so every route a module
 		// claims is throttled by the same policy as the API's own.
 		kernel.Mount(throttled, opts.Modules...)
+	})
+
+	// The ConnectRPC surface is composed in rpc.go and throttled by the same
+	// policy as the REST routes, refused in its own protocol. It mounts
+	// before nothing else in its group: a module that claims a path under
+	// the RPC prefix would be a defect, and the route-claim detection in
+	// kernel.MountRPC reports it at startup rather than answering two
+	// handlers for one path.
+	r.Group(func(throttled chi.Router) {
+		if opts.RateLimiter != nil {
+			throttled.Use(middleware.RateLimit(opts.RateLimiter, rpcRefuse, rpcRateLimitExclusions...))
+		}
+
+		mountRPC(throttled, opts.Checker, opts.Modules)
 	})
 
 	// The uploads are served outside the group: a page that loads an image
@@ -106,4 +127,12 @@ func NewRouter(opts Options) chi.Router {
 
 	web.SetupStatic(r)
 	return r
+}
+
+// restRefuse answers a limited REST request with the envelope: a 429 whose
+// metadata carries the X-RateLimit-* headers the middleware wrote, the shape
+// a REST client parses. The Connect surface refuses its calls through
+// rpcRefuse, in its own protocol.
+func restRefuse(w http.ResponseWriter, r *http.Request) {
+	responder.Fail(w, r, http.StatusTooManyRequests, "rate limit exceeded")
 }

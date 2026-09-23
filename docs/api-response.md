@@ -37,7 +37,7 @@ require it, and none is part of this envelope contract:
 | Error message       | the connect error message                             | `message` in the error envelope          |
 | Structured error    | a typed message attached as a connect error detail    | `error` in the error envelope            |
 | Request/trace id    | the `X-Request-Id` response header                    | `metadata.request_id` + the same header  |
-| Rate limit          | the `X-RateLimit-*` response headers                  | `metadata.rate_limit` + the same headers |
+| Rate limit          | `X-RateLimit-*` headers; a limited call is refused with `resource_exhausted` (429) | `metadata.rate_limit` + the same headers; a limited request is refused with the envelope |
 | Pagination          | a `tango.common.v1.ListMetadata` block on the message | `metadata` pagination fields             |
 | Payload             | the response message's own typed fields               | `data` in the envelope                   |
 | Links (HATEOAS)     | not modelled; a page token when a list needs one      | the `links` map                          |
@@ -187,6 +187,9 @@ parsing a body:
   again: connect merges handler-set headers by appending, so a second writer
   answers with the id twice.
 - **Rate-limit state** is the `X-RateLimit-*` response headers the limiter
-  middleware writes.
+  middleware writes. A limited call is refused with `resource_exhausted` —
+  the code the specification maps to 429 — and a `Retry-After` header, never
+  the REST envelope. The health procedure is not throttled, the same as its
+  REST twin.
 - **A structured failure** is a message attached to the connect error's
   details, the typed counterpart of the REST envelope's `error` field.
