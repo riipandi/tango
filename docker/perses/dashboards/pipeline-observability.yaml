@@ -1,9 +1,9 @@
 # The telemetry pipeline itself: Vector, the one collector carrying logs and traces, and
 # VictoriaMetrics, the store every signal's metrics land in. The panels watch the
 # watchers — throughput per component, buffer occupancy against the drop threshold, send
-# latency, and the store's own ingestion and scrape health. Metrics are read here by the
-# pull route, so this dashboard keeps working when Vector itself is down; the Vector
-# panels go quiet and the up/down stat says why.
+# latency, the store's own ingestion and scrape health, and the disk and memory the store
+# runs against. Metrics are read here by the pull route, so this dashboard keeps working
+# when Vector itself is down; the Vector panels go quiet and the up/down stat says why.
 #
 # Native provisioning format: kind Dashboard with a project.
 
@@ -257,6 +257,94 @@ spec:
                             kind: PrometheusTimeSeriesQuery
                             spec:
                                 query: count(up == 0) or vector(0)
+        vm-disk:
+            kind: Panel
+            spec:
+                display:
+                    name: VictoriaMetrics free disk space
+                    description: Bytes free where the store writes, against the low-water mark it refuses writes below. Approaching the limit is the retention question asking to be answered.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            display: line
+                            areaOpacity: 0.2
+                            lineWidth: 2
+                        legend:
+                            mode: table
+                            position: bottom
+                        yAxis:
+                            format:
+                                unit: bytes
+                queries:
+                -   kind: TimeSeriesQuery
+                    spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: vm_free_disk_space_bytes{job="victoria-metrics"}
+                -   kind: TimeSeriesQuery
+                    spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: vm_free_disk_space_limit_bytes{job="victoria-metrics"}
+        vm-read-only:
+            kind: Panel
+            spec:
+                display:
+                    name: Storage read-only
+                    description: 1 means the store stopped accepting writes (disk below its limit). Anything but 0 is an outage for every dashboard behind it.
+                plugin:
+                    kind: StatChart
+                    spec:
+                        calculation: last-number
+                        thresholds:
+                            mode: absolute
+                            steps:
+                            -   value: 1
+                                color: '#dc2626'
+                            -   value: 1
+                                color: '#16a34a'
+                queries:
+                -   kind: TimeSeriesQuery
+                    spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: max(vm_storage_is_read_only{job="victoria-metrics"})
+        vm-memory:
+            kind: Panel
+            spec:
+                display:
+                    name: VictoriaMetrics memory (available vs allowed)
+                    description: Memory the process can get from the OS against the cap it self-limits to. Available falling toward allowed is the OOM-kill path forming.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            display: line
+                            areaOpacity: 0.2
+                            lineWidth: 2
+                        legend:
+                            mode: table
+                            position: bottom
+                        yAxis:
+                            format:
+                                unit: bytes
+                queries:
+                -   kind: TimeSeriesQuery
+                    spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: vm_available_memory_bytes{job="victoria-metrics"}
+                -   kind: TimeSeriesQuery
+                    spec:
+                        plugin:
+                            kind: PrometheusTimeSeriesQuery
+                            spec:
+                                query: vm_allowed_memory_bytes{job="victoria-metrics"}
     layouts:
     -   kind: Grid
         spec:
@@ -321,3 +409,21 @@ spec:
                 height: 8
                 content:
                     $ref: '#/spec/panels/down-targets'
+            -   x: 8
+                y: 24
+                width: 8
+                height: 8
+                content:
+                    $ref: '#/spec/panels/vm-disk'
+            -   x: 16
+                y: 24
+                width: 8
+                height: 8
+                content:
+                    $ref: '#/spec/panels/vm-read-only'
+            -   x: 0
+                y: 32
+                width: 8
+                height: 8
+                content:
+                    $ref: '#/spec/panels/vm-memory'

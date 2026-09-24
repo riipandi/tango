@@ -31,6 +31,8 @@ spec:
                 name: Instance
                 hidden: false
             allowAllValue: true
+            customAllValue: '.*'
+            defaultValue: host.docker.internal:3080
             allowMultiple: false
             plugin:
                 kind: PrometheusLabelValuesVariable

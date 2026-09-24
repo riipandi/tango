@@ -139,7 +139,7 @@ services:
     image: docker.io/nginx:${NGINX_VERSION:-mainline-alpine-slim}
     hostname: nginx
     ports: ["9180:9180", "3443:3443", "8443:8443"]
-    volumes: ["../storage/certs:/etc/nginx/certs:ro"]
+    volumes: ["../storage/certs:/etc/nginx/certs:ro", "../.storage/nginx_logs:/var/log/nginx:rw"]
     configs: [{ source: nginx_config, target: /etc/nginx/templates/default.conf.template }]
     healthcheck:
       test: ["CMD", "nc", "-vz", "127.0.0.1", "9180"]
@@ -152,6 +152,11 @@ services:
 configs:
   nginx_config:
     content: |
+      # Access logs ship as one JSON object per line: Vector reads this file and
+      # forwards it to the log store, where the edge dashboards split response
+      # status codes stub_status cannot provide.
+      log_format json_edge escape=json '{"timestamp":"$$time_iso8601","remote_addr":"$$remote_addr","method":"$$request_method","uri":"$$uri","protocol":"$$server_protocol","status":$$status,"bytes":$$body_bytes_sent,"request_time":$$request_time,"user_agent":"$$http_user_agent"}';
+      access_log /var/log/nginx/access.json json_edge;
       add_header X-Frame-Options "SAMEORIGIN" always;
       add_header X-Content-Type-Options "nosniff" always;
       add_header Access-Control-Allow-Origin "*" always;

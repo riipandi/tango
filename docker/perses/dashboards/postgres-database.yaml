@@ -23,6 +23,8 @@ spec:
                 name: Instance
                 hidden: false
             allowAllValue: true
+            customAllValue: '.*'
+            defaultValue: pg-server-01
             allowMultiple: false
             plugin:
                 kind: PrometheusLabelValuesVariable
@@ -37,6 +39,8 @@ spec:
                 name: Database
                 hidden: false
             allowAllValue: true
+            customAllValue: '.*'
+            defaultValue: postgres
             allowMultiple: false
             plugin:
                 kind: PrometheusLabelValuesVariable

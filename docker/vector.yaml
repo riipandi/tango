@@ -18,6 +18,10 @@ sources:
     http:
       address: 0.0.0.0:4318
     use_otlp_decoding: true
+  nginx_access:
+    type: file
+    include: ["/var/log/nginx/access.json"]
+    read_from: beginning
   internal:
     type: internal_metrics
   nginx:
@@ -25,6 +29,30 @@ sources:
     endpoints:
       - http://nginx:9180/stub_status
     scrape_interval_secs: 15
+transforms:
+  edge_logs:
+    type: remap
+    inputs: ["nginx_access"]
+    drop_on_error: true
+    source: |
+      raw = parse_json!(string!(.message))
+      status = to_int(raw.status) ?? 0
+      .service.name = "nginx"
+      .status = status
+      .method = to_string(raw.method) ?? "-"
+      .uri = to_string(raw.uri) ?? "-"
+      .remote_addr = to_string(raw.remote_addr) ?? "-"
+      .bytes = to_int(raw.bytes) ?? 0
+      .request_time = to_float(raw.request_time) ?? 0.0
+      .user_agent = to_string(raw.user_agent) ?? "-"
+      .severity_text = if status >= 500 { "error" } else if status >= 400 { "warn" } else { "info" }
+      ._msg = string!(.message)
+      ._time = format_timestamp!(.timestamp, format: "%+")
+      del(.message)
+      del(.timestamp)
+      del(.file)
+      del(.host)
+      del(.source_type)
 sinks:
   metrics:
     type: opentelemetry
@@ -48,6 +76,18 @@ sinks:
       compression: gzip
       batch:
         timeout_secs: 1
+  edge_store:
+    type: http
+    inputs: ["edge_logs"]
+    uri: http://victoria-logs:9428/insert/jsonline?_stream_fields=service.name
+    method: post
+    framing:
+      method: newline_delimited
+    encoding:
+      codec: json
+    compression: gzip
+    batch:
+      timeout_secs: 1
   traces:
     type: opentelemetry
     inputs: ["otlp.traces"]

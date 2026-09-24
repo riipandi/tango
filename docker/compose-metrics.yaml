@@ -48,7 +48,7 @@ services:
       - '4317:4317' # OTLP/gRPC, for otel.protocol: grpc
       - '9598:9598' # Vector's own pipeline, scraped by VictoriaMetrics
       - '9599:9599' # The edge (nginx) metrics, scraped under the nginx job
-    volumes: ['./vector.yaml:/etc/vector/vector.yaml:ro']
+    volumes: ['./vector.yaml:/etc/vector/vector.yaml:ro', '../.storage/nginx_logs:/var/log/nginx:ro']
     command: ['--config', '/etc/vector/vector.yaml']
     depends_on:
       victoria-metrics: { condition: service_started }

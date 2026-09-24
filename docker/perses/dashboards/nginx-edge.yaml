@@ -1,9 +1,10 @@
 # The edge proxy, read from the stub_status endpoint Vector's nginx_metrics source polls
-# and re-publishes at :9599 (job="nginx"). stub_status is aggregate on purpose:
-# connections and a request counter, no status-code split — a 502 the proxy answers
-# itself never reaches a handler that could count it. The panels answer the questions
-# stub_status can: is the proxy up, is it saturated, is traffic flowing, and how much of
-# it never reaches the application.
+# and re-publishes at :9599 (job="nginx"), plus the edge's own access logs: nginx writes
+# one JSON line per request, Vector ships it to the log store as service.name="nginx",
+# and the three VictoriaLogs panels at the end read it back with LogsQL. stub_status is
+# aggregate on purpose — no status-code split — which is exactly the gap the access-log
+# panels close: a 502 the proxy answers itself never reaches a handler that could count
+# it, but it does appear in the log.
 #
 # Native provisioning format: kind Dashboard with a project.
 
@@ -24,6 +25,8 @@ spec:
                 name: Instance
                 hidden: false
             allowAllValue: true
+            customAllValue: .*
+            defaultValue: nginx-proxy-01
             allowMultiple: false
             plugin:
                 kind: PrometheusLabelValuesVariable
@@ -219,6 +222,84 @@ spec:
                             kind: PrometheusTimeSeriesQuery
                             spec:
                                 query: sum(rate(http_server_request_duration_seconds_count{job="tango"}[5m]))
+        edge-status:
+            kind: Panel
+            spec:
+                display:
+                    name: Response by status (edge)
+                    description: 'Access-log truth: every response the proxy answered, by status code. This is where proxy-generated 502/504 appear that stub_status cannot see.'
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            display: line
+                            areaOpacity: 0.2
+                            lineWidth: 1
+                        legend:
+                            mode: table
+                            position: bottom
+                queries:
+                -   kind: TimeSeriesQuery
+                    spec:
+                        plugin:
+                            kind: VictoriaLogsTimeSeriesQuery
+                            spec:
+                                query: '{service.name="nginx"} | stats by (status) count(*)'
+        edge-5xx:
+            kind: Panel
+            spec:
+                display:
+                    name: 5xx per second (edge)
+                    description: Server-side failures at the edge, from the access log. Flat zero is a reading, not an absence — until the log pipeline is down, which the pipeline dashboard says.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            display: line
+                            areaOpacity: 0.2
+                            lineWidth: 2
+                        legend:
+                            mode: table
+                            position: bottom
+                queries:
+                -   kind: TimeSeriesQuery
+                    spec:
+                        plugin:
+                            kind: VictoriaLogsTimeSeriesQuery
+                            spec:
+                                query: '{service.name="nginx", status=~"5.."} | stats count(*)'
+        edge-latency:
+            kind: Panel
+            spec:
+                display:
+                    name: Request time at the edge (p50 / p95)
+                    description: Total time the proxy spent per request, from the access log. Rising p50 with flat application latency is proxy or network; rising together is upstream.
+                plugin:
+                    kind: TimeSeriesChart
+                    spec:
+                        visual:
+                            display: line
+                            areaOpacity: 0.2
+                            lineWidth: 2
+                        legend:
+                            mode: table
+                            position: bottom
+                        yAxis:
+                            format:
+                                unit: seconds
+                queries:
+                -   kind: TimeSeriesQuery
+                    spec:
+                        plugin:
+                            kind: VictoriaLogsTimeSeriesQuery
+                            spec:
+                                query: '{service.name="nginx"} | stats quantile(0.95, request_time)'
+                -   kind: TimeSeriesQuery
+                    spec:
+                        plugin:
+                            kind: VictoriaLogsTimeSeriesQuery
+                            spec:
+                                query: '{service.name="nginx"} | stats quantile(0.50, request_time)'
     layouts:
     -   kind: Grid
         spec:
@@ -265,3 +346,21 @@ spec:
                 height: 8
                 content:
                     $ref: '#/spec/panels/edge-vs-app'
+            -   x: 8
+                y: 16
+                width: 8
+                height: 8
+                content:
+                    $ref: '#/spec/panels/edge-status'
+            -   x: 16
+                y: 16
+                width: 8
+                height: 8
+                content:
+                    $ref: '#/spec/panels/edge-5xx'
+            -   x: 0
+                y: 24
+                width: 8
+                height: 8
+                content:
+                    $ref: '#/spec/panels/edge-latency'
