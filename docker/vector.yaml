@@ -18,11 +18,13 @@ sources:
     http:
       address: 0.0.0.0:4318
     use_otlp_decoding: true
-  # Vector's own pipeline (received, sent, dropped per component) — the first
-  # place to look when a signal stops arriving.
   internal:
     type: internal_metrics
-
+  nginx:
+    type: nginx_metrics
+    endpoints:
+      - http://nginx:9180/stub_status
+    scrape_interval_secs: 15
 sinks:
   metrics:
     type: opentelemetry
@@ -54,9 +56,11 @@ sinks:
         codec: otlp
       batch:
         timeout_secs: 1
-  # Scraped by VictoriaMetrics (job `vector`), same role the collector's
-  # service.telemetry endpoint played.
   self:
     type: prometheus_exporter
     inputs: ["internal"]
     address: 0.0.0.0:9598
+  edge:
+    type: prometheus_exporter
+    inputs: ["nginx"]
+    address: 0.0.0.0:9599

@@ -47,6 +47,7 @@ services:
       - '4318:4318' # OTLP/HTTP, the endpoint the application dials by default
       - '4317:4317' # OTLP/gRPC, for otel.protocol: grpc
       - '9598:9598' # Vector's own pipeline, scraped by VictoriaMetrics
+      - '9599:9599' # The edge (nginx) metrics, scraped under the nginx job
     volumes: ['./vector.yaml:/etc/vector/vector.yaml:ro']
     command: ['--config', '/etc/vector/vector.yaml']
     depends_on:
@@ -134,20 +135,6 @@ services:
     depends_on:
       valkey: { condition: service_healthy }
 
-  # The edge proxy's metrics, read from the stub_status the nginx config
-  # publishes on the 9180 server. stub_status is aggregate: connections and a
-  # request counter, no status-code split — a 502 the proxy returns never
-  # reaches a handler that could count it, so a latency or refusal question
-  # about the edge is answered from its access log, not this job.
-  nginx-exporter:
-    <<: *common
-    image: docker.io/nginx/nginx-prometheus-exporter:${NGINX_EXPORTER_VERSION:-1.4}
-    hostname: nginx-exporter
-    ports: ['9113:9113']
-    command: ['--nginx.scrape-uri=http://nginx:9180/stub_status']
-    depends_on:
-      nginx: { condition: service_started }
-
 # ================================================================================================
 # Configuration file
 # Behind Cloudflare: proxy_set_header X-Client-IP $http_cf_connecting_ip;
@@ -201,32 +188,24 @@ configs:
               labels:
                 instance: redis-server-01
           metrics_path: /scrape
+          params:
+            target: ['valkey:6379']
           relabel_configs:
-            - source_labels: [__address__]
-              target_label: __param_target
-            - source_labels: [__param_target]
-              target_label: instance
             - target_label: __address__
               replacement: redis-exporter:9121
         - job_name: redis-exporter
           static_configs:
             - targets: ['redis-exporter:9121']
-        # Vector's own pipeline (received, sent, dropped per component) — the
-        # first place to look when a signal stops arriving.
         - job_name: vector
           static_configs:
             - targets: ['vector:9598']
               labels:
                 instance: vector-01
-        # The edge: nginx is in front of everything external, so its failure
-        # modes (upstream 502s never reach the application) need their own job.
         - job_name: nginx
           static_configs:
-            - targets: ['nginx-exporter:9113']
+            - targets: ['vector:9599']
               labels:
                 instance: nginx-proxy-01
-        # The Go server publishes metrics on the port it serves; the target is
-        # the host running `task dev`, reached through the extra_hosts entry.
         - job_name: tango
           static_configs:
             - targets: ['host.docker.internal:3080']
