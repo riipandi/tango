@@ -27,7 +27,7 @@ services:
       victoria-metrics: { condition: service_healthy }
       victoria-logs: { condition: service_started }
       victoria-traces: { condition: service_started }
-      otel-collector: { condition: service_started }
+      vector: { condition: service_started }
 
   perses-mcp:
     <<: *common
@@ -39,24 +39,19 @@ services:
     depends_on:
       perses: { condition: service_healthy }
 
-  otel-collector:
+  vector:
     <<: *common
-    image: docker.io/otel/opentelemetry-collector-contrib:${OTELCOL_VERSION:-0.140.0}
-    hostname: otel-collector
+    image: docker.io/timberio/vector:${VECTOR_VERSION:-nightly-2026-09-23-debian}
+    hostname: vector
     ports:
       - '4318:4318' # OTLP/HTTP, the endpoint the application dials by default
       - '4317:4317' # OTLP/gRPC, for otel.protocol: grpc
-      - '13133:13133' # health_check extension
-    volumes: ['./otelcol.yaml:/etc/otelcol/config.yaml:ro']
-    command: ['--config=/etc/otelcol/config.yaml']
-    healthcheck:
-      test: ['CMD', '/otelcol-contrib', '--version']
-      interval: 3s
-      timeout: 5s
-      retries: 3
+      - '9598:9598' # Vector's own pipeline, scraped by VictoriaMetrics
+    volumes: ['./vector.yaml:/etc/vector/vector.yaml:ro']
+    command: ['--config', '/etc/vector/vector.yaml']
     depends_on:
+      victoria-metrics: { condition: service_started }
       victoria-logs: { condition: service_started }
-      victoria-metrics: { condition: service_healthy }
       victoria-traces: { condition: service_started }
 
   # VictoriaLogs v1.52+ and VictoriaTraces v0.11+ are distroless: no shell, no HTTP
@@ -216,11 +211,13 @@ configs:
         - job_name: redis-exporter
           static_configs:
             - targets: ['redis-exporter:9121']
-        # The collector's own pipeline (accepted, dropped, sent) — the first
-        # place to look when a signal stops arriving.
-        - job_name: otel-collector
+        # Vector's own pipeline (received, sent, dropped per component) — the
+        # first place to look when a signal stops arriving.
+        - job_name: vector
           static_configs:
-            - targets: ['otel-collector:8888']
+            - targets: ['vector:9598']
+              labels:
+                instance: vector-01
         # The edge: nginx is in front of everything external, so its failure
         # modes (upstream 502s never reach the application) need their own job.
         - job_name: nginx

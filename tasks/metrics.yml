@@ -42,7 +42,7 @@ tasks:
   metrics:endpoints:
     desc: Print the stack endpoints and the variables that reach them
     cmds:
-      - echo "OTLP collector     http://localhost:4318 (the one address the app dials)"
+      - echo "OTLP fan-out (Vector) http://localhost:4318 (the one address the app dials)"
       - echo "VictoriaLogs query http://localhost:33801/select/logsql/query"
       - echo "VictoriaMetrics    http://localhost:33802"
       - echo "VictoriaTraces     http://localhost:33803/select/jaeger"
@@ -83,4 +83,4 @@ tasks:
 
   metrics:down:
     desc: Stop the observability stack
-    cmd: docker compose -f docker/compose.yaml stop otel-collector victoria-metrics victoria-logs victoria-traces perses
+    cmd: docker compose -f docker/compose.yaml stop vector victoria-metrics victoria-logs victoria-traces perses

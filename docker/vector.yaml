@@ -1,0 +1,62 @@
+# The collector's replacement: Vector fans the one `otel.endpoint` address out
+# to the three Victoria backends. Every signal keeps its raw OTLP encoding end
+# to end (`use_otlp_decoding`): the events pass through as the OTLP envelopes
+# the SDKs sent, which is why the backends see exactly the fields they saw
+# through the OpenTelemetry Collector — `service.name` with the dots, the
+# histogram buckets verbatim.
+#
+# Maturity note: the `otlp` codec and `use_otlp_decoding` are not in a stable
+# release yet (first shipped after 0.50.0), so the image is pinned to a dated
+# nightly, and the trace leg is experimental inside Vector itself — traces are
+# held as a key/value map, not a typed structure. Accepted deliberately; the
+# review trigger is Vector shipping these in a stable release.
+sources:
+  otlp:
+    type: opentelemetry
+    grpc:
+      address: 0.0.0.0:4317
+    http:
+      address: 0.0.0.0:4318
+    use_otlp_decoding: true
+  # Vector's own pipeline (received, sent, dropped per component) — the first
+  # place to look when a signal stops arriving.
+  internal:
+    type: internal_metrics
+
+sinks:
+  metrics:
+    type: opentelemetry
+    inputs: ["otlp.metrics"]
+    protocol:
+      type: http
+      uri: http://victoria-metrics:8428/opentelemetry/v1/metrics
+      encoding:
+        codec: otlp
+      batch:
+        timeout_secs: 1
+  logs:
+    type: opentelemetry
+    inputs: ["otlp.logs"]
+    protocol:
+      type: http
+      uri: http://victoria-logs:9428/insert/opentelemetry/v1/logs
+      encoding:
+        codec: otlp
+      batch:
+        timeout_secs: 1
+  traces:
+    type: opentelemetry
+    inputs: ["otlp.traces"]
+    protocol:
+      type: http
+      uri: http://victoria-traces:10428/insert/opentelemetry/v1/traces
+      encoding:
+        codec: otlp
+      batch:
+        timeout_secs: 1
+  # Scraped by VictoriaMetrics (job `vector`), same role the collector's
+  # service.telemetry endpoint played.
+  self:
+    type: prometheus_exporter
+    inputs: ["internal"]
+    address: 0.0.0.0:9598
