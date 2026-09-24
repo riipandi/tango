@@ -333,23 +333,30 @@ type OTELTracing struct {
 
 // OTELMetrics holds the metric export settings.
 //
-// It is read only when Enable is true. Metrics leave by two routes at once, and
-// both are wanted: the push to the collector follows the other signals, and the
-// /metrics endpoint is what a Prometheus-style scraper reads. A deployment that
-// runs a scraper but no collector is served by the same switch.
+// It is read only when Enable is true. Pull is the primary route: the
+// Prometheus exposition at prometheus_path is always served when metrics are
+// enabled, and a scrape reads a snapshot the bridge already holds, so the
+// metrics keep flowing while the collector is down. Push is opt-in: a
+// deployment that has no scraper — or an application the collector cannot
+// reach — sets Push to add the periodic reader, which exports to the collector
+// the way the other signals do.
 type OTELMetrics struct {
 	// Enable records and exports metrics.
 	Enable bool `koanf:"enable" json:"enable"`
+	// Push adds the OTLP push leg on top of the pull exposition. It is read
+	// only when Enable is true; the pull route needs no second switch.
+	Push bool `koanf:"push" json:"push"`
 	// Path is the collector route for metrics. Empty means the protocol's own
-	// /v1/metrics.
+	// /v1/metrics. It is read only when Push is true.
 	Path string `koanf:"path" json:"path"`
 	// PrometheusPath is where the Prometheus exposition is served, on the
 	// application's own port. It is a path rather than a switch: the exposition
 	// is always served when metrics are enabled, and a scrape job needs the
 	// path to be a decision rather than a second enable flag.
 	PrometheusPath string `koanf:"prometheus_path" json:"prometheus_path"`
-	// Interval is how often measurements are handed to the exporter, and
-	// ExportTimeout bounds one export attempt.
+	// Interval is how often measurements are handed to the push exporter, and
+	// ExportTimeout bounds one export attempt. Both are read only when Push is
+	// true: the pull route has no exporter to schedule.
 	Interval      time.Duration `koanf:"interval" json:"interval"`
 	ExportTimeout time.Duration `koanf:"export_timeout" json:"export_timeout"`
 }

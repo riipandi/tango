@@ -191,6 +191,14 @@ func (c Config) Validate() error {
 	if c.OTEL.Metrics.Enable {
 		check(isPath(c.OTEL.Metrics.PrometheusPath),
 			"otel.metrics.prometheus_path: %q must be a path such as /metrics", c.OTEL.Metrics.PrometheusPath)
+	}
+
+	// Push is the only reader with a cadence and a collector route to check:
+	// the pull exposition needs neither.
+	if c.OTEL.Metrics.Push {
+		if !c.OTEL.Metrics.Enable {
+			check(false, "otel.metrics.push: requires otel.metrics.enable")
+		}
 		check(c.OTEL.Metrics.Interval > 0, "otel.metrics.interval: must be positive")
 		check(c.OTEL.Metrics.ExportTimeout > 0, "otel.metrics.export_timeout: must be positive")
 	}
@@ -206,7 +214,7 @@ func (c Config) Validate() error {
 		check(isOTELPath(c.OTEL.Tracing.Path),
 			"otel.tracing.path: %q must be a path such as /v1/traces", c.OTEL.Tracing.Path)
 	}
-	if c.OTEL.Metrics.Enable {
+	if c.OTEL.Metrics.Push {
 		check(isOTELPath(c.OTEL.Metrics.Path),
 			"otel.metrics.path: %q must be a path such as /v1/metrics", c.OTEL.Metrics.Path)
 	}
@@ -223,7 +231,7 @@ func (c Config) Validate() error {
 		if c.OTEL.Tracing.Enable {
 			paths = append(paths, struct{ key, value string }{"otel.tracing.path", c.OTEL.Tracing.Path})
 		}
-		if c.OTEL.Metrics.Enable {
+		if c.OTEL.Metrics.Push {
 			paths = append(paths, struct{ key, value string }{"otel.metrics.path", c.OTEL.Metrics.Path})
 		}
 		for _, p := range paths {

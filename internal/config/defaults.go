@@ -305,6 +305,7 @@ func Default() Config {
 			},
 			Metrics: OTELMetrics{
 				Enable:         false,
+				Push:           false,
 				PrometheusPath: DefaultPrometheusPath,
 				Interval:       DefaultOTELMetricInterval,
 				ExportTimeout:  DefaultOTELExportTimeout,

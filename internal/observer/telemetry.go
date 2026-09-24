@@ -177,27 +177,18 @@ func newTraceExporter(ctx context.Context, cfg config.Config) (sdktrace.SpanExpo
 }
 
 // newMeterProvider builds the metric pipeline the configuration describes.
-//
-// Metrics leave by two routes at once. The periodic reader pushes to the
-// collector, following the other signals; the Prometheus reader serves the
-// exposition at /metrics, which is what a scraper reads. Both are registered on
-// the one provider, so an instrument is recorded once and exported twice.
+// Metrics leave by pull first. The Prometheus bridge is a reader, not a
+// server: it registers a collector on the registry, and MetricsHandler serves
+// the exposition at /metrics, which is what a scraper reads — so the metrics
+// keep flowing while the collector is down. The push leg follows the other
+// signals and is opt-in (otel.metrics.push): when it is off, no exporter is
+// built at all.
 //
 // Both readers aggregate in the background: a measurement is handed to the
 // instrument and returns, and the reader collects on its own schedule. A scrape
 // therefore reads a snapshot the reader already holds rather than waiting on the
 // application, and an unreachable collector costs dropped exports, not latency.
 func newMeterProvider(ctx context.Context, cfg config.Config, res *resource.Resource, o *Observer) (*metric.MeterProvider, error) {
-	exporter, err := newMetricExporter(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	push := metric.NewPeriodicReader(exporter,
-		metric.WithInterval(cfg.OTEL.Metrics.Interval),
-		metric.WithTimeout(cfg.OTEL.Metrics.ExportTimeout),
-	)
-
 	// The Prometheus bridge is a reader, not a server: it registers a collector
 	// on the registry, and MetricsHandler serves that registry.
 	registry := newRegistry()
@@ -207,11 +198,22 @@ func newMeterProvider(ctx context.Context, cfg config.Config, res *resource.Reso
 	}
 	o.registry = registry
 
-	return metric.NewMeterProvider(
+	options := []metric.Option{
 		metric.WithResource(res),
-		metric.WithReader(push),
 		metric.WithReader(bridge),
-	), nil
+	}
+	if cfg.OTEL.Metrics.Push {
+		exporter, err := newMetricExporter(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		options = append(options, metric.WithReader(metric.NewPeriodicReader(exporter,
+			metric.WithInterval(cfg.OTEL.Metrics.Interval),
+			metric.WithTimeout(cfg.OTEL.Metrics.ExportTimeout),
+		)))
+	}
+
+	return metric.NewMeterProvider(options...), nil
 }
 
 // newMetricExporter builds the metric exporter for the configured protocol.

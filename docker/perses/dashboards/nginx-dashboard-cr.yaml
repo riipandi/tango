@@ -156,7 +156,7 @@ spec:
             spec:
                 display:
                     name: Edge vs application requests
-                    description: nginx's request rate against the application's own. The gap is what the edge absorbed — its own 4xx and 5xx, health probes, or traffic that never became a handler call.
+                    description: nginx's request rate against the application's own (scraped from the Prometheus bridge). The gap is what the edge absorbed — its own 4xx and 5xx, health probes, or traffic that never became a handler call.
                 plugin:
                     kind: TimeSeriesChart
                     spec:
@@ -177,7 +177,7 @@ spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'sum(rate(http_server_request_duration_seconds_count{service_name="tango"}[5m]))'
+                                  query: 'sum(rate(http_server_request_duration_seconds_count{job="tango"}[5m]))'
     layouts:
         - kind: Grid
           spec:

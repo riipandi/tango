@@ -1,9 +1,9 @@
 # The application's RED signal, read from the instrumentation the transport
 # itself carries: otelhttp covers every API request (the http_server_* series)
 # and the otelconnect interceptor covers every procedure (the rpc_server_*
-# histograms). Both reach this store twice — pushed over OTLP and scraped from
-# the Prometheus bridge — so a stopped collector costs history, not the live
-# view.
+# histograms). The queries read the scraped side (job="tango", the Prometheus
+# bridge) — the primary route, the one that keeps flowing while the collector
+# is down; the OTLP push for metrics is opt-in and absent by default.
 apiVersion: perses.dev/v1alpha1
 kind: Dashboard
 metadata:
@@ -27,7 +27,7 @@ spec:
                   spec:
                       labelName: instance
                       matchers:
-                          - target_info{service_name="tango"}
+                          - target_info{job="tango"}
               name: instance
     panels:
         request-rate:
@@ -50,7 +50,7 @@ spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'sum by (http_request_method) (rate(http_server_request_duration_seconds_count{service_name="tango", instance=~"$instance"}[5m]))'
+                                  query: 'sum by (http_request_method) (rate(http_server_request_duration_seconds_count{job="tango", instance=~"$instance"}[5m]))'
         request-latency:
             kind: Panel
             spec:
@@ -71,13 +71,13 @@ spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="tango", instance=~"$instance"}[5m])))'
+                                  query: 'histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket{job="tango", instance=~"$instance"}[5m])))'
                     - kind: TimeSeriesQuery
                       spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="tango", instance=~"$instance"}[5m])))'
+                                  query: 'histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{job="tango", instance=~"$instance"}[5m])))'
         request-status:
             kind: Panel
             spec:
@@ -97,7 +97,7 @@ spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name="tango", instance=~"$instance"}[5m]))'
+                                  query: 'sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{job="tango", instance=~"$instance"}[5m]))'
         request-errors:
             kind: Panel
             spec:
@@ -117,7 +117,7 @@ spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'sum(rate(http_server_request_duration_seconds_count{service_name="tango", http_response_status_code=~"5..", instance=~"$instance"}[5m])) or vector(0)'
+                                  query: 'sum(rate(http_server_request_duration_seconds_count{job="tango", http_response_status_code=~"5..", instance=~"$instance"}[5m])) or vector(0)'
         rpc-latency:
             kind: Panel
             spec:
@@ -138,7 +138,7 @@ spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'histogram_quantile(0.99, sum by (le, rpc_method) (rate(rpc_server_duration_milliseconds_bucket{service_name="tango", instance=~"$instance"}[5m])))'
+                                  query: 'histogram_quantile(0.99, sum by (le, rpc_method) (rate(rpc_server_duration_milliseconds_bucket{job="tango", instance=~"$instance"}[5m])))'
         rpc-rate:
             kind: Panel
             spec:
@@ -159,7 +159,7 @@ spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'sum by (rpc_method) (rate(rpc_server_duration_milliseconds_count{service_name="tango", instance=~"$instance"}[5m]))'
+                                  query: 'sum by (rpc_method) (rate(rpc_server_duration_milliseconds_count{job="tango", instance=~"$instance"}[5m]))'
         rpc-request-size:
             kind: Panel
             spec:
@@ -177,7 +177,7 @@ spec:
                           plugin:
                               kind: PrometheusTimeSeriesQuery
                               spec:
-                                  query: 'histogram_quantile(0.99, sum by (le) (rate(rpc_server_request_size_bytes_bucket{service_name="tango", instance=~"$instance"}[5m])))'
+                                  query: 'histogram_quantile(0.99, sum by (le) (rate(rpc_server_request_size_bytes_bucket{job="tango", instance=~"$instance"}[5m])))'
     layouts:
         - kind: Grid
           spec:

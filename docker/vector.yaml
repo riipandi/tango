@@ -34,6 +34,7 @@ sinks:
       uri: http://victoria-metrics:8428/opentelemetry/v1/metrics
       encoding:
         codec: otlp
+      compression: gzip
       batch:
         timeout_secs: 1
   logs:
@@ -44,6 +45,7 @@ sinks:
       uri: http://victoria-logs:9428/insert/opentelemetry/v1/logs
       encoding:
         codec: otlp
+      compression: gzip
       batch:
         timeout_secs: 1
   traces:
@@ -54,6 +56,7 @@ sinks:
       uri: http://victoria-traces:10428/insert/opentelemetry/v1/traces
       encoding:
         codec: otlp
+      compression: gzip
       batch:
         timeout_secs: 1
   self:
