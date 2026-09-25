@@ -294,9 +294,8 @@ func (c Config) Validate() error {
 	check(c.Server.ShutdownTimeout > 0, "server.shutdown_timeout: must be positive")
 	checkCORS(&c.Server.CORS, check)
 
-	check(isOneOf(c.Session.Driver, SessionDB, SessionKV),
-		"session.driver: %q is not one of %s", c.Session.Driver, joinValues(SessionDB, SessionKV))
-	check(c.Session.TTL > 0, "session.ttl: must be positive")
+	check(c.Auth.SessionDriver == "" || isOneOf(c.Auth.SessionDriver, SessionDB, SessionKV),
+		"auth.session_driver: %q is not one of %s", c.Auth.SessionDriver, joinValues(SessionDB, SessionKV))
 
 	check(isOneOf(c.Storage.Driver, StorageLocal, StorageS3),
 		"storage.driver: %q is not one of %s", c.Storage.Driver, joinValues(StorageLocal, StorageS3))
@@ -469,8 +468,8 @@ func (c Config) kvStoreDrivers() []string {
 	if c.RateLimit.Driver == RateLimitKV {
 		keys = append(keys, "rate_limit.driver")
 	}
-	if c.Session.Driver == SessionKV {
-		keys = append(keys, "session.driver")
+	if c.Auth.SessionDriver == SessionKV {
+		keys = append(keys, "auth.session_driver")
 	}
 	return keys
 }

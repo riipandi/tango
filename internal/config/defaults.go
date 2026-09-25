@@ -218,6 +218,7 @@ func Default() Config {
 			AccessTTL:       15 * time.Minute,
 			RefreshShortTTL: 12 * time.Hour,
 			RefreshLongTTL:  14 * 24 * time.Hour,
+			SessionDriver:   SessionDB,
 		},
 		Cache: Cache{
 			// Off by default: a feature that wants caching switches it on
@@ -345,10 +346,6 @@ func Default() Config {
 				AllowedHeaders: DefaultCORSHeaders,
 				MaxAge:         DefaultCORSMaxAge,
 			},
-		},
-		Session: Session{
-			Driver: SessionDB,
-			TTL:    7 * 24 * time.Hour,
 		},
 		Storage: Storage{
 			Driver:    StorageLocal,

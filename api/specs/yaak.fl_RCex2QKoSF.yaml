@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_RCex2QKoSF
 createdAt: 2026-09-14T09:40:48.096725
-updatedAt: 2026-09-19T15:35:41.787981
+updatedAt: 2026-09-25T10:05:48.261206
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
@@ -10,7 +10,7 @@ authentication:
 authenticationType: bearer
 description: 'Healthcheck endpoints: root text healthz (upstream) and JSON variant (tango extension)'
 headers: []
-name: Health Check
+name: General Information
 sortPriority: 20000.0
 settingSendCookies:
   enabled: false

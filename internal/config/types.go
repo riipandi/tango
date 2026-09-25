@@ -26,7 +26,6 @@ type Config struct {
 	RateLimit RateLimit `koanf:"rate_limit" json:"rate_limit"`
 	Scheduler Scheduler `koanf:"scheduler" json:"scheduler"`
 	Server    Server    `koanf:"server" json:"server"`
-	Session   Session   `koanf:"session" json:"session"`
 	Storage   Storage   `koanf:"storage" json:"storage"`
 
 	// origin records which source last set each key, for conflict resolution.
@@ -76,6 +75,11 @@ type Auth struct {
 	RefreshShortTTL time.Duration `koanf:"refresh_short_ttl" json:"refresh_short_ttl"`
 	// RefreshLongTTL is the lifetime of a remembered refresh token.
 	RefreshLongTTL time.Duration `koanf:"refresh_long_ttl" json:"refresh_long_ttl"`
+	// SessionDriver is the backend the sign-in session store reads: SessionDB
+	// or SessionKV. It lives beside the token lifetimes because the store
+	// serves exactly those tokens, and there is no second session concept to
+	// configure.
+	SessionDriver string `koanf:"session_driver" json:"session_driver"`
 }
 
 // Cache holds the key-value cache settings.
@@ -153,9 +157,10 @@ type Fetcher struct {
 //
 // It is opt-in and never required: with Enable false the application runs on
 // Postgres and in-process memory alone, which is what keeps a local checkout
-// from needing a second server. Enable gates availability; the driver fields on
-// Cache, Session, and RateLimit still choose which backend each one uses, so
-// switching the kvstore on does not silently move anything.
+// from needing a second server. Enable gates availability; the driver fields
+// on Cache and RateLimit and the auth session driver still choose which
+// backend each one uses, so switching the kvstore on does not silently move
+// anything.
 type KVStore struct {
 	// Enable reports whether the key-value backend is available. A driver set to
 	// kvstore while this is false is a contradiction Validate reports.
@@ -479,14 +484,7 @@ type CORS struct {
 	MaxAge time.Duration `koanf:"max_age" json:"max_age"`
 }
 
-// Session holds the session store settings.
-type Session struct {
-	// Driver is SessionDB or SessionKV.
-	Driver string `koanf:"driver" json:"driver"`
-	// TTL is how long an idle session stays valid.
-	TTL time.Duration `koanf:"ttl" json:"ttl"`
-}
-
+// Storage holds the file storage settings.
 // Storage holds the file storage settings.
 type Storage struct {
 	// Driver is StorageLocal or StorageS3.

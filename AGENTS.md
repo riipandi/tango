@@ -8,7 +8,7 @@ Full design rationale per package: **`.llms/architecture.md`** — read the sect
 
 - Built from `cmd/` using `urfave/cli/v3`. Commands: `serve`, `migrate:*`, `db:export`/`db:import`, `key:generate`/`key:rotate`, `health`, smoke tests. Implemented: `key:generate`, `health`, all `migrate:*`, `db:export`/`db:import`, `mailer:smoke`, and `serve` (basic HTTP surface, SPA mount, metrics, middleware). The rest print `not yet implemented`.
 - SPA (React 19 + TanStack + Vite) builds into `web/output/` and embeds into the binary. Vite dev server proxies `/api`, `/rpc`, `/.well-known`, `/static` to Go on `:3080`.
-- Implemented: `database`, `internal/{config,datastore,health,logger,cache,fetcher,mailer,queue,jobs,scheduler,storage}`, `pkg/{crypto,envfile,jwtutils,responder,validate,testutils,printext}`, `api/connect`, `email/templates`, `web`, `modules/identity/jwks`. Scaffolds only: most of `internal/**`, rest of `modules/**`.
+- Implemented: `database`, `internal/{config,datastore,health,logger,cache,fetcher,mailer,queue,jobs,scheduler,storage}`, `pkg/{crypto,envfile,jwtutils,responder,validate,testutils,printext}`, `api/connect`, `email/templates`, `web`, `modules/identity/{jwks,signin}`. Scaffolds only: most of `internal/**`, rest of `modules/**`.
 - Never add, remove, or rename top-level packages/directories without explicit request. Extend existing packages instead.
 - Porting a plan/doc into code means implementing it, not copying it. Docs may describe larger surface than the code has.
 

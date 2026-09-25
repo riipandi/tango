@@ -42,7 +42,6 @@ var durationKeys = []string{
 	"server.read_timeout",
 	"server.shutdown_timeout",
 	"server.write_timeout",
-	"session.ttl",
 	"storage.s3.signed_url_expires",
 	"storage.watch.debounce",
 }

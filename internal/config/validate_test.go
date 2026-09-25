@@ -257,17 +257,17 @@ func TestValidationAcceptsACacheDriverWithTheBackendOff(t *testing.T) {
 func TestValidationNamesEveryKVDriverThatDisagrees(t *testing.T) {
 	err := resolveFile(t,
 		`"rate_limit": {"driver": "kvstore"}, `+
-			`"session": {"driver": "kvstore"}`)
+			`"auth": {"session_driver": "kvstore"}`)
 	require.ErrorIs(t, err, config.ErrInvalid)
 
 	// One message naming both beats two messages naming one each.
-	for _, key := range []string{"rate_limit.driver", "session.driver"} {
+	for _, key := range []string{"rate_limit.driver", "auth.session_driver"} {
 		assert.Contains(t, err.Error(), key)
 	}
 }
 
 func TestValidationAcceptsAKVDriverWithTheBackendOn(t *testing.T) {
-	err := resolveFile(t, `"rate_limit": {"driver": "kvstore"}, "session": {"driver": "kvstore"}, "kvstore": {"enable": true}`)
+	err := resolveFile(t, `"rate_limit": {"driver": "kvstore"}, "auth": {"session_driver": "kvstore"}, "kvstore": {"enable": true}`)
 	assert.NoError(t, err)
 }
 
