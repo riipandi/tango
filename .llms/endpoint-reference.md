@@ -291,7 +291,7 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 
 | Method | Procedure / Endpoint | Summary / Yaak Title | Status | Evidence |
 | ------ | -------------------- | -------------------- | ------ | -------- |
-| POST | `/rpc/tango.identity.v1.SignupService/Signup` | Sign up | done — requires a valid signup token; password and names required; created unverified (email verification later) | `modules/identity/signup` (service tests) |
+| POST | `/rpc/tango.identity.v1.SignupService/Signup` | Sign up | done — requires a valid signup token; password and names required; created unverified; answers the canonical account view | `modules/identity/signup` (service tests) |
 | POST | `/rpc/tango.identity.v1.SignupService/GetSetupAvailability` | Check initial admin setup availability | planned — needs the setup flow; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.SignupService/SetupInitialAdmin` | Sign up initial admin user | planned — needs the setup flow; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.SignupService/ListSignupTokens` | List signup tokens | done — admin Bearer; paginated | `modules/identity/signup` (service tests) |

@@ -10,6 +10,7 @@ import (
 
 	"uuid"
 
+	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/responder"
@@ -266,6 +267,49 @@ func (s *Service) UpdateUser(ctx context.Context, id string, params UpdateParams
 	}
 	return view(row), nil
 }
+
+// ReadAccount reads one account row and answers the canonical view. It is
+// the read-back the account-creating features share: sign-up assembles its
+// answer from it, so both doors describe the account the same way.
+func ReadAccount(ctx context.Context, db datastore.Querier, id uuid.UUID) (UserView, error) {
+	row, err := (&Repository{}).GetUser(ctx, db, id)
+	if err != nil {
+		return UserView{}, err
+	}
+	return view(row), nil
+}
+
+// WireView maps the account view onto the wire message the identity
+// contract carries. The procedures that answer an account — sign-up and the
+// administration CRUD — share it, so the wire form of an account is written
+// once. The optional wire fields carry the NULLs, so an absent locale or
+// ban reads as absent rather than as an empty string.
+func WireView(user UserView) *identityv1.User {
+	view := &identityv1.User{
+		Id:            user.ID,
+		Username:      user.Username,
+		Email:         user.Email,
+		DisplayName:   user.DisplayName,
+		FirstName:     user.FirstName,
+		LastName:      user.LastName,
+		Locale:        user.Locale,
+		IsAdmin:       user.IsAdmin,
+		Disabled:      user.Disabled,
+		EmailVerified: user.EmailVerified,
+		CreatedAt:     user.CreatedAt.Format(rfc3339),
+		BanReason:     user.BanReason,
+	}
+	if user.BannedAt != nil {
+		view.BannedAt = new(user.BannedAt.Format(rfc3339))
+	}
+	if user.BanExpires != nil {
+		view.BanExpires = new(user.BanExpires.Format(rfc3339))
+	}
+	return view
+}
+
+// rfc3339 is the timestamp form the wire views carry.
+const rfc3339 = "2006-01-02T15:04:05Z07:00"
 
 // DeleteUser removes an account. The caller's username travels with the
 // request, because the one deletion an administrator cannot perform is the

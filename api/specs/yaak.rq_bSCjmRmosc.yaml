@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_bSCjmRmosc
 createdAt: 2026-09-25T10:33:41.108464
-updatedAt: 2026-09-25T12:13:09.628680
+updatedAt: 2026-09-25T17:13:33.134045
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -31,7 +31,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Reset user profile picture (unimplemented)'
-sortPriority: 15000.0
+sortPriority: 11555.555555555557
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/DeleteProfilePicture
 urlParameters:
 - enabled: true

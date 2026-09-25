@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_JBSuwiYqGz
 createdAt: 2026-09-25T10:33:42.197240
-updatedAt: 2026-09-25T12:13:09.625238
+updatedAt: 2026-09-25T17:13:18.288323
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -24,7 +24,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Exchange one-time access token (unimplemented)'
-sortPriority: 7000.0
+sortPriority: 13000.0
 url: ${[ apiBaseURL ]}/api/one-time-access-token/REPLACE_ONE_TIME_TOKEN
 urlParameters:
 - enabled: true

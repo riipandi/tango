@@ -13,6 +13,7 @@ import (
 	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
 )
@@ -68,7 +69,7 @@ func newRPCHandler(service *Service) identityv1connect.SignupServiceHandler {
 func (h *rpcHandler) Signup(ctx context.Context, req *connect.Request[identityv1.SignupRequest]) (*connect.Response[identityv1.SignupResponse], error) {
 	body := req.Msg
 
-	user, err := h.service.Signup(ctx, Params{
+	account, err := h.service.Signup(ctx, Params{
 		Username:  body.Username,
 		Email:     body.Email,
 		Password:  body.Password,
@@ -81,12 +82,7 @@ func (h *rpcHandler) Signup(ctx context.Context, req *connect.Request[identityv1
 	}
 
 	return connect.NewResponse(&identityv1.SignupResponse{
-		User: &identityv1.User{
-			Id:          user.ID,
-			Username:    user.Username,
-			Email:       user.Email,
-			DisplayName: user.DisplayName,
-		},
+		User: user.WireView(account),
 	}), nil
 }
 

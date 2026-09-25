@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_j4vyRwZur6
 createdAt: 2026-09-25T10:33:40.835356
-updatedAt: 2026-09-25T12:32:58.676581
+updatedAt: 2026-09-25T17:13:18.258492
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication:
@@ -24,7 +24,7 @@ body:
     }
 bodyType: application/json
 description: |-
-  Replace an account's fields. Every field is specified: an empty name part or locale clears its column. The ban fields are one unit — ban_expires present applies the ban, absent lifts it.
+  Replace an account's fields. Every field is specified: the names are mandatory, and an absent locale clears its column. The ban fields are one unit — ban_expires present applies the ban, absent lifts it.
 
   Ported from Pocket ID `PUT /api/users/{id}` as the `tango.identity.v1.UserService/UpdateUser` procedure.
 
@@ -32,6 +32,8 @@ description: |-
   - id (body, required): User ID
   - username (body, required): Account handle
   - email (body, required): Account address
+  - first_name (body, required): Given name
+  - last_name (body, required): Family name
   - display_name (body, required): Name the UI shows
   - ban_expires (body, optional): RFC 3339 instant the ban lifts
 headers:
@@ -45,7 +47,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Update user'
-sortPriority: 960.9815576893768
+sortPriority: 9000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/UpdateUser
 urlParameters:
 - enabled: true

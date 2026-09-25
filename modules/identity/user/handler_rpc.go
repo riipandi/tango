@@ -77,7 +77,7 @@ func (h *rpcHandler) ListUsers(ctx context.Context, req *connect.Request[identit
 
 	views := make([]*identityv1.User, 0, len(users))
 	for _, user := range users {
-		views = append(views, userView(user))
+		views = append(views, WireView(user))
 	}
 	return connect.NewResponse(&identityv1.ListUsersResponse{
 		Users:    views,
@@ -95,7 +95,7 @@ func (h *rpcHandler) GetUser(ctx context.Context, req *connect.Request[identityv
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.GetUserResponse{User: userView(user)}), nil
+	return connect.NewResponse(&identityv1.GetUserResponse{User: WireView(user)}), nil
 }
 
 // CreateUser creates an account directly, without a signup token.
@@ -120,7 +120,7 @@ func (h *rpcHandler) CreateUser(ctx context.Context, req *connect.Request[identi
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.CreateUserResponse{User: userView(user)}), nil
+	return connect.NewResponse(&identityv1.CreateUserResponse{User: WireView(user)}), nil
 }
 
 // UpdateUser replaces an account's fields.
@@ -149,7 +149,7 @@ func (h *rpcHandler) UpdateUser(ctx context.Context, req *connect.Request[identi
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.UpdateUserResponse{User: userView(user)}), nil
+	return connect.NewResponse(&identityv1.UpdateUserResponse{User: WireView(user)}), nil
 }
 
 // DeleteUser removes an account.
@@ -165,36 +165,6 @@ func (h *rpcHandler) DeleteUser(ctx context.Context, req *connect.Request[identi
 	return connect.NewResponse(&identityv1.DeleteUserResponse{}), nil
 }
 
-// userView maps the service's account view onto the wire message. The
-// optional wire fields carry the NULLs, so an absent name part or ban reads
-// as absent rather than as an empty string.
-func userView(user UserView) *identityv1.User {
-	view := &identityv1.User{
-		Id:            user.ID,
-		Username:      user.Username,
-		Email:         user.Email,
-		DisplayName:   user.DisplayName,
-		FirstName:     user.FirstName,
-		LastName:      user.LastName,
-		Locale:        user.Locale,
-		IsAdmin:       user.IsAdmin,
-		Disabled:      user.Disabled,
-		EmailVerified: user.EmailVerified,
-		CreatedAt:     user.CreatedAt.Format(rfc3339),
-		BanReason:     user.BanReason,
-	}
-	if user.BannedAt != nil {
-		view.BannedAt = ptr(user.BannedAt.Format(rfc3339))
-	}
-	if user.BanExpires != nil {
-		view.BanExpires = ptr(user.BanExpires.Format(rfc3339))
-	}
-	return view
-}
-
-// rfc3339 is the timestamp form the wire views carry.
-const rfc3339 = "2006-01-02T15:04:05Z07:00"
-
 // listMetadata maps the responder's pagination onto the shared block. The
 // wire fields are optional, so an unknown range is absent rather than zero.
 func listMetadata(p responder.Pagination) *commonv1.ListMetadata {
@@ -209,7 +179,7 @@ func listMetadata(p responder.Pagination) *commonv1.ListMetadata {
 		if value > math.MaxInt32 || value < math.MinInt32 {
 			value = math.MaxInt32
 		}
-		*dst = ptr(int32(value))
+		*dst = new(int32(value))
 	}
 	set(&meta.Page, p.Page)
 	set(&meta.Limit, p.Limit)
@@ -218,11 +188,6 @@ func listMetadata(p responder.Pagination) *commonv1.ListMetadata {
 	set(&meta.FirstItemIndex, p.FirstItemIndex)
 	set(&meta.LastItemIndex, p.LastItemIndex)
 	return meta
-}
-
-// ptr hands the setters an addressable value.
-func ptr[T any](value T) *T {
-	return &value
 }
 
 // adminFrom reads the authenticated caller's claims the bearer middleware

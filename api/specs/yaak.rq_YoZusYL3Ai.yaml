@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_YoZusYL3Ai
 createdAt: 2026-09-25T10:33:41.162193
-updatedAt: 2026-09-25T12:13:09.631438
+updatedAt: 2026-09-25T17:13:18.284167
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -19,7 +19,7 @@ description: |-
 headers: []
 method: GET
 name: '[Pocket ID] Get user profile picture (unimplemented)'
-sortPriority: 10000.0
+sortPriority: 11000.0
 url: ${[ apiBaseURL ]}/api/users/REPLACE_USER_ID/profile-picture.png
 urlParameters:
 - enabled: true

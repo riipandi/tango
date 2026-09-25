@@ -70,14 +70,6 @@ type Params struct {
 	LastName  string
 }
 
-// User is the account view a successful sign-up answers with.
-type User struct {
-	ID          string
-	Username    string
-	Email       string
-	DisplayName string
-}
-
 // Signup consumes the token and creates the account. The request's shape is
 // the contract's business — `SignupRequest` carries the constraints the
 // transport's validate interceptor enforces before this runs.
@@ -85,16 +77,16 @@ type User struct {
 // Email verification is a later procedure: the account is created unverified,
 // which is the column's default and needs no code here yet. The password is
 // hashed and stored with the account, so the account can sign in immediately.
-func (s *Service) Signup(ctx context.Context, params Params) (User, error) {
+func (s *Service) Signup(ctx context.Context, params Params) (user.UserView, error) {
 	passwordHash, err := s.hasher.Hash(params.Password)
 	if err != nil {
-		return User{}, fmt.Errorf("signup: hash password: %w", err)
+		return user.UserView{}, fmt.Errorf("signup: hash password: %w", err)
 	}
 	tokenHash := tokenSHA256(params.Token)
 
 	name := displayName(params.FirstName, params.LastName)
 
-	var created User
+	var created user.UserView
 	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
 		token, findErr := s.repo.FindSignupTokenByHash(ctx, tx, tokenHash)
 		if errors.Is(findErr, datastore.ErrNoRows) {
@@ -132,16 +124,18 @@ func (s *Service) Signup(ctx context.Context, params Params) (User, error) {
 			return consumeErr
 		}
 
-		created = User{
-			ID:          userID.String(),
-			Username:    params.Username,
-			Email:       params.Email,
-			DisplayName: name,
+		// The database fills the columns the insert omits, so the answer
+		// is the account read back — the same canonical view the account
+		// procedures answer with.
+		read, readErr := user.ReadAccount(ctx, tx, userID)
+		if readErr != nil {
+			return readErr
 		}
+		created = read
 		return nil
 	})
 	if err != nil {
-		return User{}, err
+		return user.UserView{}, err
 	}
 	return created, nil
 }

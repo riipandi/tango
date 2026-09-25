@@ -113,6 +113,19 @@ func TestSignupCreatesTheAccount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Ada Lovelace", user.DisplayName)
 
+	// The answer is the canonical account view: the names, the creation
+	// instant the database stamped, and the unverified state.
+	assert.Equal(t, "ada", user.Username)
+	assert.Equal(t, "ada@example.com", user.Email)
+	require.NotNil(t, user.FirstName)
+	assert.Equal(t, "Ada", *user.FirstName)
+	require.NotNil(t, user.LastName)
+	assert.Equal(t, "Lovelace", *user.LastName)
+	assert.False(t, user.EmailVerified)
+	assert.False(t, user.IsAdmin)
+	assert.False(t, user.Disabled)
+	assert.False(t, user.CreatedAt.IsZero())
+
 	// The account row carries the composed display name and stays
 	// unverified: email verification is a later procedure.
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()

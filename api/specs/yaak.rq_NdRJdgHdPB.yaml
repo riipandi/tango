@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_NdRJdgHdPB
 createdAt: 2026-09-25T10:33:40.889166
-updatedAt: 2026-09-25T12:33:00.124679
+updatedAt: 2026-09-25T17:13:18.258897
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication:
@@ -34,7 +34,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Delete user'
-sortPriority: 973.9877051262512
+sortPriority: 10000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/DeleteUser
 urlParameters:
 - enabled: true

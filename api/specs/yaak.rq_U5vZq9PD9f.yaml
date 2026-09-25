@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_U5vZq9PD9f
 createdAt: 2026-09-25T10:33:42.143507
-updatedAt: 2026-09-25T12:13:09.621984
+updatedAt: 2026-09-25T17:13:18.284486
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -32,7 +32,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Create one-time access token for user (admin) (unimplemented)'
-sortPriority: 1000.0
+sortPriority: 12000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.OneTimeAccessService/AdminIssueToken
 urlParameters:
 - enabled: true

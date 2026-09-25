@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_4xJftYUp4i
 createdAt: 2026-09-25T10:33:40.779504
-updatedAt: 2026-09-25T12:33:51.440733
+updatedAt: 2026-09-25T17:13:18.257936
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication:
@@ -34,7 +34,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Get user by ID'
-sortPriority: 941.472336534065
+sortPriority: 8000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/GetUser
 urlParameters:
 - enabled: true

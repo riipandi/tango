@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_ToRkNxDZk4
 createdAt: 2026-09-25T10:33:41.981014
-updatedAt: 2026-09-25T12:13:14.143700
+updatedAt: 2026-09-25T17:13:18.254362
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication:
@@ -34,7 +34,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Delete signup token'
-sortPriority: 555.5555555555555
+sortPriority: 2000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.SignupService/DeleteSignupToken
 urlParameters:
 - enabled: true

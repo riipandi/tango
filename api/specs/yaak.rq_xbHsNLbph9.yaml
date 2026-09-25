@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_xbHsNLbph9
 createdAt: 2026-09-25T10:33:41.373765
-updatedAt: 2026-09-25T12:13:09.624558
+updatedAt: 2026-09-25T17:13:18.287924
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -33,7 +33,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Delete user passkey (unimplemented)'
-sortPriority: 6000.0
+sortPriority: 14000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/DeleteWebAuthnCredential
 urlParameters:
 - enabled: true

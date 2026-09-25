@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_ZooqkWcoPU
 createdAt: 2026-09-25T10:33:41.216165
-updatedAt: 2026-09-25T12:53:46.730266
+updatedAt: 2026-09-25T17:13:18.255824
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication:
@@ -28,7 +28,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Send email verification'
-sortPriority: 736.6255144032922
+sortPriority: 4000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.EmailVerificationService/SendEmail
 urlParameters: []
 settingSendCookies:

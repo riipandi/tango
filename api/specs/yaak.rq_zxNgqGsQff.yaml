@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_zxNgqGsQff
 createdAt: 2026-09-25T10:33:41.055291
-updatedAt: 2026-09-25T12:13:09.630641
+updatedAt: 2026-09-25T17:13:25.951561
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -32,7 +32,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Update user profile picture (unimplemented)'
-sortPriority: 21000.0
+sortPriority: 11333.333333333334
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/UpdateProfilePicture
 urlParameters:
 - enabled: true

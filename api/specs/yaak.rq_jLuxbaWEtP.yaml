@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_jLuxbaWEtP
 createdAt: 2026-09-25T10:33:41.759673
-updatedAt: 2026-09-25T12:13:16.537913
+updatedAt: 2026-09-25T17:13:18.255272
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -14,16 +14,23 @@ body:
       "username": "yaak_${[ faker.string.alphanumeric(options='{"length": 12}') ]}",
       "email": "yaak_${[ faker.string.alphanumeric(options='{"length": 12}') ]}@example.com",
       "password": "${[ password ]}",
-      "token": "${[ response.body.path(request='rq_PVBpyz36Rx', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC5yYXdfdG9rZW4') ]}"
+      "token": "${[ response.body.path(request='rq_PVBpyz36Rx', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC5yYXdfdG9rZW4') ]}",
+      "first_name": "Ada",
+      "last_name": "Lovelace"
     }
 bodyType: application/json
 description: |-
-  Create a new user account
+  Create an account from a valid signup token. The names are mandatory; the display name is composed from them.
 
-  Mirror of Pocket ID `POST /api/signup`.
+  Ported from Pocket ID `POST /api/signup` as the `tango.identity.v1.SignupService/Signup` procedure.
 
   Parameters:
-  - user (body, required): User information
+  - username (body, required): Account handle
+  - email (body, required): Account address
+  - password (body, required): Primary credential
+  - token (body, required): Raw signup token
+  - first_name (body, required): Given name
+  - last_name (body, required): Family name
 headers:
 - enabled: true
   name: Content-Type
@@ -35,7 +42,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Sign up'
-sortPriority: 703.7037037037037
+sortPriority: 3000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.SignupService/Signup
 urlParameters: []
 settingSendCookies:

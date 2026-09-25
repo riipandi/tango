@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_zZRhfM9THh
 createdAt: 2026-09-25T10:33:41.321127
-updatedAt: 2026-09-25T12:13:09.627082
+updatedAt: 2026-09-25T17:13:40.900772
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -31,7 +31,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] List user passkeys (unimplemented)'
-sortPriority: 11000.0
+sortPriority: 13333.333333333334
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/ListWebAuthnCredentials
 urlParameters:
 - enabled: true
