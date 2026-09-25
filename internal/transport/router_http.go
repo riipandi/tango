@@ -89,7 +89,7 @@ func NewRouter(opts Options) chi.Router {
 	// paths from being answered with index.html.
 	r.Group(func(throttled chi.Router) {
 		if opts.RateLimiter != nil {
-			throttled.Use(middleware.RateLimit(opts.RateLimiter, restRefuse, httpRateLimitExclusions...))
+			throttled.Use(middleware.RateLimit("rest", opts.RateLimiter, restRefuse, httpRateLimitExclusions...))
 		}
 
 		throttled.Route("/api", func(api chi.Router) {
@@ -112,7 +112,7 @@ func NewRouter(opts Options) chi.Router {
 	// handlers for one path.
 	r.Group(func(throttled chi.Router) {
 		if opts.RateLimiter != nil {
-			throttled.Use(middleware.RateLimit(opts.RateLimiter, rpcRefuse, rpcRateLimitExclusions...))
+			throttled.Use(middleware.RateLimit("rpc", opts.RateLimiter, rpcRefuse, rpcRateLimitExclusions...))
 		}
 
 		mountRPC(throttled, opts.Checker, opts.Modules)

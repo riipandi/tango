@@ -53,6 +53,7 @@ type Client struct {
 	hosts      map[string]*resty.Client
 	baseHTTP   *http.Client
 	log        *slog.Logger
+	metrics    *fetchMetrics
 	retryCount int
 	maxBody    int64
 	settings   config.Fetcher
@@ -92,6 +93,7 @@ func New(cfg config.Config, log *slog.Logger) (*Client, error) {
 		hosts:      make(map[string]*resty.Client),
 		baseHTTP:   baseHTTP,
 		log:        log,
+		metrics:    newFetchMetrics(),
 		retryCount: settings.RetryCount,
 		maxBody:    settings.MaxBodyBytes,
 		settings:   settings,
@@ -135,6 +137,9 @@ func (c *Client) newHostClient(host string) *resty.Client {
 	breaker.OnStateChange(func(from, to resty.CircuitBreakerState) {
 		c.log.Warn("fetcher: circuit breaker",
 			"target", host, "from", circuitState(from), "to", circuitState(to))
+		if to == resty.CircuitBreakerStateOpen {
+			c.metrics.recordBreakerOpen(context.Background(), host)
+		}
 	})
 	breaker.OnTrigger(func(*resty.Request, error) {
 		// The request is not logged: it can carry a credential. The host
@@ -209,6 +214,7 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 
 	absolute, host, err := resolve(req.URL)
 	if err != nil {
+		c.metrics.recordRequest(ctx, "", outcomeInvalid, 0, 0)
 		return nil, err
 	}
 	target := safeTarget("", absolute)
@@ -247,6 +253,11 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 		callErr = readErr
 	}
 	classified = classify(c.retryCount, "", method, absolute, out.Attempts, res, callErr)
+	attempts := 0
+	if out != nil {
+		attempts = out.Attempts
+	}
+	c.metrics.recordRequest(ctx, host, c.metrics.outcomeFor(classified), time.Since(started), attempts)
 	c.logCall(ctx, method, target, out, classified, time.Since(started))
 	if classified != nil {
 		return out, classified

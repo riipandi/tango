@@ -52,7 +52,7 @@ func envelopeRefuse(w http.ResponseWriter, r *http.Request) {
 func TestRateLimitWritesTheHeadersAClientPacesBy(t *testing.T) {
 	reset := time.Now().Add(time.Minute).Truncate(time.Second)
 	limiter := &stubLimiter{result: Result{Limit: 60, Remaining: 59, ResetAt: reset}}
-	handler := RateLimit(limiter, envelopeRefuse)(http.HandlerFunc(
+	handler := RateLimit("rest", limiter, envelopeRefuse)(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusAccepted)
 		}))
@@ -77,7 +77,7 @@ func TestRateLimitRefusesAStudentWhoSpentTheWindow(t *testing.T) {
 		Limited: true, Limit: 60, Remaining: 0,
 		RetryAfter: 30 * time.Second,
 	}}
-	handler := RateLimit(limiter, envelopeRefuse)(http.HandlerFunc(
+	handler := RateLimit("rest", limiter, envelopeRefuse)(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			require.Fail(t, "a limited request must not reach the route")
 		}))
@@ -98,7 +98,7 @@ func TestRateLimitRefusesAStudentWhoSpentTheWindow(t *testing.T) {
 
 func TestRateLimitLetsTheRequestThroughWhenTheBackendCannotAnswer(t *testing.T) {
 	limiter := &stubLimiter{err: context.DeadlineExceeded}
-	handler := RateLimit(limiter, envelopeRefuse)(http.HandlerFunc(
+	handler := RateLimit("rest", limiter, envelopeRefuse)(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -113,7 +113,7 @@ func TestRateLimitLetsTheRequestThroughWhenTheBackendCannotAnswer(t *testing.T) 
 }
 
 func TestRateLimitWithoutALimiterIsAPassThrough(t *testing.T) {
-	handler := RateLimit(nil, envelopeRefuse)(http.HandlerFunc(
+	handler := RateLimit("rest", nil, envelopeRefuse)(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -126,7 +126,7 @@ func TestRateLimitWithoutALimiterIsAPassThrough(t *testing.T) {
 
 func TestRateLimitSparesTheExcludedPrefixes(t *testing.T) {
 	limiter := &stubLimiter{}
-	handler := RateLimit(limiter, envelopeRefuse, "/api/healthz")(http.HandlerFunc(
+	handler := RateLimit("rest", limiter, envelopeRefuse, "/api/healthz")(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))

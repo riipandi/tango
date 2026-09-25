@@ -98,7 +98,7 @@ Run `task` to list every target. Most targets live in `tasks/`, one file per gro
 
 ## Local HTTPS
 
-The nginx service in `docker/compose.yaml` reads certificates from `storage/certs`. Generate them with
+The nginx service in `docker/compose-dev.yaml` reads certificates from `storage/certs`. Generate them with
 [`mkcert`](https://github.com/FiloSottile/mkcert), falling back to a self-signed `openssl` certificate when
 `mkcert` is unavailable:
 

@@ -3,4 +3,4 @@
 # dashboards in dashboards/ exist.
 kind: Project
 metadata:
-    name: tango
+  name: tango

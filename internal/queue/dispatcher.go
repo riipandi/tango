@@ -316,6 +316,7 @@ func (d *dispatcher) fetch() {
 	tasks, err := claimReady(d.ctx, d.client.store, at, deadline, workers)
 	if err != nil {
 		d.client.log.ErrorContext(d.ctx, "queue: failed to claim tasks", "err", err.Error())
+		d.client.metrics.recordClaimError(d.ctx)
 		d.scheduleRetry()
 		return
 	}
@@ -421,6 +422,7 @@ func (d *dispatcher) processTask(task *taskRow) {
 		if err := requeueTask(ctx, d.client.store, task.ID, now().Add(requeueDelay)); err != nil {
 			d.client.log.ErrorContext(ctx, "queue: failed to requeue task", "err", err.Error())
 		}
+		d.client.metrics.recordOutcome(d.ctx, task.Queue, outcomeUnknownQueue, 0, task.Attempts)
 		return
 	}
 
@@ -454,8 +456,14 @@ func (d *dispatcher) processTask(task *taskRow) {
 	defer cancelSettle()
 
 	if err == nil {
+		d.client.metrics.recordOutcome(settleCtx, task.Queue, outcomeSuccess, duration, task.Attempts)
 		d.taskSuccess(settleCtx, queue, task, start, duration)
 		return
+	}
+	if remaining := queue.Config().MaxAttempts - task.Attempts; remaining >= 1 {
+		d.client.metrics.recordOutcome(settleCtx, task.Queue, outcomeRetry, duration, task.Attempts)
+	} else {
+		d.client.metrics.recordOutcome(settleCtx, task.Queue, outcomeDead, duration, task.Attempts)
 	}
 	d.taskFailure(settleCtx, queue, task, start, duration, err)
 }

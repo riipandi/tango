@@ -74,6 +74,7 @@ type (
 		store    queue.Store
 		client   *queue.Client
 		log      *slog.Logger
+		metrics  *schedulerMetrics
 		location *time.Location
 		jobs     []registeredJob
 		cron     *cron.Cron
@@ -127,7 +128,9 @@ func New(cfg Config) (*Scheduler, error) {
 		jobs = append(jobs, registeredJob{Job: job, schedule: schedule})
 	}
 
+	metrics := newSchedulerMetrics()
 	return &Scheduler{
+		metrics:  metrics,
 		store:    cfg.Store,
 		client:   cfg.Client,
 		log:      cfg.Logger,
@@ -211,16 +214,33 @@ func (s *Scheduler) seed(ctx context.Context, job *registeredJob) error {
 // one transaction, and only a committed claim wakes the dispatcher. A failed
 // tick leaves next_due untouched, so the next firing retries it.
 func (s *Scheduler) fire(ctx context.Context, job *registeredJob) {
-	err := s.store.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
-		return s.claim(ctx, tx, job)
-	})
+	started := now()
+	outcome, err := s.claimOutcome(ctx, job)
 	if err != nil {
 		s.log.ErrorContext(ctx, "scheduler: tick failed", "job", job.Name, "err", err.Error())
-		return
+		outcome = tickError
 	}
-	// The transaction is committed, so the task is visible and the
-	// dispatcher can claim it.
-	s.client.Notify()
+	s.metrics.recordTick(ctx, job.Name, outcome, time.Since(started))
+	if err == nil && outcome == tickClaimed {
+		// The transaction is committed, so the task is visible and the
+		// dispatcher can claim it.
+		s.client.Notify()
+	}
+}
+
+// claimOutcome runs the claim transaction and reports what the tick became: a
+// claimed tick advanced next_due and enqueued its task, a skipped one was
+// claimed by another replica first, and a reseeded one rebuilt its state row.
+// The outcome rides out of the transaction, because the counters record after
+// it commits — a counter written inside would be rolled back with the claim.
+func (s *Scheduler) claimOutcome(ctx context.Context, job *registeredJob) (string, error) {
+	outcome := tickClaimed
+	err := s.store.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		var claimErr error
+		outcome, claimErr = s.claim(ctx, tx, job)
+		return claimErr
+	})
+	return outcome, err
 }
 
 // claim decides the tick inside the caller's transaction. The row is locked
@@ -228,7 +248,7 @@ func (s *Scheduler) fire(ctx context.Context, job *registeredJob) {
 // replicas that fire at the same moment line up on the lock, and the first
 // commit moves next_due forward, which is what makes every later fire a
 // no-op.
-func (s *Scheduler) claim(ctx context.Context, tx datastore.Querier, job *registeredJob) error {
+func (s *Scheduler) claim(ctx context.Context, tx datastore.Querier, job *registeredJob) (string, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("next_due", "now()")
 	sb.From(jobsTable)
@@ -242,14 +262,14 @@ func (s *Scheduler) claim(ctx context.Context, tx datastore.Querier, job *regist
 		// The row was removed out from under the schedule — a manual delete,
 		// a restored dump. It is re-seeded rather than fire-never-again.
 		s.log.WarnContext(ctx, "scheduler: state row missing, re-seeding", "job", job.Name)
-		return s.reseed(ctx, tx, job)
+		return tickReseeded, s.reseed(ctx, tx, job)
 	}
 	if err != nil {
-		return err
+		return tickError, err
 	}
 	if due.After(dbNow) {
 		// Another replica's fire already claimed this tick.
-		return nil
+		return tickSkipped, nil
 	}
 
 	// The next due time advances from the old one, so the schedule keeps its
@@ -268,16 +288,16 @@ func (s *Scheduler) claim(ctx context.Context, tx datastore.Querier, job *regist
 
 	query, args = ub.Build()
 	if _, err := tx.Exec(ctx, query, args...); err != nil {
-		return err
+		return tickError, err
 	}
 
 	if _, err := s.client.Add(job.Task).Ctx(ctx).Priority(job.Priority).Executor(tx).Save(); err != nil {
-		return fmt.Errorf("enqueue task: %w", err)
+		return tickError, fmt.Errorf("enqueue task: %w", err)
 	}
 
 	s.log.InfoContext(ctx, "scheduler: tick claimed",
 		"job", job.Name, "next", next.Format(time.RFC3339))
-	return nil
+	return tickClaimed, nil
 }
 
 // reseed writes the job's state row through the caller's transaction, with
@@ -294,5 +314,8 @@ func (s *Scheduler) reseed(ctx context.Context, tx datastore.Querier, job *regis
 
 	query, args := ib.Build()
 	_, err := tx.Exec(ctx, query, args...)
+	if err == nil {
+		s.metrics.recordReseed(ctx, job.Name)
+	}
 	return err
 }

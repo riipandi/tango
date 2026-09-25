@@ -1,0 +1,95 @@
+package storage
+
+import (
+	"context"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+)
+
+// meterName is the instrumentation scope every storage instrument is
+// registered under, rendered into otel_scope_name by the bridge.
+const meterName = "github.com/riipandi/tango/internal/storage"
+
+// The outcomes one sync carries on tango.storage.uploads. A skipped sync
+// found no staging file — the retry that arrived after another attempt
+// finished, which is the idempotence contract working.
+const (
+	uploadSuccess = "success"
+	uploadSkipped = "skipped"
+	uploadError   = "error"
+)
+
+// storageMetrics holds the storage engine's instruments. The manager and the
+// watcher each build one at construction from the global meter provider,
+// which is real when the observer is up and the SDK's no-op when metrics are
+// off.
+type storageMetrics struct {
+	staged   metric.Int64Counter
+	uploads  metric.Int64Counter
+	duration metric.Float64Histogram
+	bytes    metric.Int64Counter
+	chunks   metric.Int64Counter
+	settled  metric.Int64Counter
+}
+
+func newStorageMetrics() *storageMetrics {
+	meter := otel.Meter(meterName)
+	m := &storageMetrics{}
+	var err error
+	if m.staged, err = meter.Int64Counter("tango.storage.files.staged",
+		metric.WithDescription("Files written into the staging directory"),
+		metric.WithUnit("{file}")); err != nil {
+		panic("storage: " + err.Error())
+	}
+	if m.uploads, err = meter.Int64Counter("tango.storage.uploads",
+		metric.WithDescription("Sync rounds by outcome: uploaded, skipped as already done, or failed"),
+		metric.WithUnit("{upload}")); err != nil {
+		panic("storage: " + err.Error())
+	}
+	if m.duration, err = meter.Float64Histogram("tango.storage.upload.duration",
+		metric.WithDescription("Time one sync round spent hashing and uploading"),
+		metric.WithUnit("s")); err != nil {
+		panic("storage: " + err.Error())
+	}
+	if m.bytes, err = meter.Int64Counter("tango.storage.bytes.uploaded",
+		metric.WithDescription("Staging bytes that reached the backend"),
+		metric.WithUnit("By")); err != nil {
+		panic("storage: " + err.Error())
+	}
+	if m.chunks, err = meter.Int64Counter("tango.storage.chunks.uploaded",
+		metric.WithDescription("Chunks the backend did not hold yet"),
+		metric.WithUnit("{chunk}")); err != nil {
+		panic("storage: " + err.Error())
+	}
+	if m.settled, err = meter.Int64Counter("tango.storage.staging.settled",
+		metric.WithDescription("Staging files that went quiet and had their upload enqueued"),
+		metric.WithUnit("{file}")); err != nil {
+		panic("storage: " + err.Error())
+	}
+	return m
+}
+
+// recordStaged counts one file that reached the staging directory.
+func (m *storageMetrics) recordStaged(ctx context.Context) {
+	m.staged.Add(ctx, 1)
+}
+
+// recordSettled counts one staging file whose upload was enqueued.
+func (m *storageMetrics) recordSettled(ctx context.Context) {
+	m.settled.Add(ctx, 1)
+}
+
+// recordSync counts one finished sync round: the outcome, how long the round
+// took, and — on success — the bytes and chunks that reached the backend.
+func (m *storageMetrics) recordSync(ctx context.Context, outcome string, duration time.Duration, size int64, chunksUploaded int) {
+	attrs := metric.WithAttributes(attribute.String("outcome", outcome))
+	m.uploads.Add(ctx, 1, attrs)
+	m.duration.Record(ctx, duration.Seconds())
+	if outcome == uploadSuccess {
+		m.bytes.Add(ctx, size, attrs)
+		m.chunks.Add(ctx, int64(chunksUploaded), attrs)
+	}
+}

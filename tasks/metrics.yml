@@ -4,8 +4,8 @@ version: "3"
 
 tasks:
   # ----------------------------------------------------------------------------
-  # Observability stack — the services live in docker/compose.yaml, which
-  # includes compose-metrics.yaml. These are the shortcuts for wiring the
+  # Observability stack — the services live in docker/compose-dev.yaml, which
+  # includes compose-sre.yaml. These are the shortcuts for wiring the
   # application to the stack: start it, check it, read back what it shipped.
   # ----------------------------------------------------------------------------
 
@@ -13,8 +13,6 @@ tasks:
     desc: Start the observability stack (collector, VictoriaMetrics/Logs/Traces, Perses)
     cmds:
       - docker compose -f docker/compose.yaml up --detach --remove-orphans otel-collector victoria-metrics victoria-logs victoria-traces perses
-      # The two distroless services cannot carry a healthcheck, so wait from the
-      # host instead.
       - task: metrics:health
 
   metrics:health:

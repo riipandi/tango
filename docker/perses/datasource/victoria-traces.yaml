@@ -1,6 +1,6 @@
 # The trace store. VictoriaTraces exposes the Jaeger query API, which is what
-# this datasource speaks, so traces are readable without a collector in front of
-# it.
+# this datasource speaks, so traces are readable without a collector in front 
+# of it.
 kind: "GlobalDatasource"
 metadata:
   name: "victoria-traces"

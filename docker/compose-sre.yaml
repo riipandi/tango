@@ -1,12 +1,13 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json
 
 x-common: &common
-  networks: ['intranet']
-  extra_hosts: ['host.docker.internal:host-gateway']
+  networks: ["intranet"]
+  extra_hosts: ["host.docker.internal:host-gateway"]
   restart: unless-stopped
   security_opt: ['no-new-privileges:true']
   shm_size: 128m # set shared memory limit
   mem_limit: 256m # set memory limit
+  cpus: 1.0 # set CPUs limit
 
 services:
   perses:
@@ -216,3 +217,8 @@ volumes:
   victoria_logs_data:
   victoria_traces_data:
   perses_data:
+
+networks:
+  intranet:
+    driver: bridge
+    enable_ipv6: false

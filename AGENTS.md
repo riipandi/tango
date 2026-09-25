@@ -29,7 +29,7 @@ Full design rationale per package: **`.llms/architecture.md`** — read the sect
 - `task lint` — golangci-lint + oxlint. `task check` — `go vet` + `migrate:validate` + format check. `task format` — gofmt + oxfmt. `task typecheck` — `tsc -b --noEmit`.
 - `task rpc:generate` regenerates Go and TypeScript from `api/connect/*.proto`; `task rpc:stale` fails when contracts changed without regenerating.
 - Task targets wrap CLI 1:1 (`db:migrate` → `migrate:up`, `db:rollback` → `migrate:down`, etc.), so a renamed command silently breaks the task. Pass extra flags after `--`.
-- `task cert:generate` writes `storage/certs/localhost_{key,crt}.pem` via `mkcert`, falling back to self-signed `openssl` certificate; `task cert:trust` installs mkcert CA. nginx service in `docker/compose.yaml` reads those paths.
+- `task cert:generate` writes `storage/certs/localhost_{key,crt}.pem` via `mkcert`, falling back to self-signed `openssl` certificate; `task cert:trust` installs mkcert CA. nginx service in `docker/compose-dev.yaml` reads those paths.
 - Integration tests use `pkg/testutils.StartPostgres` / `StartMailpit` / `StartMinIO` / `StartValkey` / `StartVictoriaLogs` (testcontainers). Need Docker daemon: call `testutils.SkipWithoutDocker(t)` so run without one skips rather than fails (macOS CI has none). Never widen timeout to work around hung container.
 
 ## Architecture
@@ -112,12 +112,12 @@ Implemented today — treat as the contract. Reasoning/invariants/traps per pack
 - Send an email: render template and submit in one call through `*mailer.Service` resolved from registry; new template needs `.tsx` in `email/templates/` and struct in `internal/mailer/data.go` whose field names match `TemplateProps` the build writes.
 - Prove tracing/metrics end to end: `task metrics:up`, `OTEL_TRACING_ENABLE=true OTEL_METRICS_ENABLE=true task metrics:smoke:otel`, then `task metrics:traces` and `tango_otel_smoke_total` query against VictoriaMetrics. `internal/observer/observer_test.go` covers same ground without Docker.
 - Add a signal setting: shared (address, service identity) in `otel`; signal-specific in its own subsection. Never a second collector address — different route sets a path. `envKeys` when deployment sets it.
-- Local services: `docker compose -f docker/compose.yaml up -d pgsql`; full stack plus observability is in same file (`compose-metrics.yaml` included). `task metrics:up` starts only observability half.
+- Local services: `docker compose -f docker/compose.yaml up -d pgsql`; full stack plus observability is in same file (`compose-sre.yaml` included). `task metrics:up` starts only observability half.
 
 ## Gotchas / Anti-patterns
 
 - `codegen/` is gitignored build output. Never edit or commit it; regenerate with `task rpc:generate`.
-- Task targets live in `tasks/*.yml`, one file per group, included with `flatten: true`: `task db:migrate`, never `task database:db:migrate`; flattened names are one flat namespace, so cross-group deps use plain names. Add group by writing `tasks/<group>.yml` + flattened include in root `Taskfile.yml`; do not add tasks to root file. `compose:*` targets are exception and stay in root file, next to `docker/compose.yaml`.
+- Task targets live in `tasks/*.yml`, one file per group, included with `flatten: true`: `task db:migrate`, never `task database:db:migrate`; flattened names are one flat namespace, so cross-group deps use plain names. Add group by writing `tasks/<group>.yml` + flattened include in root `Taskfile.yml`; do not add tasks to root file. `compose:*` targets are exception and stay in root file, next to `docker/compose-dev.yaml`.
 - `task` (default) runs `--list` without `--sort none` on purpose: alphabetical order keeps each group together.
 - Tool configs live in `.config/` — **except the two oxc configs**, which stay at repository root: both resolve `ignorePatterns` relative to config file's own directory, so from `.config/` every root-anchored pattern silently stops matching. `ncu` needs `--configFilePath .config --configFileName ncurc.json`. After moving a config, re-check its `$schema` path.
 - Root `--env-file` flag adds dotenv file to table the config file's directives resolve from; it is not a config layer and never a write target. Subcommand that writes a file (`key:generate`) declares the flag separately.

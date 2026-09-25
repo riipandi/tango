@@ -63,6 +63,7 @@ type AfterSyncHook func(ctx context.Context, manifest Manifest) error
 // upload, the assembled read, and the deletion. Features hold this, not a
 // backend; which backend answers is the configuration's business.
 type Manager struct {
+	metrics   *storageMetrics
 	store     Store
 	db        DB
 	manifests *Manifests
@@ -91,6 +92,7 @@ func NewManager(store Store, db DB, chunkSize int, staging string, uploads int, 
 		uploads = 4
 	}
 	return &Manager{
+		metrics:   newStorageMetrics(),
 		store:     store,
 		db:        db,
 		manifests: NewManifests(),
@@ -211,7 +213,11 @@ func (m *Manager) Stage(ctx context.Context, key string, r io.Reader, metadata m
 	if err != nil {
 		return fmt.Errorf("storage: staging %q: %w", key, err)
 	}
-	return m.manifests.Stage(ctx, m.db, key, info.Size(), info.ModTime(), metadata)
+	if err := m.manifests.Stage(ctx, m.db, key, info.Size(), info.ModTime(), metadata); err != nil {
+		return err
+	}
+	m.metrics.recordStaged(ctx)
+	return nil
 }
 
 // Sync uploads a staging file: it computes or reuses the chunk manifest,
@@ -221,17 +227,30 @@ func (m *Manager) Stage(ctx context.Context, key string, r io.Reader, metadata m
 // replay it. The before- and after-sync hooks (nil by default) wrap the
 // round; their contracts sit on their types.
 func (m *Manager) Sync(ctx context.Context, key string) error {
+	started := time.Now()
+	outcome, size, uploaded, err := m.sync(ctx, key)
+	if err != nil && outcome == "" {
+		outcome = uploadError
+	}
+	m.metrics.recordSync(ctx, outcome, time.Since(started), size, uploaded)
+	return err
+}
+
+// sync is Sync's body; the wrapper records its outcome. The outcome travels
+// beside the error because a failed cleanup is not a failed upload: the
+// manifest is ready, and the staging copy waits for the next pass.
+func (m *Manager) sync(ctx context.Context, key string) (string, int64, int, error) {
 	if err := ValidateKey(key); err != nil {
-		return err
+		return uploadError, 0, 0, err
 	}
 	path := m.stagingPath(key)
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		// A key with no staging file has nothing to sync: either another
 		// attempt already finished, or the file was staged by a caller
 		// that manages its own lifecycle.
-		return nil
+		return uploadSkipped, 0, 0, nil
 	} else if err != nil {
-		return fmt.Errorf("storage: stat staging %q: %w", key, err)
+		return uploadError, 0, 0, fmt.Errorf("storage: stat staging %q: %w", key, err)
 	}
 
 	// The gate runs before the fingerprint is read: a hook that rewrites
@@ -239,13 +258,13 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 	// fingerprint the TOCTOU guard trusts is the post-hook file's.
 	if m.beforeSync != nil {
 		if err := m.beforeSync(ctx, key, path); err != nil {
-			return fmt.Errorf("storage: before-sync hook for %q: %w", key, err)
+			return uploadError, 0, 0, fmt.Errorf("storage: before-sync hook for %q: %w", key, err)
 		}
 	}
 
 	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("storage: open staging %q: %w", key, err)
+		return uploadError, 0, 0, fmt.Errorf("storage: open staging %q: %w", key, err)
 	}
 	defer func() { _ = f.Close() }()
 
@@ -254,13 +273,13 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 	// compares against before the staging copy is removed.
 	info, err := f.Stat()
 	if err != nil {
-		return fmt.Errorf("storage: stat staging %q: %w", key, err)
+		return uploadError, 0, 0, fmt.Errorf("storage: stat staging %q: %w", key, err)
 	}
 	fingerprint := stagingFingerprint{size: info.Size(), mtime: info.ModTime()}
 
 	prior, err := m.manifests.Load(ctx, m.db, key)
 	if err != nil && !errors.Is(err, ErrNoManifest) {
-		return err
+		return uploadError, 0, 0, err
 	}
 
 	// The checkpoint is the retry's fast path: a pending manifest whose
@@ -285,12 +304,12 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 			chunks, err = m.chunker.ParallelSplit(f, fingerprint.size, m.uploads)
 		} else {
 			if _, err = f.Seek(0, io.SeekStart); err != nil {
-				return fmt.Errorf("storage: rewind staging %q: %w", key, err)
+				return uploadError, 0, 0, fmt.Errorf("storage: rewind staging %q: %w", key, err)
 			}
 			chunks, err = m.chunker.Split(f)
 		}
 		if err != nil {
-			return err
+			return uploadError, 0, 0, err
 		}
 		contentHash = RootHash(chunks)
 	}
@@ -308,15 +327,15 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 		prior.File.StagingMtime = fingerprint.mtime
 		err = m.saveManifest(ctx, prior)
 		if err != nil {
-			return err
+			return uploadError, 0, 0, err
 		}
 		if m.afterSync != nil {
 			err = m.afterSync(ctx, prior)
 			if err != nil {
-				return fmt.Errorf("storage: after-sync hook for %q: %w", key, err)
+				return uploadError, 0, 0, fmt.Errorf("storage: after-sync hook for %q: %w", key, err)
 			}
 		}
-		return m.clearStaging(ctx, path, fingerprint)
+		return uploadSuccess, fingerprint.size, 0, m.clearStaging(ctx, path, fingerprint)
 	}
 
 	// The checkpoint: the chunk list lands before the first chunk travels,
@@ -340,13 +359,13 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 	if !reuse {
 		err = m.saveManifest(ctx, checkpoint)
 		if err != nil {
-			return err
+			return uploadError, 0, 0, err
 		}
 	}
 
 	done, err := m.uploadMissing(ctx, key, chunks)
 	if err != nil {
-		return err
+		return uploadError, 0, 0, err
 	}
 
 	// The ready commit closes the round: every chunk is in the backend,
@@ -356,7 +375,7 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 	checkpoint.File.ChunksDone = len(chunks)
 	err = m.saveManifest(ctx, checkpoint)
 	if err != nil {
-		return err
+		return uploadError, 0, 0, err
 	}
 	if !reuse && done > 0 {
 		m.log.InfoContext(ctx, "storage: file synced",
@@ -370,10 +389,10 @@ func (m *Manager) Sync(ctx context.Context, key string) error {
 	if m.afterSync != nil {
 		err = m.afterSync(ctx, checkpoint)
 		if err != nil {
-			return fmt.Errorf("storage: after-sync hook for %q: %w", key, err)
+			return uploadError, 0, 0, fmt.Errorf("storage: after-sync hook for %q: %w", key, err)
 		}
 	}
-	return m.clearStaging(ctx, path, fingerprint)
+	return uploadSuccess, fingerprint.size, done, m.clearStaging(ctx, path, fingerprint)
 }
 
 // saveManifest commits a manifest in its own transaction.

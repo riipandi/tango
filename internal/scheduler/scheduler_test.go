@@ -130,7 +130,8 @@ func TestClaimEnqueuesAndAdvancesTheDueTime(t *testing.T) {
 	require.Nil(t, fired)
 
 	err = pool.WithTx(t.Context(), func(ctx context.Context, tx datastore.Querier) error {
-		return s.claim(ctx, tx, &s.jobs[0])
+		_, claimErr := s.claim(ctx, tx, &s.jobs[0])
+		return claimErr
 	})
 	require.NoError(t, err)
 
@@ -159,7 +160,8 @@ func TestClaimEnqueuesAtTheJobPriority(t *testing.T) {
 	require.EqualValues(t, 1, tag.RowsAffected())
 
 	err = pool.WithTx(t.Context(), func(ctx context.Context, tx datastore.Querier) error {
-		return s.claim(ctx, tx, &s.jobs[0])
+		_, claimErr := s.claim(ctx, tx, &s.jobs[0])
+		return claimErr
 	})
 	require.NoError(t, err)
 
@@ -185,7 +187,8 @@ func TestClaimSkipsATickAnotherReplicaWon(t *testing.T) {
 	// second claims nothing, because the first moved the due time.
 	for _, s := range []*Scheduler{s1, s2} {
 		err := pool.WithTx(t.Context(), func(ctx context.Context, tx datastore.Querier) error {
-			return s.claim(ctx, tx, &s.jobs[0])
+			_, claimErr := s.claim(ctx, tx, &s.jobs[0])
+			return claimErr
 		})
 		require.NoError(t, err)
 	}
@@ -257,7 +260,8 @@ func TestClaimAdvancesFromTheOldDueNotFromNow(t *testing.T) {
 	require.EqualValues(t, 1, tag.RowsAffected())
 
 	err = pool.WithTx(t.Context(), func(ctx context.Context, tx datastore.Querier) error {
-		return s.claim(ctx, tx, &s.jobs[0])
+		_, claimErr := s.claim(ctx, tx, &s.jobs[0])
+		return claimErr
 	})
 	require.NoError(t, err)
 

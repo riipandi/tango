@@ -32,6 +32,10 @@ type (
 		store Store
 		// log is the process logger; the queue never builds its own.
 		log *slog.Logger
+		// metrics is the instrumentation built with the client. It records
+		// through the global meter provider, which is the no-op when the
+		// metrics signal is off.
+		metrics *taskMetrics
 		// queues holds the registered queues tasks can be added to.
 		queues queues
 		// buffers is a pool of byte buffers for payload encoding.
@@ -96,6 +100,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	c := &Client{
 		store:     cfg.Store,
 		log:       cfg.Logger,
+		metrics:   newTaskMetrics(),
 		queues:    queues{registry: make(map[string]Queue)},
 		buffers:   sync.Pool{New: func() any { return bytes.NewBuffer(nil) }},
 		encryptor: cfg.Encryptor,
@@ -305,6 +310,9 @@ func (c *Client) save(op *TaskAddOp) ([]string, error) {
 		if err := insertTasks(op.ctx, op.executor, tasks); err != nil {
 			return nil, err
 		}
+		for _, task := range tasks {
+			c.metrics.recordEnqueued(op.ctx, task.Queue)
+		}
 		return ids, nil
 	}
 
@@ -317,6 +325,9 @@ func (c *Client) save(op *TaskAddOp) ([]string, error) {
 
 	// The transaction is committed, so the tasks are visible and the
 	// dispatcher can claim them.
+	for _, task := range tasks {
+		c.metrics.recordEnqueued(op.ctx, task.Queue)
+	}
 	c.Notify()
 	return ids, nil
 }
