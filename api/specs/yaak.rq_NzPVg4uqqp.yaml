@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_NzPVg4uqqp
 createdAt: 2026-09-25T10:33:42.091565
-updatedAt: 2026-09-25T10:33:42.091567
+updatedAt: 2026-09-25T12:13:09.630139
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -13,7 +13,14 @@ body:
       "id": "REPLACE_USER_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Request a one-time access email for a specific user (admin only)
+
+  Mirror of Pocket ID `POST /api/users/{id}/one-time-access-email`.
+
+  Parameters:
+  - id (path, required): User ID
+  - body (body, required): Email request options
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +31,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Request one-time access email (admin)'
-sortPriority: 0.0
+name: '[Pocket ID] Request one-time access email (admin) (unimplemented)'
+sortPriority: 13000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

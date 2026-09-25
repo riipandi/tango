@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_YTExWnSMT4
 createdAt: 2026-09-25T10:33:41.268283
-updatedAt: 2026-09-25T10:33:41.268285
+updatedAt: 2026-09-25T12:13:09.631091
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -13,15 +13,21 @@ body:
       "token": "REPLACE_EMAIL_TOKEN"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Verify the currently authenticated user's email using a verification token
+
+  Mirror of Pocket ID `POST /api/users/me/verify-email`.
+
+  Parameters:
+  - body (body, required): Email verification token
 headers:
 - enabled: true
   name: Content-Type
   value: application/json
   id: null
 method: POST
-name: '[Pocket ID] Verify email'
-sortPriority: 0.0
+name: '[Pocket ID] Verify email (unimplemented)'
+sortPriority: 22000.0
 url: ${[ apiBaseURL ]}/api/users/me/verify-email
 urlParameters: []
 settingSendCookies:

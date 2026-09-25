@@ -2,15 +2,27 @@ type: http_request
 model: http_request
 id: rq_W4Yo9T7CGY
 createdAt: 2026-09-25T10:33:41.867902
-updatedAt: 2026-09-25T10:33:41.867904
+updatedAt: 2026-09-25T12:13:09.621184
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
-authentication: {}
-authenticationType: null
+authentication:
+  prefix: Bearer
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
+  bodyType: application/json
   text: '{}'
 bodyType: application/json
-description: ''
+description: |-
+  Get a paginated list of signup tokens
+
+  Mirror of Pocket ID `GET /api/signup-tokens`.
+
+  Parameters:
+  - pagination[page] (query, optional): Page number for pagination
+  - pagination[limit] (query, optional): Number of items per page
+  - sort[column] (query, optional): Column to sort by
+  - sort[direction] (query, optional): Sort direction (asc or desc)
 headers:
 - enabled: true
   name: Content-Type
@@ -24,7 +36,23 @@ method: POST
 name: '[Pocket ID] List signup tokens'
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.SignupService/ListSignupTokens
-urlParameters: []
+urlParameters:
+- enabled: false
+  name: pagination[page]
+  value: ''
+  id: null
+- enabled: false
+  name: pagination[limit]
+  value: ''
+  id: null
+- enabled: false
+  name: sort[column]
+  value: ''
+  id: null
+- enabled: false
+  name: sort[direction]
+  value: ''
+  id: null
 settingSendCookies:
   enabled: false
   value: true

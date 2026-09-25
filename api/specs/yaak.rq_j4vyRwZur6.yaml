@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_j4vyRwZur6
 createdAt: 2026-09-25T10:33:40.835356
-updatedAt: 2026-09-25T10:33:40.835359
+updatedAt: 2026-09-25T12:13:09.629847
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -14,7 +14,14 @@ body:
       "username": "REPLACE_USERNAME"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Update an existing user by ID
+
+  Mirror of Pocket ID `PUT /api/users/{id}`.
+
+  Parameters:
+  - id (path, required): User ID
+  - user (body, required): User information
 headers:
 - enabled: true
   name: Content-Type
@@ -25,10 +32,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Update user'
-sortPriority: 0.0
+name: '[Pocket ID] Update user (unimplemented)'
+sortPriority: 19000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/UpdateUser
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

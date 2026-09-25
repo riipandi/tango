@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_ZooqkWcoPU
 createdAt: 2026-09-25T10:33:41.216165
-updatedAt: 2026-09-25T10:33:41.216167
+updatedAt: 2026-09-25T12:13:09.628324
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -10,7 +10,10 @@ authenticationType: null
 body:
   text: '{}'
 bodyType: application/json
-description: ''
+description: |-
+  Send an email verification to the currently authenticated user
+
+  Mirror of Pocket ID `POST /api/users/me/send-email-verification`.
 headers:
 - enabled: true
   name: Content-Type
@@ -21,8 +24,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Send email verification'
-sortPriority: 0.0
+name: '[Pocket ID] Send email verification (unimplemented)'
+sortPriority: 16000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.EmailVerificationService/SendEmail
 urlParameters: []
 settingSendCookies:

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_h4fDWAsjXS
 createdAt: 2026-09-25T10:33:41.815424
-updatedAt: 2026-09-25T10:33:41.815426
+updatedAt: 2026-09-25T12:13:09.629453
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -14,7 +14,13 @@ body:
       "email": "${[ identity ]}"
     }
 bodyType: application/json
-description: Email comes from the environment variable; the username stays a placeholder because this request only runs on a fresh database.
+description: |-
+  Sign up and generate setup access token for initial admin user
+
+  Mirror of Pocket ID `POST /api/signup/setup`.
+
+  Parameters:
+  - body (body, required): User information
 headers:
 - enabled: true
   name: Content-Type
@@ -25,8 +31,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Sign up initial admin user'
-sortPriority: 0.0
+name: '[Pocket ID] Sign up initial admin user (unimplemented)'
+sortPriority: 18000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.SignupService/SetupInitialAdmin
 urlParameters: []
 settingSendCookies:

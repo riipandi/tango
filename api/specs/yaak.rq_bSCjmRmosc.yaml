@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_bSCjmRmosc
 createdAt: 2026-09-25T10:33:41.108464
-updatedAt: 2026-09-25T10:33:41.108466
+updatedAt: 2026-09-25T12:13:09.628680
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -13,7 +13,13 @@ body:
       "id": "REPLACE_USER_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Reset a specific user's profile picture to the default
+
+  Mirror of Pocket ID `DELETE /api/users/{id}/profile-picture`.
+
+  Parameters:
+  - id (path, required): User ID
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +30,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Reset user profile picture'
-sortPriority: 0.0
+name: '[Pocket ID] Reset user profile picture (unimplemented)'
+sortPriority: 15000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/DeleteProfilePicture
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

@@ -2,20 +2,30 @@ type: http_request
 model: http_request
 id: rq_YoZusYL3Ai
 createdAt: 2026-09-25T10:33:41.162193
-updatedAt: 2026-09-25T10:33:41.162195
+updatedAt: 2026-09-25T12:13:09.631438
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: ''
+description: |-
+  Retrieve a specific user's profile picture
+
+  Mirror of Pocket ID `GET /api/users/{id}/profile-picture.png`.
+
+  Parameters:
+  - id (path, required): User ID
 headers: []
 method: GET
-name: '[Pocket ID] Get user profile picture'
-sortPriority: 0.0
+name: '[Pocket ID] Get user profile picture (unimplemented)'
+sortPriority: 10000.0
 url: ${[ apiBaseURL ]}/api/users/REPLACE_USER_ID/profile-picture.png
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

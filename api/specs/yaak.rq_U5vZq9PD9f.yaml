@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_U5vZq9PD9f
 createdAt: 2026-09-25T10:33:42.143507
-updatedAt: 2026-09-25T10:33:42.143509
+updatedAt: 2026-09-25T12:13:09.621984
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -13,7 +13,14 @@ body:
       "id": "REPLACE_USER_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Generate a one-time access token for a specific user (admin only)
+
+  Mirror of Pocket ID `POST /api/users/{id}/one-time-access-token`.
+
+  Parameters:
+  - id (path, required): User ID
+  - body (body, required): Token options
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +31,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Create one-time access token for user (admin)'
-sortPriority: 0.0
+name: '[Pocket ID] Create one-time access token for user (admin) (unimplemented)'
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.OneTimeAccessService/AdminIssueToken
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

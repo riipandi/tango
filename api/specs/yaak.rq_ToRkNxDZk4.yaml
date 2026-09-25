@@ -2,18 +2,27 @@ type: http_request
 model: http_request
 id: rq_ToRkNxDZk4
 createdAt: 2026-09-25T10:33:41.981014
-updatedAt: 2026-09-25T10:33:41.981016
+updatedAt: 2026-09-25T12:13:14.143700
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
-authentication: {}
-authenticationType: null
+authentication:
+  prefix: Bearer
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
+  bodyType: application/json
   text: |-
     {
-      "id": "REPLACE_TOKEN_ID"
+      "id": "REPLACE_SIGNUP_TOKEN_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Delete a signup token by ID
+
+  Mirror of Pocket ID `DELETE /api/signup-tokens/{id}`.
+
+  Parameters:
+  - id (path, required): Token ID
 headers:
 - enabled: true
   name: Content-Type
@@ -25,9 +34,13 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Delete signup token'
-sortPriority: 0.0
+sortPriority: 555.5555555555555
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.SignupService/DeleteSignupToken
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

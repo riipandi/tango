@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_xbHsNLbph9
 createdAt: 2026-09-25T10:33:41.373765
-updatedAt: 2026-09-25T10:33:41.373768
+updatedAt: 2026-09-25T12:13:09.624558
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -14,7 +14,14 @@ body:
       "credential_id": "REPLACE_CREDENTIAL_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Delete a specific WebAuthn credential for a user
+
+  Mirror of Pocket ID `DELETE /api/users/{id}/webauthn-credentials/{credentialId}`.
+
+  Parameters:
+  - id (path, required): User ID
+  - credentialId (path, required): Credential ID
 headers:
 - enabled: true
   name: Content-Type
@@ -25,10 +32,18 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Delete user passkey'
-sortPriority: 0.0
+name: '[Pocket ID] Delete user passkey (unimplemented)'
+sortPriority: 6000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/DeleteWebAuthnCredential
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
+- enabled: true
+  name: credentialId
+  value: REPLACE_CREDENTIALID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

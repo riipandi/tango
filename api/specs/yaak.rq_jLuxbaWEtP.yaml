@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_jLuxbaWEtP
 createdAt: 2026-09-25T10:33:41.759673
-updatedAt: 2026-09-25T12:11:47.924682
+updatedAt: 2026-09-25T12:13:16.537913
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -35,7 +35,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Sign up'
-sortPriority: 17.0
+sortPriority: 703.7037037037037
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.SignupService/Signup
 urlParameters: []
 settingSendCookies:

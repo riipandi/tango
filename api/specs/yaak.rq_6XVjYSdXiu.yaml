@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_6XVjYSdXiu
 createdAt: 2026-09-25T10:33:40.668220
-updatedAt: 2026-09-25T10:33:40.668223
+updatedAt: 2026-09-25T12:13:09.632303
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -14,7 +14,17 @@ body:
       "limit": 5
     }
 bodyType: application/json
-description: ''
+description: |-
+  Get a paginated list of users with optional search and sorting
+
+  Mirror of Pocket ID `GET /api/users`.
+
+  Parameters:
+  - search (query, optional): Search term to filter users
+  - pagination[page] (query, optional): Page number for pagination
+  - pagination[limit] (query, optional): Number of items per page
+  - sort[column] (query, optional): Column to sort by
+  - sort[direction] (query, optional): Sort direction (asc or desc)
 headers:
 - enabled: true
   name: Content-Type
@@ -25,10 +35,30 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] List users'
-sortPriority: 0.0
+name: '[Pocket ID] List users (unimplemented)'
+sortPriority: 12000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/ListUsers
-urlParameters: []
+urlParameters:
+- enabled: false
+  name: search
+  value: ''
+  id: null
+- enabled: false
+  name: pagination[page]
+  value: ''
+  id: null
+- enabled: false
+  name: pagination[limit]
+  value: ''
+  id: null
+- enabled: false
+  name: sort[column]
+  value: ''
+  id: null
+- enabled: false
+  name: sort[direction]
+  value: ''
+  id: null
 settingSendCookies:
   enabled: false
   value: true

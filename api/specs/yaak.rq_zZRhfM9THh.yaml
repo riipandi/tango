@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_zZRhfM9THh
 createdAt: 2026-09-25T10:33:41.321127
-updatedAt: 2026-09-25T10:33:41.321130
+updatedAt: 2026-09-25T12:13:09.627082
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -13,7 +13,13 @@ body:
       "id": "REPLACE_USER_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Retrieve all WebAuthn credentials for a specific user
+
+  Mirror of Pocket ID `GET /api/users/{id}/webauthn-credentials`.
+
+  Parameters:
+  - id (path, required): User ID
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +30,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] List user passkeys'
-sortPriority: 0.0
+name: '[Pocket ID] List user passkeys (unimplemented)'
+sortPriority: 11000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/ListWebAuthnCredentials
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

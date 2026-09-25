@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_NdRJdgHdPB
 createdAt: 2026-09-25T10:33:40.889166
-updatedAt: 2026-09-25T10:33:40.889168
+updatedAt: 2026-09-25T12:13:09.623854
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -13,7 +13,13 @@ body:
       "id": "REPLACE_USER_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Delete a specific user by ID
+
+  Mirror of Pocket ID `DELETE /api/users/{id}`.
+
+  Parameters:
+  - id (path, required): User ID
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +30,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Delete user'
-sortPriority: 0.0
+name: '[Pocket ID] Delete user (unimplemented)'
+sortPriority: 5000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/DeleteUser
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

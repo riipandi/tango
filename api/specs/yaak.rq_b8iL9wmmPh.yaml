@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_b8iL9wmmPh
 createdAt: 2026-09-25T10:33:40.946981
-updatedAt: 2026-09-25T10:33:40.946983
+updatedAt: 2026-09-25T12:13:09.627997
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -13,7 +13,13 @@ body:
       "id": "REPLACE_USER_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Retrieve all groups a specific user belongs to
+
+  Mirror of Pocket ID `GET /api/users/{id}/groups`.
+
+  Parameters:
+  - id (path, required): User ID
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +30,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Get user groups'
-sortPriority: 0.0
+name: '[Pocket ID] Get user groups (unimplemented)'
+sortPriority: 9000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/ListUserGroups
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

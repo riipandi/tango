@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_XQur3FVAwg
 createdAt: 2026-09-25T10:33:40.723878
-updatedAt: 2026-09-25T10:33:40.723881
+updatedAt: 2026-09-25T12:13:09.623372
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -14,7 +14,13 @@ body:
       "email": "yaak_${[ faker.string.alphanumeric(options='{"length": 12}') ]}@example.com"
     }
 bodyType: application/json
-description: 'Username and email are generated per run with Faker, so repeated sends do not collide on the unique constraint. They are independent values: Yaak re-renders the template for every reference.'
+description: |-
+  Create a new user
+
+  Mirror of Pocket ID `POST /api/users`.
+
+  Parameters:
+  - user (body, required): User information
 headers:
 - enabled: true
   name: Content-Type
@@ -25,8 +31,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Create user'
-sortPriority: 0.0
+name: '[Pocket ID] Create user (unimplemented)'
+sortPriority: 4000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/CreateUser
 urlParameters: []
 settingSendCookies:

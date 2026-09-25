@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_JnqG9ZCE8V
 createdAt: 2026-09-25T10:33:42.035450
-updatedAt: 2026-09-25T10:33:42.035452
+updatedAt: 2026-09-25T12:13:09.631939
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -13,7 +13,13 @@ body:
       "email": "user@example.com"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Request a one-time access email for unauthenticated users
+
+  Mirror of Pocket ID `POST /api/one-time-access-email`.
+
+  Parameters:
+  - body (body, required): Email request information
 headers:
 - enabled: true
   name: Content-Type
@@ -24,8 +30,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Request one-time access email'
-sortPriority: 0.0
+name: '[Pocket ID] Request one-time access email (unimplemented)'
+sortPriority: 14000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.OneTimeAccessService/RequestEmail
 urlParameters: []
 settingSendCookies:

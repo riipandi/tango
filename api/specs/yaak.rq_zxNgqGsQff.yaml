@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_zxNgqGsQff
 createdAt: 2026-09-25T10:33:41.055291
-updatedAt: 2026-09-25T10:33:41.055293
+updatedAt: 2026-09-25T12:13:09.630641
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -13,7 +13,14 @@ body:
       "id": "REPLACE_USER_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Update a specific user's profile picture
+
+  Mirror of Pocket ID `PUT /api/users/{id}/profile-picture`.
+
+  Parameters:
+  - id (path, required): User ID
+  - file (formData, required): Profile picture image file (PNG, JPG, or JPEG)
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +31,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Update user profile picture'
-sortPriority: 0.0
+name: '[Pocket ID] Update user profile picture (unimplemented)'
+sortPriority: 21000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/UpdateProfilePicture
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true
