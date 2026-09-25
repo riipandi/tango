@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_BpfCqAkHnd
 createdAt: 2026-09-25T10:28:52.642081
-updatedAt: 2026-09-25T10:28:52.642087
+updatedAt: 2026-09-25T19:25:50.841588
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: ''
 headers: []
 name: Application Images
-sortPriority: 0.0
+sortPriority: 3000.0
 settingSendCookies:
   enabled: false
   value: true

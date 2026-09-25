@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_WS3exykjjP
 createdAt: 2026-09-25T10:28:52.736974
-updatedAt: 2026-09-25T10:28:52.736976
+updatedAt: 2026-09-25T19:25:50.841795
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: ''
 headers: []
 name: Version
-sortPriority: 0.0
+sortPriority: 13000.0
 settingSendCookies:
   enabled: false
   value: true

@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_dp4vR24das
 createdAt: 2026-09-25T10:28:09.921433
-updatedAt: 2026-09-25T10:28:09.921435
+updatedAt: 2026-09-25T19:25:50.840064
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: ''
 headers: []
 name: Health
-sortPriority: 0.0
+sortPriority: 7000.0
 settingSendCookies:
   enabled: false
   value: true

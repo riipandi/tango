@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_tw8Gigobcd
 createdAt: 2026-09-14T00:53:28.690067
-updatedAt: 2026-09-19T15:35:41.782569
+updatedAt: 2026-09-25T19:25:50.837921
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
@@ -11,7 +11,7 @@ authenticationType: bearer
 description: 'Application configuration endpoints: public/all config, test-email'
 headers: []
 name: Application Configuration
-sortPriority: 9000.0
+sortPriority: 2000.0
 settingSendCookies:
   enabled: false
   value: true

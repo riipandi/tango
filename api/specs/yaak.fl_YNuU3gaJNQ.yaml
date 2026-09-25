@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_YNuU3gaJNQ
 createdAt: 2026-09-13T06:23:01.744642
-updatedAt: 2026-09-19T15:35:41.785761
+updatedAt: 2026-09-25T19:25:50.842162
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
@@ -11,7 +11,7 @@ authenticationType: bearer
 description: Discovery endpoints for OpenID Connect (RFC 8615)
 headers: []
 name: Well Known
-sortPriority: 15000.0
+sortPriority: 14000.0
 settingSendCookies:
   enabled: false
   value: true

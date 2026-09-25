@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_5R2gfN3X4T
 createdAt: 2026-09-25T10:28:09.871988
-updatedAt: 2026-09-25T10:28:09.871991
+updatedAt: 2026-09-25T19:25:50.840582
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 description: ''
 headers: []
 name: OIDC
-sortPriority: 0.0
+sortPriority: 8000.0
 settingSendCookies:
   enabled: false
   value: true
