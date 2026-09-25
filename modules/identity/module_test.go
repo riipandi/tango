@@ -16,6 +16,8 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/mailer"
+	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/modules/identity/jwks"
 )
 
@@ -31,6 +33,12 @@ func TestTheAreaForwardsFeatureProcedures(t *testing.T) {
 		do.Eager(&cfg),
 		do.Eager[*slog.Logger](nil),
 		do.Eager[*datastore.Postgres](nil),
+		// The verification feature builds over the infrastructure the
+		// registry resolves; the area test pins the forwarding, not the
+		// mail or queue wiring, so nils stand in for what the composition
+		// root guarantees to be present.
+		do.Eager[*mailer.Service](nil),
+		do.Eager[*queue.Client](nil),
 	)
 	Package(i)
 
@@ -66,6 +74,10 @@ func TestTheAreaForwardsFeatureProcedures(t *testing.T) {
 	assert.True(t, claimed[identityv1connect.UserServiceUpdateUserProcedure],
 		"the area must forward its features' procedures to the RPC router")
 	assert.True(t, claimed[identityv1connect.UserServiceDeleteUserProcedure],
+		"the area must forward its features' procedures to the RPC router")
+	assert.True(t, claimed[identityv1connect.EmailVerificationServiceSendEmailProcedure],
+		"the area must forward its features' procedures to the RPC router")
+	assert.True(t, claimed[identityv1connect.EmailVerificationServiceVerifyEmailProcedure],
 		"the area must forward its features' procedures to the RPC router")
 }
 

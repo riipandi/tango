@@ -23,10 +23,13 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/mailer"
+	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/modules/identity/signup"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/modules/identity/verification"
 	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
@@ -50,6 +53,10 @@ type Deps struct {
 
 	// Users administers the accounts.
 	Users *user.Service
+
+	// Verification verifies an account's address over the mailer and the
+	// queue.
+	Verification *verification.Service
 }
 
 // Module mounts every identity feature.
@@ -125,6 +132,18 @@ var Package = do.Package(
 		pool := do.MustInvoke[*datastore.Postgres](i)
 		return user.NewService(pool, log), nil
 	}),
+
+	// The verification service builds over the mailer and the queue the
+	// infrastructure registers; the registry's prewarm walk resolves both,
+	// so a process that reaches the listener has them.
+	do.Lazy(func(i do.Injector) (*verification.Service, error) {
+		c := do.MustInvoke[*config.Config](i)
+		log := do.MustInvoke[*slog.Logger](i)
+		pool := do.MustInvoke[*datastore.Postgres](i)
+		mail := do.MustInvoke[*mailer.Service](i)
+		client := do.MustInvoke[*queue.Client](i)
+		return verification.NewService(pool, mail, client, c.App.BaseURL, log), nil
+	}),
 )
 
 // Mount resolves what this area's features need and builds the module the
@@ -147,10 +166,11 @@ func Mount(i do.Injector) (kernel.Module, error) {
 	}
 
 	return NewModule(Deps{
-		KeySet: keySet,
-		SignIn: do.MustInvoke[*signin.Service](i),
-		Signup: do.MustInvoke[*signup.Service](i),
-		Users:  do.MustInvoke[*user.Service](i),
+		KeySet:       keySet,
+		SignIn:       do.MustInvoke[*signin.Service](i),
+		Signup:       do.MustInvoke[*signup.Service](i),
+		Users:        do.MustInvoke[*user.Service](i),
+		Verification: do.MustInvoke[*verification.Service](i),
 	}), nil
 }
 
@@ -170,6 +190,9 @@ func features(deps Deps) []kernel.Module {
 	}
 	if deps.Users != nil {
 		modules = append(modules, user.NewModule(deps.Users))
+	}
+	if deps.Verification != nil {
+		modules = append(modules, verification.NewModule(deps.Verification))
 	}
 	return modules
 }

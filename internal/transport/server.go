@@ -52,9 +52,10 @@ var rpcRateLimitExclusions = []string{
 // new procedure is protected by default and a public one is a deliberate line
 // in this set.
 var rpcPublicProcedures = map[string]struct{}{
-	systemv1connect.HealthServiceCheckProcedure:    {},
-	authv1connect.AuthServiceSignInProcedure:       {},
-	identityv1connect.SignupServiceSignupProcedure: {},
+	systemv1connect.HealthServiceCheckProcedure:                    {},
+	authv1connect.AuthServiceSignInProcedure:                       {},
+	identityv1connect.SignupServiceSignupProcedure:                 {},
+	identityv1connect.EmailVerificationServiceVerifyEmailProcedure: {},
 }
 
 // Authenticator authenticates an RPC request before its procedure runs. The

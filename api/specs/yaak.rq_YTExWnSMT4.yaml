@@ -2,33 +2,34 @@ type: http_request
 model: http_request
 id: rq_YTExWnSMT4
 createdAt: 2026-09-25T10:33:41.268283
-updatedAt: 2026-09-25T12:13:09.631091
+updatedAt: 2026-09-25T13:00:17.023415
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
 authenticationType: null
 body:
+  bodyType: application/json
   text: |-
     {
-      "token": "REPLACE_EMAIL_TOKEN"
+      "token": "REPLACE_VERIFICATION_TOKEN"
     }
 bodyType: application/json
 description: |-
-  Verify the currently authenticated user's email using a verification token
+  Mark the account the token names as verified. The procedure is public: the token is the credential the email linked to, forwarded by the frontend.
 
-  Mirror of Pocket ID `POST /api/users/me/verify-email`.
+  Ported from Pocket ID `POST /api/users/me/verify-email` as the `tango.identity.v1.EmailVerificationService/VerifyEmail` procedure.
 
   Parameters:
-  - body (body, required): Email verification token
+  - token (body, required): The raw verification token
 headers:
 - enabled: true
   name: Content-Type
   value: application/json
   id: null
 method: POST
-name: '[Pocket ID] Verify email (unimplemented)'
-sortPriority: 22000.0
-url: ${[ apiBaseURL ]}/api/users/me/verify-email
+name: '[Pocket ID] Verify email'
+sortPriority: 758.5733882030179
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.EmailVerificationService/VerifyEmail
 urlParameters: []
 settingSendCookies:
   enabled: false

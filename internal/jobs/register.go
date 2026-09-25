@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/scheduler"
 	"github.com/riipandi/tango/internal/storage"
@@ -16,8 +17,9 @@ import (
 //
 // uploader is the storage engine the chunk upload and the garbage collection
 // run through. A nil uploader registers none of its jobs: a queue that
-// cannot answer its tasks is not a schedule, it is a failure.
-func Register(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager) {
+// cannot answer its tasks is not a schedule, it is a failure. mail is the
+// service the verification email submits through, and the same rule applies.
+func Register(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager, mail *mailer.Service, baseURL string) {
 	client.Register(queue.NewQueue[CleanupTask](cleanupProcessor))
 	if uploader != nil {
 		client.Register(queue.NewQueue[ChunkUploadTask](func(ctx context.Context, task ChunkUploadTask) error {
@@ -25,6 +27,11 @@ func Register(client *queue.Client, cleanupInterval time.Duration, uploader *sto
 		}))
 		client.Register(queue.NewQueue[StorageGCTask](func(ctx context.Context, task StorageGCTask) error {
 			return gcProcessor(ctx, task, uploader)
+		}))
+	}
+	if mail != nil {
+		client.Register(queue.NewQueue[EmailVerificationTask](func(ctx context.Context, task EmailVerificationTask) error {
+			return emailVerificationProcessor(ctx, task, mail, baseURL)
 		}))
 	}
 }

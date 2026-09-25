@@ -138,6 +138,7 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			pool := do.MustInvoke[*datastore.Postgres](i)
 			log := do.MustInvoke[*slog.Logger](i)
 			uploader := do.MustInvoke[*storage.Manager](i)
+			mailer := do.MustInvoke[*mailer.Service](i)
 			var encryptor *crypto.Cipher
 			if c.Queue.Encrypt {
 				// Validation refuses an encrypted queue without a usable secret,
@@ -163,7 +164,7 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			// The processors are wired onto the engine here — pure wiring, no
 			// connection is touched. The recurring seeds are the Seeder's
 			// service, resolved by the prewarm walk.
-			jobs.Register(client, c.Queue.CleanupInterval, uploader)
+			jobs.Register(client, c.Queue.CleanupInterval, uploader, mailer, c.App.BaseURL)
 			return client, nil
 		}),
 

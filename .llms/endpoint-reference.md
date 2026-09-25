@@ -316,8 +316,8 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | POST | `/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail` | Request one-time access email (admin) | done — admin | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
 | POST | `/rpc/tango.identity.v1.OneTimeAccessService/AdminIssueToken` | Create one-time access token for user (admin) | done — raw token shown once | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
 | POST | `/api/one-time-access-token/{token}` | Exchange one-time access token | REST — email link; single use, sets the session cookie | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
-| POST | `/rpc/tango.identity.v1.EmailVerificationService/SendEmail` | Send email verification | done — self; token travels by email only | `modules/identity/emailverification.TestSendEmailRPC` |
-| POST | `/api/users/me/verify-email` | Verify email | REST — single-use token scoped to the session user | `modules/identity/emailverification.TestVerifyConsumesScopedToken` |
+| POST | `/rpc/tango.identity.v1.EmailVerificationService/SendEmail` | Send email verification | done — self-service Bearer; refuses verified; token row upserted, email via the durable queue | `modules/identity/verification` (service tests, Mailpit end-to-end) |
+| POST | `/rpc/tango.identity.v1.EmailVerificationService/VerifyEmail` | Verify email | done — public; token is the credential; consumed on success | `modules/identity/verification` (service tests) |
 | GET | `/api/users/{id}/profile-picture.png` | Get user profile picture | REST — bare bytes, default fallback | `modules/identity/user.TestProfilePictureDefaultFallback` |
 
 ## WebAuthn

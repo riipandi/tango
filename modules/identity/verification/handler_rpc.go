@@ -1,0 +1,114 @@
+package verification
+
+import (
+	"context"
+	"errors"
+
+	"connectrpc.com/authn"
+	"connectrpc.com/connect"
+	"github.com/go-chi/chi/v5"
+
+	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
+	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
+	"github.com/riipandi/tango/pkg/jwtutils"
+)
+
+// ModuleName is the name this feature reports under. The area it belongs to
+// qualifies it, so the name is the feature alone.
+const ModuleName = "verification"
+
+// Module serves the email-verification procedures. Everything it answers is
+// an RPC procedure, so its HTTP mount is empty by construction.
+type Module struct {
+	service *Service
+}
+
+// NewModule builds the module over the verification service.
+func NewModule(service *Service) *Module {
+	return &Module{service: service}
+}
+
+// Name reports the module in composition reports.
+func (m *Module) Name() string { return ModuleName }
+
+// Mount registers the endpoints on the HTTP router. The feature serves no
+// plain HTTP route: the token travels through the frontend, so a procedure
+// is POST-only on the RPC surface.
+func (m *Module) Mount(r chi.Router) {}
+
+// MountRPC registers the procedures on the RPC router. The handler options
+// are the transport's — the shared snake_case codec and the panic boundary —
+// so the procedures answer exactly like the transport's own. Each procedure
+// is registered at its own path: the generated handler answers a path under
+// its prefix it does not know with a plain-text 404, which a Connect client
+// cannot read.
+func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
+	_, handler := identityv1connect.NewEmailVerificationServiceHandler(newRPCHandler(m.service), opts...)
+	r.Handle(identityv1connect.EmailVerificationServiceSendEmailProcedure, handler)
+	r.Handle(identityv1connect.EmailVerificationServiceVerifyEmailProcedure, handler)
+}
+
+// rpcHandler is the transport mapping of the procedures. The service carries
+// the rules; this type carries the connect codes.
+type rpcHandler struct {
+	service *Service
+}
+
+// newRPCHandler builds the handler over the service.
+func newRPCHandler(service *Service) identityv1connect.EmailVerificationServiceHandler {
+	return &rpcHandler{service: service}
+}
+
+// SendEmail mails the verification link to the signed-in account's address.
+// The procedure is the signed-in user's own door, not an administrative one:
+// any authenticated caller may ask for their own message, and the claims —
+// not the request — name the account.
+func (h *rpcHandler) SendEmail(ctx context.Context, req *connect.Request[identityv1.SendVerificationEmailRequest]) (*connect.Response[identityv1.SendVerificationEmailResponse], error) {
+	claims, ok := callerFrom(ctx)
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
+	}
+
+	if err := h.service.SendEmail(ctx, claims.Username); err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.SendVerificationEmailResponse{}), nil
+}
+
+// VerifyEmail marks the token's account as verified. The procedure is
+// public: the token is the credential, and the caller carries none — the
+// message linked here from a browser that may hold no session.
+func (h *rpcHandler) VerifyEmail(ctx context.Context, req *connect.Request[identityv1.VerifyEmailRequest]) (*connect.Response[identityv1.VerifyEmailResponse], error) {
+	if err := h.service.VerifyEmail(ctx, req.Msg.Token); err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.VerifyEmailResponse{}), nil
+}
+
+// callerFrom reads the authenticated caller's claims the bearer middleware
+// attached. SendEmail is self-service, so any account's claims qualify; the
+// role is not this procedure's business.
+func callerFrom(ctx context.Context) (*jwtutils.AccessClaims, bool) {
+	claims, ok := authn.GetInfo(ctx).(*jwtutils.AccessClaims)
+	return claims, ok
+}
+
+// mapError translates the service's failures into the codes the Connect
+// protocol carries. The internal ones are collapsed to one answer whose text
+// names nothing a caller could aim at. A malformed field never reaches the
+// service: the transport's validate interceptor refuses it with the typed
+// violation details the contracts carry.
+func mapError(err error) error {
+	switch {
+	case errors.Is(err, ErrUserNotFound):
+		return connect.NewError(connect.CodeNotFound, errors.New("account not found"))
+	case errors.Is(err, ErrAlreadyVerified):
+		return connect.NewError(connect.CodeFailedPrecondition, errors.New("email already verified"))
+	case errors.Is(err, ErrMailUnavailable):
+		return connect.NewError(connect.CodeUnavailable, errors.New("mailer is not configured"))
+	case errors.Is(err, ErrInvalidToken):
+		return connect.NewError(connect.CodePermissionDenied, errors.New("verification token is invalid or expired"))
+	default:
+		return connect.NewError(connect.CodeInternal, errors.New("email verification failed"))
+	}
+}

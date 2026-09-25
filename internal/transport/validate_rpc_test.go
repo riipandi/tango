@@ -15,6 +15,7 @@ import (
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/modules/identity/signup"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/modules/identity/verification"
 )
 
 // The declarative constraints live in the contracts, and the validate
@@ -30,6 +31,7 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 		Modules: []kernel.Module{
 			signup.NewModule(signup.NewService(nil, nil)),
 			user.NewModule(user.NewService(nil, nil)),
+			verification.NewModule(verification.NewService(nil, nil, nil, "", nil)),
 		},
 	})
 
@@ -72,6 +74,10 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 		"bad username on update": {
 			"/tango.identity.v1.UserService/UpdateUser",
 			`{"id":"018f0000-0000-7000-8000-000000000000","username":"a b","email":"ada@example.com","display_name":"Ada"}`,
+		},
+		"empty verification token": {
+			"/tango.identity.v1.EmailVerificationService/VerifyEmail",
+			`{"token":""}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

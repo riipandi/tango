@@ -30,7 +30,7 @@ func expiredRecord(ctx context.Context, t *testing.T, pool *datastore.Postgres) 
 // seeded wires the processors onto the client and seeds the recurring jobs —
 // the two steps a serve run takes between building the queue and starting it.
 func seeded(ctx context.Context, client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager) error {
-	Register(client, cleanupInterval, uploader)
+	Register(client, cleanupInterval, uploader, nil, "")
 	return NewSeeder(client, cleanupInterval, uploader, slog.New(slog.DiscardHandler)).Seed(ctx)
 }
 

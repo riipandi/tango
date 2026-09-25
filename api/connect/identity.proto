@@ -85,6 +85,50 @@ service UserService {
   rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
 }
 
+// EmailVerificationService verifies an account's address. The verification
+// email is the only mail the flow sends, and the token it carries is the
+// flow's whole credential: it is generated here, shown once in the message,
+// and stored only as a hash, so a database leak cannot verify an account.
+//
+// SendEmail is the signed-in user's own door — it mails the address on
+// record, never one the request names. VerifyEmail is answered without a
+// caller: the token identifies the account, and the frontend the message
+// links to forwards the value, so the flow works in a browser that holds no
+// session.
+service EmailVerificationService {
+  // SendEmail mails the verification link to the signed-in user's address.
+  // An already-verified account is refused — the caller learns the state
+  // rather than receiving a pointless message — and an unconfigured mailer
+  // refuses the procedure rather than enqueuing a task that cannot succeed.
+  // The email itself is sent by the durable queue: the request writes the
+  // token row and enqueues, and the queue's retries own the SMTP attempt.
+  rpc SendEmail(SendVerificationEmailRequest) returns (SendVerificationEmailResponse);
+
+  // VerifyEmail marks the account the token names as verified. An unknown,
+  // expired, and spent token answer the same failure, so the endpoint does
+  // not disclose which half was wrong. Verification consumes the token: the
+  // row is deleted, so the link works once.
+  rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse);
+}
+
+// SendVerificationEmailRequest is empty: the caller is the account the
+// Bearer claims name, and the address is the one on record.
+message SendVerificationEmailRequest {}
+
+// SendVerificationEmailResponse is empty: acceptance says the token was
+// issued and the task enqueued, not that a message was delivered.
+message SendVerificationEmailResponse {}
+
+// VerifyEmailRequest carries the token the message linked to.
+message VerifyEmailRequest {
+  // token is the raw verification token, in clear text. It travels only
+  // over TLS and is never logged.
+  string token = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// VerifyEmailResponse is empty: the protocol carries the success.
+message VerifyEmailResponse {}
+
 // SignupRequest carries the account fields and the signup token. The
 // constraints below mirror what the users table enforces, so a bad field is
 // refused with its name before the database is reached.

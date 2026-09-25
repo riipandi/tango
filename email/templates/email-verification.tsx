@@ -26,7 +26,7 @@ export const EmailVerification = ({ logoURL, appName, data }: EmailVerificationP
       <Button href={data.verificationLink}>Verify Email</Button>
 
       <Text style={{ marginTop: '24px' }}>
-        <strong>Important:</strong> This link will expire in 24 hours.
+        <strong>Important:</strong> This link will expire in 1 hour.
       </Text>
 
       <Text>If you did not create account, please ignore this email.</Text>

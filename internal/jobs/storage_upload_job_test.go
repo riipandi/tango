@@ -24,7 +24,7 @@ func TestChunkUploadJobSyncsAStagedFile(t *testing.T) {
 	store := storage.NewFS(t.TempDir())
 	manager, err := storage.NewManager(store, pool, 32, t.TempDir(), 2, slog.New(slog.DiscardHandler))
 	require.NoError(t, err)
-	Register(client, time.Hour, manager)
+	Register(client, time.Hour, manager, nil, "")
 
 	data := bytes.Repeat([]byte("queued"), 40)
 	require.NoError(t, manager.Stage(t.Context(), "uploads/report.bin", bytes.NewReader(data), nil))

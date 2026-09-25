@@ -2,18 +2,21 @@ type: http_request
 model: http_request
 id: rq_ZooqkWcoPU
 createdAt: 2026-09-25T10:33:41.216165
-updatedAt: 2026-09-25T12:13:09.628324
+updatedAt: 2026-09-25T12:53:46.730266
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
-authentication: {}
-authenticationType: null
+authentication:
+  prefix: Bearer
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
+  bodyType: application/json
   text: '{}'
 bodyType: application/json
 description: |-
-  Send an email verification to the currently authenticated user
+  Send the verification email to the currently authenticated user's address on record. An already-verified account is refused; the email itself is sent by the durable queue.
 
-  Mirror of Pocket ID `POST /api/users/me/send-email-verification`.
+  Ported from Pocket ID `POST /api/users/me/send-email-verification` as the `tango.identity.v1.EmailVerificationService/SendEmail` procedure.
 headers:
 - enabled: true
   name: Content-Type
@@ -24,8 +27,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Send email verification (unimplemented)'
-sortPriority: 16000.0
+name: '[Pocket ID] Send email verification'
+sortPriority: 736.6255144032922
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.EmailVerificationService/SendEmail
 urlParameters: []
 settingSendCookies:
