@@ -1,0 +1,34 @@
+type: folder
+model: folder
+id: fl_5R2gfN3X4T
+createdAt: 2026-09-25T10:28:09.871988
+updatedAt: 2026-09-25T10:28:09.871991
+workspaceId: wk_kBiMYTkhPP
+folderId: null
+authentication: {}
+authenticationType: null
+description: ''
+headers: []
+name: OIDC
+sortPriority: 0.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

@@ -1,0 +1,45 @@
+type: http_request
+model: http_request
+id: rq_foGkRa5NEM
+createdAt: 2026-09-25T10:24:52.045931
+updatedAt: 2026-09-25T10:24:52.045934
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_RCex2QKoSF
+authentication: {}
+authenticationType: null
+body:
+  text: '{}'
+bodyType: application/json
+description: 'The same readiness the REST probe answers, spoken in ConnectRPC. Kept: a tango built-in, no Pocket ID counterpart.'
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: '[Tango] System Health Check via RPC'
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/rpc/tango.system.v1.HealthService/Check
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto
