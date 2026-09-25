@@ -134,6 +134,12 @@ func Admin(caller *jwtutils.Caller, _ Target) error {
 // A caller that is impersonating is refused outright. The delegation exists
 // so an administrator can act as another account through the administrative
 // surface, not so it can use the requests that belong to the account.
+//
+// TODO(impersonation): the rule is enforced and tested, but no procedure
+// issues a delegated token yet, so the refusal is currently unreachable in a
+// running server — see pkg/jwtutils.AccessClaims.ActorID. It stays because
+// the refusal has to exist before the surface that produces such a token
+// does.
 func Self(field string) Rule {
 	return func(caller *jwtutils.Caller, target Target) error {
 		if caller == nil {

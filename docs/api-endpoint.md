@@ -242,6 +242,7 @@ User management, sign-up, one-time access, email verification, and profile pictu
 | POST     | `/rpc/tango.identity.v1.UserService/ListWebAuthnCredentials`                 | ConnectRPC   | List user passkeys                              |
 | POST     | `/rpc/tango.identity.v1.UserService/UpdateWebAuthnCredential`                | ConnectRPC   | Rename user passkey                             |
 | POST     | `/rpc/tango.identity.v1.UserService/DeleteWebAuthnCredential`                | ConnectRPC   | Delete user passkey                             |
+| POST     | `ImpersonateUser` (procedure name TBD)                                       | ConnectRPC   | Impersonate a user (admin) — **TODO(impersonation)**, not implemented |
 | POST     | `/rpc/tango.identity.v1.OneTimeAccessService/RequestEmail`                   | ConnectRPC   | Request one-time access email                   |
 | POST     | `/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail`                 | ConnectRPC   | Request one-time access email (admin)           |
 | POST     | `/rpc/tango.identity.v1.OneTimeAccessService/AdminIssueToken`                | ConnectRPC   | Create one-time access token for user (admin)   |

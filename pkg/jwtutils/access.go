@@ -32,6 +32,21 @@ type AccessClaims struct {
 	// token exchange (RFC 8693) calls `act`: the actor is recorded beside the
 	// subject rather than replacing it, so no seam has to reconstruct who is
 	// really acting.
+	//
+	// TODO(impersonation): nothing issues a delegated token yet. The claims,
+	// the Caller that carries them, and the rule that refuses them on a
+	// self-service request are in place and tested, but the two procedures
+	// that would populate them do not exist: no `ImpersonateUser` mints a
+	// token with this pair set and no `StopImpersonating` returns the caller
+	// to their own account. The session column the durable record belongs in
+	// already exists (`public.sessions.impersonated_by`, migration 00002) and
+	// is unused by Go code, so nothing records a delegation today and
+	// `IsImpersonating` is always false outside tests. Port the surface from
+	// Better Auth's admin plugin: `POST /admin/impersonate-user` (bounded TTL,
+	// admin may not impersonate another admin without an explicit permission,
+	// revocable) and `POST /admin/stop-impersonating` (which must be callable
+	// while impersonating, so it is `Authenticated` in the guard table rather
+	// than `Self`).
 	ActorID       string `json:"actor_id,omitzero"`
 	ActorUsername string `json:"actor_username,omitzero"`
 }
@@ -43,6 +58,10 @@ type AccessClaims struct {
 // feature, and an audit record agree about who is acting and who is being
 // acted for. Reading the raw claims would leave each of them to answer the
 // delegation question itself, and the answers would drift.
+//
+// TODO(impersonation): the delegation half is plumbing only — see the note on
+// AccessClaims.ActorID. The subject half is complete and is what every guard
+// rule compares.
 type Caller struct {
 	// AccessClaims describe the account the request acts as, as the token
 	// asserted them when it was signed.
@@ -69,6 +88,13 @@ func NewCaller(verified Verified[AccessClaims]) (*Caller, error) {
 // impersonated caller on this flag, before it looks at any identifier: a
 // delegated session is an administrator's tool, not a way to act as somebody
 // else on a surface that belongs to them.
+//
+// TODO(impersonation): the flag is wired end to end and tested, but nothing
+// sets the claims it reads yet — see the note on AccessClaims.ActorID. It
+// stays here because the refusal is the part that must be in place *before*
+// any procedure issues a delegated token: a surface that gained impersonation
+// without this rule would silently hand the account's own procedures to
+// whoever impersonates it.
 func (c *Caller) IsImpersonating() bool {
 	return c != nil && c.ActorID != ""
 }
