@@ -79,6 +79,14 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 			"/tango.identity.v1.EmailVerificationService/VerifyEmail",
 			`{"token":""}`,
 		},
+		"empty first name on create": {
+			"/tango.identity.v1.UserService/CreateUser",
+			`{"username":"ada","email":"ada@example.com","first_name":"","last_name":"Lovelace"}`,
+		},
+		"empty names on signup": {
+			"/tango.identity.v1.SignupService/Signup",
+			`{"username":"ada","email":"ada@example.com","password":"correct horse","token":"tok"}`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := httptest.NewRecorder()

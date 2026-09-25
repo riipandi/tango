@@ -107,15 +107,15 @@ func TestCreateUserWithoutAPasswordCarriesNoCredential(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	created, err := service.CreateUser(t.Context(), CreateParams{
+	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Grace", LastName: "Hopper",
 		Username: "grace",
 		Email:    "grace@example.com",
 	})
 	require.NoError(t, err)
 
-	// The display name falls back to the username, the way sign-up composes
-	// it, and no credential row exists to sign in with.
-	assert.Equal(t, "grace", created.DisplayName)
+	// The display name is composed from the mandatory names, and no
+	// credential row exists to sign in with.
+	assert.Equal(t, "Grace Hopper", created.DisplayName)
 	assert.False(t, created.EmailVerified)
 	assert.Equal(t, 0, passwordCount(t, pool, created.ID))
 }
@@ -126,14 +126,14 @@ func TestCreateUserRefusesADuplicateAccount(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	_, err := service.CreateUser(t.Context(), CreateParams{Username: "ada", Email: "ada@example.com"})
+	_, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "ada", Email: "ada@example.com"})
 	require.NoError(t, err)
 
 	// The username matches case-insensitively, the way its unique index does.
-	_, err = service.CreateUser(t.Context(), CreateParams{Username: "ADA", Email: "other@example.com"})
+	_, err = service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "ADA", Email: "other@example.com"})
 	assert.ErrorIs(t, err, ErrAccountExists)
 
-	_, err = service.CreateUser(t.Context(), CreateParams{Username: "other", Email: "ada@example.com"})
+	_, err = service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "other", Email: "ada@example.com"})
 	assert.ErrorIs(t, err, ErrAccountExists)
 }
 
@@ -157,7 +157,7 @@ func TestListUsersSearchesAndPaginates(t *testing.T) {
 	service := testService(t, pool)
 
 	for _, name := range []string{"ada", "grace", "alan", "marie"} {
-		_, err := service.CreateUser(t.Context(), CreateParams{Username: name, Email: name + "@example.com"})
+		_, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: name, Email: name + "@example.com"})
 		require.NoError(t, err)
 	}
 
@@ -188,11 +188,14 @@ func TestUpdateUserReplacesTheFields(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// The full replace is the whole shape: a name part left empty clears its
-	// column, the way the upstream endpoint it ports behaves.
+	// The full replace is the whole shape: every field is specified, and the
+	// names are mandatory, so a name part left empty is a contract refusal
+	// the transport answers before the service runs.
 	updated, err := service.UpdateUser(t.Context(), created.ID, UpdateParams{
 		Username:    "ada",
 		Email:       "countess@example.com",
+		FirstName:   "Ada",
+		LastName:    "King",
 		DisplayName: "The Countess",
 		Locale:      "en-GB",
 		Disabled:    true,
@@ -201,13 +204,16 @@ func TestUpdateUserReplacesTheFields(t *testing.T) {
 	assert.Equal(t, "The Countess", updated.DisplayName)
 	assert.Equal(t, "countess@example.com", updated.Email)
 	assert.True(t, updated.Disabled)
-	assert.Nil(t, updated.FirstName)
+	require.NotNil(t, updated.FirstName)
+	assert.Equal(t, "Ada", *updated.FirstName)
+	require.NotNil(t, updated.LastName)
+	assert.Equal(t, "King", *updated.LastName)
 	require.NotNil(t, updated.Locale)
 	assert.Equal(t, "en-GB", *updated.Locale)
 
 	read, err := service.GetUser(t.Context(), created.ID)
 	require.NoError(t, err)
-	assert.Nil(t, read.FirstName)
+	assert.Equal(t, "King", *read.LastName)
 }
 
 func TestUpdateUserAppliesAndLiftsTheBan(t *testing.T) {
@@ -217,13 +223,15 @@ func TestUpdateUserAppliesAndLiftsTheBan(t *testing.T) {
 	service := testService(t, pool)
 	service.now = func() time.Time { return time.Unix(2000000000, 0) }
 
-	created, err := service.CreateUser(t.Context(), CreateParams{Username: "ada", Email: "ada@example.com"})
+	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "ada", Email: "ada@example.com"})
 	require.NoError(t, err)
 
 	expires := service.now().Add(24 * time.Hour)
 	banned, err := service.UpdateUser(t.Context(), created.ID, UpdateParams{
 		Username:     "ada",
 		Email:        "ada@example.com",
+		FirstName:    "Ada",
+		LastName:     "Lovelace",
 		DisplayName:  "ada",
 		BanExpiresAt: &expires,
 		BanReason:    strPtr("unruly behaviour"),
@@ -240,6 +248,8 @@ func TestUpdateUserAppliesAndLiftsTheBan(t *testing.T) {
 	rebanned, err := service.UpdateUser(t.Context(), created.ID, UpdateParams{
 		Username:     "ada",
 		Email:        "ada@example.com",
+		FirstName:    "Ada",
+		LastName:     "Lovelace",
 		DisplayName:  "ada",
 		BanExpiresAt: &later,
 	})
@@ -263,19 +273,19 @@ func TestUpdateUserRefusesAnUnknownIdentifierAndADuplicate(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	_, err := service.CreateUser(t.Context(), CreateParams{Username: "ada", Email: "ada@example.com"})
+	_, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "ada", Email: "ada@example.com"})
 	require.NoError(t, err)
 
 	_, err = service.UpdateUser(t.Context(), uuid.NewV7().String(), UpdateParams{
-		Username: "ada", Email: "x@example.com", DisplayName: "x",
+		Username: "ada", Email: "x@example.com", DisplayName: "x", FirstName: "Ada", LastName: "Lovelace",
 	})
 	assert.ErrorIs(t, err, ErrUserNotFound)
 
-	other, err := service.CreateUser(t.Context(), CreateParams{Username: "grace", Email: "grace@example.com"})
+	other, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "grace", Email: "grace@example.com"})
 	require.NoError(t, err)
 
 	_, err = service.UpdateUser(t.Context(), other.ID, UpdateParams{
-		Username: "ada", Email: "grace@example.com", DisplayName: "grace",
+		Username: "ada", Email: "grace@example.com", DisplayName: "grace", FirstName: "Ada", LastName: "Lovelace",
 	})
 	assert.ErrorIs(t, err, ErrAccountExists)
 }
@@ -286,14 +296,14 @@ func TestDeleteUserRefusesTheSignedInAccount(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	created, err := service.CreateUser(t.Context(), CreateParams{Username: "ada", Email: "ada@example.com"})
+	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "ada", Email: "ada@example.com"})
 	require.NoError(t, err)
 
 	// The signed-in account is refused, whatever case the claims carry it in.
 	err = service.DeleteUser(t.Context(), created.ID, "ADA")
 	assert.ErrorIs(t, err, ErrSelfDeletion)
 
-	other, err := service.CreateUser(t.Context(), CreateParams{Username: "grace", Email: "grace@example.com"})
+	other, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "grace", Email: "grace@example.com"})
 	require.NoError(t, err)
 	require.NoError(t, service.DeleteUser(t.Context(), other.ID, "ada"))
 

@@ -161,7 +161,7 @@ func testConfig() config.Config {
 	return cfg
 }
 
-func TestSignupDisplayNameFallsBackToUsername(t *testing.T) {
+func TestSignupComposesTheDisplayNameFromTheNames(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
 	pool := migratedPool(t)
@@ -169,13 +169,15 @@ func TestSignupDisplayNameFallsBackToUsername(t *testing.T) {
 	insertToken(t, pool, "valid-token", 1, 0)
 
 	user, err := service.Signup(t.Context(), Params{
-		Username: "ada",
-		Email:    "ada@example.com",
-		Password: "correct horse",
-		Token:    "valid-token",
+		Username:  "ada",
+		Email:     "ada@example.com",
+		Password:  "correct horse",
+		Token:     "valid-token",
+		FirstName: "Ada",
+		LastName:  "Lovelace",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "ada", user.DisplayName)
+	assert.Equal(t, "Ada Lovelace", user.DisplayName)
 }
 
 func TestSignupRequiresValidToken(t *testing.T) {
@@ -202,7 +204,7 @@ func TestSignupRequiresValidToken(t *testing.T) {
 		"expired":   {expired, "exhausted-token"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := tc.service.Signup(t.Context(), Params{
+			_, err := tc.service.Signup(t.Context(), Params{FirstName: "Ada", LastName: "Lovelace",
 				Username: "ada",
 				Email:    "ada@example.com",
 				Password: "correct horse",
@@ -221,11 +223,11 @@ func TestSignupConsumesASingleUseTokenOnce(t *testing.T) {
 	service := testService(t, pool)
 	insertToken(t, pool, "single-use", 1, 0)
 
-	params := Params{Username: "ada", Email: "ada@example.com", Password: "correct horse", Token: "single-use"}
+	params := Params{FirstName: "Ada", LastName: "Lovelace", Username: "ada", Email: "ada@example.com", Password: "correct horse", Token: "single-use"}
 	_, err := service.Signup(t.Context(), params)
 	require.NoError(t, err)
 
-	_, err = service.Signup(t.Context(), Params{
+	_, err = service.Signup(t.Context(), Params{FirstName: "Ada", LastName: "Lovelace",
 		Username: "grace",
 		Email:    "grace@example.com",
 		Password: "correct horse",
@@ -248,7 +250,7 @@ func TestSignupRejectsDuplicateAccount(t *testing.T) {
 		insertToken(t, pool, token, 1, 0)
 	}
 
-	_, err := service.Signup(t.Context(), Params{
+	_, err := service.Signup(t.Context(), Params{FirstName: "Ada", LastName: "Lovelace",
 		Username: "ada", Email: "ada@example.com", Password: "correct horse", Token: "first-token",
 	})
 	require.NoError(t, err)
@@ -256,9 +258,9 @@ func TestSignupRejectsDuplicateAccount(t *testing.T) {
 	// The email is TEXT matched exactly, the way its unique index is, so a
 	// cased variant of a live address is a different address and signs up.
 	for name, params := range map[string]Params{
-		"same username":  {Username: "ada", Email: "grace@example.com", Password: "correct horse", Token: "second-token"},
-		"cased username": {Username: "ADA", Email: "grace@example.com", Password: "correct horse", Token: "third-token"},
-		"same email":     {Username: "grace", Email: "ada@example.com", Password: "correct horse", Token: "fourth-token"},
+		"same username":  {Username: "ada", Email: "grace@example.com", Password: "correct horse", Token: "second-token", FirstName: "Ada", LastName: "Lovelace"},
+		"cased username": {Username: "ADA", Email: "grace@example.com", Password: "correct horse", Token: "third-token", FirstName: "Ada", LastName: "Lovelace"},
+		"same email":     {Username: "grace", Email: "ada@example.com", Password: "correct horse", Token: "fourth-token", FirstName: "Grace", LastName: "Hopper"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := service.Signup(t.Context(), params)
@@ -316,7 +318,7 @@ func TestSignupTokenIssueStoresTheHashAlone(t *testing.T) {
 	assert.WithinDuration(t, time.Now().Add(24*time.Hour), expiresAt, time.Minute)
 
 	// The raw value admits the sign-up it was issued for.
-	user, err := service.Signup(t.Context(), Params{
+	user, err := service.Signup(t.Context(), Params{FirstName: "Ada", LastName: "Lovelace",
 		Username: "ada",
 		Email:    "ada@example.com",
 		Password: "correct horse",

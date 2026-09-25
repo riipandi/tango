@@ -98,6 +98,29 @@ func (r *Repository) FindTokenByHash(ctx context.Context, db datastore.Querier, 
 	return row, nil
 }
 
+// FindTokenByUser reads the verification row an account carries, whatever
+// value it hashes. The resend cooldown reads the send time it stamps.
+func (r *Repository) FindTokenByUser(ctx context.Context, db datastore.Querier, userID uuid.UUID) (VerificationToken, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("id", "user_id", "expires_at", "last_sent_at")
+	sb.From(AuthTokenTable)
+	sb.Where(
+		sb.Equal("user_id", userID),
+		sb.Equal("purpose", PurposeEmailVerification),
+	)
+
+	query, args := sb.Build()
+	var row VerificationToken
+	err := db.QueryRow(ctx, query, args...).Scan(&row.ID, &row.UserID, &row.ExpiresAt, &row.LastSentAt)
+	if errors.Is(err, datastore.ErrNoRows) {
+		return VerificationToken{}, datastore.ErrNoRows
+	}
+	if err != nil {
+		return VerificationToken{}, fmt.Errorf("verification: find token by user: %w", err)
+	}
+	return row, nil
+}
+
 // MarkVerified stamps the account's address as verified. The conditional
 // update keeps an earlier verification instant when one is on record: a
 // row that already carries the stamp is matched by nothing and stays as it

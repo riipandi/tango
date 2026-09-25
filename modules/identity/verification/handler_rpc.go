@@ -108,6 +108,8 @@ func mapError(err error) error {
 		return connect.NewError(connect.CodeUnavailable, errors.New("mailer is not configured"))
 	case errors.Is(err, ErrInvalidToken):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("verification token is invalid or expired"))
+	case errors.Is(err, ErrResendTooSoon):
+		return connect.NewError(connect.CodeResourceExhausted, errors.New("a verification email was sent less than a minute ago"))
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("email verification failed"))
 	}

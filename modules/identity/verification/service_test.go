@@ -151,15 +151,18 @@ func TestSendEmailIssuesOneTokenPerAccount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), pending)
 
-	// A re-request replaces the token: the row the first hash named no
-	// longer exists, and the queue carries one more message, not a second
-	// row.
-	_ = readOnlyHash(t, pool, "ada")
+	// A re-request inside the cooldown refuses. Past the window the same
+	// request replaces the token: the row the first hash named no longer
+	// exists, and the queue carries one more message, not a second row.
+	err = service.SendEmail(t.Context(), "ada")
+	assert.ErrorIs(t, err, ErrResendTooSoon)
+
+	service.now = func() time.Time { return time.Now().Add(2 * time.Minute) }
 	require.NoError(t, service.SendEmail(t.Context(), "ada"))
 
 	pending, err = service.queue.Pending(t.Context(), jobs.EmailVerificationName)
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), pending)
+	assert.Equal(t, int64(2), pending) // the first message and the re-issue
 
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("count(*)")
@@ -169,23 +172,6 @@ func TestSendEmailIssuesOneTokenPerAccount(t *testing.T) {
 	var rows int
 	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&rows))
 	assert.Equal(t, 1, rows)
-}
-
-// readOnlyHash reads the token hash the account carries. It exists so the
-// replace assertion can name the hash a re-request retired.
-func readOnlyHash(t *testing.T, pool *datastore.Postgres, username string) string {
-	t.Helper()
-
-	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select("t.token_hash")
-	sb.From(AuthTokenTable + " AS t")
-	sb.Join("public.users AS u", "t.user_id = u.id")
-	sb.Where(sb.Equal("u.username", username), sb.Equal("t.purpose", PurposeEmailVerification))
-
-	query, args := sb.Build()
-	var hash string
-	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&hash))
-	return hash
 }
 
 func TestVerifyEmailConsumesTheToken(t *testing.T) {
@@ -392,6 +378,7 @@ func TestMapErrorCarriesTheConnectCodes(t *testing.T) {
 		{ErrAlreadyVerified, connect.CodeFailedPrecondition},
 		{ErrMailUnavailable, connect.CodeUnavailable},
 		{ErrInvalidToken, connect.CodePermissionDenied},
+		{ErrResendTooSoon, connect.CodeResourceExhausted},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.code, connect.CodeOf(mapError(tc.err)), "%v", tc.err)

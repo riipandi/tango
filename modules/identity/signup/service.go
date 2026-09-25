@@ -92,7 +92,7 @@ func (s *Service) Signup(ctx context.Context, params Params) (User, error) {
 	}
 	tokenHash := tokenSHA256(params.Token)
 
-	name := displayName(params.FirstName, params.LastName, params.Username)
+	name := displayName(params.FirstName, params.LastName)
 
 	var created User
 	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {

@@ -35,11 +35,20 @@ var (
 	// ErrInvalidToken covers an unknown, expired, and spent verification
 	// token: answering differently would tell a caller which half was wrong.
 	ErrInvalidToken = errors.New("verification: invalid verification token")
+
+	// ErrResendTooSoon is a request inside the cooldown the last send
+	// opened: another message now would only invite a mailbomb.
+	ErrResendTooSoon = errors.New("verification: a message was sent recently")
 )
 
 // tokenTTL is how long a verification link works. The template copy states
 // it, so changing one means changing the other.
 const tokenTTL = time.Hour
+
+// resendCooldown is how long the last send keeps a new one out. The window
+// is what stops a caller from turning the procedure into a mailbomb; the
+// token row's send time is the clock it reads.
+const resendCooldown = time.Minute
 
 // tokenEntropy is the randomness of a raw verification token. It is sent to
 // one address once and only its hash is stored, so 256 bits is the whole
@@ -93,6 +102,15 @@ func (s *Service) SendEmail(ctx context.Context, username string) error {
 	}
 	if !s.mail.Configured() {
 		return ErrMailUnavailable
+	}
+
+	// The resend cooldown reads the send time the last token row stamps: a
+	// request inside the window refuses, so the resend is the deliberate
+	// re-issue the caller waits for, not the loop a script runs.
+	if existing, findErr := s.repo.FindTokenByUser(ctx, s.pool, account.ID); findErr == nil && existing.LastSentAt != nil {
+		if s.now().Before(existing.LastSentAt.Add(resendCooldown)) {
+			return ErrResendTooSoon
+		}
 	}
 
 	raw := make([]byte, tokenEntropy)

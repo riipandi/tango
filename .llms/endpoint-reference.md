@@ -291,7 +291,7 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 
 | Method | Procedure / Endpoint | Summary / Yaak Title | Status | Evidence |
 | ------ | -------------------- | -------------------- | ------ | -------- |
-| POST | `/rpc/tango.identity.v1.SignupService/Signup` | Sign up | done — requires a valid signup token; password required; created unverified (email verification later) | `modules/identity/signup` (service tests) |
+| POST | `/rpc/tango.identity.v1.SignupService/Signup` | Sign up | done — requires a valid signup token; password and names required; created unverified (email verification later) | `modules/identity/signup` (service tests) |
 | POST | `/rpc/tango.identity.v1.SignupService/GetSetupAvailability` | Check initial admin setup availability | planned — needs the setup flow; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.SignupService/SetupInitialAdmin` | Sign up initial admin user | planned — needs the setup flow; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.SignupService/ListSignupTokens` | List signup tokens | done — admin Bearer; paginated | `modules/identity/signup` (service tests) |
@@ -299,8 +299,8 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | POST | `/rpc/tango.identity.v1.SignupService/DeleteSignupToken` | Delete signup token | done — admin Bearer | `modules/identity/signup` (service tests) |
 | POST | `/rpc/tango.identity.v1.UserService/ListUsers` | List users | done — admin Bearer; paginated; optional search over username/email/display_name | `modules/identity/user` (service tests) |
 | POST | `/rpc/tango.identity.v1.UserService/GetUser` | Get user by ID | done — admin Bearer | `modules/identity/user` (service tests) |
-| POST | `/rpc/tango.identity.v1.UserService/CreateUser` | Create user | done — admin Bearer; optional password (absent = no credential) | `modules/identity/user` (service tests) |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateUser` | Update user | done — admin Bearer; full replace; ban fields as a unit | `modules/identity/user` (service tests) |
+| POST | `/rpc/tango.identity.v1.UserService/CreateUser` | Create user | done — admin Bearer; mandatory names; optional password (absent = no credential) | `modules/identity/user` (service tests) |
+| POST | `/rpc/tango.identity.v1.UserService/UpdateUser` | Update user | done — admin Bearer; full replace; mandatory names; ban fields as a unit | `modules/identity/user` (service tests) |
 | POST | `/rpc/tango.identity.v1.UserService/DeleteUser` | Delete user | done — admin Bearer; refuses the signed-in account | `modules/identity/user` (service tests) |
 | POST | `/rpc/tango.identity.v1.UserService/UpdateMe` | Update current user | planned — self-service profile; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.UserService/UpdateMyProfilePicture` | Update current user's profile picture | planned — needs the storage upload path; not yet implemented | — |
@@ -316,7 +316,7 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | POST | `/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail` | Request one-time access email (admin) | done — admin | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
 | POST | `/rpc/tango.identity.v1.OneTimeAccessService/AdminIssueToken` | Create one-time access token for user (admin) | done — raw token shown once | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
 | POST | `/api/one-time-access-token/{token}` | Exchange one-time access token | REST — email link; single use, sets the session cookie | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
-| POST | `/rpc/tango.identity.v1.EmailVerificationService/SendEmail` | Send email verification | done — self-service Bearer; refuses verified; token row upserted, email via the durable queue | `modules/identity/verification` (service tests, Mailpit end-to-end) |
+| POST | `/rpc/tango.identity.v1.EmailVerificationService/SendEmail` | Send email verification | done — self-service Bearer; refuses verified; resend cooldown on last_sent_at; token row upserted, email via the durable queue | `modules/identity/verification` (service tests, Mailpit end-to-end) |
 | POST | `/rpc/tango.identity.v1.EmailVerificationService/VerifyEmail` | Verify email | done — public; token is the credential; consumed on success | `modules/identity/verification` (service tests) |
 | GET | `/api/users/{id}/profile-picture.png` | Get user profile picture | REST — bare bytes, default fallback | `modules/identity/user.TestProfilePictureDefaultFallback` |
 

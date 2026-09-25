@@ -147,11 +147,17 @@ message SignupRequest {
   // token is the raw signup token the account is created under.
   string token = 4 [(buf.validate.field).string.min_len = 1];
 
-  // first_name is the optional given name the account displays.
-  optional string first_name = 5 [(buf.validate.field).string.max_len = 100];
+  // first_name is the given name the account displays.
+  string first_name = 5 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 100
+  ];
 
-  // last_name is the optional family name the account displays.
-  optional string last_name = 6 [(buf.validate.field).string.max_len = 100];
+  // last_name is the family name the account displays.
+  string last_name = 6 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 100
+  ];
 }
 
 // SignupResponse is the account the token created.
@@ -341,14 +347,20 @@ message CreateUserRequest {
   // credential until one is set.
   optional string password = 3 [(buf.validate.field).string.min_len = 1];
 
-  // first_name is the optional given name.
-  optional string first_name = 4 [(buf.validate.field).string.max_len = 100];
+  // first_name is the given name.
+  string first_name = 4 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 100
+  ];
 
-  // last_name is the optional family name.
-  optional string last_name = 5 [(buf.validate.field).string.max_len = 100];
+  // last_name is the family name.
+  string last_name = 5 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 100
+  ];
 
-  // display_name is the name the UI shows. Absent, it falls back to the
-  // username, the way sign-up composes it.
+  // display_name is the name the UI shows. Absent, it is composed from the
+  // given and family names.
   optional string display_name = 6 [(buf.validate.field).string.max_len = 200];
 
   // locale is the optional preferred locale tag.
@@ -386,11 +398,17 @@ message UpdateUserRequest {
   // email is the account's address, matched exactly.
   string email = 3 [(buf.validate.field).string.pattern = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"];
 
-  // first_name is the given name; empty clears it.
-  string first_name = 4 [(buf.validate.field).string.max_len = 100];
+  // first_name is the given name; never empty.
+  string first_name = 4 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 100
+  ];
 
-  // last_name is the family name; empty clears it.
-  string last_name = 5 [(buf.validate.field).string.max_len = 100];
+  // last_name is the family name; never empty.
+  string last_name = 5 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 100
+  ];
 
   // display_name is the name the UI shows; never empty.
   string display_name = 6 [

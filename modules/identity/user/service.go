@@ -122,7 +122,7 @@ func (s *Service) CreateUser(ctx context.Context, params CreateParams) (UserView
 
 	displayName := params.DisplayName
 	if displayName == "" {
-		displayName = DisplayName(params.FirstName, params.LastName, params.Username)
+		displayName = DisplayName(params.FirstName, params.LastName)
 	}
 
 	var emailVerifiedAt *time.Time
@@ -325,14 +325,10 @@ func optional(value string) *string {
 	return &value
 }
 
-// DisplayName composes the name the UI shows from the optional given and
-// family names, falling back to the username when neither is carried. The
+// DisplayName composes the name the UI shows from the given and family
+// names. Both are mandatory, so the composition is always a name; the
 // account-creating features share it, so a sign-up and an administrator
 // creation name an account the same way.
-func DisplayName(firstName, lastName, username string) string {
-	name := strings.TrimSpace(strings.Join([]string{strings.TrimSpace(firstName), strings.TrimSpace(lastName)}, " "))
-	if name == "" {
-		return username
-	}
-	return name
+func DisplayName(firstName, lastName string) string {
+	return strings.TrimSpace(strings.Join([]string{strings.TrimSpace(firstName), strings.TrimSpace(lastName)}, " "))
 }
