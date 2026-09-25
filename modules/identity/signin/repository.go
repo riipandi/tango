@@ -95,7 +95,8 @@ func (r *Repository) CreateSession(ctx context.Context, row session.SessionSchem
 }
 
 // TouchLastLogin records the successful sign-in on the account.
-func (r *Repository) TouchLastLogin(ctx context.Context, userID uuid.UUID, at time.Time) error {	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+func (r *Repository) TouchLastLogin(ctx context.Context, userID uuid.UUID, at time.Time) error {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(user.UserTable)
 	ub.Set(ub.Assign("last_login_at", at))
 	ub.Where(ub.Equal("id", userID))

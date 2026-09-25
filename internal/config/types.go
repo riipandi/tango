@@ -71,8 +71,11 @@ type Auth struct {
 	Issuer string `koanf:"issuer" json:"issuer"`
 	// AccessTTL is the lifetime of an access token.
 	AccessTTL time.Duration `koanf:"access_ttl" json:"access_ttl"`
-	// RefreshTTL is the lifetime of a refresh token.
-	RefreshTTL time.Duration `koanf:"refresh_ttl" json:"refresh_ttl"`
+	// RefreshShortTTL is the lifetime of a refresh token the caller did not
+	// ask to remember: a shared-machine window that ends the same day.
+	RefreshShortTTL time.Duration `koanf:"refresh_short_ttl" json:"refresh_short_ttl"`
+	// RefreshLongTTL is the lifetime of a remembered refresh token.
+	RefreshLongTTL time.Duration `koanf:"refresh_long_ttl" json:"refresh_long_ttl"`
 }
 
 // Cache holds the key-value cache settings.

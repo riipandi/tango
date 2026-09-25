@@ -214,9 +214,10 @@ func Default() Config {
 			AssetsURL: DefaultAssetsURL,
 		},
 		Auth: Auth{
-			Issuer:     "tango",
-			AccessTTL:  15 * time.Minute,
-			RefreshTTL: 30 * 24 * time.Hour,
+			Issuer:          "tango",
+			AccessTTL:       15 * time.Minute,
+			RefreshShortTTL: 12 * time.Hour,
+			RefreshLongTTL:  14 * 24 * time.Hour,
 		},
 		Cache: Cache{
 			// Off by default: a feature that wants caching switches it on

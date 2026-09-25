@@ -2,11 +2,11 @@ type: http_request
 model: http_request
 id: rq_5SgzmJyWWh
 createdAt: 2026-09-18T19:38:03.314271
-updatedAt: 2026-09-20T10:26:38.483763
+updatedAt: 2026-09-25T10:03:28.900817
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_vJemVfyfFL
 authentication: {}
-authenticationType: null
+authenticationType: none
 body:
   text: |-
     {
@@ -28,7 +28,7 @@ headers:
 method: POST
 name: Sign in with password
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.AuthService/SignIn
+url: ${[ apiBaseURL ]}/rpc/tango.auth.v1.AuthService/SignIn
 urlParameters: []
 settingSendCookies:
   enabled: false

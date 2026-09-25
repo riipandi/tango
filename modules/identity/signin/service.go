@@ -52,14 +52,15 @@ const refreshTokenBytes = 32
 
 // Service verifies the primary credential and issues the token pair.
 type Service struct {
-	repo       *Repository
-	keys       *jwks.Service
-	hasher     *crypto.PasswordHasher
-	log        *slog.Logger
-	issuer     string
-	accessTTL  time.Duration
-	refreshTTL time.Duration
-	now        func() time.Time
+	repo      *Repository
+	keys      *jwks.Service
+	hasher    *crypto.PasswordHasher
+	log       *slog.Logger
+	issuer    string
+	accessTTL time.Duration
+	shortTTL  time.Duration
+	longTTL   time.Duration
+	now       func() time.Time
 
 	// dummyHash holds the hash a sign-in of an unknown account is checked
 	// against, so the two failure paths cost the same work. It is computed
@@ -75,14 +76,15 @@ func NewService(cfg config.Config, repo *Repository, keys *jwks.Service, log *sl
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Service{
-		repo:       repo,
-		keys:       keys,
-		hasher:     crypto.NewPasswordHasher(),
-		log:        log,
-		issuer:     cfg.Auth.Issuer,
-		accessTTL:  cfg.Auth.AccessTTL,
-		refreshTTL: cfg.Auth.RefreshTTL,
-		now:        time.Now,
+		repo:      repo,
+		keys:      keys,
+		hasher:    crypto.NewPasswordHasher(),
+		log:       log,
+		issuer:    cfg.Auth.Issuer,
+		accessTTL: cfg.Auth.AccessTTL,
+		shortTTL:  cfg.Auth.RefreshShortTTL,
+		longTTL:   cfg.Auth.RefreshLongTTL,
+		now:       time.Now,
 	}
 }
 
@@ -182,7 +184,7 @@ func (s *Service) SignIn(ctx context.Context, params Params) (Result, error) {
 		IPAddress: addrPtr(params.IPAddress),
 		Remember:  params.Remember,
 		CreatedAt: now,
-		ExpiresAt: now.Add(s.refreshTTL),
+		ExpiresAt: now.Add(s.sessionTTL(params.Remember)),
 	}
 	if createErr := s.repo.CreateSession(ctx, sessionRow); createErr != nil {
 		return Result{}, createErr
@@ -216,6 +218,17 @@ func (s *Service) SignIn(ctx context.Context, params Params) (Result, error) {
 // without an expiry never lifts by itself.
 func bannedAt(account *Account, at time.Time) bool {
 	return account.BannedAt != nil && (account.BanExpires == nil || account.BanExpires.After(at))
+}
+
+// sessionTTL picks the session lifetime the caller asked for: the short
+// window a shared machine forgets by the end of the day, the long one a
+// remembered device keeps. Both are configuration keys, so a deployment
+// decides the two windows.
+func (s *Service) sessionTTL(remember bool) time.Duration {
+	if remember {
+		return s.longTTL
+	}
+	return s.shortTTL
 }
 
 // signAccess mints the stateless token. The key and algorithm resolve on

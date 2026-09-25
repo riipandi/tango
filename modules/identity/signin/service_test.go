@@ -311,6 +311,54 @@ func TestSignInStoresANullAddressWhenNoneIsKnown(t *testing.T) {
 	assert.Nil(t, ip)
 }
 
+// TestRememberSelectsTheConfiguredLifetime pins the two windows to the
+// configuration keys, not to constants: a deployment that changes
+// auth.refresh_short_ttl and auth.refresh_long_ttl changes what remember
+// means, and the flag alone decides between them.
+func TestRememberSelectsTheConfiguredLifetime(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+
+	cfg := testConfig()
+	cfg.Auth.RefreshShortTTL = 1 * time.Hour
+	cfg.Auth.RefreshLongTTL = 48 * time.Hour
+	service := NewService(cfg, NewRepository(pool), jwks.NewService(cfg, nil, nil), nil)
+
+	createAccount(t, pool, "ada", "ada@example.com", "correct horse", nil)
+
+	for name, params := range map[string]Params{
+		"short window": {Identity: "ada", Password: "correct horse"},
+		"long window":  {Identity: "ada", Password: "correct horse", Remember: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := service.SignIn(t.Context(), params)
+			require.NoError(t, err)
+
+			sid, err := typeid.Parse[session.SessionID](result.SessionID)
+			require.NoError(t, err)
+
+			sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+			sb.Select("remember", "created_at", "expires_at")
+			sb.From(session.SessionTable)
+			sb.Where(sb.Equal("id", sid.UUID()))
+			query, args := sb.Build()
+			var remember bool
+			var createdAt, expiresAt time.Time
+			require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&remember, &createdAt, &expiresAt))
+
+			lifetime := expiresAt.Sub(createdAt)
+			if params.Remember {
+				assert.True(t, remember)
+				assert.Equal(t, 48*time.Hour, lifetime)
+				return
+			}
+			assert.False(t, remember)
+			assert.Equal(t, time.Hour, lifetime)
+		})
+	}
+}
+
 func TestMapErrorCarriesTheConnectCodes(t *testing.T) {
 	cases := []struct {
 		err  error
