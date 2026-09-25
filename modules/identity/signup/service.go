@@ -2,7 +2,9 @@ package signup
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,6 +19,9 @@ import (
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/crypto"
+	"github.com/riipandi/tango/pkg/responder"
+
+	"uuid"
 )
 
 // The failures a sign-up reports. The handler maps them to connect codes, so
@@ -29,6 +34,9 @@ var (
 	// ErrAccountExists covers a taken username and a taken email. The
 	// username is matched case-insensitively, the way its unique index is.
 	ErrAccountExists = errors.New("signup: account already exists")
+
+	// ErrTokenNotFound is a delete whose id names no issued token.
+	ErrTokenNotFound = errors.New("signup: signup token not found")
 )
 
 // usernamePattern is the grammar the users table enforces on the handle:
@@ -196,4 +204,134 @@ func displayName(firstName, lastName, username string) string {
 func tokenSHA256(raw string) string {
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
+}
+
+// tokenLifetimeBounds are the window an issued token may cover: shorter than
+// an hour is a typo, longer than thirty days outlives an invitation's purpose.
+const (
+	minTokenLifetime = time.Hour
+	maxTokenLifetime = 30 * 24 * time.Hour
+)
+
+// maxTokenUses bounds the budget one token admits; a larger number is an
+// open-ended invitation spelled as a token.
+const maxTokenUses = 1000
+
+// CreateTokenParams carries one token issue.
+type CreateTokenParams struct {
+	TTL        time.Duration
+	UsageLimit int32 // zero means the single-invitation default
+}
+
+// Validate applies the bounds an issued token lives inside.
+func (p CreateTokenParams) Validate() error {
+	errs := validation.Errors{}
+	if p.TTL < minTokenLifetime || p.TTL > maxTokenLifetime {
+		errs["ttl_seconds"] = errors.New("must be between one hour and thirty days")
+	}
+	switch {
+	case p.UsageLimit < 0:
+		errs["usage_limit"] = errors.New("must not be negative")
+	case p.UsageLimit > maxTokenUses:
+		errs["usage_limit"] = fmt.Errorf("must be at most %d", maxTokenUses)
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return errs
+}
+
+// TokenView is an issued token as the procedures answer it: the counters and
+// the window, never the raw value.
+type TokenView struct {
+	ID         string
+	UsageLimit int32
+	UsageCount int32
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+}
+
+// CreatedToken is the issued token and the raw value shown once.
+type CreatedToken struct {
+	Token    TokenView
+	RawToken string
+}
+
+// tokenEntropy is the randomness of a raw signup token. It is shown to the
+// operator once and only its hash is stored, so 256 bits is the whole defense
+// against a database leak.
+const tokenEntropy = 32
+
+// CreateSignupToken issues a token: the raw value is drawn here, shown once
+// in the answer, and only its hash is stored. A usage limit of zero means
+// the single invitation.
+func (s *Service) CreateSignupToken(ctx context.Context, params CreateTokenParams) (CreatedToken, error) {
+	if params.UsageLimit == 0 {
+		params.UsageLimit = 1
+	}
+	if err := params.Validate(); err != nil {
+		return CreatedToken{}, err
+	}
+
+	raw := make([]byte, tokenEntropy)
+	if _, err := rand.Read(raw); err != nil {
+		return CreatedToken{}, fmt.Errorf("signup: token: %w", err)
+	}
+	rawToken := base64.RawURLEncoding.EncodeToString(raw)
+	now := s.now()
+
+	id, err := s.repo.CreateSignupToken(ctx, s.pool, tokenSHA256(rawToken), params.UsageLimit, now.Add(params.TTL))
+	if err != nil {
+		return CreatedToken{}, err
+	}
+	return CreatedToken{
+		Token: TokenView{
+			ID:         id.String(),
+			UsageLimit: params.UsageLimit,
+			UsageCount: 0,
+			CreatedAt:  now,
+			ExpiresAt:  now.Add(params.TTL),
+		},
+		RawToken: rawToken,
+	}, nil
+}
+
+// ListSignupTokens answers one page of the issued tokens, newest first, with
+// the pagination metadata the response carries.
+func (s *Service) ListSignupTokens(ctx context.Context, page, limit int) ([]TokenView, responder.Pagination, error) {
+	page, limit = responder.NormalizePage(page, limit, responder.DefaultPageSize, responder.MaxPageSize)
+
+	tokens, total, err := s.repo.ListSignupTokens(ctx, s.pool, responder.Offset(page, limit), limit)
+	if err != nil {
+		return nil, responder.Pagination{}, err
+	}
+
+	views := make([]TokenView, 0, len(tokens))
+	for _, row := range tokens {
+		views = append(views, TokenView{
+			ID:         row.ID.String(),
+			UsageLimit: row.UsageLimit,
+			UsageCount: row.UsageCount,
+			CreatedAt:  row.CreatedAt,
+			ExpiresAt:  row.ExpiresAt,
+		})
+	}
+	return views, responder.NewPagination(responder.PaginationParams{Page: page, Limit: limit}, total), nil
+}
+
+// DeleteSignupToken revokes an issued token. A token that named nothing is
+// the not-found failure, so a withdrawn invitation is told from a typo.
+func (s *Service) DeleteSignupToken(ctx context.Context, id string) error {
+	tokenID, err := uuid.Parse(id)
+	if err != nil {
+		return ErrTokenNotFound
+	}
+	deleted, err := s.repo.DeleteSignupToken(ctx, s.pool, tokenID)
+	if err != nil {
+		return err
+	}
+	if !deleted {
+		return ErrTokenNotFound
+	}
+	return nil
 }

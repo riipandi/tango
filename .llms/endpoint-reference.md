@@ -294,9 +294,9 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | POST | `/rpc/tango.identity.v1.SignupService/Signup` | Sign up | done — requires a valid signup token; password required; created unverified (email verification later) | `modules/identity/signup` (service tests) |
 | POST | `/rpc/tango.identity.v1.SignupService/GetSetupAvailability` | Check initial admin setup availability | done — 204 while no user exists, then 404 | `modules/identity/signup.TestSetupAvailabilityAndInitialAdmin` |
 | POST | `/rpc/tango.identity.v1.SignupService/SetupInitialAdmin` | Sign up initial admin user | done — 409 once any user exists | `modules/identity/signup.TestSetupAvailabilityAndInitialAdmin` |
-| POST | `/rpc/tango.identity.v1.SignupService/ListSignupTokens` | List signup tokens | done | `modules/identity/signup.TestSignupTokenAdminCRUD` |
-| POST | `/rpc/tango.identity.v1.SignupService/CreateSignupToken` | Create signup token | done — raw token shown once | `modules/identity/signup.TestSignupTokenAdminCRUD` |
-| POST | `/rpc/tango.identity.v1.SignupService/DeleteSignupToken` | Delete signup token | done | `modules/identity/signup.TestSignupTokenAdminCRUD` |
+| POST | `/rpc/tango.identity.v1.SignupService/ListSignupTokens` | List signup tokens | done — admin Bearer; paginated | `modules/identity/signup` (service tests) |
+| POST | `/rpc/tango.identity.v1.SignupService/CreateSignupToken` | Create signup token | done — admin Bearer; raw token shown once | `modules/identity/signup` (service tests) |
+| POST | `/rpc/tango.identity.v1.SignupService/DeleteSignupToken` | Delete signup token | done — admin Bearer | `modules/identity/signup` (service tests) |
 | POST | `/rpc/tango.identity.v1.UserService/ListUsers` | List users | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |
 | POST | `/rpc/tango.identity.v1.UserService/CreateUser` | Create user | done — admin; show-once password | `modules/identity/user.TestUserRPCAdminLifecycle` |
 | POST | `/rpc/tango.identity.v1.UserService/GetUser` | Get user by ID | done — admin; TypeID only | `modules/identity/user.TestUserRPCAdminLifecycle` |

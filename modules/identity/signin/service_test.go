@@ -152,7 +152,7 @@ func TestSignInIssuesTheTokenPair(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, jwa.HS256(), algorithm)
 
-	verifier, err := jwtutils.NewVerifier[AccessClaims](key, algorithm)
+	verifier, err := jwtutils.NewVerifier[jwtutils.AccessClaims](key, algorithm)
 	require.NoError(t, err)
 	verified, err := verifier.
 		WithIssuer(cfg.Auth.Issuer).

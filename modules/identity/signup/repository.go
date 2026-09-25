@@ -29,13 +29,13 @@ func NewRepository() *Repository {
 // is never stored: only the caller's hash reaches this query.
 func (r *Repository) FindSignupTokenByHash(ctx context.Context, db datastore.Querier, tokenHash string) (*SignupToken, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select("id", "usage_limit", "usage_count", "expires_at")
+	sb.Select("id", "usage_limit", "usage_count", "created_at", "expires_at")
 	sb.From(SignupTokenTable)
 	sb.Where(sb.Equal("token_hash", tokenHash))
 
 	query, args := sb.Build()
 	var row SignupToken
-	err := db.QueryRow(ctx, query, args...).Scan(&row.ID, &row.UsageLimit, &row.UsageCount, &row.ExpiresAt)
+	err := db.QueryRow(ctx, query, args...).Scan(&row.ID, &row.UsageLimit, &row.UsageCount, &row.CreatedAt, &row.ExpiresAt)
 	if errors.Is(err, datastore.ErrNoRows) {
 		return nil, datastore.ErrNoRows
 	}
@@ -115,4 +115,75 @@ func (r *Repository) ConsumeSignupToken(ctx context.Context, db datastore.Querie
 func errUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// CreateSignupToken inserts the hashed row and answers its identifier. The
+// raw value is the caller's to show once; only the hash reaches this table.
+func (r *Repository) CreateSignupToken(ctx context.Context, db datastore.Querier, tokenHash string, usageLimit int32, expiresAt time.Time) (uuid.UUID, error) {
+	id := uuid.NewV7()
+
+	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+	ib.InsertInto(SignupTokenTable)
+	ib.Cols("id", "token_hash", "usage_limit", "expires_at")
+	ib.Values(id, tokenHash, usageLimit, expiresAt)
+
+	query, args := ib.Build()
+	if _, err := db.Exec(ctx, query, args...); err != nil {
+		return uuid.Nil(), fmt.Errorf("signup: create token: %w", err)
+	}
+	return id, nil
+}
+
+// ListSignupTokens answers one page of the issued tokens, newest first, with
+// the total count the pagination metadata needs.
+func (r *Repository) ListSignupTokens(ctx context.Context, db datastore.Querier, offset, limit int) ([]SignupToken, int, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("id", "usage_limit", "usage_count", "created_at", "expires_at")
+	sb.From(SignupTokenTable)
+	sb.OrderBy("created_at DESC", "id DESC")
+	sb.Limit(limit).Offset(offset)
+
+	query, args := sb.Build()
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("signup: list tokens: %w", err)
+	}
+	defer rows.Close()
+
+	tokens := []SignupToken{}
+	for rows.Next() {
+		var row SignupToken
+		if err := rows.Scan(&row.ID, &row.UsageLimit, &row.UsageCount, &row.CreatedAt, &row.ExpiresAt); err != nil {
+			return nil, 0, fmt.Errorf("signup: list tokens: %w", err)
+		}
+		tokens = append(tokens, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("signup: list tokens: %w", err)
+	}
+
+	cb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	cb.Select("count(*)")
+	cb.From(SignupTokenTable)
+	query, args = cb.Build()
+	var total int
+	if err := db.QueryRow(ctx, query, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("signup: count tokens: %w", err)
+	}
+	return tokens, total, nil
+}
+
+// DeleteSignupToken removes an issued token. It answers whether a row was
+// removed, so the caller refuses an id that names nothing.
+func (r *Repository) DeleteSignupToken(ctx context.Context, db datastore.Querier, id uuid.UUID) (bool, error) {
+	db2 := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	db2.DeleteFrom(SignupTokenTable)
+	db2.Where(db2.Equal("id", id))
+
+	query, args := db2.Build()
+	tag, err := db.Exec(ctx, query, args...)
+	if err != nil {
+		return false, fmt.Errorf("signup: delete token: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }

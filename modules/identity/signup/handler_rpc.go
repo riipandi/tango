@@ -3,13 +3,19 @@ package signup
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
+	"time"
 
+	"connectrpc.com/authn"
 	"connectrpc.com/connect"
 	"github.com/go-chi/chi/v5"
 
+	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
+	"github.com/riipandi/tango/pkg/jwtutils"
+	"github.com/riipandi/tango/pkg/responder"
 	"github.com/riipandi/tango/pkg/validate"
 )
 
@@ -17,8 +23,8 @@ import (
 // qualifies it, so the name is the feature alone.
 const ModuleName = "signup"
 
-// Module serves the sign-up procedure. Everything it answers is an RPC
-// procedure, so its HTTP mount is empty by construction.
+// Module serves the sign-up and signup-token procedures. Everything it
+// answers is an RPC procedure, so its HTTP mount is empty by construction.
 type Module struct {
 	service *Service
 }
@@ -37,14 +43,20 @@ func (m *Module) Mount(r chi.Router) {}
 
 // MountRPC registers the procedures on the RPC router. The handler options
 // are the transport's — the shared snake_case codec and the panic boundary —
-// so the procedure answers exactly like the transport's own.
+// so the procedures answer exactly like the transport's own. Each procedure
+// is registered at its own path: the generated handler answers a path under
+// its prefix it does not know with a plain-text 404, which a Connect client
+// cannot read.
 func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
 	_, handler := identityv1connect.NewSignupServiceHandler(newRPCHandler(m.service), opts...)
 	r.Handle(identityv1connect.SignupServiceSignupProcedure, handler)
+	r.Handle(identityv1connect.SignupServiceCreateSignupTokenProcedure, handler)
+	r.Handle(identityv1connect.SignupServiceListSignupTokensProcedure, handler)
+	r.Handle(identityv1connect.SignupServiceDeleteSignupTokenProcedure, handler)
 }
 
-// rpcHandler is the transport mapping of the sign-up procedure. The service
-// carries the rules; this type carries the connect codes.
+// rpcHandler is the transport mapping of the procedures. The service carries
+// the rules; this type carries the connect codes.
 type rpcHandler struct {
 	service *Service
 }
@@ -57,10 +69,6 @@ func newRPCHandler(service *Service) identityv1connect.SignupServiceHandler {
 // Signup creates an account from a signup token.
 func (h *rpcHandler) Signup(ctx context.Context, req *connect.Request[identityv1.SignupRequest]) (*connect.Response[identityv1.SignupResponse], error) {
 	body := req.Msg
-	if body.Username == "" || body.Email == "" || body.Password == "" || body.Token == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument,
-			errors.New("username, email, password, and token are required"))
-	}
 
 	user, err := h.service.Signup(ctx, Params{
 		Username:  body.Username,
@@ -84,6 +92,112 @@ func (h *rpcHandler) Signup(ctx context.Context, req *connect.Request[identityv1
 	}), nil
 }
 
+// CreateSignupToken issues a signup token. The procedure is administrative:
+// the transport authenticated the caller, and the claims decide the role.
+func (h *rpcHandler) CreateSignupToken(ctx context.Context, req *connect.Request[identityv1.CreateSignupTokenRequest]) (*connect.Response[identityv1.CreateSignupTokenResponse], error) {
+	if _, ok := adminFrom(ctx); !ok {
+		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
+	}
+
+	body := req.Msg
+	created, err := h.service.CreateSignupToken(ctx, CreateTokenParams{
+		TTL:        time.Duration(body.TtlSeconds) * time.Second,
+		UsageLimit: body.GetUsageLimit(),
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	return connect.NewResponse(&identityv1.CreateSignupTokenResponse{
+		Token:    tokenView(created.Token),
+		RawToken: created.RawToken,
+	}), nil
+}
+
+// ListSignupTokens answers the issued tokens with their pagination block.
+func (h *rpcHandler) ListSignupTokens(ctx context.Context, req *connect.Request[identityv1.ListSignupTokensRequest]) (*connect.Response[identityv1.ListSignupTokensResponse], error) {
+	if _, ok := adminFrom(ctx); !ok {
+		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
+	}
+
+	tokens, pagination, err := h.service.ListSignupTokens(ctx, int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	views := make([]*identityv1.SignupToken, 0, len(tokens))
+	for _, token := range tokens {
+		views = append(views, tokenView(token))
+	}
+	return connect.NewResponse(&identityv1.ListSignupTokensResponse{
+		Tokens:   views,
+		Metadata: listMetadata(pagination),
+	}), nil
+}
+
+// DeleteSignupToken revokes an issued token.
+func (h *rpcHandler) DeleteSignupToken(ctx context.Context, req *connect.Request[identityv1.DeleteSignupTokenRequest]) (*connect.Response[identityv1.DeleteSignupTokenResponse], error) {
+	if _, ok := adminFrom(ctx); !ok {
+		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
+	}
+
+	if err := h.service.DeleteSignupToken(ctx, req.Msg.Id); err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.DeleteSignupTokenResponse{}), nil
+}
+
+// tokenView maps the service's token view onto the wire message.
+func tokenView(token TokenView) *identityv1.SignupToken {
+	return &identityv1.SignupToken{
+		Id:         token.ID,
+		UsageLimit: token.UsageLimit,
+		UsageCount: token.UsageCount,
+		CreatedAt:  token.CreatedAt.Format(time.RFC3339),
+		ExpiresAt:  token.ExpiresAt.Format(time.RFC3339),
+	}
+}
+
+// listMetadata maps the responder's pagination onto the shared block. The
+// wire fields are optional, so an unknown range is absent rather than zero.
+func listMetadata(p responder.Pagination) *commonv1.ListMetadata {
+	meta := &commonv1.ListMetadata{}
+	set := func(dst **int32, src *int) {
+		if src == nil {
+			return
+		}
+		// The wire field is int32; a total beyond it saturates rather than
+		// wrapping, and no page the rules allow can reach the bound.
+		value := *src
+		if value > math.MaxInt32 || value < math.MinInt32 {
+			value = math.MaxInt32
+		}
+		*dst = ptr(int32(value))
+	}
+	set(&meta.Page, p.Page)
+	set(&meta.Limit, p.Limit)
+	set(&meta.TotalPages, p.TotalPages)
+	set(&meta.TotalItems, p.TotalItems)
+	set(&meta.FirstItemIndex, p.FirstItemIndex)
+	set(&meta.LastItemIndex, p.LastItemIndex)
+	return meta
+}
+
+// ptr hands the setters an addressable value.
+func ptr[T any](value T) *T {
+	return &value
+}
+
+// adminFrom reads the authenticated caller's claims the bearer middleware
+// attached, and reports whether the caller holds the administrator role.
+func adminFrom(ctx context.Context) (*jwtutils.AccessClaims, bool) {
+	claims, ok := authn.GetInfo(ctx).(*jwtutils.AccessClaims)
+	return claims, ok && claims.IsAdmin
+}
+
+// errAdminRequired is the refusal a caller without the administrator role reads.
+var errAdminRequired = errors.New("administrator role required")
+
 // mapError translates the service's failures into the codes the Connect
 // protocol carries. The internal ones are collapsed to one answer whose text
 // names nothing a caller could aim at.
@@ -95,6 +209,8 @@ func mapError(err error) error {
 		return connect.NewError(connect.CodePermissionDenied, errors.New("signup token is invalid or expired"))
 	case errors.Is(err, ErrAccountExists):
 		return connect.NewError(connect.CodeAlreadyExists, errors.New("account already exists"))
+	case errors.Is(err, ErrTokenNotFound):
+		return connect.NewError(connect.CodeNotFound, errors.New("signup token not found"))
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("sign-up failed"))
 	}

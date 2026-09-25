@@ -39,6 +39,10 @@ type Options struct {
 	// Modules are the feature modules whose routes and procedures the server
 	// mounts.
 	Modules []kernel.Module
+	// Authenticator authenticates the RPC surface's requests before their
+	// procedures run. A nil authenticator leaves the surface open, which is
+	// the state a test that reads only responses is in.
+	Authenticator Authenticator
 }
 
 // NewRouter builds the HTTP surface: the request pipeline, then the endpoints
@@ -115,7 +119,7 @@ func NewRouter(opts Options) chi.Router {
 			throttled.Use(middleware.RateLimit("rpc", opts.RateLimiter, rpcRefuse, rpcRateLimitExclusions...))
 		}
 
-		mountRPC(throttled, opts.Checker, opts.Modules)
+		mountRPC(throttled, opts.Checker, opts.Authenticator, opts.Modules)
 	})
 
 	// The uploads are served outside the group: a page that loads an image

@@ -10,14 +10,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"connectrpc.com/authn"
 	"connectrpc.com/connect"
 
+	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/pkg/crypto"
+	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/testutils"
 	"github.com/riipandi/tango/pkg/validate"
 )
@@ -334,4 +337,120 @@ func TestMapErrorCarriesTheConnectCodes(t *testing.T) {
 		assert.Equal(t, tc.code, connect.CodeOf(mapError(tc.err)), "%v", tc.err)
 	}
 	assert.Equal(t, connect.CodeInternal, connect.CodeOf(mapError(errors.New("boom"))))
+}
+
+func TestSignupTokenIssueStoresTheHashAlone(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testService(t, pool)
+
+	created, err := service.CreateSignupToken(t.Context(), CreateTokenParams{TTL: 24 * time.Hour})
+	require.NoError(t, err)
+
+	assert.Regexp(t, `^[A-Za-z0-9_-]{43}$`, created.RawToken, "the raw token is 256 bits of base64url")
+	assert.Equal(t, int32(1), created.Token.UsageLimit, "an unset budget is the single invitation")
+
+	// The row stores the hash alone: the raw value must not be recoverable
+	// from anything the database holds.
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("token_hash", "usage_limit", "usage_count", "expires_at")
+	sb.From(SignupTokenTable)
+	sb.Where(sb.Equal("id", created.Token.ID))
+	query, args := sb.Build()
+	var tokenHash string
+	var usageLimit, usageCount int32
+	var expiresAt time.Time
+	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&tokenHash, &usageLimit, &usageCount, &expiresAt))
+	assert.Equal(t, tokenSHA256(created.RawToken), tokenHash)
+	assert.NotEqual(t, created.RawToken, tokenHash)
+	assert.Equal(t, int32(1), usageLimit)
+	assert.Equal(t, int32(0), usageCount)
+	assert.WithinDuration(t, time.Now().Add(24*time.Hour), expiresAt, time.Minute)
+
+	// The raw value admits the sign-up it was issued for.
+	user, err := service.Signup(t.Context(), Params{
+		Username: "ada",
+		Email:    "ada@example.com",
+		Password: "correct horse",
+		Token:    created.RawToken,
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, user.ID)
+	assert.Equal(t, int32(1), tokenUsageCount(t, pool, created.RawToken))
+}
+
+func TestSignupTokenIssueValidatesTheBounds(t *testing.T) {
+	service := NewService(nil, nil) // validation returns before the pool
+
+	for name, params := range map[string]CreateTokenParams{
+		"too short":   {TTL: 30 * time.Minute},
+		"too long":    {TTL: 31 * 24 * time.Hour},
+		"no window":   {},
+		"negative":    {TTL: 24 * time.Hour, UsageLimit: -1},
+		"over budget": {TTL: 24 * time.Hour, UsageLimit: 1001},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := service.CreateSignupToken(t.Context(), params)
+			require.True(t, validate.IsValidationError(err))
+		})
+	}
+}
+
+func TestSignupTokenListAndDelete(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testService(t, pool)
+
+	first, err := service.CreateSignupToken(t.Context(), CreateTokenParams{TTL: 24 * time.Hour})
+	require.NoError(t, err)
+	second, err := service.CreateSignupToken(t.Context(), CreateTokenParams{TTL: 48 * time.Hour, UsageLimit: 5})
+	require.NoError(t, err)
+
+	tokens, pagination, err := service.ListSignupTokens(t.Context(), 1, 0)
+	require.NoError(t, err)
+	require.Len(t, tokens, 2)
+	assert.Equal(t, second.Token.ID, tokens[0].ID, "the list is newest first")
+	assert.Equal(t, first.Token.ID, tokens[1].ID)
+	assert.Equal(t, int32(5), tokens[0].UsageLimit)
+	require.NotNil(t, pagination.TotalItems)
+	assert.Equal(t, 2, *pagination.TotalItems)
+
+	// A page beyond the set answers no items and an unknown range.
+	tokens, pagination, err = service.ListSignupTokens(t.Context(), 2, 10)
+	require.NoError(t, err)
+	assert.Empty(t, tokens)
+	assert.Nil(t, pagination.FirstItemIndex)
+
+	require.NoError(t, service.DeleteSignupToken(t.Context(), first.Token.ID))
+
+	tokens, pagination, err = service.ListSignupTokens(t.Context(), 1, 0)
+	require.NoError(t, err)
+	assert.Len(t, tokens, 1)
+	require.NotNil(t, pagination.TotalItems)
+	assert.Equal(t, 1, *pagination.TotalItems)
+
+	assert.ErrorIs(t, service.DeleteSignupToken(t.Context(), first.Token.ID), ErrTokenNotFound)
+	assert.ErrorIs(t, service.DeleteSignupToken(t.Context(), "not-a-uuid"), ErrTokenNotFound)
+}
+
+func TestTokenProceduresRefuseACallerWithoutTheRole(t *testing.T) {
+	handler := &rpcHandler{service: nil} // the gate runs before the service
+
+	for name, ctx := range map[string]context.Context{
+		"no identity": t.Context(),
+		"non-admin":   authn.SetInfo(t.Context(), &jwtutils.AccessClaims{IsAdmin: false}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := handler.CreateSignupToken(ctx, connect.NewRequest(&identityv1.CreateSignupTokenRequest{TtlSeconds: 86400}))
+			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
+
+			_, err = handler.ListSignupTokens(ctx, connect.NewRequest(&identityv1.ListSignupTokensRequest{}))
+			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
+
+			_, err = handler.DeleteSignupToken(ctx, connect.NewRequest(&identityv1.DeleteSignupTokenRequest{Id: "00000000-0000-0000-0000-000000000000"}))
+			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
+		})
+	}
 }

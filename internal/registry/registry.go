@@ -42,6 +42,8 @@ import (
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/jwks"
 )
 
 // New registers the shared services of a serve run.
@@ -86,18 +88,25 @@ func newRouter(i do.Injector, areas []Area) (chi.Router, error) {
 	limiter := do.MustInvoke[middleware.Limiter](i)
 	metrics := do.MustInvoke[http.Handler](i)
 
+	// The authenticator is built here, the join point, because it is the one
+	// place a transport need may name an area's service: the RPC surface
+	// verifies the tokens the identity area's key service signed, and the
+	// transport itself receives only the function, never the service.
+	keys := do.MustInvoke[*jwks.Service](i)
+
 	mounted, err := mountAreas(i, areas)
 	if err != nil {
 		return nil, err
 	}
 
 	return transport.NewRouter(transport.Options{
-		Config:      *c,
-		Checker:     checker,
-		Metrics:     metrics,
-		Logger:      log,
-		RateLimiter: limiter,
-		Modules:     mounted,
+		Config:        *c,
+		Checker:       checker,
+		Metrics:       metrics,
+		Logger:        log,
+		RateLimiter:   limiter,
+		Modules:       mounted,
+		Authenticator: identity.Authenticate(keys, *c),
 	}), nil
 }
 

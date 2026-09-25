@@ -11,12 +11,12 @@ import (
 // table rename touches one line.
 const SignupTokenTable = "public.signup_tokens"
 
-// SignupToken is one row of SignupTokenTable, the view a sign-up reads. It
-// lists only the columns the feature consumes; the hash is named where its
-// query is, never as a struct field.
+// SignupToken is one row of SignupTokenTable, the view the feature reads and
+// the operators manage. The raw token is not a field: only its hash is stored.
 type SignupToken struct {
 	ID         uuid.UUID
 	UsageLimit int32
 	UsageCount int32
+	CreatedAt  time.Time
 	ExpiresAt  time.Time
 }

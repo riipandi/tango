@@ -22,7 +22,11 @@ import (
 	"net/http"
 	"strings"
 
+	authv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1/authv1connect"
+	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
+	systemv1connect "github.com/riipandi/tango/codegen/proto/go/tango/system/v1/systemv1connect"
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -38,6 +42,26 @@ var httpRateLimitExclusions = []string{
 var rpcRateLimitExclusions = []string{
 	healthCheckPath, // the same readiness a monitor watches over ConnectRPC
 }
+
+// rpcPublicProcedures lists the procedures the RPC surface answers without a
+// caller, beside the rate-limit exclusion lists above because both encode the
+// same default in opposite directions: a procedure is throttled and protected
+// unless it is named here. The health procedure is public because a probe
+// carries no token; sign-in and sign-up are public because they are how a
+// caller becomes one. The bearer middleware refuses every other path, so a
+// new procedure is protected by default and a public one is a deliberate line
+// in this set.
+var rpcPublicProcedures = map[string]struct{}{
+	systemv1connect.HealthServiceCheckProcedure:    {},
+	authv1connect.AuthServiceSignInProcedure:       {},
+	identityv1connect.SignupServiceSignupProcedure: {},
+}
+
+// Authenticator authenticates an RPC request before its procedure runs. The
+// transport receives it through Options rather than resolving the key service
+// itself: verification material belongs to the identity area, and the
+// composition root is what joins the two halves.
+type Authenticator = middleware.Authenticator
 
 // NewServer builds the HTTP server the router is served through, with the
 // timeouts the configuration holds. The caller owns the listener and the

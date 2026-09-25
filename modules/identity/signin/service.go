@@ -88,17 +88,6 @@ func NewService(cfg config.Config, repo *Repository, keys *jwks.Service, log *sl
 	}
 }
 
-// AccessClaims are the private claims an access token carries. The subject is
-// the account's ID; every other field is duplicated here so a verifier reads
-// the token without a round trip.
-type AccessClaims struct {
-	Email       string `json:"email"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	IsAdmin     bool   `json:"is_admin"`
-	SessionID   string `json:"sid"`
-}
-
 // Params carries one sign-in attempt. IPAddress is the caller's address as
 // the transport read it, empty when it is unknown.
 type Params struct {
@@ -244,13 +233,13 @@ func (s *Service) signAccess(ctx context.Context, account *Account, sessionID se
 		return "", fmt.Errorf("signin: signing key: %w", err)
 	}
 
-	signer, err := jwtutils.NewSigner[AccessClaims](key, algorithm)
+	signer, err := jwtutils.NewSigner[jwtutils.AccessClaims](key, algorithm)
 	if err != nil {
 		return "", fmt.Errorf("signin: signer: %w", err)
 	}
 	signer = signer.WithIssuer(s.issuer).WithTTL(s.accessTTL)
 
-	token, err := signer.Sign(AccessClaims{
+	token, err := signer.Sign(jwtutils.AccessClaims{
 		Email:       account.Email,
 		Username:    account.Username,
 		DisplayName: account.DisplayName,

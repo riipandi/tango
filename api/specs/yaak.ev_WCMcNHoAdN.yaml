@@ -3,7 +3,7 @@ model: environment
 id: ev_WCMcNHoAdN
 workspaceId: wk_kBiMYTkhPP
 createdAt: 2026-09-13T08:08:50.987531
-updatedAt: 2026-09-18T18:57:20.914128
+updatedAt: 2026-09-25T12:10:35.164900
 name: Development
 public: true
 base: false
@@ -13,18 +13,26 @@ variables:
 - enabled: true
   name: apiBaseURL
   value: http://localhost:3080
-  id: gzWyHcyqwP
+  id: gzdvRp7ISQ
+- enabled: true
+  name: identity
+  value: admin@example.com
+  id: RD5xSjvdeb
+- enabled: true
+  name: password
+  value: '@dmin123'
+  id: DiaitnKkVe
 - enabled: true
   name: accessToken
-  value: dummy
-  id: DQy850JbsC
-- enabled: true
-  name: refreshToken
-  value: dummy
-  id: b0K5YS67Js
+  value: ${[ response.body.path(request='rq_5SgzmJyWWh', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC5hY2Nlc3NfdG9rZW4') ]}
+  id: m625Dt36N7
 - enabled: true
   name: apiKey
   value: sk_dummy
-  id: SFzggKe5V4
+  id: WcbntnKDIa
+- enabled: true
+  name: remember
+  value: 'true'
+  id: 8jMCbXuU4G
 color: null
-sortPriority: 0.0
+sortPriority: 0.1

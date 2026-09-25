@@ -12,9 +12,11 @@ syntax = "proto3";
 
 package tango.identity.v1;
 
+import "common.proto";
+
 option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1;identityv1";
 
-// SignupService creates accounts.
+// SignupService creates accounts and administers the tokens sign-up requires.
 service SignupService {
   // Signup creates an account from a valid signup token.
   //
@@ -24,6 +26,25 @@ service SignupService {
   // not disclose which half was wrong. The username is case-insensitive and
   // the email is matched exactly, the way their unique indexes are.
   rpc Signup(SignupRequest) returns (SignupResponse);
+
+  // CreateSignupToken issues the signup token an account is created under.
+  // It is an administrative procedure: the caller must carry a Bearer token
+  // whose claims name an administrator, and a leaked machine credential is
+  // no substitute, so a leaked key cannot mint account invitations.
+  //
+  // The raw token is generated here and returned once; only its hash is
+  // stored, so no later procedure can read it back.
+  rpc CreateSignupToken(CreateSignupTokenRequest) returns (CreateSignupTokenResponse);
+
+  // ListSignupTokens answers the issued tokens with their usage counters.
+  // The raw values are absent on purpose: they were shown once, at creation,
+  // and only their hashes live in the database.
+  rpc ListSignupTokens(ListSignupTokensRequest) returns (ListSignupTokensResponse);
+
+  // DeleteSignupToken revokes an issued token. A spent or expired token needs
+  // no deletion — the consumption rules refuse it — so this exists for an
+  // invitation withdrawn before its window closes.
+  rpc DeleteSignupToken(DeleteSignupTokenRequest) returns (DeleteSignupTokenResponse);
 }
 
 // SignupRequest carries the account fields and the signup token.
@@ -70,3 +91,76 @@ message User {
   // display_name is the name shown in the UI.
   string display_name = 4;
 }
+
+// SignupToken is the issued token's view. It carries the counters an operator
+// manages, never the raw value: a token is shown once, in the creation
+// response, and only its hash is stored.
+//
+// TODO(signup): user_groups joins an issued token to the groups its sign-ups
+// join, per the upstream shape; deferred until the usergroup feature lands.
+message SignupToken {
+  // id is the token row's identifier, a UUID string.
+  string id = 1;
+
+  // usage_limit is how many sign-ups the token admits.
+  int32 usage_limit = 2;
+
+  // usage_count is how many sign-ups have used it.
+  int32 usage_count = 3;
+
+  // created_at is the issue time, RFC 3339.
+  string created_at = 4;
+
+  // expires_at is the instant the token stops admitting sign-ups, RFC 3339.
+  string expires_at = 5;
+}
+
+// CreateSignupTokenRequest carries the token's window and budget.
+message CreateSignupTokenRequest {
+  // ttl_seconds is how long the token admits sign-ups, in seconds. It must
+  // be positive; a day is 86400.
+  int32 ttl_seconds = 1;
+
+  // usage_limit is how many sign-ups the token admits. It defaults to 1 —
+  // the single invitation — when unset.
+  optional int32 usage_limit = 2;
+}
+
+// CreateSignupTokenResponse is the issued token. raw_token is the only place
+// the value exists: it is not stored and cannot be read back.
+message CreateSignupTokenResponse {
+  // token is the issued token's view.
+  SignupToken token = 1;
+
+  // raw_token is the value an invitation carries. Show it once.
+  string raw_token = 2;
+}
+
+// ListSignupTokensRequest carries the page the caller asks for. Both fields
+// unset answer the first default-sized page.
+message ListSignupTokensRequest {
+  // page is the one-based page number.
+  optional int32 page = 1;
+
+  // limit is the page size.
+  optional int32 limit = 2;
+}
+
+// ListSignupTokensResponse is the issued tokens and their pagination block.
+message ListSignupTokensResponse {
+  // tokens are the issued tokens, newest first.
+  repeated SignupToken tokens = 1;
+
+  // metadata is the pagination block the list responses carry.
+  tango.common.v1.ListMetadata metadata = 2;
+}
+
+// DeleteSignupToken names the token to revoke.
+message DeleteSignupTokenRequest {
+  // id is the token row's identifier, the UUID string the list answered.
+  string id = 1;
+}
+
+// DeleteSignupTokenResponse is empty: a successful deletion says so with the
+// protocol, and a missed one with the not-found code.
+message DeleteSignupTokenResponse {}

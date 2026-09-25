@@ -2,20 +2,28 @@ type: http_request
 model: http_request
 id: rq_jLuxbaWEtP
 createdAt: 2026-09-25T10:33:41.759673
-updatedAt: 2026-09-25T10:33:41.759676
+updatedAt: 2026-09-25T12:11:47.924682
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
 authenticationType: null
 body:
+  bodyType: application/json
   text: |-
     {
       "username": "yaak_${[ faker.string.alphanumeric(options='{"length": 12}') ]}",
       "email": "yaak_${[ faker.string.alphanumeric(options='{"length": 12}') ]}@example.com",
-      "token": "REPLACE_SIGNUP_TOKEN"
+      "password": "${[ password ]}",
+      "token": "${[ response.body.path(request='rq_PVBpyz36Rx', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC5yYXdfdG9rZW4') ]}"
     }
 bodyType: application/json
-description: Username and email are generated per run with Faker; the signup token still needs a value from the Create signup token request.
+description: |-
+  Create a new user account
+
+  Mirror of Pocket ID `POST /api/signup`.
+
+  Parameters:
+  - user (body, required): User information
 headers:
 - enabled: true
   name: Content-Type
@@ -27,7 +35,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Sign up'
-sortPriority: 0.0
+sortPriority: 17.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.SignupService/Signup
 urlParameters: []
 settingSendCookies:

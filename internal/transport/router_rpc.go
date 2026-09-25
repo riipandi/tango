@@ -15,6 +15,7 @@ import (
 	systemv1connect "github.com/riipandi/tango/codegen/proto/go/tango/system/v1/systemv1connect"
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/transport/middleware"
 )
 
 // RPCPath is the route prefix the ConnectRPC surface is mounted on. The SPA,
@@ -126,12 +127,13 @@ func rpcHandlerOptions() []connect.HandlerOption {
 }
 
 // mountRPC registers the ConnectRPC surface on the router. It receives
-// exactly what the surface serves — the checker and the modules — so the RPC
-// registration never reads how the router got its dependencies.
-func mountRPC(r chi.Router, checker *health.Checker, modules []kernel.Module) {
+// exactly what the surface serves — the checker, the authenticator, and the
+// modules — so the RPC registration never reads how the router got its
+// dependencies.
+func mountRPC(r chi.Router, checker *health.Checker, auth Authenticator, modules []kernel.Module) {
 	// The prefix is stripped because chi only shifts its own route context: a
 	// generated Connect handler matches its procedure path exactly.
-	r.Mount(RPCPath, http.StripPrefix(RPCPath, rpcRouter(checker, modules)))
+	r.Mount(RPCPath, http.StripPrefix(RPCPath, rpcRouter(checker, auth, modules)))
 }
 
 // rpcRouter builds the Connect handler tree served below RPCPath.
@@ -146,7 +148,7 @@ func mountRPC(r chi.Router, checker *health.Checker, modules []kernel.Module) {
 // (no procedure in this contract declares `idempotency_level =
 // NO_SIDE_EFFECTS`, which is what would make a GET legal), and the generated
 // handler is what refuses another method with `405` and `Allow: POST`.
-func rpcRouter(checker *health.Checker, modules []kernel.Module) http.Handler {
+func rpcRouter(checker *health.Checker, auth Authenticator, modules []kernel.Module) http.Handler {
 	r := chi.NewRouter()
 
 	options := rpcHandlerOptions()
@@ -173,7 +175,10 @@ func rpcRouter(checker *health.Checker, modules []kernel.Module) http.Handler {
 			fmt.Sprintf("procedure %q does not accept %s", r.URL.Path, r.Method))
 	})
 
-	return r
+	// Authentication wraps the finished tree, so a refusal happens before the
+	// request is decoded and an unknown procedure is not disclosed to a
+	// caller without a token.
+	return middleware.BearerAuth(auth, rpcPublicProcedures, options, r)
 }
 
 // writeRPCError answers a request that reached no procedure, in the protocol the caller used.
