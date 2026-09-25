@@ -21,6 +21,7 @@ var durationKeys = []string{
 	"auth.refresh_long_ttl",
 	"auth.refresh_short_ttl",
 	"cache.ttl",
+	"database.connect_retry_interval",
 	"database.connect_timeout",
 	"database.max_conn_idle_time",
 	"database.max_conn_lifetime",

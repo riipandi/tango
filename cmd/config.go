@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -88,23 +89,28 @@ func initConfig(ctx context.Context, cmd *cli.Command) (context.Context, error) 
 // and must close it.
 //
 // Every pool setting comes from cfg, so a command cannot open a pool that
-// disagrees with the configuration.
+// disagrees with the configuration. The probe retries on the configured terms:
+// a command that runs from a container's boot sequence races the database the
+// same way serve does.
 func openStore(ctx context.Context, cfg config.Config) (*datastore.Postgres, error) {
-	store, err := datastore.NewPostgres(ctx, datastore.PostgresOptions{
-		DSN:             cfg.Database.URL,
-		ApplicationName: config.AppIdentifier,
-		MaxConns:        cfg.Database.MaxConns,
-		MinConns:        cfg.Database.MinConns,
-		MaxConnLifetime: cfg.Database.MaxConnLifetime,
-		MaxConnIdleTime: cfg.Database.MaxConnIdleTime,
-		ConnectTimeout:  cfg.Database.ConnectTimeout,
-		SearchPath:      cfg.Database.SearchPath,
-		Timezone:        cfg.Database.Timezone,
-	})
+	store, err := datastore.NewPostgres(ctx, databaseOptions(ctx, cfg))
 	if err != nil {
 		return nil, err
 	}
 	return store, nil
+}
+
+// probeLogger is the logger a connection probe reports a retry through. It is
+// the process logger when the command has one — built here if the command never
+// asked for it, because a retry an operator cannot see looks like a hang — and
+// nil when the logger itself cannot be built, which leaves the probe silent
+// rather than failing a command over its logging.
+func probeLogger(ctx context.Context) *slog.Logger {
+	log, err := loggerFrom(ctx)
+	if err != nil || log == nil {
+		return nil
+	}
+	return log.Slog()
 }
 
 // requireDatabaseURL reports the missing DSN with the message every command

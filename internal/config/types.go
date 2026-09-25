@@ -113,6 +113,12 @@ type Database struct {
 	MaxConnIdleTime time.Duration `koanf:"max_conn_idle_time" json:"max_conn_idle_time"`
 	// ConnectTimeout bounds the initial connection attempt.
 	ConnectTimeout time.Duration `koanf:"connect_timeout" json:"connect_timeout"`
+	// ConnectAttempts is how many times the startup probe tries to reach the
+	// database before the run fails, and ConnectRetryInterval is the wait
+	// between two attempts. One attempt means the probe reports instead of
+	// waiting, which is what a command that only reads one key wants.
+	ConnectAttempts      int           `koanf:"connect_attempts" json:"connect_attempts"`
+	ConnectRetryInterval time.Duration `koanf:"connect_retry_interval" json:"connect_retry_interval"`
 	// SearchPath and Timezone are applied to every pooled connection.
 	SearchPath string `koanf:"search_path" json:"search_path"`
 	Timezone   string `koanf:"timezone" json:"timezone"`

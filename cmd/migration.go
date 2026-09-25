@@ -31,7 +31,7 @@ func openMigrator(
 		return nil, "", nil, err
 	}
 
-	db, err := datastore.OpenMigrationDB(ctx, datastore.PostgresOptions{DSN: dsn})
+	db, err := datastore.OpenMigrationDB(ctx, databaseOptions(ctx, cfg))
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -42,6 +42,26 @@ func openMigrator(
 		return nil, "", nil, err
 	}
 	return migrator, dsn, func() { _ = db.Close() }, nil
+}
+
+// databaseOptions is the pool and probe configuration a command opens a handle
+// with, so every command reaches the database on the terms the file describes
+// and a retry is logged through the process logger.
+func databaseOptions(ctx context.Context, cfg config.Config) datastore.PostgresOptions {
+	return datastore.PostgresOptions{
+		DSN:                  cfg.Database.URL,
+		ApplicationName:      config.AppIdentifier,
+		MaxConns:             cfg.Database.MaxConns,
+		MinConns:             cfg.Database.MinConns,
+		MaxConnLifetime:      cfg.Database.MaxConnLifetime,
+		MaxConnIdleTime:      cfg.Database.MaxConnIdleTime,
+		ConnectTimeout:       cfg.Database.ConnectTimeout,
+		ConnectAttempts:      cfg.Database.ConnectAttempts,
+		ConnectRetryInterval: cfg.Database.ConnectRetryInterval,
+		SearchPath:           cfg.Database.SearchPath,
+		Timezone:             cfg.Database.Timezone,
+		Logger:               probeLogger(ctx),
+	}
 }
 
 // printPending reports the migrations the database has not applied yet. Each

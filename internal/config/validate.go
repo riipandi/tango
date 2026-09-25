@@ -56,6 +56,8 @@ func (c Config) Validate() error {
 	check(c.Database.MaxConnLifetime > 0, "database.max_conn_lifetime: must be positive")
 	check(c.Database.MaxConnIdleTime > 0, "database.max_conn_idle_time: must be positive")
 	check(c.Database.ConnectTimeout > 0, "database.connect_timeout: must be positive")
+	check(c.Database.ConnectAttempts > 0, "database.connect_attempts: must be positive")
+	check(c.Database.ConnectRetryInterval > 0, "database.connect_retry_interval: must be positive")
 	check(c.Database.SearchPath != "", "database.search_path: must not be empty")
 	check(c.Database.Timezone != "", "database.timezone: must not be empty")
 

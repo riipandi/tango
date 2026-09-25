@@ -43,16 +43,20 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 
 		do.Lazy(func(i do.Injector) (*datastore.Postgres, error) {
 			c := do.MustInvoke[*config.Config](i)
+			log := do.MustInvoke[*slog.Logger](i)
 			return datastore.NewPostgres(ctx, datastore.PostgresOptions{
-				DSN:             c.Database.URL,
-				ApplicationName: config.AppIdentifier,
-				SearchPath:      c.Database.SearchPath,
-				Timezone:        c.Database.Timezone,
-				MaxConns:        c.Database.MaxConns,
-				MinConns:        c.Database.MinConns,
-				MaxConnLifetime: c.Database.MaxConnLifetime,
-				MaxConnIdleTime: c.Database.MaxConnIdleTime,
-				ConnectTimeout:  c.Database.ConnectTimeout,
+				DSN:                  c.Database.URL,
+				ApplicationName:      config.AppIdentifier,
+				SearchPath:           c.Database.SearchPath,
+				Timezone:             c.Database.Timezone,
+				MaxConns:             c.Database.MaxConns,
+				MinConns:             c.Database.MinConns,
+				MaxConnLifetime:      c.Database.MaxConnLifetime,
+				MaxConnIdleTime:      c.Database.MaxConnIdleTime,
+				ConnectTimeout:       c.Database.ConnectTimeout,
+				ConnectAttempts:      c.Database.ConnectAttempts,
+				ConnectRetryInterval: c.Database.ConnectRetryInterval,
+				Logger:               log,
 			})
 		}),
 

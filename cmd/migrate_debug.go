@@ -11,6 +11,7 @@ import (
 
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/database/seeders"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/printext"
 )
@@ -122,7 +123,7 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if err := requireMigrated(ctx, dsn); err != nil {
+	if err := requireMigrated(ctx, cfg); err != nil {
 		return err
 	}
 
@@ -199,8 +200,8 @@ func runMigrateSeed(ctx context.Context, cmd *cli.Command) error {
 // the pool, because goose reads its version table through database/sql. Asking
 // goose is deliberate: "pending" is the engine's own answer, so the check
 // cannot drift from what migrate:up would do.
-func requireMigrated(ctx context.Context, dsn string) error {
-	db, err := datastore.OpenMigrationDB(ctx, datastore.PostgresOptions{DSN: dsn})
+func requireMigrated(ctx context.Context, cfg config.Config) error {
+	db, err := datastore.OpenMigrationDB(ctx, databaseOptions(ctx, cfg))
 	if err != nil {
 		return err
 	}

@@ -106,6 +106,10 @@ func checkHealth(ctx context.Context, cmd *cli.Command, cfg config.Config, dsn s
 	uptime := health.Uptime(processStarted)
 
 	started := time.Now()
+	// The probe makes a single attempt on purpose: this command exists to
+	// report whether the database answers right now, and the report is what a
+	// supervisor reads to decide. Waiting would turn a health check into a
+	// second startup sequence and hide the state it is meant to publish.
 	pool, err := datastore.NewPostgres(ctx, datastore.PostgresOptions{DSN: dsn})
 	if err != nil {
 		result := health.Failure(health.CheckNameDatabase, err)

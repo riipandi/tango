@@ -42,7 +42,7 @@ Implemented today — treat as the contract.
 - `pkg/crypto` — AES-256-GCM `Cipher` (`enc:` prefix), PHC `PasswordHasher`, `KeyGenerator` (all four key variables), `DecodeJWK`, `ParseHMACKeyHex` (distinct from `ParseKeyHex`). Do not add another format.
 - `pkg/printext` — colour/formatting for human output; `Style` is meaning, `Palette` is colour. `pkg/envfile` — dotenv reader/writer, preserves comments and key order.
 - `pkg/responder` / `pkg/validate` — API envelope + request validation; no hand-built envelopes. `pkg/jwtutils` — typed JWT claims. `pkg/testutils` — shared testcontainers.
-- `internal/datastore` — single `pgxpool`, `Querier`/`WithTx`, `OpenMigrationDB`, optional Valkey client.
+- `internal/datastore` — single `pgxpool`, `Querier`/`WithTx`, `OpenMigrationDB`, optional Valkey client. Startup probe retries on `database.connect_attempts` × `database.connect_retry_interval` (a permanent SQLSTATE verdict ends the wait at once); the retry is the caller's to ask for — `PostgresOptions.ConnectAttempts` defaults to 1.
 - `internal/cache` — one `Cache` contract; Noop when caching does not run; in-memory driver and Valkey driver (`tango:cache:` prefix).
 - `internal/fetcher` — outbound Resty client; timeout, jittered backoff, circuit breaker; typed errors (network/timeout/cancel/retries/circuit/status); bodies and credentials never logged.
 - `internal/health` — check names generic (`database`, `kvstore`, `storage`), never the product; no DSN/URL/path in published form.

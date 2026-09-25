@@ -74,6 +74,16 @@ func TestValidationRejectsMinAboveMax(t *testing.T) {
 	assert.Contains(t, err.Error(), "database.min_conns")
 }
 
+func TestValidationRejectsAConnectWaitWithoutAttemptsOrInterval(t *testing.T) {
+	// The wait is what makes the startup survive a database that is still
+	// starting; zero attempts would disable it and zero interval would turn
+	// the attempts into a busy loop, so neither is a value a file may set.
+	err := resolveFile(t, `"database": {"connect_attempts": 0, "connect_retry_interval": 0}`)
+	require.ErrorIs(t, err, config.ErrInvalid)
+	assert.Contains(t, err.Error(), "database.connect_attempts")
+	assert.Contains(t, err.Error(), "database.connect_retry_interval")
+}
+
 func TestValidationAcceptsAValidConfiguration(t *testing.T) {
 	require.NoError(t, resolveFile(t, ""))
 }

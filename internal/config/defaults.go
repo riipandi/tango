@@ -240,13 +240,15 @@ func Default() Config {
 			MaxBodyBytes:            DefaultFetcherMaxBody,
 		},
 		Database: Database{
-			MaxConns:        10,
-			MinConns:        2,
-			MaxConnLifetime: time.Hour,
-			MaxConnIdleTime: 30 * time.Minute,
-			ConnectTimeout:  5 * time.Second,
-			SearchPath:      "public,internal,reference",
-			Timezone:        "UTC",
+			MaxConns:             10,
+			MinConns:             2,
+			MaxConnLifetime:      time.Hour,
+			MaxConnIdleTime:      30 * time.Minute,
+			ConnectTimeout:       5 * time.Second,
+			ConnectAttempts:      5,
+			ConnectRetryInterval: 2 * time.Second,
+			SearchPath:           "public,internal,reference",
+			Timezone:             "UTC",
 		},
 		KVStore: KVStore{
 			// Disabled by default, so a fresh checkout runs on Postgres and
