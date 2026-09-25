@@ -25,6 +25,7 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/signin"
+	"github.com/riipandi/tango/modules/identity/signup"
 	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
@@ -42,6 +43,9 @@ type Deps struct {
 
 	// SignIn verifies the primary credential and issues the token pair.
 	SignIn *signin.Service
+
+	// Signup creates an account from a signup token.
+	Signup *signup.Service
 }
 
 // Module mounts every identity feature.
@@ -140,6 +144,8 @@ func features(deps Deps) []kernel.Module {
 	if deps.SignIn != nil {
 		modules = append(modules, signin.NewModule(deps.SignIn))
 	}
+	if deps.Signup != nil {
+		modules = append(modules, signup.NewModule(deps.Signup))
+	}
 	return modules
 }
-
