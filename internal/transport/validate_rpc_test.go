@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,7 +31,7 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 		Checker: health.NewChecker(),
 		Modules: []kernel.Module{
 			signup.NewModule(signup.NewService(nil, nil)),
-			user.NewModule(user.NewService(nil, nil)),
+			user.NewModule(user.NewService(nil, nil, nil)),
 			verification.NewModule(verification.NewService(nil, nil, nil, "", nil)),
 		},
 	})
@@ -86,6 +87,18 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 		"empty names on signup": {
 			"/tango.identity.v1.SignupService/Signup",
 			`{"username":"ada","email":"ada@example.com","password":"correct horse","token":"tok"}`,
+		},
+		"empty picture bytes on update": {
+			"/tango.identity.v1.UserService/UpdateProfilePicture",
+			`{"userId":"018f0000-0000-7000-8000-000000000000","data":""}`,
+		},
+		"picture bytes past the contract's bound": {
+			"/tango.identity.v1.UserService/UpdateProfilePicture",
+			`{"userId":"018f0000-0000-7000-8000-000000000000","data":"` + strings.Repeat("A", 2*1024*1024+1) + `}`,
+		},
+		"bad user id on reset": {
+			"/tango.identity.v1.UserService/ResetProfilePicture",
+			`{"userId":"not-a-uuid"}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

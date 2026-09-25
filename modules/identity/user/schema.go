@@ -29,4 +29,8 @@ type UserSchema struct {
 	BannedAt        *time.Time `db:"banned_at"`
 	BanExpires      *time.Time `db:"ban_expires"`
 	BanReason       *string    `db:"ban_reason"`
+
+	// ProfilePicturePath is the storage key the account's picture lives
+	// under; nil means the bundled default picture answers for it.
+	ProfilePicturePath *string `db:"profile_picture_path"`
 }

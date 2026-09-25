@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_zxNgqGsQff
 createdAt: 2026-09-25T10:33:41.055291
-updatedAt: 2026-09-25T17:13:25.951561
+updatedAt: 2026-09-25T17:38:42.062082
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -10,17 +10,23 @@ authenticationType: null
 body:
   text: |-
     {
-      "id": "REPLACE_USER_ID"
+      "userId": "${[ userId ]}",
+      "data": "REPLACE_BASE64_IMAGE"
     }
 bodyType: application/json
 description: |-
-  Update a specific user's profile picture
+  Update a specific user's profile picture.
 
-  Mirror of Pocket ID `PUT /api/users/{id}/profile-picture`.
+  Ported from Pocket ID `PUT /api/users/{id}/profile-picture` as the
+  `UpdateProfilePicture` procedure. Requires a Bearer token of the account's
+  owner or an administrator; the image bytes travel base64-encoded in the
+  request and are checked against their magic bytes — PNG, JPEG, or WebP, at
+  most 2 MiB. The engine stages the bytes and lands them on the storage
+  backend through the durable queue.
 
   Parameters:
-  - id (path, required): User ID
-  - file (formData, required): Profile picture image file (PNG, JPG, or JPEG)
+  - userId (string, required): User ID
+  - data (bytes, required): base64-encoded image bytes
 headers:
 - enabled: true
   name: Content-Type
@@ -31,14 +37,18 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Update user profile picture (unimplemented)'
+name: '[Pocket ID] Update user profile picture'
 sortPriority: 11333.333333333334
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/UpdateProfilePicture
 urlParameters:
 - enabled: true
   name: id
-  value: REPLACE_ID
-  id: null
+  value: ${[ userId ]}
+  id: hImYmxMSI9
+- enabled: true
+  name: ''
+  value: ''
+  id: T3wkUzCUSR
 settingSendCookies:
   enabled: false
   value: true

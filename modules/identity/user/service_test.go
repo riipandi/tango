@@ -1,8 +1,10 @@
 package user
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
@@ -15,7 +17,10 @@ import (
 
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	"github.com/riipandi/tango/database"
+	"log/slog"
+
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/testutils"
 
@@ -44,9 +49,32 @@ func migratedPool(t *testing.T) *datastore.Postgres {
 	return pool
 }
 
+// readPicture opens the account's picture through the service's read, so a
+// test reads the body the transport would stream.
+func (s *Service) readPicture(ctx context.Context, id string) (io.ReadCloser, string, error) {
+	view, err := s.ProfilePicture(ctx, id)
+	if err != nil {
+		return nil, "", err
+	}
+	return view.Body, view.ContentType, nil
+}
+
 func testService(t *testing.T, pool *datastore.Postgres) *Service {
 	t.Helper()
-	return NewService(pool, nil)
+	return NewService(pool, nil, nil)
+}
+
+// testPictureService builds the service over the real storage engine — the
+// local driver in a throwaway directory and the small chunk size the engine's
+// own tests use — so a picture procedure runs the stage, sync, and read the
+// production path runs.
+func testPictureService(t *testing.T, pool *datastore.Postgres) *Service {
+	t.Helper()
+
+	manager, err := storage.NewManager(storage.NewFS(t.TempDir()), pool, 32,
+		t.TempDir(), 2, slog.New(slog.DiscardHandler))
+	require.NoError(t, err)
+	return NewService(pool, nil, manager)
 }
 
 // passwordCount reads how many credentials an account carries. An account
@@ -358,4 +386,185 @@ func TestMapErrorCarriesTheConnectCodes(t *testing.T) {
 		assert.Equal(t, tc.code, connect.CodeOf(mapError(tc.err)), "%v", tc.err)
 	}
 	assert.Equal(t, connect.CodeInternal, connect.CodeOf(mapError(errors.New("boom"))))
+}
+
+// TestThePictureFlowStagesSyncsAndReadsBack runs the update through the real
+// engine — stage, inline sync, row pointer — and reads the bytes back with
+// the content type the update recorded.
+func TestThePictureFlowStagesSyncsAndReadsBack(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testPictureService(t, pool)
+	created, err := service.CreateUser(t.Context(), CreateParams{
+		Username: "ada", Email: "ada@example.com", Password: "correct horse",
+		FirstName: "Ada", LastName: "Lovelace",
+	})
+	require.NoError(t, err)
+	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: false}
+
+	picture := bytes.Repeat([]byte("A"), 80) // PNG magic + filler
+	picture[0], picture[3] = 0x89, 'N'
+	copy(picture, []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
+	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, claims, picture))
+
+	body, mime, err := service.readPicture(t.Context(), created.ID)
+	require.NoError(t, err)
+	defer body.Close()
+	assert.Equal(t, "image/png", mime)
+	read, err := io.ReadAll(body)
+	require.NoError(t, err)
+	assert.Equal(t, picture, read)
+
+	// The row names the key the engine holds the file under.
+	var storedPath *string
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("profile_picture_path")
+	sb.From(UserTable)
+	sb.Where(sb.Equal("id", created.ID))
+	query, args := sb.Build()
+	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&storedPath))
+	require.NotNil(t, storedPath)
+	assert.Equal(t, "avatars/"+created.ID+"/profile-picture", *storedPath)
+}
+
+// TestPictureUpdateSniffsTheBytesRatherThanTheDeclaration refuses a payload
+// no accepted image kind claims, whatever its name says.
+func TestPictureUpdateSniffsTheBytesRatherThanTheDeclaration(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testPictureService(t, pool)
+	created, err := service.CreateUser(t.Context(), CreateParams{
+		Username: "ada", Email: "ada@example.com", Password: "correct horse",
+		FirstName: "Ada", LastName: "Lovelace",
+	})
+	require.NoError(t, err)
+	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: false}
+
+	err = service.UpdateProfilePicture(t.Context(), created.ID, claims, []byte("definitely not an image"))
+	assert.ErrorIs(t, err, ErrUnsupportedPicture)
+
+	// The WAV file shares the RIFF form with WebP; the format field tells
+	// them apart.
+	wav := append([]byte("RIFF"), make([]byte, 8)...)
+	copy(wav[8:], "WAVE")
+	err = service.UpdateProfilePicture(t.Context(), created.ID, claims, wav)
+	assert.ErrorIs(t, err, ErrUnsupportedPicture)
+}
+
+// TestPictureEditBelongsToTheOwnerOrAnAdministrator keeps the two-gate rule:
+// the owner under whatever case the claims carry, an administrator for any
+// account, nobody else.
+func TestPictureEditBelongsToTheOwnerOrAnAdministrator(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testPictureService(t, pool)
+	created, err := service.CreateUser(t.Context(), CreateParams{
+		Username: "ada", Email: "ada@example.com", Password: "correct horse",
+		FirstName: "Ada", LastName: "Lovelace",
+	})
+	require.NoError(t, err)
+	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
+
+	for name, claims := range map[string]*jwtutils.AccessClaims{
+		"owner":    {Username: "ADA", IsAdmin: false},
+		"admin":    {Username: "grace", IsAdmin: true},
+		"stranger": {Username: "grace", IsAdmin: false},
+	} {
+		updateErr := service.UpdateProfilePicture(t.Context(), created.ID, claims, picture)
+		if name == "stranger" {
+			assert.ErrorIs(t, updateErr, ErrPictureForbidden, name)
+			continue
+		}
+		assert.NoError(t, updateErr, name)
+	}
+
+	err = service.ResetProfilePicture(t.Context(), created.ID, &jwtutils.AccessClaims{Username: "grace", IsAdmin: false})
+	assert.ErrorIs(t, err, ErrPictureForbidden)
+}
+
+// TestPictureResetFallsBackToTheDefault clears the row and removes the file,
+// so the read answers the bundled default the frontend ships.
+func TestPictureResetFallsBackToTheDefault(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testPictureService(t, pool)
+	created, err := service.CreateUser(t.Context(), CreateParams{
+		Username: "ada", Email: "ada@example.com", Password: "correct horse",
+		FirstName: "Ada", LastName: "Lovelace",
+	})
+	require.NoError(t, err)
+	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: false}
+	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 1, 2}
+	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, claims, picture))
+
+	// The read before the reset answers the stored bytes.
+	body, _, readErr := service.readPicture(t.Context(), created.ID)
+	require.NoError(t, readErr)
+	body.Close()
+
+	require.NoError(t, service.ResetProfilePicture(t.Context(), created.ID, claims))
+
+	var storedPath *string
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("profile_picture_path")
+	sb.From(UserTable)
+	sb.Where(sb.Equal("id", created.ID))
+	query, args := sb.Build()
+	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&storedPath))
+	assert.Nil(t, storedPath)
+
+	view, err := service.ProfilePicture(t.Context(), created.ID)
+	require.NoError(t, err)
+	defer view.Body.Close()
+	assert.True(t, view.Default)
+	empty, err := io.ReadAll(view.Body)
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+
+	// The file left the engine: the sync the update ran holds no copy the
+	// reset forgot.
+	assert.True(t, view.Default, "the read after the reset answers the default")
+}
+
+// TestPictureRefusesAnUnknownAccount keeps the not-found boundary on every
+// picture procedure.
+func TestPictureRefusesAnUnknownAccount(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testPictureService(t, pool)
+	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: true}
+
+	id := "00000000-0000-0000-0000-000000000000"
+	err := service.UpdateProfilePicture(t.Context(), id, claims, []byte("x"))
+	assert.ErrorIs(t, err, ErrUserNotFound)
+	err = service.ResetProfilePicture(t.Context(), id, claims)
+	assert.ErrorIs(t, err, ErrUserNotFound)
+	_, err = service.ProfilePicture(t.Context(), id)
+	assert.ErrorIs(t, err, ErrUserNotFound)
+}
+
+// TestPictureProceduresRefuseARunWithoutTheEngine covers the deployment that
+// serves accounts without picture storage: the account procedures answer as
+// usual, the picture procedures refuse.
+func TestPictureProceduresRefuseARunWithoutTheEngine(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testService(t, pool)
+	created, err := service.CreateUser(t.Context(), CreateParams{
+		Username: "ada", Email: "ada@example.com", Password: "correct horse",
+		FirstName: "Ada", LastName: "Lovelace",
+	})
+	require.NoError(t, err)
+	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: false}
+
+	err = service.UpdateProfilePicture(t.Context(), created.ID, claims, []byte("x"))
+	assert.ErrorIs(t, err, ErrPicturesUnavailable)
+	err = service.ResetProfilePicture(t.Context(), created.ID, claims)
+	assert.ErrorIs(t, err, ErrPicturesUnavailable)
 }

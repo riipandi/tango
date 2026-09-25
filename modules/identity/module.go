@@ -25,6 +25,7 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/modules/identity/signup"
@@ -130,7 +131,8 @@ var Package = do.Package(
 	do.Lazy(func(i do.Injector) (*user.Service, error) {
 		log := do.MustInvoke[*slog.Logger](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
-		return user.NewService(pool, log), nil
+		pictures := do.MustInvoke[*storage.Manager](i)
+		return user.NewService(pool, log, pictures), nil
 	}),
 
 	// The verification service builds over the mailer and the queue the

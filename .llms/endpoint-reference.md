@@ -303,10 +303,8 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | POST | `/rpc/tango.identity.v1.UserService/UpdateUser` | Update user | done — admin Bearer; full replace; mandatory names; ban fields as a unit | `modules/identity/user` (service tests) |
 | POST | `/rpc/tango.identity.v1.UserService/DeleteUser` | Delete user | done — admin Bearer; refuses the signed-in account | `modules/identity/user` (service tests) |
 | POST | `/rpc/tango.identity.v1.UserService/UpdateMe` | Update current user | planned — self-service profile; not yet implemented | — |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateMyProfilePicture` | Update current user's profile picture | planned — needs the storage upload path; not yet implemented | — |
-| POST | `/rpc/tango.identity.v1.UserService/DeleteMyProfilePicture` | Reset current user's profile picture | planned — needs the storage upload path; not yet implemented | — |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateProfilePicture` | Update user profile picture | planned — needs the storage upload path; not yet implemented | — |
-| POST | `/rpc/tango.identity.v1.UserService/DeleteProfilePicture` | Reset user profile picture | planned — needs the storage upload path; not yet implemented | — |
+| POST | `/rpc/tango.identity.v1.UserService/UpdateProfilePicture` | Update user profile picture | done — owner or admin Bearer; bytes in request, magic-byte sniff (PNG/JPEG/WebP), max 2 MiB; staged then synced in-request | `modules/identity/user` (service + handler tests) |
+| POST | `/rpc/tango.identity.v1.UserService/ResetProfilePicture` | Reset user profile picture | done — owner or admin Bearer; deletes the stored file and clears the row | `modules/identity/user` (service + handler tests) |
 | POST | `/rpc/tango.identity.v1.UserService/ListUserGroups` | Get user groups | planned — needs the usergroup feature; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.UserService/ReplaceUserGroups` | Update user groups | planned — needs the usergroup feature; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.UserService/ListWebAuthnCredentials` | List user passkeys | planned — needs the webauthn feature; not yet implemented | — |
@@ -318,7 +316,7 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | POST | `/api/one-time-access-token/{token}` | Exchange one-time access token | REST — email link; single use, sets the session cookie | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
 | POST | `/rpc/tango.identity.v1.EmailVerificationService/SendEmail` | Send email verification | done — self-service Bearer; refuses verified; resend cooldown on last_sent_at; token row upserted, email via the durable queue | `modules/identity/verification` (service tests, Mailpit end-to-end) |
 | POST | `/rpc/tango.identity.v1.EmailVerificationService/VerifyEmail` | Verify email | done — public; token is the credential; consumed on success | `modules/identity/verification` (service tests) |
-| GET | `/api/users/{id}/profile-picture.png` | Get user profile picture | REST — bare bytes, default fallback | `modules/identity/user.TestProfilePictureDefaultFallback` |
+| GET | `/api/users/{id}/profile-picture.png` | Get user profile picture | done — REST; public; streams the stored bytes, an account without one answers the bundled default by redirect to `/images/default-avatar.png` | `modules/identity/user` (handler test) |
 
 ## WebAuthn
 

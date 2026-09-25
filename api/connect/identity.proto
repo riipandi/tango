@@ -83,6 +83,17 @@ service UserService {
   // the removal is soft by construction, not by a flag the service writes.
   // An administrator cannot delete the account they are signed in with.
   rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+
+  // UpdateProfilePicture replaces an account's profile picture. The image
+  // bytes travel in the request; the storage engine stages them and the
+  // durable queue lands them on the backend. The caller may be the account's
+  // owner or an administrator.
+  rpc UpdateProfilePicture(UpdateProfilePictureRequest) returns (UpdateProfilePictureResponse);
+
+  // ResetProfilePicture removes an account's profile picture. The account
+  // falls back to the bundled default picture the read answers with. The
+  // caller may be the account's owner or an administrator.
+  rpc ResetProfilePicture(ResetProfilePictureRequest) returns (ResetProfilePictureResponse);
 }
 
 // EmailVerificationService verifies an account's address. The verification
@@ -450,3 +461,26 @@ message DeleteUserRequest {
 // DeleteUserResponse is empty: a successful deletion says so with the
 // protocol, and a missed one with the not-found code.
 message DeleteUserResponse {}
+
+// UpdateProfilePictureRequest carries the image bytes. The size bound is the
+// contract's business, checked before any handler runs; the accepted image
+// kinds are the service's, checked against the bytes themselves rather than
+// a declared type.
+message UpdateProfilePictureRequest {
+  // The account whose picture is replaced.
+  string user_id = 1 [(buf.validate.field).string.uuid = true];
+  // The image bytes, at most 2 MiB.
+  bytes data = 2 [(buf.validate.field).bytes = {
+    min_len: 1,
+    max_len: 2097152
+  }];
+}
+
+message UpdateProfilePictureResponse {}
+
+message ResetProfilePictureRequest {
+  // The account whose picture is removed.
+  string user_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ResetProfilePictureResponse {}

@@ -34,10 +34,6 @@ func NewModule(service *Service) *Module {
 // Name reports the module in composition reports.
 func (m *Module) Name() string { return ModuleName }
 
-// Mount registers the endpoints on the HTTP router. The feature serves no
-// plain HTTP route: a procedure is POST-only on the RPC surface.
-func (m *Module) Mount(r chi.Router) {}
-
 // MountRPC registers the procedures on the RPC router. The handler options
 // are the transport's — the shared snake_case codec and the panic boundary —
 // so the procedures answer exactly like the transport's own. Each procedure
@@ -51,6 +47,8 @@ func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
 	r.Handle(identityv1connect.UserServiceCreateUserProcedure, handler)
 	r.Handle(identityv1connect.UserServiceUpdateUserProcedure, handler)
 	r.Handle(identityv1connect.UserServiceDeleteUserProcedure, handler)
+	r.Handle(identityv1connect.UserServiceUpdateProfilePictureProcedure, handler)
+	r.Handle(identityv1connect.UserServiceResetProfilePictureProcedure, handler)
 }
 
 // rpcHandler is the transport mapping of the procedures. The service carries
@@ -165,6 +163,35 @@ func (h *rpcHandler) DeleteUser(ctx context.Context, req *connect.Request[identi
 	return connect.NewResponse(&identityv1.DeleteUserResponse{}), nil
 }
 
+// UpdateProfilePicture replaces an account's picture. The write is the
+// account owner's or an administrator's; the service tells the two gates
+// apart and the mapError boundary answers the rest.
+func (h *rpcHandler) UpdateProfilePicture(ctx context.Context, req *connect.Request[identityv1.UpdateProfilePictureRequest]) (*connect.Response[identityv1.UpdateProfilePictureResponse], error) {
+	claims, ok := callerFrom(ctx)
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
+	}
+
+	if err := h.service.UpdateProfilePicture(ctx, req.Msg.UserId, claims, req.Msg.Data); err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.UpdateProfilePictureResponse{}), nil
+}
+
+// ResetProfilePicture removes an account's picture. The same two-gate rule
+// the update carries governs who may reset it.
+func (h *rpcHandler) ResetProfilePicture(ctx context.Context, req *connect.Request[identityv1.ResetProfilePictureRequest]) (*connect.Response[identityv1.ResetProfilePictureResponse], error) {
+	claims, ok := callerFrom(ctx)
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
+	}
+
+	if err := h.service.ResetProfilePicture(ctx, req.Msg.UserId, claims); err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.ResetProfilePictureResponse{}), nil
+}
+
 // listMetadata maps the responder's pagination onto the shared block. The
 // wire fields are optional, so an unknown range is absent rather than zero.
 func listMetadata(p responder.Pagination) *commonv1.ListMetadata {
@@ -193,8 +220,16 @@ func listMetadata(p responder.Pagination) *commonv1.ListMetadata {
 // adminFrom reads the authenticated caller's claims the bearer middleware
 // attached, and reports whether the caller holds the administrator role.
 func adminFrom(ctx context.Context) (*jwtutils.AccessClaims, bool) {
-	claims, ok := authn.GetInfo(ctx).(*jwtutils.AccessClaims)
+	claims, ok := callerFrom(ctx)
 	return claims, ok && claims.IsAdmin
+}
+
+// callerFrom reads the authenticated caller's claims the bearer middleware
+// attached. Every procedure behind the middleware runs after it, so a
+// missing caller is a defect the transport answers unauthenticated.
+func callerFrom(ctx context.Context) (*jwtutils.AccessClaims, bool) {
+	claims, ok := authn.GetInfo(ctx).(*jwtutils.AccessClaims)
+	return claims, ok
 }
 
 // errAdminRequired is the refusal a caller without the administrator role reads.
@@ -213,6 +248,12 @@ func mapError(err error) error {
 		return connect.NewError(connect.CodeAlreadyExists, errors.New("account already exists"))
 	case errors.Is(err, ErrSelfDeletion):
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("an administrator cannot delete the account they are signed in with"))
+	case errors.Is(err, ErrPictureForbidden):
+		return connect.NewError(connect.CodePermissionDenied, errors.New("the caller may not edit this account's picture"))
+	case errors.Is(err, ErrUnsupportedPicture):
+		return connect.NewError(connect.CodeInvalidArgument, errors.New("the picture must be a PNG, JPEG, or WebP image"))
+	case errors.Is(err, ErrPicturesUnavailable):
+		return connect.NewError(connect.CodeUnavailable, errors.New("picture storage is not available"))
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("user operation failed"))
 	}

@@ -12,6 +12,7 @@ import (
 
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/responder"
 )
@@ -40,21 +41,27 @@ type Service struct {
 	hasher *crypto.PasswordHasher
 	log    *slog.Logger
 	now    func() time.Time
+
+	// pictures is the storage engine the profile pictures live in. It is
+	// nil in the tests that exercise the account procedures only; the
+	// picture procedures refuse while it is absent.
+	pictures *storage.Manager
 }
 
 // NewService builds the service. The database writes run in one transaction
 // the service opens over the pool, so an account and its credential commit
 // together or not at all.
-func NewService(pool *datastore.Postgres, log *slog.Logger) *Service {
+func NewService(pool *datastore.Postgres, log *slog.Logger, pictures *storage.Manager) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Service{
-		pool:   pool,
-		repo:   NewRepository(),
-		hasher: crypto.NewPasswordHasher(),
-		log:    log,
-		now:    time.Now,
+		pool:     pool,
+		repo:     NewRepository(),
+		hasher:   crypto.NewPasswordHasher(),
+		log:      log,
+		pictures: pictures,
+		now:      time.Now,
 	}
 }
 

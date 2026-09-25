@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_YoZusYL3Ai
 createdAt: 2026-09-25T10:33:41.162193
-updatedAt: 2026-09-25T17:13:18.284167
+updatedAt: 2026-09-25T17:40:53.352925
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -10,22 +10,29 @@ authenticationType: null
 body: {}
 bodyType: null
 description: |-
-  Retrieve a specific user's profile picture
+  Retrieve a specific user's profile picture.
 
-  Mirror of Pocket ID `GET /api/users/{id}/profile-picture.png`.
+  Ported from Pocket ID `GET /api/users/{id}/profile-picture.png` — the read
+  stays a REST route, because a picture is fetched by an img tag rather than
+  a client that speaks the protocol. Public; an account without a picture
+  answers the bundled default by redirect to /images/default-avatar.png.
 
   Parameters:
   - id (path, required): User ID
 headers: []
 method: GET
-name: '[Pocket ID] Get user profile picture (unimplemented)'
+name: '[Pocket ID] Get user profile picture'
 sortPriority: 11000.0
-url: ${[ apiBaseURL ]}/api/users/REPLACE_USER_ID/profile-picture.png
+url: ${[ apiBaseURL ]}/api/users/:userId/profile-picture.png
 urlParameters:
 - enabled: true
-  name: id
-  value: REPLACE_ID
-  id: null
+  name: :userId
+  value: ${[ userId ]}
+  id: path-placeholder:0
+- enabled: true
+  name: ''
+  value: ''
+  id: DZz0X35uSw
 settingSendCookies:
   enabled: false
   value: true

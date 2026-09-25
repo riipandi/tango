@@ -27,19 +27,19 @@ func NewRepository() *Repository {
 var userColumns = []string{
 	"id", "username", "email", "first_name", "last_name", "display_name",
 	"locale", "is_admin", "disabled", "email_verified_at", "created_at",
-	"banned_at", "ban_expires", "ban_reason",
+	"banned_at", "ban_expires", "ban_reason", "profile_picture_path",
 }
 
 // scanUser reads one row into the schema. The nullable columns scan through
 // pointers, so an absent name part or ban reads as nil, not as a zero value.
 func scanUser(scan func(dest ...any) error) (UserSchema, error) {
 	var row UserSchema
-	var firstName, lastName, locale, banReason *string
+	var firstName, lastName, locale, banReason, picturePath *string
 	err := scan(
 		&row.ID, &row.Username, &row.Email, &firstName, &lastName,
 		&row.DisplayName, &locale, &row.IsAdmin, &row.Disabled,
 		&row.EmailVerifiedAt, &row.CreatedAt,
-		&row.BannedAt, &row.BanExpires, &banReason,
+		&row.BannedAt, &row.BanExpires, &banReason, &picturePath,
 	)
 	if err != nil {
 		return UserSchema{}, err
@@ -48,6 +48,7 @@ func scanUser(scan func(dest ...any) error) (UserSchema, error) {
 	row.LastName = deref(lastName)
 	row.Locale = deref(locale)
 	row.BanReason = banReason
+	row.ProfilePicturePath = picturePath
 	return row, nil
 }
 
@@ -229,6 +230,23 @@ func nullIfEmpty(value string) any {
 		return nil
 	}
 	return value
+}
+
+// SetProfilePicturePath points the account's picture at a storage key, or
+// clears it when the key is empty — the reset's way back to the bundled
+// default picture.
+func (r *Repository) SetProfilePicturePath(ctx context.Context, db datastore.Querier, id uuid.UUID, path string) (bool, error) {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(UserTable)
+	ub.SetMore(ub.Assign("profile_picture_path", nullIfEmpty(path)))
+	ub.Where(ub.Equal("id", id))
+
+	query, args := ub.Build()
+	tag, err := db.Exec(ctx, query, args...)
+	if err != nil {
+		return false, fmt.Errorf("user: set profile picture path: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // errUniqueViolation reports whether the write failed on a unique index, the

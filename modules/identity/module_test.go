@@ -18,6 +18,7 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/modules/identity/jwks"
 )
 
@@ -39,6 +40,10 @@ func TestTheAreaForwardsFeatureProcedures(t *testing.T) {
 		// root guarantees to be present.
 		do.Eager[*mailer.Service](nil),
 		do.Eager[*queue.Client](nil),
+		// The user feature stages its pictures into the engine; nil stands
+		// in for the wiring the composition root guarantees, and the picture
+		// procedures refuse while the account procedures serve.
+		do.Eager[*storage.Manager](nil),
 	)
 	Package(i)
 
@@ -74,6 +79,10 @@ func TestTheAreaForwardsFeatureProcedures(t *testing.T) {
 	assert.True(t, claimed[identityv1connect.UserServiceUpdateUserProcedure],
 		"the area must forward its features' procedures to the RPC router")
 	assert.True(t, claimed[identityv1connect.UserServiceDeleteUserProcedure],
+		"the area must forward its features' procedures to the RPC router")
+	assert.True(t, claimed[identityv1connect.UserServiceUpdateProfilePictureProcedure],
+		"the area must forward its features' procedures to the RPC router")
+	assert.True(t, claimed[identityv1connect.UserServiceResetProfilePictureProcedure],
 		"the area must forward its features' procedures to the RPC router")
 	assert.True(t, claimed[identityv1connect.EmailVerificationServiceSendEmailProcedure],
 		"the area must forward its features' procedures to the RPC router")
