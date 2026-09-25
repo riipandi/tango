@@ -1,32 +1,42 @@
 package identity
 
 import (
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/samber/do/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	authv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1/authv1connect"
+	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity/jwks"
-	"github.com/riipandi/tango/modules/identity/signin"
 )
 
-// TestTheAreaForwardsFeatureProcedures pins the RPC forwarding: the area
-// implements kernel.RPCModule, because the composition root names the area
-// alone. An area without the interface is skipped by kernel.MountRPC
-// silently, and every procedure it holds answers "unknown procedure".
+// TestTheAreaForwardsFeatureProcedures pins the RPC forwarding through the
+// seam the registry uses: the area's Package registers the services and its
+// Mount resolves them into the Deps. A provider or a resolution missed there
+// leaves the feature's service nil, features() skips it without an error,
+// and every procedure it holds answers "unknown procedure" — an area test
+// that hand-builds Deps pins nothing about that wiring.
 func TestTheAreaForwardsFeatureProcedures(t *testing.T) {
-	deps := Deps{
-		KeySet: jwks.NewService(testConfig(t), nil, nil),
-		SignIn: signin.NewService(testConfig(t), nil, nil, nil),
-	}
+	cfg := testConfig(t)
+	i := do.New(
+		do.Eager(&cfg),
+		do.Eager[*slog.Logger](nil),
+		do.Eager[*datastore.Postgres](nil),
+	)
+	Package(i)
 
-	var module kernel.Module = NewModule(deps)
+	module, err := Mount(i)
+	require.NoError(t, err)
+
 	rpc, ok := module.(kernel.RPCModule)
 	require.True(t, ok, "the area must implement kernel.RPCModule")
 
@@ -38,6 +48,8 @@ func TestTheAreaForwardsFeatureProcedures(t *testing.T) {
 		claimed[route.Pattern] = true
 	}
 	assert.True(t, claimed[authv1connect.AuthServiceSignInProcedure],
+		"the area must forward its features' procedures to the RPC router")
+	assert.True(t, claimed[identityv1connect.SignupServiceSignupProcedure],
 		"the area must forward its features' procedures to the RPC router")
 }
 

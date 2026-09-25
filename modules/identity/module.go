@@ -109,6 +109,12 @@ var Package = do.Package(
 		keys := do.MustInvoke[*jwks.Service](i)
 		return signin.NewService(*c, signin.NewRepository(pool), keys, log), nil
 	}),
+
+	do.Lazy(func(i do.Injector) (*signup.Service, error) {
+		log := do.MustInvoke[*slog.Logger](i)
+		pool := do.MustInvoke[*datastore.Postgres](i)
+		return signup.NewService(pool, log), nil
+	}),
 )
 
 // Mount resolves what this area's features need and builds the module the
@@ -130,7 +136,11 @@ func Mount(i do.Injector) (kernel.Module, error) {
 		return nil, err
 	}
 
-	return NewModule(Deps{KeySet: keySet, SignIn: do.MustInvoke[*signin.Service](i)}), nil
+	return NewModule(Deps{
+		KeySet: keySet,
+		SignIn: do.MustInvoke[*signin.Service](i),
+		Signup: do.MustInvoke[*signup.Service](i),
+	}), nil
 }
 
 // features is the area's feature list, the one place an identity feature is
