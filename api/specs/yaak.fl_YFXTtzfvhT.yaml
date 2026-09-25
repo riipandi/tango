@@ -2,7 +2,7 @@ type: folder
 model: folder
 id: fl_YFXTtzfvhT
 createdAt: 2026-09-19T11:59:42.194257
-updatedAt: 2026-09-19T15:39:46.248723
+updatedAt: 2026-09-25T10:13:00.384662
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication:
@@ -10,7 +10,7 @@ authentication:
 authenticationType: bearer
 description: 'Tango-only password authentication: session, password, MFA, OAuth extension flows'
 headers: []
-name: '[Tango] Authentication'
+name: Authentication
 sortPriority: 3000.0
 settingSendCookies:
   enabled: false
