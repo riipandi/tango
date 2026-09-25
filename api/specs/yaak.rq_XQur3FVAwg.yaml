@@ -2,25 +2,35 @@ type: http_request
 model: http_request
 id: rq_XQur3FVAwg
 createdAt: 2026-09-25T10:33:40.723878
-updatedAt: 2026-09-25T12:13:09.623372
+updatedAt: 2026-09-25T12:32:52.177139
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
-authentication: {}
-authenticationType: null
+authentication:
+  prefix: Bearer
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
+  bodyType: application/json
   text: |-
     {
-      "username": "yaak_${[ faker.string.alphanumeric(options='{"length": 12}') ]}",
-      "email": "yaak_${[ faker.string.alphanumeric(options='{"length": 12}') ]}@example.com"
+      "username": "ada",
+      "email": "ada@example.com",
+      "password": "correct horse",
+      "first_name": "Ada",
+      "last_name": "Lovelace",
+      "is_admin": false
     }
 bodyType: application/json
 description: |-
-  Create a new user
+  Create an account directly, without a signup token. The password is optional: an account created without one carries no credential until one is set.
 
-  Mirror of Pocket ID `POST /api/users`.
+  Ported from Pocket ID `POST /api/users` as the `tango.identity.v1.UserService/CreateUser` procedure.
 
   Parameters:
-  - user (body, required): User information
+  - username (body, required): Account handle
+  - email (body, required): Account address
+  - password (body, optional): Primary credential
+  - display_name (body, optional): Falls back to the username
 headers:
 - enabled: true
   name: Content-Type
@@ -31,8 +41,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Create user (unimplemented)'
-sortPriority: 4000.0
+name: '[Pocket ID] Create user'
+sortPriority: 868.3127572016461
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/CreateUser
 urlParameters: []
 settingSendCookies:

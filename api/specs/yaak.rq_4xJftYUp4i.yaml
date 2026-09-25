@@ -2,24 +2,27 @@ type: http_request
 model: http_request
 id: rq_4xJftYUp4i
 createdAt: 2026-09-25T10:33:40.779504
-updatedAt: 2026-09-25T12:13:09.625624
+updatedAt: 2026-09-25T12:33:51.440733
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
-authentication: {}
-authenticationType: null
+authentication:
+  prefix: Bearer
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
+  bodyType: application/json
   text: |-
     {
       "id": "REPLACE_USER_ID"
     }
 bodyType: application/json
 description: |-
-  Retrieve detailed information about a specific user
+  Retrieve one account by its identifier.
 
-  Mirror of Pocket ID `GET /api/users/{id}`.
+  Ported from Pocket ID `GET /api/users/{id}` as the `tango.identity.v1.UserService/GetUser` procedure.
 
   Parameters:
-  - id (path, required): User ID
+  - id (body, required): User ID
 headers:
 - enabled: true
   name: Content-Type
@@ -30,8 +33,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Get user by ID (unimplemented)'
-sortPriority: 8000.0
+name: '[Pocket ID] Get user by ID'
+sortPriority: 941.472336534065
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/GetUser
 urlParameters:
 - enabled: true

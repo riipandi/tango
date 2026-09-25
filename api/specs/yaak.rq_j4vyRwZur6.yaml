@@ -2,26 +2,38 @@ type: http_request
 model: http_request
 id: rq_j4vyRwZur6
 createdAt: 2026-09-25T10:33:40.835356
-updatedAt: 2026-09-25T12:13:09.629847
+updatedAt: 2026-09-25T12:32:58.676581
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
-authentication: {}
-authenticationType: null
+authentication:
+  prefix: Bearer
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
+  bodyType: application/json
   text: |-
     {
       "id": "REPLACE_USER_ID",
-      "username": "REPLACE_USERNAME"
+      "username": "ada",
+      "email": "ada@example.com",
+      "first_name": "Ada",
+      "last_name": "Lovelace",
+      "display_name": "Ada Lovelace",
+      "is_admin": false,
+      "disabled": false
     }
 bodyType: application/json
 description: |-
-  Update an existing user by ID
+  Replace an account's fields. Every field is specified: an empty name part or locale clears its column. The ban fields are one unit — ban_expires present applies the ban, absent lifts it.
 
-  Mirror of Pocket ID `PUT /api/users/{id}`.
+  Ported from Pocket ID `PUT /api/users/{id}` as the `tango.identity.v1.UserService/UpdateUser` procedure.
 
   Parameters:
-  - id (path, required): User ID
-  - user (body, required): User information
+  - id (body, required): User ID
+  - username (body, required): Account handle
+  - email (body, required): Account address
+  - display_name (body, required): Name the UI shows
+  - ban_expires (body, optional): RFC 3339 instant the ban lifts
 headers:
 - enabled: true
   name: Content-Type
@@ -32,8 +44,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Update user (unimplemented)'
-sortPriority: 19000.0
+name: '[Pocket ID] Update user'
+sortPriority: 960.9815576893768
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/UpdateUser
 urlParameters:
 - enabled: true

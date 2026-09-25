@@ -26,6 +26,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/modules/identity/signup"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
@@ -46,6 +47,9 @@ type Deps struct {
 
 	// Signup creates an account from a signup token.
 	Signup *signup.Service
+
+	// Users administers the accounts.
+	Users *user.Service
 }
 
 // Module mounts every identity feature.
@@ -115,6 +119,12 @@ var Package = do.Package(
 		pool := do.MustInvoke[*datastore.Postgres](i)
 		return signup.NewService(pool, log), nil
 	}),
+
+	do.Lazy(func(i do.Injector) (*user.Service, error) {
+		log := do.MustInvoke[*slog.Logger](i)
+		pool := do.MustInvoke[*datastore.Postgres](i)
+		return user.NewService(pool, log), nil
+	}),
 )
 
 // Mount resolves what this area's features need and builds the module the
@@ -140,6 +150,7 @@ func Mount(i do.Injector) (kernel.Module, error) {
 		KeySet: keySet,
 		SignIn: do.MustInvoke[*signin.Service](i),
 		Signup: do.MustInvoke[*signup.Service](i),
+		Users:  do.MustInvoke[*user.Service](i),
 	}), nil
 }
 
@@ -156,6 +167,9 @@ func features(deps Deps) []kernel.Module {
 	}
 	if deps.Signup != nil {
 		modules = append(modules, signup.NewModule(deps.Signup))
+	}
+	if deps.Users != nil {
+		modules = append(modules, user.NewModule(deps.Users))
 	}
 	return modules
 }

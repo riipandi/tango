@@ -292,25 +292,25 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | Method | Procedure / Endpoint | Summary / Yaak Title | Status | Evidence |
 | ------ | -------------------- | -------------------- | ------ | -------- |
 | POST | `/rpc/tango.identity.v1.SignupService/Signup` | Sign up | done — requires a valid signup token; password required; created unverified (email verification later) | `modules/identity/signup` (service tests) |
-| POST | `/rpc/tango.identity.v1.SignupService/GetSetupAvailability` | Check initial admin setup availability | done — 204 while no user exists, then 404 | `modules/identity/signup.TestSetupAvailabilityAndInitialAdmin` |
-| POST | `/rpc/tango.identity.v1.SignupService/SetupInitialAdmin` | Sign up initial admin user | done — 409 once any user exists | `modules/identity/signup.TestSetupAvailabilityAndInitialAdmin` |
+| POST | `/rpc/tango.identity.v1.SignupService/GetSetupAvailability` | Check initial admin setup availability | planned — needs the setup flow; not yet implemented | — |
+| POST | `/rpc/tango.identity.v1.SignupService/SetupInitialAdmin` | Sign up initial admin user | planned — needs the setup flow; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.SignupService/ListSignupTokens` | List signup tokens | done — admin Bearer; paginated | `modules/identity/signup` (service tests) |
 | POST | `/rpc/tango.identity.v1.SignupService/CreateSignupToken` | Create signup token | done — admin Bearer; raw token shown once | `modules/identity/signup` (service tests) |
 | POST | `/rpc/tango.identity.v1.SignupService/DeleteSignupToken` | Delete signup token | done — admin Bearer | `modules/identity/signup` (service tests) |
-| POST | `/rpc/tango.identity.v1.UserService/ListUsers` | List users | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |
-| POST | `/rpc/tango.identity.v1.UserService/CreateUser` | Create user | done — admin; show-once password | `modules/identity/user.TestUserRPCAdminLifecycle` |
-| POST | `/rpc/tango.identity.v1.UserService/GetUser` | Get user by ID | done — admin; TypeID only | `modules/identity/user.TestUserRPCAdminLifecycle` |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateUser` | Update user | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |
-| POST | `/rpc/tango.identity.v1.UserService/DeleteUser` | Delete user | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateMe` | Update current user | done — self; profile fields only; refuses a machine credential | `modules/identity/user.TestUserRPCSelfBranches` |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateMyProfilePicture` | Update current user's profile picture | done — self; raw bytes; refuses a machine credential | `modules/identity/user.TestUserRPCPictureBranches` |
-| POST | `/rpc/tango.identity.v1.UserService/DeleteMyProfilePicture` | Reset current user's profile picture | done — self; refuses a machine credential | `modules/identity/user.TestUserRPCPictureBranches` |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateProfilePicture` | Update user profile picture | done — admin; raw bytes | `modules/identity/user.TestUserRPCPictureBranches` |
-| POST | `/rpc/tango.identity.v1.UserService/DeleteProfilePicture` | Reset user profile picture | done — admin | `modules/identity/user.TestUserRPCPictureBranches` |
-| POST | `/rpc/tango.identity.v1.UserService/ListUserGroups` | Get user groups | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |
-| POST | `/rpc/tango.identity.v1.UserService/ReplaceUserGroups` | Update user groups | done — replaces the set atomically | `modules/identity/user.TestUserRPCAdminLifecycle` |
-| POST | `/rpc/tango.identity.v1.UserService/ListWebAuthnCredentials` | List user passkeys | done — admin; key material never leaves the store | `modules/identity/user.TestUserRPCAdminLifecycle` |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateWebAuthnCredential` | Rename user passkey | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |
+| POST | `/rpc/tango.identity.v1.UserService/ListUsers` | List users | done — admin Bearer; paginated; optional search over username/email/display_name | `modules/identity/user` (service tests) |
+| POST | `/rpc/tango.identity.v1.UserService/GetUser` | Get user by ID | done — admin Bearer | `modules/identity/user` (service tests) |
+| POST | `/rpc/tango.identity.v1.UserService/CreateUser` | Create user | done — admin Bearer; optional password (absent = no credential) | `modules/identity/user` (service tests) |
+| POST | `/rpc/tango.identity.v1.UserService/UpdateUser` | Update user | done — admin Bearer; full replace; ban fields as a unit | `modules/identity/user` (service tests) |
+| POST | `/rpc/tango.identity.v1.UserService/DeleteUser` | Delete user | done — admin Bearer; refuses the signed-in account | `modules/identity/user` (service tests) |
+| POST | `/rpc/tango.identity.v1.UserService/UpdateMe` | Update current user | planned — self-service profile; not yet implemented | — |
+| POST | `/rpc/tango.identity.v1.UserService/UpdateMyProfilePicture` | Update current user's profile picture | planned — needs the storage upload path; not yet implemented | — |
+| POST | `/rpc/tango.identity.v1.UserService/DeleteMyProfilePicture` | Reset current user's profile picture | planned — needs the storage upload path; not yet implemented | — |
+| POST | `/rpc/tango.identity.v1.UserService/UpdateProfilePicture` | Update user profile picture | planned — needs the storage upload path; not yet implemented | — |
+| POST | `/rpc/tango.identity.v1.UserService/DeleteProfilePicture` | Reset user profile picture | planned — needs the storage upload path; not yet implemented | — |
+| POST | `/rpc/tango.identity.v1.UserService/ListUserGroups` | Get user groups | planned — needs the usergroup feature; not yet implemented | — |
+| POST | `/rpc/tango.identity.v1.UserService/ReplaceUserGroups` | Update user groups | planned — needs the usergroup feature; not yet implemented | — |
+| POST | `/rpc/tango.identity.v1.UserService/ListWebAuthnCredentials` | List user passkeys | planned — needs the webauthn feature; not yet implemented | — |
+| POST | `/rpc/tango.identity.v1.UserService/UpdateWebAuthnCredential` | Rename user passkey | planned — needs the webauthn feature; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.UserService/DeleteWebAuthnCredential` | Delete user passkey | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |
 | POST | `/rpc/tango.identity.v1.OneTimeAccessService/RequestEmail` | Request one-time access email | done — answers success unconditionally | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
 | POST | `/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail` | Request one-time access email (admin) | done — admin | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |

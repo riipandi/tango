@@ -15,6 +15,7 @@ package tango.identity.v1;
 
 import "buf/validate/validate.proto";
 import "common.proto";
+import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1;identityv1";
 
@@ -49,6 +50,41 @@ service SignupService {
   rpc DeleteSignupToken(DeleteSignupTokenRequest) returns (DeleteSignupTokenResponse);
 }
 
+// UserService administers the accounts. Every procedure is administrative:
+// the caller must carry a Bearer token whose claims name an administrator,
+// the same rule the signup-token procedures apply — a leaked machine
+// credential is no substitute, and a leaked key cannot rewrite accounts.
+//
+// An account's creation through sign-up is the SignupService's procedure;
+// CreateUser is the administrator's own door, for an account that exists
+// without an invitation. Updating is a full replace, the way the upstream
+// endpoint it ports is: every field is specified, an absent optional field
+// clears its column, and the ban fields operate as a unit.
+service UserService {
+  // ListUsers answers one page of the accounts, newest first, optionally
+  // filtered by a search term matched against the username, the email, and
+  // the display name — the columns the trigram indexes exist for.
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+
+  // GetUser answers one account by its identifier.
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+
+  // CreateUser creates an account directly, without a signup token. The
+  // password is optional: an account created without one carries no
+  // credential until a later procedure sets it.
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+
+  // UpdateUser replaces an account's fields. The ban fields are one unit:
+  // an expiry present applies the ban (the start instant is recorded
+  // automatically), an absent expiry lifts it.
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+
+  // DeleteUser removes an account. The database trigger archives the row, so
+  // the removal is soft by construction, not by a flag the service writes.
+  // An administrator cannot delete the account they are signed in with.
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+}
+
 // SignupRequest carries the account fields and the signup token. The
 // constraints below mirror what the users table enforces, so a bad field is
 // refused with its name before the database is reached.
@@ -80,13 +116,19 @@ message SignupResponse {
   User user = 1;
 }
 
-// User is the account view a sign-up answers with. It carries the fields a
-// client renders, not the row: no password hash, no ban bookkeeping.
+// User is the account view the identity procedures answer with. It carries
+// the fields a client renders or an operator manages, not the row: no
+// password hash, no metadata blob, no profile-picture path. The nullable
+// columns are optional on the wire, so an account without a name part or a
+// ban reads as absent rather than as an empty string.
+//
+// TODO(signup): user_groups joins an account to the groups it belongs to,
+// per the upstream shape; deferred until the usergroup feature lands.
 message User {
   // id is the account's identifier, a UUID string.
   string id = 1;
 
-  // username is the account's handle, case preserved.
+  // username is the account's handle, case preserved as stored.
   string username = 2;
 
   // email is the account's address.
@@ -94,6 +136,38 @@ message User {
 
   // display_name is the name shown in the UI.
   string display_name = 4;
+
+  // first_name is the optional given name.
+  optional string first_name = 5;
+
+  // last_name is the optional family name.
+  optional string last_name = 6;
+
+  // locale is the optional preferred locale tag.
+  optional string locale = 7;
+
+  // is_admin says whether the account holds the administrator role.
+  bool is_admin = 8;
+
+  // disabled says whether sign-ins are refused.
+  bool disabled = 9;
+
+  // email_verified says whether the address was verified. Verification
+  // itself is a later procedure; the flag reflects the column.
+  bool email_verified = 10;
+
+  // created_at is the creation instant, RFC 3339.
+  string created_at = 11;
+
+  // banned_at is when the ban started, RFC 3339, absent when unbanned.
+  optional string banned_at = 12;
+
+  // ban_expires is when the ban lifts, RFC 3339, absent when unbanned or
+  // permanent.
+  optional string ban_expires = 13;
+
+  // ban_reason is the note the banning administrator wrote.
+  optional string ban_reason = 14;
 }
 
 // SignupToken is the issued token's view. It carries the counters an operator
@@ -174,3 +248,143 @@ message DeleteSignupTokenRequest {
 // DeleteSignupTokenResponse is empty: a successful deletion says so with the
 // protocol, and a missed one with the not-found code.
 message DeleteSignupTokenResponse {}
+
+// ListUsersRequest carries the page and the filter the caller asks for.
+message ListUsersRequest {
+  // page is the one-based page number.
+  optional int32 page = 1;
+
+  // limit is the page size.
+  optional int32 limit = 2;
+
+  // search filters by a term matched against the username, the email, and
+  // the display name. Absent means every account.
+  optional string search = 3 [(buf.validate.field).string.max_len = 100];
+}
+
+// ListUsersResponse is the page of accounts and their pagination block.
+message ListUsersResponse {
+  // users are the accounts, newest first.
+  repeated User users = 1;
+
+  // metadata is the pagination block the list responses carry.
+  tango.common.v1.ListMetadata metadata = 2;
+}
+
+// GetUserRequest names the account to read.
+message GetUserRequest {
+  // id is the account's identifier.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetUserResponse is the account.
+message GetUserResponse {
+  // user is the account's view.
+  User user = 1;
+}
+
+// CreateUserRequest carries the account fields and the optional credential.
+message CreateUserRequest {
+  // username is the account's handle: 3-32 characters of ASCII letters,
+  // digits, and underscores, matched case-insensitively.
+  string username = 1 [(buf.validate.field).string.pattern = "^[a-zA-Z0-9_]{3,32}$"];
+
+  // email is the account's address, matched exactly.
+  string email = 2 [(buf.validate.field).string.pattern = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"];
+
+  // password is the account's primary credential, in clear text. It travels
+  // only over TLS and is never logged. Absent means the account carries no
+  // credential until one is set.
+  optional string password = 3 [(buf.validate.field).string.min_len = 1];
+
+  // first_name is the optional given name.
+  optional string first_name = 4 [(buf.validate.field).string.max_len = 100];
+
+  // last_name is the optional family name.
+  optional string last_name = 5 [(buf.validate.field).string.max_len = 100];
+
+  // display_name is the name the UI shows. Absent, it falls back to the
+  // username, the way sign-up composes it.
+  optional string display_name = 6 [(buf.validate.field).string.max_len = 200];
+
+  // locale is the optional preferred locale tag.
+  optional string locale = 7;
+
+  // is_admin grants the administrator role at creation. Default false.
+  optional bool is_admin = 8;
+
+  // disabled refuses sign-ins from the start. Default false.
+  optional bool disabled = 9;
+
+  // email_verified records the address as verified at creation. Default
+  // false; verification itself is a later procedure.
+  optional bool email_verified = 10;
+}
+
+// CreateUserResponse is the created account.
+message CreateUserResponse {
+  // user is the account's view.
+  User user = 1;
+}
+
+// UpdateUserRequest replaces an account's fields. Every field is specified:
+// an empty name part or locale clears its column, and a display name is
+// always required. The ban fields are one unit — ban_expires present
+// applies the ban, absent lifts it.
+message UpdateUserRequest {
+  // id is the account's identifier.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // username is the account's handle: 3-32 characters of ASCII letters,
+  // digits, and underscores, matched case-insensitively.
+  string username = 2 [(buf.validate.field).string.pattern = "^[a-zA-Z0-9_]{3,32}$"];
+
+  // email is the account's address, matched exactly.
+  string email = 3 [(buf.validate.field).string.pattern = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"];
+
+  // first_name is the given name; empty clears it.
+  string first_name = 4 [(buf.validate.field).string.max_len = 100];
+
+  // last_name is the family name; empty clears it.
+  string last_name = 5 [(buf.validate.field).string.max_len = 100];
+
+  // display_name is the name the UI shows; never empty.
+  string display_name = 6 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 200
+  ];
+
+  // locale is the preferred locale tag; empty clears it.
+  string locale = 7;
+
+  // is_admin grants or revokes the administrator role.
+  bool is_admin = 8;
+
+  // disabled refuses or allows sign-ins.
+  bool disabled = 9;
+
+  // ban_expires is when the ban lifts. Present, it applies the ban — the
+  // start instant is recorded automatically, keeping an earlier start when
+  // the account was already banned. Absent, it lifts the ban.
+  optional google.protobuf.Timestamp ban_expires = 10;
+
+  // ban_reason is the note the banning administrator wrote. Meaningful only
+  // with ban_expires; clearing the ban clears it.
+  optional string ban_reason = 11;
+}
+
+// UpdateUserResponse is the account as the update left it.
+message UpdateUserResponse {
+  // user is the account's view.
+  User user = 1;
+}
+
+// DeleteUserRequest names the account to remove.
+message DeleteUserRequest {
+  // id is the account's identifier.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteUserResponse is empty: a successful deletion says so with the
+// protocol, and a missed one with the not-found code.
+message DeleteUserResponse {}

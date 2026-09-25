@@ -14,6 +14,7 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/modules/identity/signup"
+	"github.com/riipandi/tango/modules/identity/user"
 )
 
 // The declarative constraints live in the contracts, and the validate
@@ -26,7 +27,10 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 	router := transport.NewRouter(transport.Options{
 		Config:  config.Default(),
 		Checker: health.NewChecker(),
-		Modules: []kernel.Module{signup.NewModule(signup.NewService(nil, nil))},
+		Modules: []kernel.Module{
+			signup.NewModule(signup.NewService(nil, nil)),
+			user.NewModule(user.NewService(nil, nil)),
+		},
 	})
 
 	for name, tc := range map[string]struct {
@@ -56,6 +60,18 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 		"usage limit over budget": {
 			"/tango.identity.v1.SignupService/CreateSignupToken",
 			`{"ttl_seconds":86400,"usage_limit":1001}`,
+		},
+		"bad user id": {
+			"/tango.identity.v1.UserService/GetUser",
+			`{"id":"not-a-uuid"}`,
+		},
+		"empty display name": {
+			"/tango.identity.v1.UserService/UpdateUser",
+			`{"id":"018f0000-0000-7000-8000-000000000000","username":"ada","email":"ada@example.com","display_name":""}`,
+		},
+		"bad username on update": {
+			"/tango.identity.v1.UserService/UpdateUser",
+			`{"id":"018f0000-0000-7000-8000-000000000000","username":"a b","email":"ada@example.com","display_name":"Ada"}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

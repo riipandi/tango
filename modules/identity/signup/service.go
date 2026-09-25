@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/riipandi/tango/internal/datastore"
@@ -148,14 +147,9 @@ func (s *Service) Signup(ctx context.Context, params Params) (User, error) {
 }
 
 // displayName composes the name the UI shows from the optional given and
-// family names, falling back to the username when neither is carried.
-func displayName(firstName, lastName, username string) string {
-	name := strings.TrimSpace(strings.Join([]string{strings.TrimSpace(firstName), strings.TrimSpace(lastName)}, " "))
-	if name == "" {
-		return username
-	}
-	return name
-}
+// family names, falling back to the username when neither is carried. The
+// account-creating features share the rule; the user package owns it.
+var displayName = user.DisplayName
 
 // tokenSHA256 hashes the raw token the caller presented, the form the
 // signup_tokens table stores.
