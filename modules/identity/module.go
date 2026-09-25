@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/samber/do/v2"
 
+	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
@@ -124,20 +125,23 @@ var Package = do.Package(
 		log := do.MustInvoke[*slog.Logger](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
 		keys := do.MustInvoke[*jwks.Service](i)
-		return signin.NewService(*c, signin.NewRepository(pool), keys, log), nil
+		recorder := do.MustInvoke[*audit.Recorder](i)
+		return signin.NewService(*c, pool, signin.NewRepository(pool), keys, recorder, log), nil
 	}),
 
 	do.Lazy(func(i do.Injector) (*signup.Service, error) {
 		log := do.MustInvoke[*slog.Logger](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
-		return signup.NewService(pool, log), nil
+		recorder := do.MustInvoke[*audit.Recorder](i)
+		return signup.NewService(pool, recorder, log), nil
 	}),
 
 	do.Lazy(func(i do.Injector) (*user.Service, error) {
 		log := do.MustInvoke[*slog.Logger](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
 		pictures := do.MustInvoke[*storage.Manager](i)
-		return user.NewService(pool, log, pictures), nil
+		recorder := do.MustInvoke[*audit.Recorder](i)
+		return user.NewService(pool, recorder, log, pictures), nil
 	}),
 
 	// The verification service builds over the mailer and the queue the
@@ -149,7 +153,8 @@ var Package = do.Package(
 		pool := do.MustInvoke[*datastore.Postgres](i)
 		mail := do.MustInvoke[*mailer.Service](i)
 		client := do.MustInvoke[*queue.Client](i)
-		return verification.NewService(pool, mail, client, c.App.BaseURL, log), nil
+		recorder := do.MustInvoke[*audit.Recorder](i)
+		return verification.NewService(pool, mail, client, recorder, c.App.BaseURL, log), nil
 	}),
 )
 

@@ -18,6 +18,7 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"go.jetify.com/typeid"
 
+	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/jwks"
@@ -52,7 +53,12 @@ const refreshTokenBytes = 32
 
 // Service verifies the primary credential and issues the token pair.
 type Service struct {
-	repo      *Repository
+	pool *datastore.Postgres
+	repo *Repository
+	// audit writes the record of a successful sign-in. It is the shared
+	// recorder, so the record's columns and vocabulary are decided in one
+	// place rather than here.
+	audit     *audit.Recorder
 	keys      *jwks.Service
 	hasher    *crypto.PasswordHasher
 	log       *slog.Logger
@@ -71,12 +77,14 @@ type Service struct {
 // NewService builds the service. keys is the area's key-set service: the
 // signing material resolves through it, so the dual stack (key pair or HMAC
 // secret) is the deployment's decision, not this feature's.
-func NewService(cfg config.Config, repo *Repository, keys *jwks.Service, log *slog.Logger) *Service {
+func NewService(cfg config.Config, pool *datastore.Postgres, repo *Repository, keys *jwks.Service, recorder *audit.Recorder, log *slog.Logger) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Service{
+		pool:      pool,
 		repo:      repo,
+		audit:     recorder,
 		keys:      keys,
 		hasher:    crypto.NewPasswordHasher(),
 		log:       log,
@@ -96,6 +104,10 @@ type Params struct {
 	Remember  bool
 	UserAgent string
 	IPAddress string
+	// Fingerprint is the browser fingerprint the transport read from the
+	// request header. It is opaque: it is stored beside the session and the
+	// audit record, never interpreted.
+	Fingerprint string
 }
 
 // User is the account view a successful sign-in answers with.
@@ -165,21 +177,46 @@ func (s *Service) SignIn(ctx context.Context, params Params) (Result, error) {
 		return Result{}, fmt.Errorf("signin: session id: %w", err)
 	}
 	sessionRow := session.SessionSchema{
-		ID:        sessionID,
-		UserID:    account.ID,
-		Provider:  ProviderPassword,
-		TokenHash: refresh.hash,
-		UserAgent: params.UserAgent,
-		IPAddress: addrPtr(params.IPAddress),
-		Remember:  params.Remember,
-		CreatedAt: now,
-		ExpiresAt: now.Add(s.sessionTTL(params.Remember)),
+		ID:                sessionID,
+		UserID:            account.ID,
+		Provider:          ProviderPassword,
+		TokenHash:         refresh.hash,
+		UserAgent:         params.UserAgent,
+		DeviceFingerprint: params.Fingerprint,
+		IPAddress:         addrPtr(params.IPAddress),
+		Remember:          params.Remember,
+		CreatedAt:         now,
+		ExpiresAt:         now.Add(s.sessionTTL(params.Remember)),
 	}
-	if createErr := s.repo.CreateSession(ctx, sessionRow); createErr != nil {
-		return Result{}, createErr
-	}
-	if touchErr := s.repo.TouchLastLogin(ctx, account.ID, now); touchErr != nil {
-		return Result{}, touchErr
+	// The session row, the last-login touch, and the record of the sign-in
+	// commit together: a record of a sign-in that was rolled back would be a
+	// log describing something that did not happen, which is the one thing a
+	// reader must be able to trust it not to do.
+	if txErr := s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		txRepo := s.repo.WithQuerier(tx)
+		if createErr := txRepo.CreateSession(ctx, sessionRow); createErr != nil {
+			return createErr
+		}
+		if touchErr := txRepo.TouchLastLogin(ctx, account.ID, now); touchErr != nil {
+			return touchErr
+		}
+		// A sign-in that failed is deliberately not recorded: the attempt is
+		// unauthenticated, so a caller controls how many rows it writes, and
+		// the rate limiter — not the audit log — is what answers a brute
+		// force. Recording only the successes keeps the log's growth tied to
+		// accounts that exist rather than to requests anyone can send.
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:  audit.EventSignIn,
+			Status: audit.StatusSuccess,
+			UserID: account.ID.String(),
+			Payload: map[string]string{
+				"provider":   ProviderPassword,
+				"session_id": sessionID.String(),
+			},
+		})
+		return nil
+	}); txErr != nil {
+		return Result{}, txErr
 	}
 
 	access, err := s.signAccess(ctx, account, sessionID, now)

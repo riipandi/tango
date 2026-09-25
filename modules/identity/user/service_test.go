@@ -64,7 +64,7 @@ func (s *Service) readPicture(ctx context.Context, id string) (io.ReadCloser, st
 
 func testService(t *testing.T, pool *datastore.Postgres) *Service {
 	t.Helper()
-	return NewService(pool, nil, nil)
+	return NewService(pool, nil, nil, nil)
 }
 
 // testPictureService builds the service over the real storage engine — the
@@ -76,7 +76,7 @@ func testPictureService(t *testing.T, pool *datastore.Postgres) (*Service, *stor
 
 	manager := storage.NewManager(storage.NewFS(t.TempDir()), pool,
 		t.TempDir(), slog.New(slog.DiscardHandler))
-	return NewService(pool, nil, manager), manager
+	return NewService(pool, nil, nil, manager), manager
 }
 
 // passwordCount reads how many credentials an account carries. An account
@@ -549,7 +549,7 @@ func TestThePictureFlowLandsOnS3(t *testing.T) {
 	}
 
 	manager := storage.NewManager(store, pool, t.TempDir(), slog.New(slog.DiscardHandler))
-	service := NewService(pool, nil, manager)
+	service := NewService(pool, nil, nil, manager)
 
 	created, err := service.CreateUser(t.Context(), CreateParams{
 		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",

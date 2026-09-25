@@ -14,6 +14,7 @@ import (
 // default in Default(), and a rule in Validate().
 type Config struct {
 	App       App       `koanf:"app" json:"app"`
+	Audit     Audit     `koanf:"audit" json:"audit"`
 	Auth      Auth      `koanf:"auth" json:"auth"`
 	Cache     Cache     `koanf:"cache" json:"cache"`
 	Database  Database  `koanf:"database" json:"database"`
@@ -34,6 +35,18 @@ type Config struct {
 	// unresolved records the keys whose directive named a missing variable,
 	// mapped to the variable name. It is state about the sources, not config.
 	unresolved map[string]string
+}
+
+// Audit holds the audit trail's own settings. The trail is written by every
+// feature and read by modules/auditlog; what a deployment decides about it is
+// how long it is kept.
+type Audit struct {
+	// RetentionDays is how long a record is kept. The cleanup job deletes
+	// what is older, so the table is bounded by a policy rather than by
+	// whoever remembers to prune it. Zero would mean "keep forever", which
+	// is why Validate refuses it: an unbounded audit table is a decision a
+	// deployment should make on purpose, not a default it never noticed.
+	RetentionDays int `koanf:"retention_days" json:"retention_days"`
 }
 
 // App holds process-level settings.
@@ -462,6 +475,24 @@ type Server struct {
 	IdleTimeout  time.Duration `koanf:"idle_timeout" json:"idle_timeout"`
 	// ShutdownTimeout bounds the graceful shutdown drain.
 	ShutdownTimeout time.Duration `koanf:"shutdown_timeout" json:"shutdown_timeout"`
+	// TrustedProxyHeaders name the headers the deployment's reverse proxies
+	// set the client's address in, in precedence order, and which this
+	// process therefore believes. Empty means the process is reached directly
+	// and the connection's own address is used.
+	//
+	// It is a list rather than one header because a deployment can have more
+	// than one hop that sets one: a CDN in front of an own reverse proxy
+	// names two headers, and the order decides which wins when both are
+	// present — the first one that carries a parseable address is the hop
+	// closest to the client.
+	//
+	// It is a configuration key rather than a built-in choice because a
+	// header is only trustworthy when the hop in front of the process
+	// overwrites it on every request: X-Forwarded-For and X-Real-IP are
+	// caller-written everywhere else, and believing one would let a caller
+	// choose the address an audit record and a rate-limit bucket are keyed
+	// by. Only a deployment knows which headers its own proxies set.
+	TrustedProxyHeaders []string `koanf:"trusted_proxy_headers" json:"trusted_proxy_headers"`
 	// CORS holds the browser cross-origin policy for the API.
 	CORS CORS `koanf:"cors" json:"cors"`
 }

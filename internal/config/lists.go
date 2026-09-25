@@ -18,6 +18,7 @@ var listKeys = []string{
 	"server.cors.allowed_headers",
 	"server.cors.allowed_methods",
 	"server.cors.allowed_origins",
+	"server.trusted_proxy_headers",
 }
 
 // mapKeys are the config keys whose value is a map of its own, and which a

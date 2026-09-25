@@ -13,6 +13,7 @@ import (
 
 	authv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1/authv1connect"
 	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
+	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
@@ -44,6 +45,10 @@ func TestTheAreaForwardsFeatureProcedures(t *testing.T) {
 		// in for the wiring the composition root guarantees, and the picture
 		// procedures refuse while the account procedures serve.
 		do.Eager[*storage.Manager](nil),
+		// The features write audit records through the shared recorder; nil
+		// stands in for the wiring the composition root guarantees, and the
+		// recorder is nil-safe so a feature runs without one.
+		do.Eager[*audit.Recorder](nil),
 	)
 	Package(i)
 

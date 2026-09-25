@@ -9,6 +9,7 @@ import (
 
 	"github.com/samber/do/v2"
 
+	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/cache"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
@@ -106,6 +107,16 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			), nil
 		}),
 
+		// The audit recorder is infrastructure because every feature reaches
+		// it, exactly the way they reach the pool: a record is written in the
+		// transaction that caused it, so the writer cannot belong to any one
+		// area. The area that *reads* records is modules/auditlog, which
+		// imports nothing from here but the vocabulary.
+		do.Lazy(func(i do.Injector) (*audit.Recorder, error) {
+			log := do.MustInvoke[*slog.Logger](i)
+			return audit.NewRecorder(log), nil
+		}),
+
 		do.Lazy(func(i do.Injector) (*mailer.Service, error) {
 			c := do.MustInvoke[*config.Config](i)
 			log := do.MustInvoke[*slog.Logger](i)
@@ -168,7 +179,7 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			// The processors are wired onto the engine here — pure wiring, no
 			// connection is touched. The recurring seeds are the Seeder's
 			// service, resolved by the prewarm walk.
-			jobs.Register(client, c.Queue.CleanupInterval, uploader, mailer, c.App.BaseURL)
+			jobs.Register(client, c.Queue.CleanupInterval, uploader, mailer, pool, c.App.BaseURL)
 			return client, nil
 		}),
 
@@ -177,7 +188,7 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			client := do.MustInvoke[*queue.Client](i)
 			uploader := do.MustInvoke[*storage.Manager](i)
 			log := do.MustInvoke[*slog.Logger](i)
-			return jobs.NewSeeder(client, c.Queue.CleanupInterval, uploader, log), nil
+			return jobs.NewSeeder(client, c.Queue.CleanupInterval, uploader, c.Audit.RetentionDays, log), nil
 		}),
 
 		do.Lazy(func(i do.Injector) (*storage.Watcher, error) {

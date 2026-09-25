@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	auditlogv1 "github.com/riipandi/tango/codegen/proto/go/tango/auditlog/v1"
+	auditlogv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auditlog/v1/auditlogv1connect"
 	authv1 "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1"
 	authv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1/authv1connect"
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
@@ -50,11 +52,30 @@ var ProcedureRules = map[string]Entry{
 	identityv1connect.SignupServiceSignupProcedure:                 {Rule: Public},
 	identityv1connect.EmailVerificationServiceVerifyEmailProcedure: {Rule: Public},
 
+	// The audit trail. `List` is the caller's own history, so being
+	// authenticated is the whole requirement — except that a delegated
+	// session is refused, which `Self` would express by comparing the
+	// account's identifier against a field the request does not have.
+	// `Authenticated` is the rule here for the same reason `SendEmail` uses
+	// it: the target is the claims' subject, not something the request names.
+	//
+	// The other three are administrative: an account may read its own
+	// activity, never another's, and the facets are derived from every
+	// record in the table.
+	auditlogv1connect.AuditLogServiceListProcedure:          {Rule: Authenticated},
+	auditlogv1connect.AuditLogServiceListAllProcedure:       {Rule: Admin},
+	auditlogv1connect.AuditLogServiceListForUserProcedure:   {Rule: Admin},
+	auditlogv1connect.AuditLogServiceFilterOptionsProcedure: {Rule: Admin},
+
 	// The caller's own door: the procedure reads the account from the claims
 	// and takes no target from the request, so being authenticated is the
 	// whole requirement. Upstream answers this with a separate `/users/me`
 	// route; here the account is the claims' subject, which is the same rule
 	// without a second route.
+	//
+	// An impersonated caller is refused here by the rule itself, which is
+	// what makes `Authenticated` fit the audit trail's self listing too: an
+	// account's own activity is not a surface a delegation may read.
 	identityv1connect.EmailVerificationServiceSendEmailProcedure: {Rule: Authenticated},
 
 	// Self-service with a target in the request: the account named must be
@@ -162,6 +183,7 @@ func RestRuleFor(method, path string) (Rule, Target) {
 // guard nothing ever reaches.
 func ContractProcedures() []string {
 	files := []protoreflect.FileDescriptor{
+		auditlogv1.File_auditlog_proto,
 		authv1.File_auth_proto,
 		identityv1.File_identity_proto,
 		systemv1.File_system_proto,

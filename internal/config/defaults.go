@@ -204,6 +204,13 @@ const DefaultAssetsURL = "http://localhost:3080/static"
 // mentions keeps the value set here.
 func Default() Config {
 	return Config{
+		Audit: Audit{
+			// Ninety days is Pocket ID's own default, and the window a
+			// security review usually asks for: long enough to answer "what
+			// happened last quarter", short enough that the table stays a
+			// table rather than an archive.
+			RetentionDays: 90,
+		},
 		App: App{
 			Mode: ModeDevelopment,
 			// The public origin is empty by default: links are built absolute
@@ -340,6 +347,11 @@ func Default() Config {
 			WriteTimeout:    30 * time.Second,
 			IdleTimeout:     60 * time.Second,
 			ShutdownTimeout: 15 * time.Second,
+			// The process is reached directly by default: a header is only
+			// believed once a deployment says its proxy sets it. An empty
+			// slice rather than nil, so a generated file writes it as [] and
+			// the round trip reads back the same value.
+			TrustedProxyHeaders: []string{},
 			CORS: CORS{
 				AllowedOrigins: DefaultCORSOrigins,
 				AllowedMethods: DefaultCORSMethods,

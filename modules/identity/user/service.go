@@ -11,6 +11,7 @@ import (
 	"uuid"
 
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
+	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/pkg/crypto"
@@ -34,10 +35,18 @@ var (
 	ErrSelfDeletion = errors.New("user: cannot delete the signed-in account")
 )
 
+// ResourceUser is the resource type an audit record names when the account
+// itself is what was acted on and the account no longer exists to be named by
+// the user column.
+const ResourceUser = "user"
+
 // Service administers the accounts.
 type Service struct {
-	pool   *datastore.Postgres
-	repo   *Repository
+	pool *datastore.Postgres
+	repo *Repository
+	// audit writes the record of every account change, in the transaction
+	// that makes the change.
+	audit  *audit.Recorder
 	hasher *crypto.PasswordHasher
 	log    *slog.Logger
 	now    func() time.Time
@@ -51,13 +60,14 @@ type Service struct {
 // NewService builds the service. The database writes run in one transaction
 // the service opens over the pool, so an account and its credential commit
 // together or not at all.
-func NewService(pool *datastore.Postgres, log *slog.Logger, pictures *storage.Manager) *Service {
+func NewService(pool *datastore.Postgres, recorder *audit.Recorder, log *slog.Logger, pictures *storage.Manager) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Service{
 		pool:     pool,
 		repo:     NewRepository(),
+		audit:    recorder,
 		hasher:   crypto.NewPasswordHasher(),
 		log:      log,
 		pictures: pictures,
@@ -175,6 +185,16 @@ func (s *Service) CreateUser(ctx context.Context, params CreateParams) (UserView
 		}
 
 		created = view(row)
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:  audit.EventAccountCreated,
+			Status: audit.StatusSuccess,
+			UserID: id.String(),
+			Payload: map[string]string{
+				"username": row.Username,
+				"email":    row.Email,
+				"source":   "admin",
+			},
+		})
 		return nil
 	})
 	if err != nil {
@@ -262,15 +282,32 @@ func (s *Service) UpdateUser(ctx context.Context, id string, params UpdateParams
 		row.BanReason = nil
 	}
 
-	updated, err := s.repo.UpdateUser(ctx, s.pool, row)
-	if errUniqueViolation(err) {
-		return UserView{}, ErrAccountExists
-	}
+	// The update and its record commit together, so the log cannot name a
+	// change the database refused.
+	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		updated, updateErr := s.repo.UpdateUser(ctx, tx, row)
+		if errUniqueViolation(updateErr) {
+			return ErrAccountExists
+		}
+		if updateErr != nil {
+			return updateErr
+		}
+		if !updated {
+			return ErrUserNotFound
+		}
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:  audit.EventAccountUpdated,
+			Status: audit.StatusSuccess,
+			UserID: userID.String(),
+			Payload: map[string]string{
+				"username": row.Username,
+				"email":    row.Email,
+			},
+		})
+		return nil
+	})
 	if err != nil {
 		return UserView{}, err
-	}
-	if !updated {
-		return UserView{}, ErrUserNotFound
 	}
 	return view(row), nil
 }
@@ -338,14 +375,33 @@ func (s *Service) DeleteUser(ctx context.Context, id, callerUsername string) err
 		return ErrSelfDeletion
 	}
 
-	deleted, err := s.repo.DeleteUser(ctx, s.pool, userID)
-	if err != nil {
-		return err
-	}
-	if !deleted {
-		return ErrUserNotFound
-	}
-	return nil
+	// The record of a deletion cannot name its account through the user
+	// column: the row is gone by the time the record is written, and the
+	// foreign key — `ON DELETE SET NULL`, so a record outlives its account —
+	// refuses an identifier that names nothing. The account is named the way
+	// any other acted-on resource is, in resource_type and resource_id, and
+	// the payload keeps the username so a reader can still tell whose
+	// deletion this was.
+	return s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		deleted, deleteErr := s.repo.DeleteUser(ctx, tx, userID)
+		if deleteErr != nil {
+			return deleteErr
+		}
+		if !deleted {
+			return ErrUserNotFound
+		}
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:        audit.EventAccountDeleted,
+			Status:       audit.StatusSuccess,
+			ResourceType: ResourceUser,
+			ResourceID:   userID.String(),
+			Payload: map[string]string{
+				"username": row.Username,
+				"email":    row.Email,
+			},
+		})
+		return nil
+	})
 }
 
 // view maps a stored row onto the account view.

@@ -29,13 +29,18 @@ type SessionID = typeid.TypeID[SessionPrefix]
 // touching this struct. The db tags are the column names the query builder
 // uses.
 type SessionSchema struct {
-	ID        SessionID   `db:"id"`
-	UserID    uuid.UUID   `db:"user_id"`
-	Provider  string      `db:"provider"`
-	TokenHash string      `db:"token_hash"`
-	UserAgent string      `db:"user_agent"`
-	IPAddress *netip.Addr `db:"ip_address"`
-	Remember  bool        `db:"remember"`
-	CreatedAt time.Time   `db:"created_at"`
-	ExpiresAt time.Time   `db:"expires_at"`
+	ID        SessionID `db:"id"`
+	UserID    uuid.UUID `db:"user_id"`
+	Provider  string    `db:"provider"`
+	TokenHash string    `db:"token_hash"`
+	UserAgent string    `db:"user_agent"`
+	// DeviceFingerprint is the browser fingerprint the frontend computed,
+	// stored beside the session it identifies. The column has no default, so
+	// a caller that has none writes an empty string rather than NULL: the
+	// distinction carries no meaning here.
+	DeviceFingerprint string      `db:"device_fingerprint"`
+	IPAddress         *netip.Addr `db:"ip_address"`
+	Remember          bool        `db:"remember"`
+	CreatedAt         time.Time   `db:"created_at"`
+	ExpiresAt         time.Time   `db:"expires_at"`
 }

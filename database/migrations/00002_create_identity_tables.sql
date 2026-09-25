@@ -210,6 +210,7 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
     ip_address INET,
     user_agent TEXT,
+    device_fingerprint TEXT,
     country TEXT,
     city TEXT,
     resource_type TEXT,
@@ -223,6 +224,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_country ON public.audit_logs USING btr
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs USING btree (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_event ON public.audit_logs USING btree (event);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_agent ON public.audit_logs USING btree (user_agent);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_device_fingerprint ON public.audit_logs (device_fingerprint) WHERE device_fingerprint IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON public.audit_logs USING btree (user_id);
 
 -- +goose StatementEnd
@@ -237,6 +239,7 @@ DROP TRIGGER IF EXISTS trg_user_groups_updated_at ON public.user_groups;
 
 DROP INDEX IF EXISTS idx_audit_logs_user_id;
 DROP INDEX IF EXISTS idx_audit_logs_user_agent;
+DROP INDEX IF EXISTS idx_audit_logs_device_fingerprint;
 DROP INDEX IF EXISTS idx_audit_logs_event;
 DROP INDEX IF EXISTS idx_audit_logs_country;
 DROP INDEX IF EXISTS idx_audit_logs_created_at;

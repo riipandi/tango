@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"log/slog"
-	"net"
 	"net/http"
 	"time"
 
@@ -53,24 +52,13 @@ func Logger(log *slog.Logger) func(http.Handler) http.Handler {
 				slog.Int("status", status),
 				slog.Duration("duration", time.Since(start)),
 				slog.Int("bytes", rec.bytes),
-				slog.String("remote", clientHost(r)),
+				slog.String("remote", clientIP(r)),
 			}
 			// The context of a finished request may already be cancelled; the
 			// span it carried is still readable, so correlation survives.
 			log.LogAttrs(context.WithoutCancel(r.Context()), level, "request", attrs...)
 		})
 	}
-}
-
-// clientHost is the host part of RemoteAddr, the address the connection came
-// from. A proxy deployment sees the proxy's address, which is the honest
-// answer until a trusted-proxy setting decides to look further.
-func clientHost(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 // responseRecorder captures the status and the size of the response the

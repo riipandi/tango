@@ -3,12 +3,12 @@ package signin
 import (
 	"context"
 	"errors"
-	"github.com/riipandi/tango/pkg/responder"
-	"net"
-	"net/http"
 
 	"connectrpc.com/connect"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/riipandi/tango/internal/audit"
+	"github.com/riipandi/tango/pkg/responder"
 
 	authv1 "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1"
 	authv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1/authv1connect"
@@ -42,7 +42,7 @@ func (m *Module) Mount(r chi.Router) {}
 // so the procedure answers exactly like the transport's own.
 func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
 	_, handler := authv1connect.NewAuthServiceHandler(newRPCHandler(m.service), opts...)
-	r.Handle(authv1connect.AuthServiceSignInProcedure, clientAddrMiddleware(handler))
+	r.Handle(authv1connect.AuthServiceSignInProcedure, handler)
 }
 
 // rpcHandler is the transport mapping of the sign-in procedures. The service
@@ -65,12 +65,19 @@ func (h *rpcHandler) SignIn(ctx context.Context, req *connect.Request[authv1.Sig
 			errors.New("identity and password are required"))
 	}
 
+	// The client facts are the transport's: one middleware captured them
+	// from the request before the procedure ran, so this handler reads the
+	// same address, agent, and fingerprint the audit record carries rather
+	// than re-deriving a narrower set from the connect request.
+	client := audit.ClientFromContext(ctx)
+
 	result, err := h.service.SignIn(ctx, Params{
-		Identity:  body.Identity,
-		Password:  body.Password,
-		Remember:  body.GetRemember(),
-		UserAgent: req.Header().Get("User-Agent"),
-		IPAddress: peerIP(ctx),
+		Identity:    body.Identity,
+		Password:    body.Password,
+		Remember:    body.GetRemember(),
+		UserAgent:   client.UserAgent,
+		IPAddress:   client.IPAddress,
+		Fingerprint: client.Fingerprint,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -111,33 +118,4 @@ func mapError(err error) error {
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("sign-in failed"))
 	}
-}
-
-// clientAddrKey is the context key the mount middleware stores the caller's
-// address under. Connect hands a unary handler the request context but no
-// connection, so the address is read into the context before it arrives.
-type ctxKey int
-
-const clientAddrKey ctxKey = 0
-
-// peerIP reads the caller's address the mount middleware captured. The port
-// is stripped there; an unknown address is no address, not an error.
-func peerIP(ctx context.Context) string {
-	if addr, ok := ctx.Value(clientAddrKey).(string); ok {
-		return addr
-	}
-	return ""
-}
-
-// clientAddrMiddleware captures the host part of the request's remote
-// address. A proxy deployment sees the proxy's address, which is the honest
-// answer until a trusted-proxy setting decides to look further.
-func clientAddrMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		addr := r.RemoteAddr
-		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-			addr = host
-		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), clientAddrKey, addr)))
-	})
 }

@@ -68,7 +68,7 @@ func testConfig() config.Config {
 // testService builds the service over a real pool and a real key-set service.
 func testService(t *testing.T, pool *datastore.Postgres) *Service {
 	t.Helper()
-	return NewService(testConfig(), NewRepository(pool), jwks.NewService(testConfig(), nil, nil), nil)
+	return NewService(testConfig(), pool, NewRepository(pool), jwks.NewService(testConfig(), nil, nil), nil, nil)
 }
 
 type accountFixture struct {
@@ -323,7 +323,7 @@ func TestRememberSelectsTheConfiguredLifetime(t *testing.T) {
 	cfg := testConfig()
 	cfg.Auth.RefreshShortTTL = 1 * time.Hour
 	cfg.Auth.RefreshLongTTL = 48 * time.Hour
-	service := NewService(cfg, NewRepository(pool), jwks.NewService(cfg, nil, nil), nil)
+	service := NewService(cfg, pool, NewRepository(pool), jwks.NewService(cfg, nil, nil), nil, nil)
 
 	createAccount(t, pool, "hermione", "hermione@example.com", "expecto-patronum", nil)
 

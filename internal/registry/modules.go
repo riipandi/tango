@@ -4,6 +4,7 @@ import (
 	"github.com/samber/do/v2"
 
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/identity"
 )
 
@@ -38,6 +39,11 @@ type Area struct {
 func Areas() []Area {
 	return []Area{
 		{Name: identity.ModuleName, Package: identity.Package, Mount: identity.Mount},
+		// The audit-log area reads what every other area writes. It mounts
+		// after identity because it serves its own paths and claims nothing
+		// identity claims, so the order is descriptive rather than a
+		// dependency.
+		{Name: auditlog.ModuleName, Package: auditlog.Package, Mount: auditlog.Mount},
 	}
 }
 

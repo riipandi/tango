@@ -164,13 +164,16 @@ Configure application settings.
 
 ## Audit Logs
 
-Access and manage audit logs.
+Read the audit trail. Records are written by the feature that caused them, in the same
+transaction, and the surface here is read-only by construction: no procedure writes, edits,
+or deletes a record. Retention is a scheduled job, not an endpoint.
 
-| Method   | Procedure / Endpoint                                    | Protocol     | Summary               |
-| -------- | ------------------------------------------------------- | ------------ | --------------------- |
-| POST     | `/rpc/tango.admin.v1.AuditLogService/List`              | ConnectRPC   | List audit logs       |
-| POST     | `/rpc/tango.admin.v1.AuditLogService/ListAll`           | ConnectRPC   | List all audit logs   |
-| POST     | `/rpc/tango.admin.v1.AuditLogService/FilterOptions`     | ConnectRPC   | List filter facets    |
+| Method   | Procedure / Endpoint                                            | Protocol     | Summary                              |
+| -------- | --------------------------------------------------------------- | ------------ | ------------------------------------ |
+| POST     | `/rpc/tango.auditlog.v1.AuditLogService/List`                   | ConnectRPC   | List the caller's own audit logs     |
+| POST     | `/rpc/tango.auditlog.v1.AuditLogService/ListAll`                | ConnectRPC   | List all audit logs (admin)          |
+| POST     | `/rpc/tango.auditlog.v1.AuditLogService/ListForUser`            | ConnectRPC   | List one account's audit logs (admin) |
+| POST     | `/rpc/tango.auditlog.v1.AuditLogService/FilterOptions`          | ConnectRPC   | List filter facets (admin)           |
 
 ## Custom Claim
 

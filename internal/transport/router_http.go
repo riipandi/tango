@@ -73,6 +73,12 @@ func NewRouter(opts Options) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
+	// The client facts are captured here rather than per surface: both the
+	// REST routes and the procedures read them from the context, and the
+	// groups below inherit this chain, so there is one place a fact is
+	// gathered instead of one per transport. The address it resolves is the
+	// same one the rate limiter keys by, because both read chi's context.
+	r.Use(middleware.ClientInfo(opts.Config.Server.TrustedProxyHeaders))
 	r.Use(middleware.Logger(opts.Logger))
 	r.Use(middleware.Recoverer(opts.Logger))
 	r.Use(middleware.CORS(opts.Config.Server.CORS))

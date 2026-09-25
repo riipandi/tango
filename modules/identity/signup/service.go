@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -37,8 +38,11 @@ var (
 
 // Service creates an account from a signup token.
 type Service struct {
-	pool   *datastore.Postgres
-	repo   *Repository
+	pool *datastore.Postgres
+	repo *Repository
+	// audit writes the record of the account this flow creates, in the same
+	// transaction, so the account and its record commit together.
+	audit  *audit.Recorder
 	hasher *crypto.PasswordHasher
 	log    *slog.Logger
 	now    func() time.Time
@@ -47,13 +51,14 @@ type Service struct {
 // NewService builds the service. The database writes run in one transaction
 // the service opens over the pool, so the account, its credential, and the
 // token's use commit together or not at all.
-func NewService(pool *datastore.Postgres, log *slog.Logger) *Service {
+func NewService(pool *datastore.Postgres, recorder *audit.Recorder, log *slog.Logger) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Service{
 		pool:   pool,
 		repo:   NewRepository(),
+		audit:  recorder,
 		hasher: crypto.NewPasswordHasher(),
 		log:    log,
 		now:    time.Now,
@@ -132,6 +137,20 @@ func (s *Service) Signup(ctx context.Context, params Params) (user.UserView, err
 			return readErr
 		}
 		created = read
+
+		// The account, its credential, the token's use, and this record
+		// commit together: a rolled-back sign-up must not leave a record
+		// claiming an account exists.
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:  audit.EventAccountCreated,
+			Status: audit.StatusSuccess,
+			UserID: userID.String(),
+			Payload: map[string]string{
+				"username": read.Username,
+				"email":    read.Email,
+				"source":   "signup",
+			},
+		})
 		return nil
 	})
 	if err != nil {

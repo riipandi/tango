@@ -107,9 +107,9 @@ func testService(t *testing.T, pool *datastore.Postgres, configured bool) *Servi
 		ReleaseAfter: 10 * time.Minute,
 	})
 	require.NoError(t, err)
-	jobs.Register(client, time.Hour, nil, mail, "http://localhost:3000")
+	jobs.Register(client, time.Hour, nil, mail, pool, "http://localhost:3000")
 
-	return NewService(pool, mail, client, "http://localhost:3000", nil)
+	return NewService(pool, mail, client, nil, "http://localhost:3000", nil)
 }
 
 func TestSendEmailRefusesTheStatesItCannotServe(t *testing.T) {
@@ -247,13 +247,13 @@ func TestTheFlowEndToEnd(t *testing.T) {
 		ReleaseAfter: 10 * time.Minute,
 	})
 	require.NoError(t, err)
-	jobs.Register(client, time.Hour, nil, mail, "http://localhost:3000")
+	jobs.Register(client, time.Hour, nil, mail, pool, "http://localhost:3000")
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	client.Start(ctx)
 	t.Cleanup(func() { client.Shutdown(context.Background()) })
 
-	service := NewService(pool, mail, client, "http://localhost:3000", nil)
+	service := NewService(pool, mail, client, nil, "http://localhost:3000", nil)
 	require.NoError(t, service.SendEmail(t.Context(), "hermione"))
 
 	link := waitForLink(t, mailpit)

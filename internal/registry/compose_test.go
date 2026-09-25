@@ -99,13 +99,17 @@ func (allowAll) Allow(context.Context, string) (middleware.Result, error) {
 	return middleware.Result{Limit: 60, Remaining: 60}, nil
 }
 
-// TestTheApplicationAreasAreListedOnce keeps the built-in list honest: the
-// identity area is reachable, and the list carries it by name.
+// TestTheApplicationAreasAreListedOnce keeps the built-in list honest: every
+// area is reachable, and the list carries each by name. The length is pinned
+// on purpose — a second area is a decision, and this is where it is noticed.
 func TestTheApplicationAreasAreListedOnce(t *testing.T) {
 	areas := registry.Areas()
-	require.Len(t, areas, 1)
+	require.Len(t, areas, 2)
 
 	assert.Equal(t, "identity", areas[0].Name)
-	assert.NotNil(t, areas[0].Package, "an area must register its own services")
-	assert.NotNil(t, areas[0].Mount, "an area must build its own module")
+	assert.Equal(t, "auditlog", areas[1].Name)
+	for _, area := range areas {
+		assert.NotNil(t, area.Package, "area %q must register its own services", area.Name)
+		assert.NotNil(t, area.Mount, "area %q must build its own module", area.Name)
+	}
 }

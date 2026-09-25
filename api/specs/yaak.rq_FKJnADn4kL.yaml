@@ -1,8 +1,8 @@
 type: http_request
 model: http_request
-id: rq_vf5GCcHKNY
-createdAt: 2026-09-18T23:54:46.763293
-updatedAt: 2026-09-25T23:27:20.617115
+id: rq_FKJnADn4kL
+createdAt: 2026-09-25T23:15:13.717881
+updatedAt: 2026-09-25T23:27:20.619077
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LLg3fisc5c
 authentication: {}
@@ -10,16 +10,15 @@ authenticationType: null
 body:
   text: |-
     {
+      "user_id": "${[ userId ]}",
       "page": 1,
       "limit": 20
     }
 bodyType: application/json
 description: |-
-  List every audit record, newest first, with the filters the administrative view offers: `event`, `user_id`, and `search` (matched against the account's username and email).
+  List one account's audit records, newest first: the administrative view of a single account, where `List` is the caller's own view of theirs.
 
   Guard: Admin.
-
-  Mirror of Pocket ID `GET /api/audit-logs/all`.
 headers:
 - enabled: true
   name: Content-Type
@@ -30,26 +29,10 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] List all audit logs'
-sortPriority: 0.0
-url: ${[ apiBaseURL ]}/rpc/tango.auditlog.v1.AuditLogService/ListAll
-urlParameters:
-- enabled: false
-  name: pagination[page]
-  value: ''
-  id: null
-- enabled: false
-  name: pagination[limit]
-  value: ''
-  id: null
-- enabled: false
-  name: sort[column]
-  value: ''
-  id: null
-- enabled: false
-  name: sort[direction]
-  value: ''
-  id: null
+name: '[Tango] List audit logs for a user'
+sortPriority: 2000.0
+url: ${[ apiBaseURL ]}/rpc/tango.auditlog.v1.AuditLogService/ListForUser
+urlParameters: []
 settingSendCookies:
   enabled: false
   value: true

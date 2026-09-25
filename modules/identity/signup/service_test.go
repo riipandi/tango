@@ -45,7 +45,7 @@ func migratedPool(t *testing.T) *datastore.Postgres {
 
 func testService(t *testing.T, pool *datastore.Postgres) *Service {
 	t.Helper()
-	return NewService(pool, nil)
+	return NewService(pool, nil, nil)
 }
 
 // insertToken writes the signup token row a raw value hashes to. The expires
@@ -154,7 +154,7 @@ func TestSignupCreatesTheAccount(t *testing.T) {
 	assert.Equal(t, int32(1), tokenUsageCount(t, pool, "elder-wand"))
 
 	// The password the caller chose signs in immediately.
-	signinService := signin.NewService(testConfig(), signin.NewRepository(pool), jwks.NewService(testConfig(), nil, nil), nil)
+	signinService := signin.NewService(testConfig(), pool, signin.NewRepository(pool), jwks.NewService(testConfig(), nil, nil), nil, nil)
 	result, err := signinService.SignIn(t.Context(), signin.Params{
 		Identity: "hermione",
 		Password: "expecto-patronum",

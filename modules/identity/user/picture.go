@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
 	"uuid"
 
+	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/storage"
 )
@@ -122,6 +124,18 @@ func (s *Service) UpdateProfilePicture(ctx context.Context, id string, data []by
 	if _, err := s.repo.SetAvatarURL(ctx, s.pool, userID, key); err != nil {
 		return err
 	}
+	// The record is written after the row names the key: the file and the
+	// key are what make the picture the account reads, so a record written
+	// before the row would describe a change that had not landed.
+	s.audit.Record(ctx, s.pool, audit.Entry{
+		Event:  audit.EventProfilePictureUpdated,
+		Status: audit.StatusSuccess,
+		UserID: userID.String(),
+		Payload: map[string]string{
+			"content_type": mime,
+			"bytes":        strconv.Itoa(len(data)),
+		},
+	})
 	s.log.Info("user: profile picture updated",
 		slog.String("user_id", userID.String()), slog.Int("bytes", len(data)))
 	return nil
@@ -154,6 +168,11 @@ func (s *Service) ResetProfilePicture(ctx context.Context, id string) error {
 	if _, err := s.repo.SetAvatarURL(ctx, s.pool, userID, ""); err != nil {
 		return err
 	}
+	s.audit.Record(ctx, s.pool, audit.Entry{
+		Event:  audit.EventProfilePictureReset,
+		Status: audit.StatusSuccess,
+		UserID: userID.String(),
+	})
 	s.log.Info("user: profile picture reset", slog.String("user_id", userID.String()))
 	return nil
 }

@@ -40,9 +40,9 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 			}, nil
 		},
 		Modules: []kernel.Module{
-			signup.NewModule(signup.NewService(nil, nil)),
-			user.NewModule(user.NewService(nil, nil, nil)),
-			verification.NewModule(verification.NewService(nil, nil, nil, "", nil)),
+			signup.NewModule(signup.NewService(nil, nil, nil)),
+			user.NewModule(user.NewService(nil, nil, nil, nil)),
+			verification.NewModule(verification.NewService(nil, nil, nil, nil, "", nil)),
 		},
 	})
 

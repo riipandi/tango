@@ -288,12 +288,22 @@ func (c Config) Validate() error {
 		check(false, "scheduler.timezone: %q is not a time zone: %v", c.Scheduler.Timezone, err)
 	}
 
+	check(c.Audit.RetentionDays > 0, "audit.retention_days: must be greater than 0")
 	check(c.Server.Host != "", "server.host: must not be empty")
 	check(c.Server.Port > 0 && c.Server.Port <= 65535, "server.port: %d must be between 1 and 65535", c.Server.Port)
 	check(c.Server.ReadTimeout > 0, "server.read_timeout: must be positive")
 	check(c.Server.WriteTimeout > 0, "server.write_timeout: must be positive")
 	check(c.Server.IdleTimeout > 0, "server.idle_timeout: must be positive")
 	check(c.Server.ShutdownTimeout > 0, "server.shutdown_timeout: must be positive")
+	// An empty list is the direct case, so only the entries have to be header
+	// names. A header name is a token, the same rule the CORS header list
+	// applies, and a duplicate would make the order meaningless.
+	for index, header := range c.Server.TrustedProxyHeaders {
+		check(isToken(header),
+			"server.trusted_proxy_headers[%d]: %q is not a header name", index, header)
+		check(index == slices.Index(c.Server.TrustedProxyHeaders, header),
+			"server.trusted_proxy_headers[%d]: %q is listed twice", index, header)
+	}
 	checkCORS(&c.Server.CORS, check)
 
 	check(c.Auth.SessionDriver == "" || isOneOf(c.Auth.SessionDriver, SessionDB, SessionKV),

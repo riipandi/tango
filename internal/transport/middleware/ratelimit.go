@@ -132,7 +132,7 @@ func RateLimit(surface string, limiter Limiter, refuse Refuse, excluded ...strin
 // the rate_limits key check — lowercase alphanumerics, underscores, colons —
 // which is why an address loses its dots before it becomes a key.
 func rateLimitKey(r *http.Request) string {
-	return "ip_" + sanitizeKey(clientHost(r))
+	return "ip_" + sanitizeKey(clientIP(r))
 }
 
 // sanitizeKey reduces any string to the alphabet the rate_limits check allows.

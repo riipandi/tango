@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/mailer"
@@ -57,8 +58,11 @@ const tokenEntropy = 32
 
 // Service issues the verification tokens and consumes them.
 type Service struct {
-	pool    *datastore.Postgres
-	repo    *Repository
+	pool *datastore.Postgres
+	repo *Repository
+	// audit writes the record of a verification that completed, in the
+	// transaction that consumes the token.
+	audit   *audit.Recorder
 	mail    *mailer.Service
 	queue   *queue.Client
 	baseURL string
@@ -69,13 +73,14 @@ type Service struct {
 // NewService builds the service. The mailer and the queue are the
 // infrastructure the composition root resolves: the procedure writes the
 // token row and enqueues, the queue owns the SMTP attempt and its retries.
-func NewService(pool *datastore.Postgres, mail *mailer.Service, client *queue.Client, baseURL string, log *slog.Logger) *Service {
+func NewService(pool *datastore.Postgres, mail *mailer.Service, client *queue.Client, recorder *audit.Recorder, baseURL string, log *slog.Logger) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Service{
 		pool:    pool,
 		repo:    NewRepository(),
+		audit:   recorder,
 		mail:    mail,
 		queue:   client,
 		baseURL: baseURL,
@@ -131,6 +136,21 @@ func (s *Service) SendEmail(ctx context.Context, username string) error {
 	}).Save(); err != nil {
 		return fmt.Errorf("verification: enqueue: %w", err)
 	}
+
+	// The message is enqueued and the record is written after the queue
+	// accepted it, so the record describes a message that will be attempted
+	// rather than one that was requested. It runs on the pool rather than a
+	// transaction because the enqueue is already committed: a task queue is
+	// durable on its own, and a record inside a transaction that rolled back
+	// after the enqueue would understate what happened.
+	s.audit.Record(ctx, s.pool, audit.Entry{
+		Event:  audit.EventEmailVerificationSent,
+		Status: audit.StatusSuccess,
+		UserID: account.ID.String(),
+		Payload: map[string]string{
+			"email": account.Email,
+		},
+	})
 	return nil
 }
 
@@ -153,7 +173,17 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
 		if markErr := s.repo.MarkVerified(ctx, tx, token.UserID, s.now()); markErr != nil {
 			return markErr
 		}
-		return s.repo.DeleteToken(ctx, tx, token.ID)
+		if deleteErr := s.repo.DeleteToken(ctx, tx, token.ID); deleteErr != nil {
+			return deleteErr
+		}
+		// The stamp and the record commit together: an address that reads as
+		// verified must have a record saying when it became so.
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:  audit.EventEmailVerified,
+			Status: audit.StatusSuccess,
+			UserID: token.UserID.String(),
+		})
+		return nil
 	})
 	return err
 }

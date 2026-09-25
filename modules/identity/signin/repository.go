@@ -27,6 +27,13 @@ func NewRepository(db datastore.Querier) *Repository {
 	return &Repository{db: db}
 }
 
+// WithQuerier answers the same repository over another query surface, so a
+// service can move its writes into a transaction it opens after the
+// repository was built. Every method already takes the surface it runs on.
+func (r *Repository) WithQuerier(db datastore.Querier) *Repository {
+	return &Repository{db: db}
+}
+
 // Account is the sign-in's view of a user row and its password. The hash
 // leaves this package only into the verifier, never into a response.
 type Account struct {
@@ -84,8 +91,8 @@ func (r *Repository) FindAccountByIdentity(ctx context.Context, identity string)
 func (r *Repository) CreateSession(ctx context.Context, row session.SessionSchema) error {
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(session.SessionTable)
-	ib.Cols("id", "user_id", "provider", "token_hash", "user_agent", "ip_address", "remember", "created_at", "expires_at")
-	ib.Values(row.ID.UUID(), row.UserID, row.Provider, row.TokenHash, row.UserAgent, row.IPAddress, row.Remember, row.CreatedAt, row.ExpiresAt)
+	ib.Cols("id", "user_id", "provider", "token_hash", "user_agent", "device_fingerprint", "ip_address", "remember", "created_at", "expires_at")
+	ib.Values(row.ID.UUID(), row.UserID, row.Provider, row.TokenHash, row.UserAgent, row.DeviceFingerprint, row.IPAddress, row.Remember, row.CreatedAt, row.ExpiresAt)
 
 	query, args := ib.Build()
 	if _, err := r.db.Exec(ctx, query, args...); err != nil {

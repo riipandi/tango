@@ -48,6 +48,25 @@ func TestAuthenticatedAnswersAnyVerifiedCaller(t *testing.T) {
 	assert.NoError(t, guard.Authenticated(caller("01a0", true), guard.Target{}))
 }
 
+// TestAuthenticatedRefusesADelegatedCaller pins the half that makes the rule
+// usable for a self-service procedure with no target in the request — the
+// audit trail's own listing. The account is the claims' subject, so there is
+// no identifier to compare; the delegation is the only thing left to refuse
+// on, and an account's own history is exactly what a delegation must not read
+// as if it were the account.
+func TestAuthenticatedRefusesADelegatedCaller(t *testing.T) {
+	delegated := caller("01a0", false)
+	delegated.ActorID = "01a0da1c-cb41-779d-bd02-99b3eb5da32a"
+	delegated.ActorUsername = "admin"
+
+	assert.ErrorIs(t, guard.Authenticated(delegated, guard.Target{}), guard.ErrImpersonated)
+	// The role does not lift it: an administrator who is impersonating is
+	// still acting as somebody else.
+	adminDelegated := caller("01a0", true)
+	adminDelegated.ActorID = "01a0da1c-cb41-779d-bd02-99b3eb5da32a"
+	assert.ErrorIs(t, guard.Authenticated(adminDelegated, guard.Target{}), guard.ErrImpersonated)
+}
+
 func TestAdminAnswersOnlyAnAdministrator(t *testing.T) {
 	assert.ErrorIs(t, guard.Admin(nil, guard.Target{}), guard.ErrUnauthenticated)
 	assert.ErrorIs(t, guard.Admin(caller("01a0", false), guard.Target{}), guard.ErrAdminRequired)

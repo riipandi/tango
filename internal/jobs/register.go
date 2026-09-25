@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/internal/scheduler"
@@ -19,8 +20,13 @@ import (
 // run through. A nil uploader registers none of its jobs: a queue that
 // cannot answer its tasks is not a schedule, it is a failure. mail is the
 // service the verification email submits through, and the same rule applies.
-func Register(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager, mail *mailer.Service, baseURL string) {
+func Register(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager, mail *mailer.Service, pool *datastore.Postgres, baseURL string) {
 	client.Register(queue.NewQueue[CleanupTask](cleanupProcessor))
+	// The audit retention runs on the pool rather than through a service: it
+	// deletes rows nothing reads back, so it needs no feature to own it.
+	client.Register(queue.NewQueue[AuditCleanupTask](func(ctx context.Context, task AuditCleanupTask) error {
+		return auditCleanupProcessor(ctx, task, pool)
+	}))
 	if uploader != nil {
 		client.Register(queue.NewQueue[ChunkUploadTask](func(ctx context.Context, task ChunkUploadTask) error {
 			return uploadProcessor(ctx, task, uploader)
@@ -50,18 +56,32 @@ type Seeder struct {
 	client          *queue.Client
 	cleanupInterval time.Duration
 	uploader        *storage.Manager
+	retentionDays   int
 	log             *slog.Logger
 }
 
 // NewSeeder builds the seeder over the client whose processors Register
-// wired.
-func NewSeeder(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager, log *slog.Logger) *Seeder {
-	return &Seeder{client: client, cleanupInterval: cleanupInterval, uploader: uploader, log: log}
+// wired. retentionDays is the audit window the retention job is seeded with;
+// a run that changes the configuration carries the new window into the
+// seeded task, which is what makes the change take effect at the next run.
+func NewSeeder(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager, retentionDays int, log *slog.Logger) *Seeder {
+	return &Seeder{
+		client:          client,
+		cleanupInterval: cleanupInterval,
+		uploader:        uploader,
+		retentionDays:   retentionDays,
+		log:             log,
+	}
 }
 
 // Seed seeds every recurring job while none of its tasks is pending.
 func (s *Seeder) Seed(ctx context.Context) error {
 	if err := s.seedOnce(ctx, CleanupName, cleanupSeed(s.cleanupInterval), s.cleanupInterval); err != nil {
+		return err
+	}
+	if err := s.seedOnce(ctx, AuditCleanupName,
+		auditCleanupSeed(DefaultAuditCleanupInterval, s.retentionDays),
+		DefaultAuditCleanupInterval); err != nil {
 		return err
 	}
 	if s.uploader == nil {

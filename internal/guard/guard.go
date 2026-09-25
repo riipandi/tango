@@ -97,12 +97,21 @@ type Rule func(caller *jwtutils.Caller, target Target) error
 // Public answers every request, caller or not.
 func Public(*jwtutils.Caller, Target) error { return nil }
 
-// Authenticated answers any verified caller, whatever their role. It is the
-// rule for a request that is the caller's own by construction — one that
-// reads the account from the claims and takes no target from the request.
+// Authenticated answers any verified caller, whatever their role, and refuses
+// a delegated one.
+//
+// It is the rule for a request that is the caller's own by construction — one
+// that reads the account from the claims and takes no target from the request.
+// That is why it is also the rule for the audit trail's self listing: the
+// account is the claims' subject, so there is no field for `Self` to compare,
+// and the delegation refusal is what keeps an impersonated session from
+// reading the account's own history as if it were the account.
 func Authenticated(caller *jwtutils.Caller, _ Target) error {
 	if caller == nil {
 		return ErrUnauthenticated
+	}
+	if caller.IsImpersonating() {
+		return ErrImpersonated
 	}
 	return nil
 }
