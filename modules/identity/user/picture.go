@@ -7,12 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"strings"
 	"uuid"
 
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/storage"
-	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
 // The bundled default picture answers for every account that has none. It is
@@ -39,10 +37,6 @@ var pictureKinds = []struct {
 // The failures the picture procedures report. The handler maps them to
 // connect codes, the way the account failures are mapped.
 var (
-	// ErrPictureForbidden is an update or reset whose caller is neither the
-	// account's owner nor an administrator.
-	ErrPictureForbidden = errors.New("user: the caller may not edit this account's picture")
-
 	// ErrUnsupportedPicture is an update whose bytes name no accepted image
 	// kind.
 	ErrUnsupportedPicture = errors.New("user: the picture is not a PNG, JPEG, or WebP image")
@@ -88,16 +82,6 @@ func sniffPictureType(data []byte) (string, bool) {
 	return "", false
 }
 
-// mayEditPicture reports whether the caller may replace the account's
-// picture: the account's owner — the username matches, the way the account
-// columns compare — or an administrator.
-func mayEditPicture(caller *jwtutils.AccessClaims, username string) bool {
-	if caller == nil {
-		return false
-	}
-	return caller.IsAdmin || strings.EqualFold(caller.Username, username)
-}
-
 // UpdateProfilePicture replaces an account's picture. The bytes are sniffed
 // for their kind before anything is stored, then staged into the storage
 // engine and synced in the request — a picture is small, and the read that
@@ -105,7 +89,7 @@ func mayEditPicture(caller *jwtutils.AccessClaims, username string) bool {
 // also schedules finds nothing left to do. The account row names the key
 // last: a crash before it leaves an orphan the garbage collection sweeps,
 // never a picture the account cannot read.
-func (s *Service) UpdateProfilePicture(ctx context.Context, id string, caller *jwtutils.AccessClaims, data []byte) error {
+func (s *Service) UpdateProfilePicture(ctx context.Context, id string, data []byte) error {
 	if s.pictures == nil {
 		return ErrPicturesUnavailable
 	}
@@ -113,15 +97,14 @@ func (s *Service) UpdateProfilePicture(ctx context.Context, id string, caller *j
 	if err != nil {
 		return ErrUserNotFound
 	}
-	row, err := s.repo.GetUser(ctx, s.pool, userID)
-	if errors.Is(err, datastore.ErrNoRows) {
-		return ErrUserNotFound
-	}
-	if err != nil {
+	// The row is read to establish the account exists: the guard decided who
+	// may write this picture, and a key for an account that is gone would
+	// leave a file nothing names.
+	if _, err := s.repo.GetUser(ctx, s.pool, userID); err != nil {
+		if errors.Is(err, datastore.ErrNoRows) {
+			return ErrUserNotFound
+		}
 		return fmt.Errorf("user: read for picture update: %w", err)
-	}
-	if !mayEditPicture(caller, row.Username) {
-		return ErrPictureForbidden
 	}
 	mime, ok := sniffPictureType(data)
 	if !ok {
@@ -148,7 +131,7 @@ func (s *Service) UpdateProfilePicture(ctx context.Context, id string, caller *j
 // deleted from the engine and the row's key cleared, so the account falls
 // back to the bundled default. An account without a picture resets as a
 // no-op — the answer the client asked for is already the state.
-func (s *Service) ResetProfilePicture(ctx context.Context, id string, caller *jwtutils.AccessClaims) error {
+func (s *Service) ResetProfilePicture(ctx context.Context, id string) error {
 	if s.pictures == nil {
 		return ErrPicturesUnavailable
 	}
@@ -163,10 +146,6 @@ func (s *Service) ResetProfilePicture(ctx context.Context, id string, caller *jw
 	if err != nil {
 		return fmt.Errorf("user: read for picture reset: %w", err)
 	}
-	if !mayEditPicture(caller, row.Username) {
-		return ErrPictureForbidden
-	}
-
 	if row.AvatarURL != nil {
 		if err := s.pictures.Delete(ctx, *row.AvatarURL); err != nil {
 			return fmt.Errorf("user: delete picture: %w", err)

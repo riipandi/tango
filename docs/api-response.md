@@ -215,3 +215,37 @@ parsing a body:
   cannot express (a uniqueness check, a token's existence) is domain logic
   and answers its own code from the feature; the REST surface keeps
   `pkg/validate`'s field errors in the envelope.
+
+## Authorization
+
+Authorization is declared per procedure and per route in `internal/guard`, and
+enforced by one guard interceptor on the RPC surface and one middleware on
+REST. A request the tables do not name is **administrative**, so a new
+endpoint is protected by default.
+
+The refusal a client reads is deliberately not `permission_denied`:
+
+| Situation | Code | REST status | Body |
+| --- | --- | --- | --- |
+| No credential | `unauthenticated` | 401 | `authentication required` |
+| Credential, wrong role | `not_found` | 404 | `not found` |
+| Credential, another account's resource | `not_found` | 404 | `not found` |
+| Impersonated caller on a self-service request | `not_found` | 404 | `not found` |
+
+`not_found` is the shape that discloses least, and the choice is a rule rather
+than a convenience: a caller who may not act on an account learns nothing about
+whether it exists, and a caller without the role cannot tell an administrative
+procedure from an absent one. Because authorization runs **before** request
+validation, the answer does not change with the body either — a malformed
+request to a procedure the caller may not run reads exactly like a request to a
+procedure that does not exist. The distinction between "not yours", "not
+allowed", and "not there" survives in the audit record and the server log,
+which an operator reads.
+
+`Self` compares the account the request names against the caller's token
+subject, and an administrator does not pass by virtue of the role: the
+administrative procedures are where an administrator acts on someone else,
+which is how upstream Pocket ID expresses the same rule (`/users/me` beside
+`/users/{id}`). A **delegated (impersonated) caller** is refused on every
+`Self` request even when the subject matches — a delegation reaches the
+administrative surface, never the requests that belong to the account.

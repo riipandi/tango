@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/riipandi/tango/pkg/responder"
 
-	"connectrpc.com/authn"
 	"connectrpc.com/connect"
 	"github.com/go-chi/chi/v5"
 
@@ -65,12 +64,12 @@ func newRPCHandler(service *Service) identityv1connect.EmailVerificationServiceH
 // any authenticated caller may ask for their own message, and the claims —
 // not the request — name the account.
 func (h *rpcHandler) SendEmail(ctx context.Context, req *connect.Request[identityv1.SendVerificationEmailRequest]) (*connect.Response[identityv1.SendVerificationEmailResponse], error) {
-	claims, ok := callerFrom(ctx)
+	caller, ok := jwtutils.CallerFrom(ctx)
 	if !ok {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
 	}
 
-	if err := h.service.SendEmail(ctx, claims.Username); err != nil {
+	if err := h.service.SendEmail(ctx, caller.Username); err != nil {
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.SendVerificationEmailResponse{
@@ -90,14 +89,6 @@ func (h *rpcHandler) VerifyEmail(ctx context.Context, req *connect.Request[ident
 		Status:  responder.StatusSuccess,
 		Message: "the email address was verified",
 	}), nil
-}
-
-// callerFrom reads the authenticated caller's claims the bearer middleware
-// attached. SendEmail is self-service, so any account's claims qualify; the
-// role is not this procedure's business.
-func callerFrom(ctx context.Context) (*jwtutils.AccessClaims, bool) {
-	claims, ok := authn.GetInfo(ctx).(*jwtutils.AccessClaims)
-	return claims, ok
 }
 
 // mapError translates the service's failures into the codes the Connect

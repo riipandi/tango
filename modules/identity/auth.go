@@ -27,10 +27,10 @@ func Authenticate(keys *jwks.Service, cfg config.Config) authn.AuthFunc {
 		if !ok {
 			return nil, authn.Errorf("authentication required")
 		}
-		verified, err := verifier.Verify(ctx, token)
+		caller, err := verifier.VerifyCaller(ctx, token)
 		if err != nil {
 			return nil, authn.Errorf("invalid or expired token")
 		}
-		return &verified.Private, nil
+		return caller, nil
 	}
 }

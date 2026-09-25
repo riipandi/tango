@@ -1,6 +1,7 @@
 package transport_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/signup"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/modules/identity/verification"
+	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
 // The declarative constraints live in the contracts, and the validate
@@ -28,6 +30,15 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 	router := transport.NewRouter(transport.Options{
 		Config:  config.Default(),
 		Checker: health.NewChecker(),
+		// Authorization runs before the contract is enforced, so the caller
+		// must be one the guard answers: this test is about protovalidate, and
+		// an unauthenticated request would be refused before validation ran.
+		Authenticator: func(context.Context, *http.Request) (any, error) {
+			return &jwtutils.Caller{
+				UserID:       "01a0da1c-cb41-779d-bd02-99b3eb5da32a",
+				AccessClaims: jwtutils.AccessClaims{Username: "admin", IsAdmin: true},
+			}, nil
+		},
 		Modules: []kernel.Module{
 			signup.NewModule(signup.NewService(nil, nil)),
 			user.NewModule(user.NewService(nil, nil, nil)),
@@ -87,10 +98,11 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 			"/tango.identity.v1.SignupService/Signup",
 			`{"username":"hermione","email":"hermione@example.com","password":"expecto-patronum","token":"elder-wand"}`,
 		},
-		"bad user id on reset": {
-			"/tango.identity.v1.UserService/ResetProfilePicture",
-			`{"userId":"not-a-uuid"}`,
-		},
+		// ResetProfilePicture is deliberately absent: authorization runs before
+		// the contract is enforced, so a caller who does not name their own
+		// account is refused by the self rule and never reaches validation.
+		// That ordering is the disclosure rule — a non-owner cannot tell a
+		// malformed identifier from one that is not theirs.
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := httptest.NewRecorder()

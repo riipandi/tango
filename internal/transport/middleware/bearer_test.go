@@ -9,6 +9,9 @@ import (
 	"connectrpc.com/authn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/riipandi/tango/internal/guard"
+	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
 // authStub answers the caller the request's token names, and refuses
@@ -18,7 +21,7 @@ func authStub(refuse bool) Authenticator {
 		if refuse {
 			return nil, authn.Errorf("authentication required")
 		}
-		return "the-caller", nil
+		return &jwtutils.Caller{UserID: "01a0", AccessClaims: jwtutils.AccessClaims{Username: "hermione"}}, nil
 	}
 }
 
@@ -39,8 +42,8 @@ func TestRESTBearerProtectsByDefault(t *testing.T) {
 			http.MethodGet, "/api/users/01a0/extra/profile-picture.png", true, http.StatusUnauthorized,
 		},
 	} {
-		guarded := RESTBearer(authStub(tc.refuse), []PublicRoute{
-			{Method: http.MethodGet, Pattern: "/api/users/{id}/profile-picture.png"},
+		guarded := RESTBearer(authStub(tc.refuse), []guard.RestEntry{
+			{Method: http.MethodGet, Pattern: "/api/users/{id}/profile-picture.png", Rule: guard.Public},
 		})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		}))

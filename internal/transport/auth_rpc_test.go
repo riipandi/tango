@@ -29,7 +29,10 @@ func stubAuthenticator() transport.Authenticator {
 		if !ok || token != "secret" {
 			return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
 		}
-		return &jwtutils.AccessClaims{IsAdmin: true}, nil
+		return &jwtutils.Caller{
+			UserID:       "01a0da1c-cb41-779d-bd02-99b3eb5da32a",
+			AccessClaims: jwtutils.AccessClaims{Username: "admin", IsAdmin: true},
+		}, nil
 	}
 }
 

@@ -2,12 +2,13 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
-	"strings"
 
 	"connectrpc.com/authn"
 	"connectrpc.com/connect"
 
+	"github.com/riipandi/tango/internal/guard"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -23,9 +24,13 @@ type Authenticator = authn.AuthFunc
 //
 // A procedure named in public is answered without a caller; every other path
 // requires one, so a new procedure is protected by default and a public one
-// is a deliberate entry in the caller's set. A nil authenticator returns the
+// is a deliberate entry in the guard table. A nil authenticator returns the
 // handler unchanged, which is the state a test that reads only responses is
 // in.
+//
+// Authentication is the whole of this middleware's job: whether the caller
+// may run the procedure is the guard interceptor's decision, made once the
+// request is decoded and the target it names is readable.
 func BearerAuth(auth Authenticator, public map[string]struct{}, options []connect.HandlerOption, inner http.Handler) http.Handler {
 	if auth == nil {
 		return inner
@@ -48,69 +53,65 @@ func publicOnly(auth Authenticator, public map[string]struct{}) Authenticator {
 	}
 }
 
-// PublicRoute is one REST route the bearer requirement excuses. The pattern
-// is a chi-style path: literal segments, `{param}` matching any one segment.
-type PublicRoute struct {
-	// Method is the HTTP method the route answers, GET, PUT, and friends.
-	Method string
-	// Pattern is the path the route claims, without a leading slash.
-	Pattern string
-}
-
-// matches reports whether the request names the route. The path is compared
-// segment by segment, so a wildcard stands for one segment — never for the
-// rest of the path.
-func (p PublicRoute) matches(r *http.Request) bool {
-	if r.Method != p.Method {
-		return false
-	}
-	path := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	pattern := strings.Split(strings.Trim(p.Pattern, "/"), "/")
-	if len(path) != len(pattern) {
-		return false
-	}
-	for i, segment := range pattern {
-		if strings.HasPrefix(segment, "{") {
-			continue
-		}
-		if segment != path[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// RESTBearer guards the REST surface's routes with the same authenticator the
-// RPC surface runs. A route named in public is answered without a caller;
-// every other path requires one, so a new route is protected by default and a
-// public one is a deliberate entry in the caller's set.
+// RESTBearer guards the REST surface's routes: it authenticates the caller
+// and applies the rule the guard table declares for the route, in one pass.
 //
-// The verified caller's claims travel through the context the authn library
-// reads — the same store BearerAuth's middleware fills — so a handler reads
-// its caller the same way on both transports. The refusal is the REST
-// envelope, because the caller here is one that reads envelopes.
+// The two steps are one middleware rather than two because they share the
+// table. A route whose rule is public is served without a caller — the key
+// set, a picture fetched by an <img> tag — and every other route requires
+// one, so a new route is protected by default and a public one is a
+// deliberate entry in internal/guard.
+//
+// The verified caller travels through the context the authn library reads,
+// the same store the RPC surface's middleware fills, so a handler reads its
+// caller the same way on both transports. A refusal is the REST envelope,
+// because the caller here is one that reads envelopes.
 //
 // A nil authenticator answers with the inner handler unchanged, which is the
 // state a test that reads only responses is in.
-func RESTBearer(auth Authenticator, public []PublicRoute) func(http.Handler) http.Handler {
+func RESTBearer(auth Authenticator, rules []guard.RestEntry) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		if auth == nil {
 			return next
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, route := range public {
-				if route.matches(r) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			rule, target := guard.MatchRest(rules, r.Method, r.URL.Path)
+			if guard.IsPublic(rule) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
-			claims, err := auth(r.Context(), r)
+			info, err := auth(r.Context(), r)
 			if err != nil {
 				responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(authn.SetInfo(r.Context(), claims)))
+
+			ctx := authn.SetInfo(r.Context(), info)
+			if err := rule(guard.CallerOf(info), target); err != nil {
+				refuseREST(w, r, err)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+}
+
+// refuseREST writes a rule's refusal in the envelope the REST surface
+// answers.
+//
+// The mapping is the same one the RPC surface applies, expressed in status
+// codes: a missing caller is 401 because the answer is to present a
+// credential, a caller without the role is 403, and a request naming another
+// account is 404 — the answer that discloses least, because the caller learns
+// nothing about whether the account exists.
+func refuseREST(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, guard.ErrUnauthenticated):
+		responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
+	case errors.Is(err, guard.ErrAdminRequired), errors.Is(err, guard.ErrImpersonated):
+		responder.Fail(w, r, http.StatusForbidden, "the caller may not perform this operation")
+	default:
+		responder.Fail(w, r, http.StatusNotFound, "not found")
 	}
 }

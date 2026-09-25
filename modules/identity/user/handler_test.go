@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/guard"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/pkg/jwtutils"
@@ -21,8 +22,9 @@ import (
 )
 
 // testVerifier builds the verifier and the signer over one HMAC secret, so a
-// test mints the token the PUT route verifies.
-func testVerifier(t *testing.T) (*jwtutils.AccessVerifier, string) {
+// test mints the token the PUT route verifies. The subject is the account the
+// caller is, which is what the self rule compares the path against.
+func testVerifier(t *testing.T, subject string) (*jwtutils.AccessVerifier, string) {
 	t.Helper()
 
 	cfg := config.Default()
@@ -35,7 +37,7 @@ func testVerifier(t *testing.T) (*jwtutils.AccessVerifier, string) {
 	signer, err := jwtutils.NewSigner[jwtutils.AccessClaims](key, algorithm)
 	require.NoError(t, err)
 	token, err := signer.Sign(jwtutils.AccessClaims{Username: "hermione", IsAdmin: true},
-		jwtutils.Standard{Issuer: cfg.Auth.Issuer, Subject: "hermione", IssuedAt: time.Now()})
+		jwtutils.Standard{Issuer: cfg.Auth.Issuer, Subject: subject, IssuedAt: time.Now()})
 	require.NoError(t, err)
 	return jwtutils.NewAccessVerifier(keys, cfg.Auth.Issuer), token
 }
@@ -54,7 +56,7 @@ func TestThePictureReadServesTheRESTRoute(t *testing.T) {
 		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	verifier, token := testVerifier(t)
+	verifier, token := testVerifier(t, created.ID)
 
 	router := chi.NewRouter()
 	// The transport's REST bearer middleware is what protects the write; the
@@ -65,15 +67,13 @@ func TestThePictureReadServesTheRESTRoute(t *testing.T) {
 		if !ok {
 			return nil, authn.Errorf("authentication required")
 		}
-		verified, err := verifier.Verify(ctx, bearer)
+		caller, err := verifier.VerifyCaller(ctx, bearer)
 		if err != nil {
 			return nil, authn.Errorf("invalid or expired token")
 		}
-		return &verified.Private, nil
+		return caller, nil
 	}
-	router.Use(middleware.RESTBearer(auth, []middleware.PublicRoute{
-		{Method: http.MethodGet, Pattern: "/api/users/{id}/profile-picture.png"},
-	}))
+	router.Use(middleware.RESTBearer(auth, guard.RestRules))
 	NewModule(service).Mount(router)
 
 	// An account without a picture answers the bundled default's URL — a

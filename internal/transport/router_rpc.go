@@ -115,6 +115,14 @@ func rpcHandlerOptions() []connect.HandlerOption {
 	return []connect.HandlerOption{
 		connect.WithCodec(rpcJSONCodec{name: rpcCodecJSON}),
 		connect.WithCodec(rpcJSONCodec{name: rpcCodecJSONCharsetUTF8}),
+		// Authorization runs before the contract is enforced, so a caller who
+		// may not run a procedure is refused without the request body being
+		// judged: the answer is the same whether the body was well-formed or
+		// not, which keeps a non-administrator from telling an administrative
+		// procedure apart from an absent one. The rule is per-procedure and
+		// the request carries the procedure it calls, so this is an
+		// interceptor rather than a middleware.
+		connect.WithInterceptors(middleware.Guard()),
 		// The declarative constraints in the contracts are enforced here,
 		// once: a message that fails its protovalidate options never reaches
 		// a handler, and the violations travel as typed error details.

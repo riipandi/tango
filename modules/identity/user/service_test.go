@@ -12,10 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"connectrpc.com/authn"
 	"connectrpc.com/connect"
 
-	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	"github.com/riipandi/tango/database"
 	"log/slog"
 
@@ -27,7 +25,6 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/storage"
-	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/testutils"
 
 	"uuid"
@@ -362,32 +359,6 @@ func strPtr(value string) *string {
 	return &value
 }
 
-func TestUserProceduresRefuseACallerWithoutTheRole(t *testing.T) {
-	handler := &rpcHandler{service: nil} // the gate runs before the service
-
-	for name, ctx := range map[string]context.Context{
-		"no identity": t.Context(),
-		"non-admin":   authn.SetInfo(t.Context(), &jwtutils.AccessClaims{IsAdmin: false}),
-	} {
-		t.Run(name, func(t *testing.T) {
-			_, err := handler.ListUsers(ctx, connect.NewRequest(&identityv1.ListUsersRequest{}))
-			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
-
-			_, err = handler.GetUser(ctx, connect.NewRequest(&identityv1.GetUserRequest{Id: "00000000-0000-0000-0000-000000000000"}))
-			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
-
-			_, err = handler.CreateUser(ctx, connect.NewRequest(&identityv1.CreateUserRequest{}))
-			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
-
-			_, err = handler.UpdateUser(ctx, connect.NewRequest(&identityv1.UpdateUserRequest{}))
-			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
-
-			_, err = handler.DeleteUser(ctx, connect.NewRequest(&identityv1.DeleteUserRequest{Id: "00000000-0000-0000-0000-000000000000"}))
-			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
-		})
-	}
-}
-
 func TestMapErrorCarriesTheConnectCodes(t *testing.T) {
 	cases := []struct {
 		err  error
@@ -416,12 +387,11 @@ func TestThePictureFlowStagesSyncsAndReadsBack(t *testing.T) {
 		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: false}
 
 	picture := bytes.Repeat([]byte("A"), 80) // PNG magic + filler
 	picture[0], picture[3] = 0x89, 'N'
 	copy(picture, []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
-	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, claims, picture))
+	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, picture))
 
 	body, mime, err := service.readPicture(t.Context(), created.ID)
 	require.NoError(t, err)
@@ -464,49 +434,16 @@ func TestPictureUpdateSniffsTheBytesRatherThanTheDeclaration(t *testing.T) {
 		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: false}
 
-	err = service.UpdateProfilePicture(t.Context(), created.ID, claims, []byte("definitely not an image"))
+	err = service.UpdateProfilePicture(t.Context(), created.ID, []byte("definitely not an image"))
 	assert.ErrorIs(t, err, ErrUnsupportedPicture)
 
 	// The WAV file shares the RIFF form with WebP; the format field tells
 	// them apart.
 	wav := append([]byte("RIFF"), make([]byte, 8)...)
 	copy(wav[8:], "WAVE")
-	err = service.UpdateProfilePicture(t.Context(), created.ID, claims, wav)
+	err = service.UpdateProfilePicture(t.Context(), created.ID, wav)
 	assert.ErrorIs(t, err, ErrUnsupportedPicture)
-}
-
-// TestPictureEditBelongsToTheOwnerOrAnAdministrator keeps the two-gate rule:
-// the owner under whatever case the claims carry, an administrator for any
-// account, nobody else.
-func TestPictureEditBelongsToTheOwnerOrAnAdministrator(t *testing.T) {
-	testutils.SkipWithoutDocker(t)
-
-	pool := migratedPool(t)
-	service, _ := testPictureService(t, pool)
-	created, err := service.CreateUser(t.Context(), CreateParams{
-		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
-		FirstName: "Hermione", LastName: "Granger",
-	})
-	require.NoError(t, err)
-	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
-
-	for name, claims := range map[string]*jwtutils.AccessClaims{
-		"owner":    {Username: "HERMIONE", IsAdmin: false},
-		"admin":    {Username: "langdon", IsAdmin: true},
-		"stranger": {Username: "langdon", IsAdmin: false},
-	} {
-		updateErr := service.UpdateProfilePicture(t.Context(), created.ID, claims, picture)
-		if name == "stranger" {
-			assert.ErrorIs(t, updateErr, ErrPictureForbidden, name)
-			continue
-		}
-		assert.NoError(t, updateErr, name)
-	}
-
-	err = service.ResetProfilePicture(t.Context(), created.ID, &jwtutils.AccessClaims{Username: "langdon", IsAdmin: false})
-	assert.ErrorIs(t, err, ErrPictureForbidden)
 }
 
 // TestPictureResetFallsBackToTheDefault clears the row and removes the file,
@@ -521,16 +458,15 @@ func TestPictureResetFallsBackToTheDefault(t *testing.T) {
 		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: false}
 	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 1, 2}
-	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, claims, picture))
+	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, picture))
 
 	// The read before the reset answers the stored bytes.
 	body, _, readErr := service.readPicture(t.Context(), created.ID)
 	require.NoError(t, readErr)
 	body.Close()
 
-	require.NoError(t, service.ResetProfilePicture(t.Context(), created.ID, claims))
+	require.NoError(t, service.ResetProfilePicture(t.Context(), created.ID))
 
 	var storedPath *string
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
@@ -565,12 +501,11 @@ func TestPictureRefusesAnUnknownAccount(t *testing.T) {
 
 	pool := migratedPool(t)
 	service, _ := testPictureService(t, pool)
-	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: true}
 
 	id := "00000000-0000-0000-0000-000000000000"
-	err := service.UpdateProfilePicture(t.Context(), id, claims, []byte("x"))
+	err := service.UpdateProfilePicture(t.Context(), id, []byte("x"))
 	assert.ErrorIs(t, err, ErrUserNotFound)
-	err = service.ResetProfilePicture(t.Context(), id, claims)
+	err = service.ResetProfilePicture(t.Context(), id)
 	assert.ErrorIs(t, err, ErrUserNotFound)
 	_, err = service.ProfilePicture(t.Context(), id)
 	assert.ErrorIs(t, err, ErrUserNotFound)
@@ -621,10 +556,9 @@ func TestThePictureFlowLandsOnS3(t *testing.T) {
 		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: false}
 
 	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 9, 8, 7}
-	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, claims, picture))
+	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, picture))
 
 	// The read streams the chunks the backend holds — the same flow the
 	// local driver answers, no S3-specific branch anywhere in the feature.
@@ -663,7 +597,7 @@ func TestThePictureFlowLandsOnS3(t *testing.T) {
 
 	// The reset removes the object the backend holds, so the account falls
 	// back to the bundled default the same way it does on the local driver.
-	require.NoError(t, service.ResetProfilePicture(t.Context(), created.ID, claims))
+	require.NoError(t, service.ResetProfilePicture(t.Context(), created.ID))
 	fallback, err := service.ProfilePicture(t.Context(), created.ID)
 	require.NoError(t, err)
 	defer fallback.Body.Close()
@@ -692,10 +626,9 @@ func TestPictureProceduresRefuseARunWithoutTheEngine(t *testing.T) {
 		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: false}
 
-	err = service.UpdateProfilePicture(t.Context(), created.ID, claims, []byte("x"))
+	err = service.UpdateProfilePicture(t.Context(), created.ID, []byte("x"))
 	assert.ErrorIs(t, err, ErrPicturesUnavailable)
-	err = service.ResetProfilePicture(t.Context(), created.ID, claims)
+	err = service.ResetProfilePicture(t.Context(), created.ID)
 	assert.ErrorIs(t, err, ErrPicturesUnavailable)
 }

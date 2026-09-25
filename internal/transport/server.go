@@ -22,10 +22,8 @@ import (
 	"net/http"
 	"strings"
 
-	authv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1/authv1connect"
-	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
-	systemv1connect "github.com/riipandi/tango/codegen/proto/go/tango/system/v1/systemv1connect"
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/guard"
 	"github.com/riipandi/tango/internal/transport/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -39,17 +37,11 @@ var httpRateLimitExclusions = []string{
 	"/api/healthz", // liveness probes and load-balancer checks
 }
 
-// restPublicRoutes lists the REST routes the bearer middleware answers
-// without a caller, beside the rate-limit exclusion list above because both
-// encode the same default in opposite directions: a module route is
-// throttled and protected unless it is named here. The key set is public
-// because a verifier needs it before it can hold a token; the picture read
-// is public because an <img> tag fetches it — an account without a picture
-// answers the bundled default by redirect.
-var restPublicRoutes = []middleware.PublicRoute{
-	{Method: http.MethodGet, Pattern: "/.well-known/jwks.json"},
-	{Method: http.MethodGet, Pattern: "/api/users/{id}/profile-picture.png"},
-}
+// restGuardRules is the authorization policy the REST surface's middleware
+// applies, read from internal/guard: the same table the RPC surface's guard
+// interceptor reads, so a route cannot be public for the authenticator and
+// guarded for the guard.
+var restGuardRules = guard.RestRules
 
 // devtoolUIPath is where the samber/do web UI mounts: served by a debug
 // build, refused with a 404 envelope by a release one.
@@ -60,19 +52,12 @@ var rpcRateLimitExclusions = []string{
 }
 
 // rpcPublicProcedures lists the procedures the RPC surface answers without a
-// caller, beside the rate-limit exclusion lists above because both encode the
-// same default in opposite directions: a procedure is throttled and protected
-// unless it is named here. The health procedure is public because a probe
-// carries no token; sign-in and sign-up are public because they are how a
-// caller becomes one. The bearer middleware refuses every other path, so a
-// new procedure is protected by default and a public one is a deliberate line
-// in this set.
-var rpcPublicProcedures = map[string]struct{}{
-	systemv1connect.HealthServiceCheckProcedure:                    {},
-	authv1connect.AuthServiceSignInProcedure:                       {},
-	identityv1connect.SignupServiceSignupProcedure:                 {},
-	identityv1connect.EmailVerificationServiceVerifyEmailProcedure: {},
-}
+// caller, read from the same guard table the authorization interceptor uses,
+// so a procedure cannot be public for the authenticator and administrative
+// for the guard. The bearer middleware refuses every other path, so a new
+// procedure is protected by default and a public one is a deliberate entry in
+// internal/guard.
+var rpcPublicProcedures = guard.PublicProcedures()
 
 // Authenticator authenticates an RPC request before its procedure runs. The
 // transport receives it through Options rather than resolving the key service

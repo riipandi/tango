@@ -18,6 +18,66 @@ type AccessClaims struct {
 	DisplayName string `json:"display_name"`
 	IsAdmin     bool   `json:"is_admin"`
 	SessionID   string `json:"sid"`
+
+	// ActorID and ActorUsername name the account a delegated token acts on
+	// behalf of — the administrator who asked for it, when the token was
+	// issued to another account. The subject still names the account the
+	// request runs as; these two name who is behind it, which is what an
+	// audit record and a refusal both need. They are omitted from a token
+	// that belongs to the account it names, which is every token that is not
+	// a delegation, so a claim that is present is the whole signal that the
+	// caller is acting for someone else.
+	//
+	// The pair is this application's spelling of the delegation an OAuth
+	// token exchange (RFC 8693) calls `act`: the actor is recorded beside the
+	// subject rather than replacing it, so no seam has to reconstruct who is
+	// really acting.
+	ActorID       string `json:"actor_id,omitzero"`
+	ActorUsername string `json:"actor_username,omitzero"`
+}
+
+// Caller is the authenticated principal a request runs as: the account the
+// token names, plus the delegation it may carry.
+//
+// It is the one type a seam reads from the request context, so a guard, a
+// feature, and an audit record agree about who is acting and who is being
+// acted for. Reading the raw claims would leave each of them to answer the
+// delegation question itself, and the answers would drift.
+type Caller struct {
+	// AccessClaims describe the account the request acts as, as the token
+	// asserted them when it was signed.
+	AccessClaims
+
+	// UserID is the account the request acts as: the token's subject. It is
+	// separate from the claims because the subject is a registered claim, not
+	// a private one, and a request's identity is its subject.
+	UserID string
+}
+
+// NewCaller builds the caller from a verified token. A token whose subject is
+// absent cannot name the account it acts for, so it is refused rather than
+// answered with an empty identity.
+func NewCaller(verified Verified[AccessClaims]) (*Caller, error) {
+	if verified.Subject == "" {
+		return nil, ErrMissingSubject
+	}
+	return &Caller{AccessClaims: verified.Private, UserID: verified.Subject}, nil
+}
+
+// IsImpersonating reports whether the caller acts for another account. A
+// procedure that may only ever be used by the account itself refuses an
+// impersonated caller on this flag, before it looks at any identifier: a
+// delegated session is an administrator's tool, not a way to act as somebody
+// else on a surface that belongs to them.
+func (c *Caller) IsImpersonating() bool {
+	return c != nil && c.ActorID != ""
+}
+
+// ActsFor reports whether the caller is the named account. An empty name is
+// nobody: a request that names no account cannot match a caller, so a guard
+// that reads a missing field refuses rather than passing.
+func (c *Caller) ActsFor(userID string) bool {
+	return c != nil && userID != "" && c.UserID == userID
 }
 
 // SigningKeySource supplies the material the process signs and verifies its
@@ -70,4 +130,19 @@ func (v *AccessVerifier) Verify(ctx context.Context, token string) (Verified[Acc
 		return Verified[AccessClaims]{}, fmt.Errorf("jwtutils: verifier: %w", err)
 	}
 	return verifier.WithIssuer(v.issuer).Verify(token)
+}
+
+// VerifyCaller verifies the token and answers the principal it authenticates.
+//
+// It is the door every authenticated surface uses: the caller carries the
+// subject beside the claims, so a guard compares identifiers instead of
+// reaching into two shapes, and the delegation the token may carry travels
+// with it. A token that names no subject is refused here rather than handed on
+// as an identity nobody can check.
+func (v *AccessVerifier) VerifyCaller(ctx context.Context, token string) (*Caller, error) {
+	verified, err := v.Verify(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	return NewCaller(verified)
 }

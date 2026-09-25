@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math"
 
-	"connectrpc.com/authn"
 	"connectrpc.com/connect"
 	"github.com/go-chi/chi/v5"
 
@@ -65,10 +64,6 @@ func newRPCHandler(service *Service) identityv1connect.UserServiceHandler {
 
 // ListUsers answers one page of the accounts.
 func (h *rpcHandler) ListUsers(ctx context.Context, req *connect.Request[identityv1.ListUsersRequest]) (*connect.Response[identityv1.ListUsersResponse], error) {
-	if _, ok := adminFrom(ctx); !ok {
-		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
-	}
-
 	users, pagination, err := h.service.ListUsers(ctx, req.Msg.GetSearch(), int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
 	if err != nil {
 		return nil, mapError(err)
@@ -88,10 +83,6 @@ func (h *rpcHandler) ListUsers(ctx context.Context, req *connect.Request[identit
 
 // GetUser answers one account.
 func (h *rpcHandler) GetUser(ctx context.Context, req *connect.Request[identityv1.GetUserRequest]) (*connect.Response[identityv1.GetUserResponse], error) {
-	if _, ok := adminFrom(ctx); !ok {
-		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
-	}
-
 	user, err := h.service.GetUser(ctx, req.Msg.Id)
 	if err != nil {
 		return nil, mapError(err)
@@ -105,10 +96,6 @@ func (h *rpcHandler) GetUser(ctx context.Context, req *connect.Request[identityv
 
 // CreateUser creates an account directly, without a signup token.
 func (h *rpcHandler) CreateUser(ctx context.Context, req *connect.Request[identityv1.CreateUserRequest]) (*connect.Response[identityv1.CreateUserResponse], error) {
-	if _, ok := adminFrom(ctx); !ok {
-		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
-	}
-
 	body := req.Msg
 	user, err := h.service.CreateUser(ctx, CreateParams{
 		Username:      body.Username,
@@ -134,10 +121,6 @@ func (h *rpcHandler) CreateUser(ctx context.Context, req *connect.Request[identi
 
 // UpdateUser replaces an account's fields.
 func (h *rpcHandler) UpdateUser(ctx context.Context, req *connect.Request[identityv1.UpdateUserRequest]) (*connect.Response[identityv1.UpdateUserResponse], error) {
-	if _, ok := adminFrom(ctx); !ok {
-		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
-	}
-
 	body := req.Msg
 	params := UpdateParams{
 		Username:    body.Username,
@@ -167,12 +150,16 @@ func (h *rpcHandler) UpdateUser(ctx context.Context, req *connect.Request[identi
 
 // DeleteUser removes an account.
 func (h *rpcHandler) DeleteUser(ctx context.Context, req *connect.Request[identityv1.DeleteUserRequest]) (*connect.Response[identityv1.DeleteUserResponse], error) {
-	claims, ok := adminFrom(ctx)
+	// The guard has already established that the caller is an administrator,
+	// so the claims are here and the name they carry is what the service
+	// compares the target against: an administrator may not delete the
+	// account they are signed in as.
+	caller, ok := jwtutils.CallerFrom(ctx)
 	if !ok {
-		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
 	}
 
-	if err := h.service.DeleteUser(ctx, req.Msg.Id, claims.Username); err != nil {
+	if err := h.service.DeleteUser(ctx, req.Msg.Id, caller.Username); err != nil {
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.DeleteUserResponse{
@@ -181,14 +168,11 @@ func (h *rpcHandler) DeleteUser(ctx context.Context, req *connect.Request[identi
 	}), nil
 }
 
-// ResetProfilePicture removes an account's picture. The same two-gate rule
-// the update carries governs who may reset it.
+// ResetProfilePicture removes an account's picture. The procedure is
+// self-service: the guard has already established that the account the
+// request names is the caller's own.
 func (h *rpcHandler) ResetProfilePicture(ctx context.Context, req *connect.Request[identityv1.ResetProfilePictureRequest]) (*connect.Response[identityv1.ResetProfilePictureResponse], error) {
-	claims, ok := callerFrom(ctx)
-	if !ok {
-		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
-	}
-	if err := h.service.ResetProfilePicture(ctx, req.Msg.Id, claims); err != nil {
+	if err := h.service.ResetProfilePicture(ctx, req.Msg.Id); err != nil {
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.ResetProfilePictureResponse{
@@ -222,24 +206,6 @@ func listMetadata(p responder.Pagination) *commonv1.ListMetadata {
 	return meta
 }
 
-// adminFrom reads the authenticated caller's claims the bearer middleware
-// attached, and reports whether the caller holds the administrator role.
-func adminFrom(ctx context.Context) (*jwtutils.AccessClaims, bool) {
-	claims, ok := callerFrom(ctx)
-	return claims, ok && claims.IsAdmin
-}
-
-// callerFrom reads the authenticated caller's claims the bearer middleware
-// attached. Every procedure behind the middleware runs after it, so a
-// missing caller is a defect the transport answers unauthenticated.
-func callerFrom(ctx context.Context) (*jwtutils.AccessClaims, bool) {
-	claims, ok := authn.GetInfo(ctx).(*jwtutils.AccessClaims)
-	return claims, ok
-}
-
-// errAdminRequired is the refusal a caller without the administrator role reads.
-var errAdminRequired = errors.New("administrator role required")
-
 // mapError translates the service's failures into the codes the Connect
 // protocol carries. The internal ones are collapsed to one answer whose text
 // names nothing a caller could aim at. A malformed field never reaches the
@@ -253,8 +219,6 @@ func mapError(err error) error {
 		return connect.NewError(connect.CodeAlreadyExists, errors.New("account already exists"))
 	case errors.Is(err, ErrSelfDeletion):
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("an administrator cannot delete the account they are signed in with"))
-	case errors.Is(err, ErrPictureForbidden):
-		return connect.NewError(connect.CodePermissionDenied, errors.New("the caller may not edit this account's picture"))
 	case errors.Is(err, ErrPicturesUnavailable):
 		return connect.NewError(connect.CodeUnavailable, errors.New("picture storage is not available"))
 	default:

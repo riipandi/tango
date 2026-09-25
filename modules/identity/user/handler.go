@@ -26,11 +26,11 @@ const maxPictureSize = 2 << 20
 // production binary. An unknown identifier is the one refusal, in the
 // envelope the REST surface answers.
 //
-// The write is protected: the bearer middleware verified the caller before
-// this handler ran, so the claims are in the context. The body is the
-// picture — the raw bytes, not a wrapper around them — and the read cap
-// bounds it before it reaches the service, which owns the kind check and
-// the owner-or-administrator gate.
+// The write is protected twice over, and both are the transport's: the bearer
+// middleware verified the caller, and the guard rule declared for this route
+// established that the account in the path is the caller's own. The body is
+// the picture — the raw bytes, not a wrapper around them — and the read cap
+// bounds it before it reaches the service, which owns the kind check.
 func (m *Module) Mount(r chi.Router) {
 	r.Get("/api/users/{id}/profile-picture.png", func(w http.ResponseWriter, r *http.Request) {
 		picture, err := m.service.ProfilePicture(r.Context(), chi.URLParam(r, "id"))
@@ -64,12 +64,6 @@ func (m *Module) Mount(r chi.Router) {
 	})
 
 	r.Put("/api/users/{id}/profile-picture", func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := callerFrom(r.Context())
-		if !ok {
-			responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
-			return
-		}
-
 		body := http.MaxBytesReader(w, r.Body, maxPictureSize)
 		data, err := io.ReadAll(body)
 		if err != nil {
@@ -78,13 +72,10 @@ func (m *Module) Mount(r chi.Router) {
 			return
 		}
 
-		err = m.service.UpdateProfilePicture(r.Context(), chi.URLParam(r, "id"), claims, data)
+		err = m.service.UpdateProfilePicture(r.Context(), chi.URLParam(r, "id"), data)
 		switch {
 		case errors.Is(err, ErrUserNotFound):
 			responder.Fail(w, r, http.StatusNotFound, "user not found")
-		case errors.Is(err, ErrPictureForbidden):
-			responder.Fail(w, r, http.StatusForbidden,
-				"the caller may not edit this account's picture")
 		case errors.Is(err, ErrUnsupportedPicture):
 			responder.Fail(w, r, http.StatusUnsupportedMediaType,
 				"the picture must be a PNG, JPEG, or WebP image")

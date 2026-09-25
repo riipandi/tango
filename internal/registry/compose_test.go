@@ -17,6 +17,7 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/registry"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
 // reportsArea is an area a consumer wrote outside this repository. It owns one
@@ -67,10 +68,16 @@ func TestAConsumerServesItsOwnArea(t *testing.T) {
 		return allowAll{}, nil
 	})
 	// The authenticator is stubbed for the same reason: the consumer area's
-	// route is protected by default, and the stub is the caller its handler
-	// would read.
+	// route is protected and administrative by default — a route the guard
+	// table does not name is administrative — so the stub answers the
+	// administrator the default rule requires.
 	do.Override[middleware.Authenticator](injector, func(do.Injector) (middleware.Authenticator, error) {
-		return func(context.Context, *http.Request) (any, error) { return "the-caller", nil }, nil
+		return func(context.Context, *http.Request) (any, error) {
+			return &jwtutils.Caller{
+				UserID:       "01a0da1c-cb41-779d-bd02-99b3eb5da32a",
+				AccessClaims: jwtutils.AccessClaims{Username: "admin", IsAdmin: true},
+			}, nil
+		}, nil
 	})
 
 	router, err := do.Invoke[chi.Router](injector)

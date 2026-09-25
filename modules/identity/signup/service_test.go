@@ -10,17 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"connectrpc.com/authn"
 	"connectrpc.com/connect"
 
-	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/pkg/crypto"
-	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/testutils"
 )
 
@@ -378,24 +375,4 @@ func TestSignupTokenListAndDelete(t *testing.T) {
 
 	assert.ErrorIs(t, service.DeleteSignupToken(t.Context(), first.Token.ID), ErrTokenNotFound)
 	assert.ErrorIs(t, service.DeleteSignupToken(t.Context(), "not-a-uuid"), ErrTokenNotFound)
-}
-
-func TestTokenProceduresRefuseACallerWithoutTheRole(t *testing.T) {
-	handler := &rpcHandler{service: nil} // the gate runs before the service
-
-	for name, ctx := range map[string]context.Context{
-		"no identity": t.Context(),
-		"non-admin":   authn.SetInfo(t.Context(), &jwtutils.AccessClaims{IsAdmin: false}),
-	} {
-		t.Run(name, func(t *testing.T) {
-			_, err := handler.CreateSignupToken(ctx, connect.NewRequest(&identityv1.CreateSignupTokenRequest{TtlSeconds: 86400}))
-			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
-
-			_, err = handler.ListSignupTokens(ctx, connect.NewRequest(&identityv1.ListSignupTokensRequest{}))
-			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
-
-			_, err = handler.DeleteSignupToken(ctx, connect.NewRequest(&identityv1.DeleteSignupTokenRequest{Id: "00000000-0000-0000-0000-000000000000"}))
-			assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
-		})
-	}
 }

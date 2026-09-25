@@ -43,7 +43,7 @@ jobs:
         # (runner-images #9460/#13505) — deliberately not used. On macOS,
         # testutils.SkipWithoutDocker skips the container tests instead of
         # failing them. To restore full macOS coverage, host the runner on
-        # real hardware with OrbStack/Docker (labels: [self-hosted, macOS])
+        # real hardware with Docker (labels: [self-hosted, macOS])
         # and drop this distinction — no QEMU needed there.
         # Empty on push/pull_request; on workflow_dispatch the `os` input
         # restricts the matrix to a single platform.

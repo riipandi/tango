@@ -113,7 +113,7 @@ func NewRouter(opts Options) chi.Router {
 		// the API mounts itself — the root and the health endpoint — stay
 		// outside it: they are the surface a monitor reaches.
 		throttled.Group(func(mod chi.Router) {
-			mod.Use(middleware.RESTBearer(opts.Authenticator, restPublicRoutes))
+			mod.Use(middleware.RESTBearer(opts.Authenticator, restGuardRules))
 			kernel.Mount(mod, opts.Modules...)
 		})
 	})

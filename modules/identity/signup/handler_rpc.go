@@ -6,7 +6,6 @@ import (
 	"math"
 	"time"
 
-	"connectrpc.com/authn"
 	"connectrpc.com/connect"
 	"github.com/go-chi/chi/v5"
 
@@ -14,7 +13,6 @@ import (
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
 	"github.com/riipandi/tango/modules/identity/user"
-	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -92,10 +90,6 @@ func (h *rpcHandler) Signup(ctx context.Context, req *connect.Request[identityv1
 // CreateSignupToken issues a signup token. The procedure is administrative:
 // the transport authenticated the caller, and the claims decide the role.
 func (h *rpcHandler) CreateSignupToken(ctx context.Context, req *connect.Request[identityv1.CreateSignupTokenRequest]) (*connect.Response[identityv1.CreateSignupTokenResponse], error) {
-	if _, ok := adminFrom(ctx); !ok {
-		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
-	}
-
 	body := req.Msg
 	created, err := h.service.CreateSignupToken(ctx, CreateTokenParams{
 		TTL:        time.Duration(body.TtlSeconds) * time.Second,
@@ -116,10 +110,6 @@ func (h *rpcHandler) CreateSignupToken(ctx context.Context, req *connect.Request
 
 // ListSignupTokens answers the issued tokens with their pagination block.
 func (h *rpcHandler) ListSignupTokens(ctx context.Context, req *connect.Request[identityv1.ListSignupTokensRequest]) (*connect.Response[identityv1.ListSignupTokensResponse], error) {
-	if _, ok := adminFrom(ctx); !ok {
-		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
-	}
-
 	tokens, pagination, err := h.service.ListSignupTokens(ctx, int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
 	if err != nil {
 		return nil, mapError(err)
@@ -140,10 +130,6 @@ func (h *rpcHandler) ListSignupTokens(ctx context.Context, req *connect.Request[
 
 // DeleteSignupToken revokes an issued token.
 func (h *rpcHandler) DeleteSignupToken(ctx context.Context, req *connect.Request[identityv1.DeleteSignupTokenRequest]) (*connect.Response[identityv1.DeleteSignupTokenResponse], error) {
-	if _, ok := adminFrom(ctx); !ok {
-		return nil, connect.NewError(connect.CodePermissionDenied, errAdminRequired)
-	}
-
 	if err := h.service.DeleteSignupToken(ctx, req.Msg.Id); err != nil {
 		return nil, mapError(err)
 	}
@@ -193,16 +179,6 @@ func listMetadata(p responder.Pagination) *commonv1.ListMetadata {
 func ptr[T any](value T) *T {
 	return &value
 }
-
-// adminFrom reads the authenticated caller's claims the bearer middleware
-// attached, and reports whether the caller holds the administrator role.
-func adminFrom(ctx context.Context) (*jwtutils.AccessClaims, bool) {
-	claims, ok := authn.GetInfo(ctx).(*jwtutils.AccessClaims)
-	return claims, ok && claims.IsAdmin
-}
-
-// errAdminRequired is the refusal a caller without the administrator role reads.
-var errAdminRequired = errors.New("administrator role required")
 
 // mapError translates the service's failures into the codes the Connect
 // protocol carries. The internal ones are collapsed to one answer whose text
