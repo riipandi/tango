@@ -16,6 +16,7 @@ package identity
 import (
 	"log/slog"
 
+	"connectrpc.com/connect"
 	"github.com/go-chi/chi/v5"
 	"github.com/samber/do/v2"
 
@@ -64,6 +65,14 @@ func (m *Module) Name() string { return ModuleName }
 // the same route is a defect to fix, not an ordering to rely on.
 func (m *Module) Mount(r chi.Router) {
 	kernel.Mount(r, m.features...)
+}
+
+// MountRPC registers the procedures of every feature that serves any. The
+// area forwards because the composition root names the area alone: a
+// feature's procedures reach the RPC router through the same seam its HTTP
+// routes do, and the transport never learns a feature's name.
+func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
+	kernel.MountRPC(r, opts, m.features...)
 }
 
 // Package registers the services this area owns.
@@ -133,3 +142,4 @@ func features(deps Deps) []kernel.Module {
 	}
 	return modules
 }
+

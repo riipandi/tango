@@ -9,9 +9,37 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	authv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1/authv1connect"
 	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity/jwks"
+	"github.com/riipandi/tango/modules/identity/signin"
 )
+
+// TestTheAreaForwardsFeatureProcedures pins the RPC forwarding: the area
+// implements kernel.RPCModule, because the composition root names the area
+// alone. An area without the interface is skipped by kernel.MountRPC
+// silently, and every procedure it holds answers "unknown procedure".
+func TestTheAreaForwardsFeatureProcedures(t *testing.T) {
+	deps := Deps{
+		KeySet: jwks.NewService(testConfig(t), nil, nil),
+		SignIn: signin.NewService(testConfig(t), nil, nil, nil),
+	}
+
+	var module kernel.Module = NewModule(deps)
+	rpc, ok := module.(kernel.RPCModule)
+	require.True(t, ok, "the area must implement kernel.RPCModule")
+
+	router := chi.NewRouter()
+	rpc.MountRPC(router)
+
+	claimed := map[string]bool{}
+	for _, route := range router.Routes() {
+		claimed[route.Pattern] = true
+	}
+	assert.True(t, claimed[authv1connect.AuthServiceSignInProcedure],
+		"the area must forward its features' procedures to the RPC router")
+}
 
 // TestTheAreaMountsItsFeatures is the reason the area exists: the registry
 // names one module, and the features inside it are reachable without the
