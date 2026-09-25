@@ -33,8 +33,8 @@ require it, and none is part of this envelope contract:
 
 | Fact                | ConnectRPC (internal, primary)                        | REST (external)                          |
 | ------------------- | ----------------------------------------------------- | ---------------------------------------- |
-| Status              | the `tango.common.v1.Status` block (`status: "success"`); a failure never reaches a body — it is the connect code | `status` + `metadata.status_code`        |
-| Message             | `status.message` — the sentence a UI shows as-is      | `message` (success and error alike)      |
+| Status              | the flat `status` field (`"success"`); a failure never reaches a body — it is the connect code | `status` + `metadata.status_code`        |
+| Message             | the flat `message` field — the sentence a UI shows as-is | `message` (success and error alike)   |
 | Error message       | the connect error message (the failure's whole answer)| `message` in the error envelope          |
 | Structured error    | a typed message attached as a connect error detail    | `error` in the error envelope            |
 | Request/trace id    | the `X-Request-Id` response header                    | `metadata.request_id` + the same header  |
@@ -43,9 +43,9 @@ require it, and none is part of this envelope contract:
 | Payload             | the response message's own typed fields               | `data` in the envelope                   |
 | Links (HATEOAS)     | not modelled; a page token when a list needs one      | the `links` map                          |
 
-The outcome block is the one envelope piece both transports write into the
-body: a client checks `status` and reads `message` the same way on either
-surface. What stays out of the body is what the protocol already carries
+The outcome pair is the one envelope piece both transports write into the
+body — two flat fields, the same keys on either surface: a client checks
+`status` and reads `message` the same way on either transport. What stays out of the body is what the protocol already carries
 better — the correlation id, the rate-limit window, and on RPC the whole
 failure half: a failed call answers a connect error (code and message), so
 a success body's `status` is always `"success"`. The correlation and

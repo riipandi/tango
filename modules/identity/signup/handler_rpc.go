@@ -84,7 +84,8 @@ func (h *rpcHandler) Signup(ctx context.Context, req *connect.Request[identityv1
 	return connect.NewResponse(&identityv1.SignupResponse{
 		User: user.WireView(account),
 
-		Status: responder.RPCStatus("the account was created from the signup token"),
+		Status:  responder.StatusSuccess,
+		Message: "the account was created from the signup token",
 	}), nil
 }
 
@@ -108,7 +109,8 @@ func (h *rpcHandler) CreateSignupToken(ctx context.Context, req *connect.Request
 		Token:    tokenView(created.Token),
 		RawToken: created.RawToken,
 
-		Status: responder.RPCStatus("the signup token was created"),
+		Status:  responder.StatusSuccess,
+		Message: "the signup token was created",
 	}), nil
 }
 
@@ -131,7 +133,8 @@ func (h *rpcHandler) ListSignupTokens(ctx context.Context, req *connect.Request[
 		Tokens:   views,
 		Metadata: listMetadata(pagination),
 
-		Status: responder.RPCStatus("the signup tokens were listed"),
+		Status:  responder.StatusSuccess,
+		Message: "the signup tokens were listed",
 	}), nil
 }
 
@@ -145,7 +148,8 @@ func (h *rpcHandler) DeleteSignupToken(ctx context.Context, req *connect.Request
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.DeleteSignupTokenResponse{
-		Status: responder.RPCStatus("the signup token was deleted"),
+		Status:  responder.StatusSuccess,
+		Message: "the signup token was deleted",
 	}), nil
 }
 

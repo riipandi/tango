@@ -124,8 +124,12 @@ message SendVerificationEmailRequest {}
 // issued and the task enqueued, not that a message was delivered.
 message SendVerificationEmailResponse  {
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 1;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 1;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 2;
 }
 
 // VerifyEmailRequest carries the token the message linked to.
@@ -138,8 +142,12 @@ message VerifyEmailRequest {
 // VerifyEmailResponse is empty: the protocol carries the success.
 message VerifyEmailResponse  {
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 1;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 1;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 2;
 }
 
 // SignupRequest carries the account fields and the signup token. The
@@ -178,8 +186,12 @@ message SignupResponse {
   // user is the created account's view.
   User user = 1;
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 2;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
 }
 
 // User is the account view the identity procedures answer with. It carries
@@ -285,8 +297,12 @@ message CreateSignupTokenResponse {
   // raw_token is the value an invitation carries. Show it once.
   string raw_token = 2;
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 3;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 3;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 4;
 }
 
 // ListSignupTokensRequest carries the page the caller asks for. Both fields
@@ -307,8 +323,12 @@ message ListSignupTokensResponse {
   // metadata is the pagination block the list responses carry.
   tango.common.v1.ListMetadata metadata = 2;
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 3;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 3;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 4;
 }
 
 // DeleteSignupToken names the token to revoke.
@@ -321,8 +341,12 @@ message DeleteSignupTokenRequest {
 // protocol, and a missed one with the not-found code.
 message DeleteSignupTokenResponse  {
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 1;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 1;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 2;
 }
 
 // ListUsersRequest carries the page and the filter the caller asks for.
@@ -346,8 +370,12 @@ message ListUsersResponse {
   // metadata is the pagination block the list responses carry.
   tango.common.v1.ListMetadata metadata = 2;
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 3;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 3;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 4;
 }
 
 // GetUserRequest names the account to read.
@@ -361,8 +389,12 @@ message GetUserResponse {
   // user is the account's view.
   User user = 1;
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 2;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
 }
 
 // CreateUserRequest carries the account fields and the optional credential.
@@ -414,8 +446,12 @@ message CreateUserResponse {
   // user is the account's view.
   User user = 1;
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 2;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
 }
 
 // UpdateUserRequest replaces an account's fields. Every field is specified:
@@ -475,8 +511,12 @@ message UpdateUserResponse {
   // user is the account's view.
   User user = 1;
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 2;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
 }
 
 // DeleteUserRequest names the account to remove.
@@ -489,8 +529,12 @@ message DeleteUserRequest {
 // protocol, and a missed one with the not-found code.
 message DeleteUserResponse  {
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 1;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 1;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 2;
 }
 
 message ResetProfilePictureRequest {
@@ -500,6 +544,10 @@ message ResetProfilePictureRequest {
 
 message ResetProfilePictureResponse  {
 
-  // status is the outcome block the client checks and reads.
-  tango.common.v1.Status status = 1;
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 1;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 2;
 }

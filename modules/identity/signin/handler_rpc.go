@@ -90,7 +90,8 @@ func (h *rpcHandler) SignIn(ctx context.Context, req *connect.Request[authv1.Sig
 			IsAdmin:     result.User.IsAdmin,
 		},
 
-		Status: responder.RPCStatus("the token pair was issued"),
+		Status:  responder.StatusSuccess,
+		Message: "the token pair was issued",
 	}), nil
 }
 

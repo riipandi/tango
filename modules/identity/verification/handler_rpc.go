@@ -74,7 +74,8 @@ func (h *rpcHandler) SendEmail(ctx context.Context, req *connect.Request[identit
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.SendVerificationEmailResponse{
-		Status: responder.RPCStatus("the verification email was sent"),
+		Status:  responder.StatusSuccess,
+		Message: "the verification email was sent",
 	}), nil
 }
 
@@ -86,7 +87,8 @@ func (h *rpcHandler) VerifyEmail(ctx context.Context, req *connect.Request[ident
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.VerifyEmailResponse{
-		Status: responder.RPCStatus("the email address was verified"),
+		Status:  responder.StatusSuccess,
+		Message: "the email address was verified",
 	}), nil
 }
 

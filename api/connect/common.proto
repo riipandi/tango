@@ -12,20 +12,6 @@ package tango.common.v1;
 
 option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/common/v1;commonv1";
 
-// Status is the outcome block a response carries: the word the client checks
-// — success, always, because a failed call never reaches a response body —
-// and the human-readable sentence a UI can show as-is. It mirrors the status
-// and message keys the REST envelope emits, so a client reads the same shape
-// on both transports. The correlation id and the rate-limit window stay with
-// the protocol: they are per-request facts, not per-procedure ones.
-message Status {
-  // status is the outcome word, always `success` in a response body.
-  string status = 1;
-
-  // message is the human-readable sentence describing what the call did.
-  string message = 2;
-}
-
 // ListMetadata is the pagination block a list response carries, flat like the
 // REST envelope's metadata. The item indices are zero-based and inclusive,
 // and both are omitted when the range is unknown.

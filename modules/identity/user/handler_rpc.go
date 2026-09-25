@@ -81,7 +81,8 @@ func (h *rpcHandler) ListUsers(ctx context.Context, req *connect.Request[identit
 	return connect.NewResponse(&identityv1.ListUsersResponse{
 		Users:    views,
 		Metadata: listMetadata(pagination),
-		Status:   responder.RPCStatus("the users were listed"),
+		Status:   responder.StatusSuccess,
+		Message:  "the users were listed",
 	}), nil
 }
 
@@ -96,8 +97,9 @@ func (h *rpcHandler) GetUser(ctx context.Context, req *connect.Request[identityv
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.GetUserResponse{
-		User:   WireView(user),
-		Status: responder.RPCStatus("the user was fetched"),
+		User:    WireView(user),
+		Status:  responder.StatusSuccess,
+		Message: "the user was fetched",
 	}), nil
 }
 
@@ -124,8 +126,9 @@ func (h *rpcHandler) CreateUser(ctx context.Context, req *connect.Request[identi
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.CreateUserResponse{
-		User:   WireView(user),
-		Status: responder.RPCStatus("the user was created"),
+		User:    WireView(user),
+		Status:  responder.StatusSuccess,
+		Message: "the user was created",
 	}), nil
 }
 
@@ -156,8 +159,9 @@ func (h *rpcHandler) UpdateUser(ctx context.Context, req *connect.Request[identi
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.UpdateUserResponse{
-		User:   WireView(user),
-		Status: responder.RPCStatus("the user was updated"),
+		User:    WireView(user),
+		Status:  responder.StatusSuccess,
+		Message: "the user was updated",
 	}), nil
 }
 
@@ -172,7 +176,8 @@ func (h *rpcHandler) DeleteUser(ctx context.Context, req *connect.Request[identi
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.DeleteUserResponse{
-		Status: responder.RPCStatus("the user was deleted"),
+		Status:  responder.StatusSuccess,
+		Message: "the user was deleted",
 	}), nil
 }
 
@@ -188,7 +193,8 @@ func (h *rpcHandler) ResetProfilePicture(ctx context.Context, req *connect.Reque
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.ResetProfilePictureResponse{
-		Status: responder.RPCStatus("the profile picture was reset"),
+		Status:  responder.StatusSuccess,
+		Message: "the profile picture was reset",
 	}), nil
 }
 
