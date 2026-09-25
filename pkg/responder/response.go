@@ -87,6 +87,14 @@ type Links map[string]*string
 type Option func(*Envelope)
 
 // WithError attaches structured error details (an object or array).
+// WithMessage sets the sentence the envelope carries. An error names its
+// refusal through Fail's message; a success names its outcome here.
+func WithMessage(message string) Option {
+	return func(env *Envelope) {
+		env.Message = message
+	}
+}
+
 func WithError(detail any) Option {
 	return func(e *Envelope) { e.Error = detail }
 }

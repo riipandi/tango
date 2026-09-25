@@ -83,6 +83,8 @@ func (h *rpcHandler) Signup(ctx context.Context, req *connect.Request[identityv1
 
 	return connect.NewResponse(&identityv1.SignupResponse{
 		User: user.WireView(account),
+
+		Status: responder.RPCStatus("the account was created from the signup token"),
 	}), nil
 }
 
@@ -105,6 +107,8 @@ func (h *rpcHandler) CreateSignupToken(ctx context.Context, req *connect.Request
 	return connect.NewResponse(&identityv1.CreateSignupTokenResponse{
 		Token:    tokenView(created.Token),
 		RawToken: created.RawToken,
+
+		Status: responder.RPCStatus("the signup token was created"),
 	}), nil
 }
 
@@ -126,6 +130,8 @@ func (h *rpcHandler) ListSignupTokens(ctx context.Context, req *connect.Request[
 	return connect.NewResponse(&identityv1.ListSignupTokensResponse{
 		Tokens:   views,
 		Metadata: listMetadata(pagination),
+
+		Status: responder.RPCStatus("the signup tokens were listed"),
 	}), nil
 }
 
@@ -138,7 +144,9 @@ func (h *rpcHandler) DeleteSignupToken(ctx context.Context, req *connect.Request
 	if err := h.service.DeleteSignupToken(ctx, req.Msg.Id); err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.DeleteSignupTokenResponse{}), nil
+	return connect.NewResponse(&identityv1.DeleteSignupTokenResponse{
+		Status: responder.RPCStatus("the signup token was deleted"),
+	}), nil
 }
 
 // tokenView maps the service's token view onto the wire message.

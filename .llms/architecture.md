@@ -93,7 +93,7 @@ Dotenv reader/writer that preserves comments, blank lines, and key order; new fi
 
 ### responder, validate, jwtutils, testutils
 
-`pkg/responder` — the API envelope, pagination, request IDs (documented in `docs/api-response.md`). `pkg/validate` — request decoding and ozzo v4 code-first validation. Handlers use these; no hand-built envelopes or ad-hoc field guards. `pkg/jwtutils` — JWT signing/verification with typed private claims. `pkg/testutils` — shared testcontainers Postgres, Mailpit, MinIO.
+`pkg/responder` — the API envelope, pagination, request IDs, and the RPC outcome block builder (`RPCStatus`, documented in `docs/api-response.md`). `pkg/validate` — request decoding and ozzo v4 code-first validation. Handlers use these; no hand-built envelopes or ad-hoc field guards. `pkg/jwtutils` — JWT signing/verification with typed private claims. `pkg/testutils` — shared testcontainers Postgres, Mailpit, MinIO.
 
 ## internal
 

@@ -122,7 +122,11 @@ message SendVerificationEmailRequest {}
 
 // SendVerificationEmailResponse is empty: acceptance says the token was
 // issued and the task enqueued, not that a message was delivered.
-message SendVerificationEmailResponse {}
+message SendVerificationEmailResponse  {
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 1;
+}
 
 // VerifyEmailRequest carries the token the message linked to.
 message VerifyEmailRequest {
@@ -132,7 +136,11 @@ message VerifyEmailRequest {
 }
 
 // VerifyEmailResponse is empty: the protocol carries the success.
-message VerifyEmailResponse {}
+message VerifyEmailResponse  {
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 1;
+}
 
 // SignupRequest carries the account fields and the signup token. The
 // constraints below mirror what the users table enforces, so a bad field is
@@ -169,6 +177,9 @@ message SignupRequest {
 message SignupResponse {
   // user is the created account's view.
   User user = 1;
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 2;
 }
 
 // User is the account view the identity procedures answer with. It carries
@@ -273,6 +284,9 @@ message CreateSignupTokenResponse {
 
   // raw_token is the value an invitation carries. Show it once.
   string raw_token = 2;
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 3;
 }
 
 // ListSignupTokensRequest carries the page the caller asks for. Both fields
@@ -292,6 +306,9 @@ message ListSignupTokensResponse {
 
   // metadata is the pagination block the list responses carry.
   tango.common.v1.ListMetadata metadata = 2;
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 3;
 }
 
 // DeleteSignupToken names the token to revoke.
@@ -302,7 +319,11 @@ message DeleteSignupTokenRequest {
 
 // DeleteSignupTokenResponse is empty: a successful deletion says so with the
 // protocol, and a missed one with the not-found code.
-message DeleteSignupTokenResponse {}
+message DeleteSignupTokenResponse  {
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 1;
+}
 
 // ListUsersRequest carries the page and the filter the caller asks for.
 message ListUsersRequest {
@@ -324,6 +345,9 @@ message ListUsersResponse {
 
   // metadata is the pagination block the list responses carry.
   tango.common.v1.ListMetadata metadata = 2;
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 3;
 }
 
 // GetUserRequest names the account to read.
@@ -336,6 +360,9 @@ message GetUserRequest {
 message GetUserResponse {
   // user is the account's view.
   User user = 1;
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 2;
 }
 
 // CreateUserRequest carries the account fields and the optional credential.
@@ -386,6 +413,9 @@ message CreateUserRequest {
 message CreateUserResponse {
   // user is the account's view.
   User user = 1;
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 2;
 }
 
 // UpdateUserRequest replaces an account's fields. Every field is specified:
@@ -444,6 +474,9 @@ message UpdateUserRequest {
 message UpdateUserResponse {
   // user is the account's view.
   User user = 1;
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 2;
 }
 
 // DeleteUserRequest names the account to remove.
@@ -454,11 +487,19 @@ message DeleteUserRequest {
 
 // DeleteUserResponse is empty: a successful deletion says so with the
 // protocol, and a missed one with the not-found code.
-message DeleteUserResponse {}
+message DeleteUserResponse  {
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 1;
+}
 
 message ResetProfilePictureRequest {
   // The account whose picture is removed.
   string user_id = 1 [(buf.validate.field).string.uuid = true];
 }
 
-message ResetProfilePictureResponse {}
+message ResetProfilePictureResponse  {
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 1;
+}

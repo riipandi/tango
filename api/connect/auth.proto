@@ -12,6 +12,8 @@
 // `permission_denied`, both with the detail message naming the reason.
 syntax = "proto3";
 
+import "common.proto";
+
 package tango.auth.v1;
 
 option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1;authv1";
@@ -68,6 +70,9 @@ message SignInResponse {
 
   // user is the account the tokens name.
   AuthenticatedUser user = 6;
+
+  // status is the outcome block the client checks and reads.
+  tango.common.v1.Status status = 7;
 }
 
 // AuthenticatedUser is the account view the tokens were issued for. It carries

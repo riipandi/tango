@@ -95,7 +95,8 @@ func TestThePictureReadServesTheRESTRoute(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "the profile picture was updated")
 
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/users/"+created.ID+"/profile-picture.png", nil))

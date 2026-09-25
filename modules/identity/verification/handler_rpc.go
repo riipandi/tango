@@ -3,6 +3,7 @@ package verification
 import (
 	"context"
 	"errors"
+	"github.com/riipandi/tango/pkg/responder"
 
 	"connectrpc.com/authn"
 	"connectrpc.com/connect"
@@ -72,7 +73,9 @@ func (h *rpcHandler) SendEmail(ctx context.Context, req *connect.Request[identit
 	if err := h.service.SendEmail(ctx, claims.Username); err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.SendVerificationEmailResponse{}), nil
+	return connect.NewResponse(&identityv1.SendVerificationEmailResponse{
+		Status: responder.RPCStatus("the verification email was sent"),
+	}), nil
 }
 
 // VerifyEmail marks the token's account as verified. The procedure is
@@ -82,7 +85,9 @@ func (h *rpcHandler) VerifyEmail(ctx context.Context, req *connect.Request[ident
 	if err := h.service.VerifyEmail(ctx, req.Msg.Token); err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.VerifyEmailResponse{}), nil
+	return connect.NewResponse(&identityv1.VerifyEmailResponse{
+		Status: responder.RPCStatus("the email address was verified"),
+	}), nil
 }
 
 // callerFrom reads the authenticated caller's claims the bearer middleware

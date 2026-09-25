@@ -3,6 +3,7 @@ package signin
 import (
 	"context"
 	"errors"
+	"github.com/riipandi/tango/pkg/responder"
 	"net"
 	"net/http"
 
@@ -88,6 +89,8 @@ func (h *rpcHandler) SignIn(ctx context.Context, req *connect.Request[authv1.Sig
 			DisplayName: result.User.DisplayName,
 			IsAdmin:     result.User.IsAdmin,
 		},
+
+		Status: responder.RPCStatus("the token pair was issued"),
 	}), nil
 }
 

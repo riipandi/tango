@@ -81,6 +81,7 @@ func (h *rpcHandler) ListUsers(ctx context.Context, req *connect.Request[identit
 	return connect.NewResponse(&identityv1.ListUsersResponse{
 		Users:    views,
 		Metadata: listMetadata(pagination),
+		Status:   responder.RPCStatus("the users were listed"),
 	}), nil
 }
 
@@ -94,7 +95,10 @@ func (h *rpcHandler) GetUser(ctx context.Context, req *connect.Request[identityv
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.GetUserResponse{User: WireView(user)}), nil
+	return connect.NewResponse(&identityv1.GetUserResponse{
+		User:   WireView(user),
+		Status: responder.RPCStatus("the user was fetched"),
+	}), nil
 }
 
 // CreateUser creates an account directly, without a signup token.
@@ -119,7 +123,10 @@ func (h *rpcHandler) CreateUser(ctx context.Context, req *connect.Request[identi
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.CreateUserResponse{User: WireView(user)}), nil
+	return connect.NewResponse(&identityv1.CreateUserResponse{
+		User:   WireView(user),
+		Status: responder.RPCStatus("the user was created"),
+	}), nil
 }
 
 // UpdateUser replaces an account's fields.
@@ -148,7 +155,10 @@ func (h *rpcHandler) UpdateUser(ctx context.Context, req *connect.Request[identi
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.UpdateUserResponse{User: WireView(user)}), nil
+	return connect.NewResponse(&identityv1.UpdateUserResponse{
+		User:   WireView(user),
+		Status: responder.RPCStatus("the user was updated"),
+	}), nil
 }
 
 // DeleteUser removes an account.
@@ -161,7 +171,9 @@ func (h *rpcHandler) DeleteUser(ctx context.Context, req *connect.Request[identi
 	if err := h.service.DeleteUser(ctx, req.Msg.Id, claims.Username); err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.DeleteUserResponse{}), nil
+	return connect.NewResponse(&identityv1.DeleteUserResponse{
+		Status: responder.RPCStatus("the user was deleted"),
+	}), nil
 }
 
 // ResetProfilePicture removes an account's picture. The same two-gate rule
@@ -175,7 +187,9 @@ func (h *rpcHandler) ResetProfilePicture(ctx context.Context, req *connect.Reque
 	if err := h.service.ResetProfilePicture(ctx, req.Msg.UserId, claims); err != nil {
 		return nil, mapError(err)
 	}
-	return connect.NewResponse(&identityv1.ResetProfilePictureResponse{}), nil
+	return connect.NewResponse(&identityv1.ResetProfilePictureResponse{
+		Status: responder.RPCStatus("the profile picture was reset"),
+	}), nil
 }
 
 // listMetadata maps the responder's pagination onto the shared block. The

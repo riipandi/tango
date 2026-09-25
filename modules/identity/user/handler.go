@@ -94,7 +94,7 @@ func (m *Module) Mount(r chi.Router) {
 		case err != nil:
 			responder.WriteError(w, r, err)
 		default:
-			w.WriteHeader(http.StatusNoContent)
+			responder.Success(w, r, http.StatusOK, nil, responder.WithMessage("the profile picture was updated"))
 		}
 	})
 }
