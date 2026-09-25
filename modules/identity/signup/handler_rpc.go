@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"strings"
 	"time"
 
 	"connectrpc.com/authn"
@@ -16,7 +15,6 @@ import (
 	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/validate"
 )
 
 // ModuleName is the name this feature reports under. The area it belongs to
@@ -200,11 +198,11 @@ var errAdminRequired = errors.New("administrator role required")
 
 // mapError translates the service's failures into the codes the Connect
 // protocol carries. The internal ones are collapsed to one answer whose text
-// names nothing a caller could aim at.
+// names nothing a caller could aim at. A malformed field never reaches the
+// service: the transport's validate interceptor refuses it with the typed
+// violation details the contracts carry.
 func mapError(err error) error {
 	switch {
-	case validate.IsValidationError(err):
-		return connect.NewError(connect.CodeInvalidArgument, errors.New(fieldMessage(err)))
 	case errors.Is(err, ErrInvalidToken):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("signup token is invalid or expired"))
 	case errors.Is(err, ErrAccountExists):
@@ -214,14 +212,4 @@ func mapError(err error) error {
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("sign-up failed"))
 	}
-}
-
-// fieldMessage flattens the validation failures into one wire detail, each
-// field leading its rule.
-func fieldMessage(err error) string {
-	parts := make([]string, 0, 2)
-	for _, fe := range validate.FieldErrors(err) {
-		parts = append(parts, fe.Field+": "+fe.Message)
-	}
-	return strings.Join(parts, "; ")
 }

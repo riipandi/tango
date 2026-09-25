@@ -9,11 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"strings"
 	"time"
-
-	"github.com/go-ozzo/ozzo-validation/v4"
 
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/password"
@@ -38,14 +35,6 @@ var (
 	// ErrTokenNotFound is a delete whose id names no issued token.
 	ErrTokenNotFound = errors.New("signup: signup token not found")
 )
-
-// usernamePattern is the grammar the users table enforces on the handle:
-// 3-32 characters of ASCII letters, digits, and underscores.
-var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_]{3,32}$`)
-
-// emailPattern is the check the users table places on the address, mirrored
-// here so a bad field is refused before the database names it a violation.
-var emailPattern = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
 
 // Service creates an account from a signup token.
 type Service struct {
@@ -82,31 +71,6 @@ type Params struct {
 	LastName  string
 }
 
-// Validate applies the rules the users table enforces, so a bad field is
-// refused before the database is reached. The keys are the snake_case names
-// the proto carries, the form a client reads on the wire.
-func (p Params) Validate() error {
-	errs := validation.Errors{}
-	if err := validation.Validate(p.Username, validation.Required, validation.Match(usernamePattern).
-		Error("must be 3-32 characters of letters, digits, and underscores")); err != nil {
-		errs["username"] = err
-	}
-	if err := validation.Validate(p.Email, validation.Required, validation.Match(emailPattern).
-		Error("must be a valid email address")); err != nil {
-		errs["email"] = err
-	}
-	if err := validation.Validate(p.Password, validation.Required); err != nil {
-		errs["password"] = err
-	}
-	if err := validation.Validate(p.Token, validation.Required); err != nil {
-		errs["token"] = err
-	}
-	if len(errs) == 0 {
-		return nil
-	}
-	return errs
-}
-
 // User is the account view a successful sign-up answers with.
 type User struct {
 	ID          string
@@ -115,20 +79,14 @@ type User struct {
 	DisplayName string
 }
 
-// Signup validates the request, consumes the token, and creates the account.
+// Signup consumes the token and creates the account. The request's shape is
+// the contract's business — `SignupRequest` carries the constraints the
+// transport's validate interceptor enforces before this runs.
 //
 // Email verification is a later procedure: the account is created unverified,
 // which is the column's default and needs no code here yet. The password is
 // hashed and stored with the account, so the account can sign in immediately.
 func (s *Service) Signup(ctx context.Context, params Params) (User, error) {
-	params.Username = strings.TrimSpace(params.Username)
-	params.Email = strings.TrimSpace(params.Email)
-	params.Token = strings.TrimSpace(params.Token)
-
-	if err := params.Validate(); err != nil {
-		return User{}, err
-	}
-
 	passwordHash, err := s.hasher.Hash(params.Password)
 	if err != nil {
 		return User{}, fmt.Errorf("signup: hash password: %w", err)
@@ -206,39 +164,18 @@ func tokenSHA256(raw string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// tokenLifetimeBounds are the window an issued token may cover: shorter than
-// an hour is a typo, longer than thirty days outlives an invitation's purpose.
-const (
-	minTokenLifetime = time.Hour
-	maxTokenLifetime = 30 * 24 * time.Hour
-)
+// tokenEntropy is the randomness of a raw signup token. It is shown to the
+// operator once and only its hash is stored, so 256 bits is the whole defense
+// against a database leak.
+const tokenEntropy = 32
 
-// maxTokenUses bounds the budget one token admits; a larger number is an
-// open-ended invitation spelled as a token.
-const maxTokenUses = 1000
-
-// CreateTokenParams carries one token issue.
+// CreateTokenParams carries one token issue. The window and budget bounds
+// live in the contract — `CreateSignupTokenRequest` carries them as
+// protovalidate constraints the transport's validate interceptor enforces
+// before this runs — so the service applies only the unset-budget default.
 type CreateTokenParams struct {
 	TTL        time.Duration
 	UsageLimit int32 // zero means the single-invitation default
-}
-
-// Validate applies the bounds an issued token lives inside.
-func (p CreateTokenParams) Validate() error {
-	errs := validation.Errors{}
-	if p.TTL < minTokenLifetime || p.TTL > maxTokenLifetime {
-		errs["ttl_seconds"] = errors.New("must be between one hour and thirty days")
-	}
-	switch {
-	case p.UsageLimit < 0:
-		errs["usage_limit"] = errors.New("must not be negative")
-	case p.UsageLimit > maxTokenUses:
-		errs["usage_limit"] = fmt.Errorf("must be at most %d", maxTokenUses)
-	}
-	if len(errs) == 0 {
-		return nil
-	}
-	return errs
 }
 
 // TokenView is an issued token as the procedures answer it: the counters and
@@ -257,20 +194,12 @@ type CreatedToken struct {
 	RawToken string
 }
 
-// tokenEntropy is the randomness of a raw signup token. It is shown to the
-// operator once and only its hash is stored, so 256 bits is the whole defense
-// against a database leak.
-const tokenEntropy = 32
-
 // CreateSignupToken issues a token: the raw value is drawn here, shown once
 // in the answer, and only its hash is stored. A usage limit of zero means
 // the single invitation.
 func (s *Service) CreateSignupToken(ctx context.Context, params CreateTokenParams) (CreatedToken, error) {
 	if params.UsageLimit == 0 {
 		params.UsageLimit = 1
-	}
-	if err := params.Validate(); err != nil {
-		return CreatedToken{}, err
 	}
 
 	raw := make([]byte, tokenEntropy)

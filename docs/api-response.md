@@ -193,3 +193,11 @@ parsing a body:
   REST twin.
 - **A structured failure** is a message attached to the connect error's
   details, the typed counterpart of the REST envelope's `error` field.
+- **Request validation** is declarative: the constraints live in the
+  contracts as protovalidate options (`buf.validate.field`), and the validate
+  interceptor enforces them before a handler runs. A refusal is
+  `invalid_argument` with a `buf.validate.ErrorInfo` detail — the field
+  paths and rule descriptions a client renders per field. A rule a contract
+  cannot express (a uniqueness check, a token's existence) is domain logic
+  and answers its own code from the feature; the REST surface keeps
+  `pkg/validate`'s field errors in the envelope.

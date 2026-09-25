@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
+	"connectrpc.com/validate"
 	"github.com/go-chi/chi/v5"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -105,15 +106,19 @@ func otelInterceptor() connect.Interceptor {
 }
 
 // rpcHandlerOptions are the options every service on this surface is
-// registered with: the shared codec pair, the panic boundary, and the
-// OpenTelemetry interceptor. A module that serves procedures receives them
-// and passes them to every generated handler it registers, so a module's
-// procedure answers exactly like the transport's own — the codec, the panic
-// boundary, and the telemetry included.
+// registered with: the shared codec pair, the panic boundary, the validate
+// interceptor, and the OpenTelemetry interceptor. A module that serves
+// procedures receives them and passes them to every generated handler it
+// registers, so a module's procedure answers exactly like the transport's
+// own — the codec, the panic boundary, and the telemetry included.
 func rpcHandlerOptions() []connect.HandlerOption {
 	return []connect.HandlerOption{
 		connect.WithCodec(rpcJSONCodec{name: rpcCodecJSON}),
 		connect.WithCodec(rpcJSONCodec{name: rpcCodecJSONCharsetUTF8}),
+		// The declarative constraints in the contracts are enforced here,
+		// once: a message that fails its protovalidate options never reaches
+		// a handler, and the violations travel as typed error details.
+		connect.WithInterceptors(validate.NewInterceptor()),
 		connect.WithRecover(func(_ context.Context, _ connect.Spec, _ http.Header, recovered any) error {
 			// The recovery middleware above this surface answers a panic with
 			// the REST envelope, which a Connect client cannot parse. A panic

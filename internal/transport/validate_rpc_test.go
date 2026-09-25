@@ -1,0 +1,74 @@
+package transport_test
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/health"
+	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/transport"
+	"github.com/riipandi/tango/modules/identity/signup"
+)
+
+// The declarative constraints live in the contracts, and the validate
+// interceptor the handler options carry is what enforces them — before a
+// handler runs, so a feature with no pool behind it still answers the
+// refusal. A valid request would reach the service (and panic over the nil
+// pool these tests carry), so every case below is one the contract itself
+// refuses; the accepted-shape cases live in the feature's own tests.
+func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
+	router := transport.NewRouter(transport.Options{
+		Config:  config.Default(),
+		Checker: health.NewChecker(),
+		Modules: []kernel.Module{signup.NewModule(signup.NewService(nil, nil))},
+	})
+
+	for name, tc := range map[string]struct {
+		procedure string
+		body      string
+	}{
+		"bad username": {
+			"/tango.identity.v1.SignupService/Signup",
+			`{"username":"a","email":"ada@example.com","password":"correct horse","token":"tok"}`,
+		},
+		"missing password": {
+			"/tango.identity.v1.SignupService/Signup",
+			`{"username":"ada","email":"ada@example.com","token":"tok"}`,
+		},
+		"bad email": {
+			"/tango.identity.v1.SignupService/Signup",
+			`{"username":"ada","email":"ada@example","password":"correct horse","token":"tok"}`,
+		},
+		"ttl below the window": {
+			"/tango.identity.v1.SignupService/CreateSignupToken",
+			`{"ttl_seconds":60}`,
+		},
+		"ttl above the window": {
+			"/tango.identity.v1.SignupService/CreateSignupToken",
+			`{"ttl_seconds":2592001}`,
+		},
+		"usage limit over budget": {
+			"/tango.identity.v1.SignupService/CreateSignupToken",
+			`{"ttl_seconds":86400,"usage_limit":1001}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, rpcRequest(t, tc.procedure, tc.body))
+
+			require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+
+			var body struct {
+				Code string `json:"code"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+			assert.Equal(t, "invalid_argument", body.Code)
+		})
+	}
+}

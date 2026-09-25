@@ -7,11 +7,13 @@
 //
 // The failure codes follow docs/api-response.md: a refused signup token is
 // `permission_denied`, an account that already exists is `already_exists`,
-// and a malformed field is `invalid_argument`.
+// and a malformed field is `invalid_argument` with the typed violations the
+// protovalidate constraints produce.
 syntax = "proto3";
 
 package tango.identity.v1;
 
+import "buf/validate/validate.proto";
 import "common.proto";
 
 option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1;identityv1";
@@ -47,27 +49,29 @@ service SignupService {
   rpc DeleteSignupToken(DeleteSignupTokenRequest) returns (DeleteSignupTokenResponse);
 }
 
-// SignupRequest carries the account fields and the signup token.
+// SignupRequest carries the account fields and the signup token. The
+// constraints below mirror what the users table enforces, so a bad field is
+// refused with its name before the database is reached.
 message SignupRequest {
   // username is the account's handle: 3-32 characters of ASCII letters,
   // digits, and underscores, matched case-insensitively.
-  string username = 1;
+  string username = 1 [(buf.validate.field).string.pattern = "^[a-zA-Z0-9_]{3,32}$"];
 
-  // email is the account's address.
-  string email = 2;
+  // email is the account's address, matched exactly.
+  string email = 2 [(buf.validate.field).string.pattern = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"];
 
   // password is the account's primary credential, in clear text. The field
   // travels only over TLS and is never logged.
-  string password = 3;
+  string password = 3 [(buf.validate.field).string.min_len = 1];
 
   // token is the raw signup token the account is created under.
-  string token = 4;
+  string token = 4 [(buf.validate.field).string.min_len = 1];
 
   // first_name is the optional given name the account displays.
-  optional string first_name = 5;
+  optional string first_name = 5 [(buf.validate.field).string.max_len = 100];
 
   // last_name is the optional family name the account displays.
-  optional string last_name = 6;
+  optional string last_name = 6 [(buf.validate.field).string.max_len = 100];
 }
 
 // SignupResponse is the account the token created.
@@ -117,13 +121,19 @@ message SignupToken {
 
 // CreateSignupTokenRequest carries the token's window and budget.
 message CreateSignupTokenRequest {
-  // ttl_seconds is how long the token admits sign-ups, in seconds. It must
-  // be positive; a day is 86400.
-  int32 ttl_seconds = 1;
+  // ttl_seconds is how long the token admits sign-ups, in seconds: between
+  // one hour and thirty days.
+  int32 ttl_seconds = 1 [(buf.validate.field).int32 = {
+    gte: 3600
+    lte: 2592000
+  }];
 
-  // usage_limit is how many sign-ups the token admits. It defaults to 1 —
-  // the single invitation — when unset.
-  optional int32 usage_limit = 2;
+  // usage_limit is how many sign-ups the token admits. Unset means the
+  // single invitation; when set it is between 1 and 1000.
+  optional int32 usage_limit = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 1000
+  }];
 }
 
 // CreateSignupTokenResponse is the issued token. raw_token is the only place

@@ -22,7 +22,6 @@ import (
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/testutils"
-	"github.com/riipandi/tango/pkg/validate"
 )
 
 func migratedPool(t *testing.T) *datastore.Postgres {
@@ -272,58 +271,6 @@ func TestSignupRejectsDuplicateAccount(t *testing.T) {
 	assert.Equal(t, int32(0), tokenUsageCount(t, pool, "second-token"))
 }
 
-func TestSignupValidatesTheInput(t *testing.T) {
-	// The rules run before any database work, so the service runs without
-	// a pool here.
-	service := NewService(nil, nil)
-
-	for name, field := range map[string]string{
-		"short username":  "username",
-		"bad username":    "username",
-		"missing domain":  "email",
-		"missing address": "email",
-		"empty request":   "username",
-	} {
-		t.Run(name, func(t *testing.T) {
-			params := Params{Username: "ada", Email: "ada@example.com", Password: "correct horse", Token: "valid-token"}
-			switch name {
-			case "short username":
-				params.Username = "ab"
-			case "bad username":
-				params.Username = "ada lovelace"
-			case "missing domain":
-				params.Email = "ada@example"
-			case "missing address":
-				params.Email = "@example.com"
-			case "empty request":
-				params = Params{}
-			}
-
-			_, err := service.Signup(t.Context(), params)
-			require.True(t, validate.IsValidationError(err))
-
-			fields := make([]string, 0, 2)
-			for _, fe := range validate.FieldErrors(err) {
-				fields = append(fields, fe.Field)
-			}
-			assert.Contains(t, fields, field)
-		})
-	}
-}
-
-func TestSignupRefusesAnIncompleteRequest(t *testing.T) {
-	service := NewService(nil, nil) // validation returns before the pool
-
-	_, err := service.Signup(t.Context(), Params{})
-	require.True(t, validate.IsValidationError(err))
-
-	fields := make([]string, 0, 4)
-	for _, fe := range validate.FieldErrors(err) {
-		fields = append(fields, fe.Field)
-	}
-	assert.ElementsMatch(t, []string{"username", "email", "password", "token"}, fields)
-}
-
 func TestMapErrorCarriesTheConnectCodes(t *testing.T) {
 	cases := []struct {
 		err  error
@@ -331,7 +278,7 @@ func TestMapErrorCarriesTheConnectCodes(t *testing.T) {
 	}{
 		{ErrInvalidToken, connect.CodePermissionDenied},
 		{ErrAccountExists, connect.CodeAlreadyExists},
-		{Params{}.Validate(), connect.CodeInvalidArgument},
+		{ErrTokenNotFound, connect.CodeNotFound},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.code, connect.CodeOf(mapError(tc.err)), "%v", tc.err)
@@ -378,23 +325,6 @@ func TestSignupTokenIssueStoresTheHashAlone(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, user.ID)
 	assert.Equal(t, int32(1), tokenUsageCount(t, pool, created.RawToken))
-}
-
-func TestSignupTokenIssueValidatesTheBounds(t *testing.T) {
-	service := NewService(nil, nil) // validation returns before the pool
-
-	for name, params := range map[string]CreateTokenParams{
-		"too short":   {TTL: 30 * time.Minute},
-		"too long":    {TTL: 31 * 24 * time.Hour},
-		"no window":   {},
-		"negative":    {TTL: 24 * time.Hour, UsageLimit: -1},
-		"over budget": {TTL: 24 * time.Hour, UsageLimit: 1001},
-	} {
-		t.Run(name, func(t *testing.T) {
-			_, err := service.CreateSignupToken(t.Context(), params)
-			require.True(t, validate.IsValidationError(err))
-		})
-	}
 }
 
 func TestSignupTokenListAndDelete(t *testing.T) {
