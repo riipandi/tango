@@ -129,10 +129,8 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			pool := do.MustInvoke[*datastore.Postgres](i)
 			store := do.MustInvoke[storage.Store](i)
 			log := do.MustInvoke[*slog.Logger](i)
-			// The uploads hold one chunk buffer each; the budget keeps a sync's
-			// memory at budget × chunk size, whatever the file's size is.
-			return storage.NewManager(store, pool, c.Storage.ChunkSize,
-				filepath.Join(c.Storage.LocalPath, "staging"), 4, log)
+			return storage.NewManager(store, pool,
+				filepath.Join(c.Storage.LocalPath, "staging"), log), nil
 		}),
 
 		do.Lazy(func(i do.Injector) (*queue.Client, error) {

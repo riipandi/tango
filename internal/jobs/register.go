@@ -15,7 +15,7 @@ import (
 // database, no context — so a client can be built without touching a
 // connection; the recurring seeds are the Seeder's job.
 //
-// uploader is the storage engine the chunk upload and the garbage collection
+// uploader is the storage engine the upload and the garbage collection
 // run through. A nil uploader registers none of its jobs: a queue that
 // cannot answer its tasks is not a schedule, it is a failure. mail is the
 // service the verification email submits through, and the same rule applies.

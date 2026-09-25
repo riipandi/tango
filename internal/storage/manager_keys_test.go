@@ -14,32 +14,6 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 )
 
-// openStaging opens a staging file the way Sync does, the handle the test
-// hashes through.
-func openStaging(m *Manager, key string) (*os.File, error) {
-	return os.Open(m.stagingPath(key))
-}
-
-// closeStaging closes a handle the test opened.
-func closeStaging(f *os.File) { _ = f.Close() }
-
-// stagingMtime reads the fingerprint half the checkpoint stores.
-func stagingMtime(m *Manager, key string) time.Time {
-	info, err := os.Stat(m.stagingPath(key))
-	if err != nil {
-		panic(err)
-	}
-	return info.ModTime()
-}
-
-// chunkBytes cuts one chunk out of the test data, the bytes a chunk index
-// names.
-func chunkBytes(data []byte, size, index int) []byte {
-	start := index * size
-	end := min(start+size, len(data))
-	return data[start:end]
-}
-
 func TestKeyComposesFlexibleSegments(t *testing.T) {
 	// The store is multi-purpose: the first part names the purpose, the
 	// rest is the feature's own naming — the engine only guarantees each
@@ -114,129 +88,81 @@ func TestManagerCarriesAndRewritesMetadata(t *testing.T) {
 	// the manifest commits carried it through.
 	manifest, err := manager.Manifest(ctx, "k")
 	require.NoError(t, err)
-	assert.Equal(t, "application/pdf", manifest.File.Metadata["content_type"])
-	assert.Equal(t, "q4 report.pdf", manifest.File.Metadata["original"])
+	assert.Equal(t, "application/pdf", manifest.Metadata["content_type"])
+	assert.Equal(t, "q4 report.pdf", manifest.Metadata["original"])
 
-	// A rewrite touches only the metadata; the manifest and the chunks are
-	// exactly as they were.
+	// A rewrite touches only the metadata; the status and the content hash
+	// are exactly as they were.
 	require.NoError(t, manager.UpdateMetadata(ctx, "k", map[string]any{
 		"content_type": "application/pdf",
 		"original":     "renamed.pdf",
 	}))
 	after, err := manager.Manifest(ctx, "k")
 	require.NoError(t, err)
-	assert.Equal(t, manifest.File.ContentHash, after.File.ContentHash)
-	assert.Equal(t, manifest.File.ChunkCount, after.File.ChunkCount)
-	assert.Equal(t, "renamed.pdf", after.File.Metadata["original"])
-	assert.Equal(t, StatusReady, after.File.Status)
+	assert.Equal(t, manifest.ContentHash, after.ContentHash)
+	assert.Equal(t, "renamed.pdf", after.Metadata["original"])
+	assert.Equal(t, StatusReady, after.Status)
 }
 
 func TestManagerProgressFollowsTheUpload(t *testing.T) {
 	manager, _, _ := newManager(t)
 	ctx := t.Context()
 
-	data := bytes.Repeat([]byte("progress"), 40) // several chunks
+	data := bytes.Repeat([]byte("progress"), 40)
 	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data), nil))
 
 	// While the file still waits in staging, the row Stage created reports
-	// pending with nothing counted — the status reader's before picture.
+	// pending — the status reader's before picture.
 	before, err := manager.Progress(ctx, "k")
 	require.NoError(t, err)
 	assert.Equal(t, StatusPending, before.Status)
-	assert.Equal(t, 0, before.Done)
+	assert.Equal(t, int64(len(data)), before.Size)
 
 	require.NoError(t, manager.Sync(ctx, "k"))
 
 	progress, err := manager.Progress(ctx, "k")
 	require.NoError(t, err)
 	assert.Equal(t, StatusReady, progress.Status)
-	assert.Equal(t, progress.Total, progress.Done, "a finished round counts every chunk")
-	assert.Greater(t, progress.Total, 1, "the test file must span several chunks")
 	assert.Equal(t, int64(len(data)), progress.Size)
 }
 
-func TestManagerSyncHashesALargeFileInParallel(t *testing.T) {
-	// The threshold lowered to a few chunks, this sync runs the parallel
-	// hashing pass: the manifest and the file it reconstructs must be
-	// exactly what the sequential pass produces.
-	old := parallelHashThreshold
-	parallelHashThreshold = 96 // three chunks of 32 bytes
-	t.Cleanup(func() { parallelHashThreshold = old })
-
-	manager, _, _ := newManager(t)
-	ctx := t.Context()
-
-	data := bytes.Repeat([]byte("parallel-hash"), 96) // 1248 bytes, 39 chunks
-	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data), nil))
-	require.NoError(t, manager.Sync(ctx, "k"))
-
-	reader, err := manager.Open(ctx, "k")
-	require.NoError(t, err)
-	defer func() { _ = reader.Close() }()
-	got, err := io.ReadAll(reader)
-	require.NoError(t, err)
-	assert.Equal(t, data, got)
-
-	progress, err := manager.Progress(ctx, "k")
-	require.NoError(t, err)
-	assert.Equal(t, StatusReady, progress.Status)
-	assert.Equal(t, 39, progress.Total)
-}
-
-func TestManagerRetryReusesTheCheckpointedManifest(t *testing.T) {
+func TestManagerRetryReusesTheCheckpointedHash(t *testing.T) {
 	// The checkpoint is what makes a retry of a large file cheap: a
-	// pending manifest whose staging fingerprint matches is reused whole,
-	// and the upload resumes from the chunks the backend still lacks.
-	manager, store, _ := newManager(t)
+	// pending manifest whose staging fingerprint matches is trusted for
+	// its content hash, and the sync goes straight to the PUT.
+	manager, _, _ := newManager(t)
 	ctx := t.Context()
 
 	data := bytes.Repeat([]byte("checkpoint"), 40)
 	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader(data), nil))
 
 	// The sync "dies" after the checkpoint but before its upload: the
-	// manifest is pending, the chunks are missing, the staging file sits.
-
-	// Simulate the interrupted round: hash and checkpoint only.
-	f, err := openStaging(manager, "k")
-	require.NoError(t, err)
-	chunks, err := manager.chunker.Split(f)
-	require.NoError(t, err)
-	closeStaging(f)
-	checkpoint := Manifest{
-		File: File{
-			Key:          "k",
-			ChunkSize:    manager.chunker.size,
-			ChunkCount:   len(chunks),
-			ContentHash:  RootHash(chunks),
-			Status:       StatusPending,
-			StagingSize:  int64(len(data)),
-			StagingMtime: stagingMtime(manager, "k"),
-		},
-		Chunks: chunks,
+	// manifest is pending, the backend has nothing, the staging file sits.
+	checkpoint := File{
+		Key:          "k",
+		ContentHash:  hashOf(data),
+		Status:       StatusPending,
+		StagingSize:  int64(len(data)),
+		StagingMtime: mtimeOf(manager, "k"),
 	}
 	require.NoError(t, manager.db.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
 		return manager.manifests.Save(ctx, tx, checkpoint)
 	}))
 
-	// Half the chunks land before the crash.
-	for _, chunk := range chunks[:len(chunks)/2] {
-		require.NoError(t, store.PutChunk(ctx, chunk.Hash, chunkBytes(data, manager.chunker.size, chunk.Index)))
-	}
-
-	// The retry finds the fingerprint unchanged: the chunk list is
-	// reused, only the missing half uploads, and the file lands ready.
+	// The retry finds the fingerprint unchanged: the stored hash is
+	// reused and the file lands ready.
 	require.NoError(t, manager.Sync(ctx, "k"))
 
-	progress, err := manager.Progress(ctx, "k")
+	manifest, err := manager.Manifest(ctx, "k")
 	require.NoError(t, err)
-	assert.Equal(t, StatusReady, progress.Status)
-	assert.Equal(t, progress.Total, progress.Done)
+	assert.Equal(t, StatusReady, manifest.Status)
+	assert.Equal(t, hashOf(data), manifest.ContentHash)
 
 	reader, err := manager.Open(ctx, "k")
 	require.NoError(t, err)
-	defer func() { _ = reader.Close() }()
 	got, err := io.ReadAll(reader)
 	require.NoError(t, err)
+	require.NoError(t, reader.Close())
 	assert.Equal(t, data, got)
 }
 
@@ -247,8 +173,8 @@ func TestStorageFilesRefuseAnUnknownStatus(t *testing.T) {
 	ctx := t.Context()
 
 	_, err := pool.Exec(ctx,
-		`INSERT INTO storage_files (key, chunk_size, content_hash, status)
-		 VALUES ('k', 32, '', 'archived')`)
+		`INSERT INTO storage_files (key, content_hash, status)
+		 VALUES ('k', '', 'archived')`)
 	require.Error(t, err, "a status outside the CHECK list must be refused")
 	assert.Contains(t, err.Error(), "chk_storage_files_status")
 }
@@ -263,6 +189,15 @@ func TestStagingMtimeRoundTrips(t *testing.T) {
 	require.NoError(t, manager.Stage(ctx, "k", bytes.NewReader([]byte("x")), nil))
 	manifest, err := manager.Manifest(ctx, "k")
 	require.NoError(t, err)
-	assert.False(t, manifest.File.StagingMtime.IsZero())
-	assert.WithinDuration(t, time.Now(), manifest.File.StagingMtime, time.Minute)
+	assert.False(t, manifest.StagingMtime.IsZero())
+	assert.WithinDuration(t, time.Now(), manifest.StagingMtime, time.Minute)
+}
+
+// mtimeOf reads the staging fingerprint a checkpoint stores.
+func mtimeOf(m *Manager, key string) time.Time {
+	info, err := os.Stat(m.stagingPath(key))
+	if err != nil {
+		panic(err)
+	}
+	return info.ModTime()
 }

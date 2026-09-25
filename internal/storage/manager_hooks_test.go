@@ -81,8 +81,7 @@ func TestAfterSyncHookRunsOnceTheManifestIsReady(t *testing.T) {
 	})
 	require.NoError(t, manager.Sync(ctx, "k"))
 
-	assert.Equal(t, StatusReady, seen.File.Status)
-	assert.Greater(t, seen.File.ChunkCount, 1)
+	assert.Equal(t, StatusReady, seen.Status)
 
 	// Cleanup happened after the hook: the upload round is fully closed.
 	assert.NoFileExists(t, filepath.Join(manager.Staging(), "k"))
@@ -119,10 +118,9 @@ func TestAfterSyncHookFailureIsReplayedByTheRetry(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(manager.Staging(), "k"))
 
 	// The retry went through the fast path: the file is intact and ready.
-	progress, err := manager.Progress(ctx, "k")
+	manifest, err := manager.Manifest(ctx, "k")
 	require.NoError(t, err)
-	assert.Equal(t, StatusReady, progress.Status)
-	assert.Equal(t, progress.Total, progress.Done)
+	assert.Equal(t, StatusReady, manifest.Status)
 }
 
 func TestManagerWithoutHooksBehavesAsBefore(t *testing.T) {

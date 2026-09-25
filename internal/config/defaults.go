@@ -91,11 +91,9 @@ const DefaultCORSMaxAge = time.Hour
 // more replaces it through the configuration.
 const DefaultCacheMaxMemory = 32 << 20
 
-// DefaultStorageChunkSize is the size of one chunk a stored file is split
 // into, in bytes. Large enough that a chunk header is noise against its
 // payload, small enough that a one-byte edit near the end of a large file
 // re-uploads a fraction of it.
-const DefaultStorageChunkSize = 8 << 20
 
 // DefaultStorageWatchDebounce is how long a staging path must stay quiet
 // before the watcher enqueues its upload, so a file written in many small
@@ -350,7 +348,6 @@ func Default() Config {
 		Storage: Storage{
 			Driver:    StorageLocal,
 			LocalPath: DefaultDataDir,
-			ChunkSize: DefaultStorageChunkSize,
 			Watch: Watch{
 				Enable:   true,
 				Debounce: DefaultStorageWatchDebounce,

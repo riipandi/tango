@@ -15,7 +15,6 @@ package identity
 
 import (
 	"log/slog"
-	"path/filepath"
 
 	"connectrpc.com/connect"
 	"github.com/go-chi/chi/v5"
@@ -135,18 +134,10 @@ var Package = do.Package(
 	}),
 
 	do.Lazy(func(i do.Injector) (*user.Service, error) {
-		c := do.MustInvoke[*config.Config](i)
 		log := do.MustInvoke[*slog.Logger](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
 		pictures := do.MustInvoke[*storage.Manager](i)
-		// The local driver is the one deployment where the account's
-		// picture has a visible form on this machine; an object store holds
-		// no local copy to keep fresh.
-		var avatarsDir string
-		if c.Storage.Driver == config.StorageLocal {
-			avatarsDir = filepath.Join(c.Storage.LocalPath, "avatars")
-		}
-		return user.NewService(pool, log, pictures, avatarsDir), nil
+		return user.NewService(pool, log, pictures), nil
 	}),
 
 	// The verification service builds over the mailer and the queue the

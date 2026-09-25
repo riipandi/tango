@@ -485,7 +485,6 @@ type CORS struct {
 }
 
 // Storage holds the file storage settings.
-// Storage holds the file storage settings.
 type Storage struct {
 	// Driver is StorageLocal or StorageS3.
 	Driver string `koanf:"driver" json:"driver"`
@@ -494,12 +493,8 @@ type Storage struct {
 	// process: the backup default and the storage health check both read it, so
 	// there is no second path to disagree with it.
 	LocalPath string `koanf:"local_path" json:"local_path"`
-	// ChunkSize is the size of one chunk an uploaded file is split into, in
-	// bytes. The chunk hashes are the manifest, so only a chunk that changed
-	// is uploaded again.
-	ChunkSize int `koanf:"chunk_size" json:"chunk_size"`
 	// Watch holds the staging watcher: it notices a finished or changed
-	// staging file and enqueues the chunk upload.
+	// staging file and enqueues the upload.
 	Watch Watch `koanf:"watch" json:"watch"`
 	// S3 holds the object-storage settings, used when Driver is StorageS3.
 	S3 S3 `koanf:"s3" json:"s3"`

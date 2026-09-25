@@ -4,21 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
+	"strings"
 )
 
-// chunkHashPattern is the shape a chunk filename must have before it is
-// believed to be a hash: 64 lowercase hex characters. The chunks directory
-// is a scan target, and a stray file — an editor's, a crash's — must not
-// become a garbage-collection candidate.
-var chunkHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+// filesDir is the directory under the data directory the final files live
+// in, one subtree per key. The engine's own root is shared — staging sits
+// beside it — so the files namespace is one level down and the garbage
+// collection's listing never sees a staging path or another feature's
+// directory.
+const filesDir = "files"
 
-// FS is the local-filesystem backend: every chunk is one file under the
-// data directory, spread across two-hex-character directories so a single
-// directory never holds the whole store.
+// FS is the local-filesystem backend: every key is one file under the data
+// directory, at the same path its key spells — the deployment where a stored
+// file has a visible form on the machine that stored it.
 type FS struct {
 	root string
 }
@@ -30,99 +32,97 @@ func NewFS(root string) *FS {
 	return &FS{root: root}
 }
 
-// HasChunks stats every named chunk. A stat is an in-process call, so the
-// batch is a loop here — the round trip the batch saves lives in the
-// networked driver.
-func (s *FS) HasChunks(_ context.Context, hashes []string) (map[string]bool, error) {
-	found := make(map[string]bool, len(hashes))
-	for _, hash := range hashes {
-		_, err := os.Stat(s.chunkPath(hash))
-		if errors.Is(err, fs.ErrNotExist) {
-			found[hash] = false
-			continue
-		}
-		if err != nil {
-			return nil, fmt.Errorf("storage: stat chunk %s: %w", hash, err)
-		}
-		found[hash] = true
+// Get opens the key's file. The caller closes the handle; no buffer holds
+// the file on the read path.
+func (s *FS) Get(_ context.Context, key string) (io.ReadCloser, error) {
+	f, err := os.Open(s.path(key))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("storage: file %s: %w", key, ErrNotFound)
 	}
-	return found, nil
+	if err != nil {
+		return nil, fmt.Errorf("storage: open file %s: %w", key, err)
+	}
+	return f, nil
 }
 
-// PutChunk writes the chunk through a temp file and a rename, so a reader
-// never observes half of it and a crash leaves a temp file — the garbage
-// collection's scan refuses names that are not hashes — instead of a
-// truncated chunk.
-func (s *FS) PutChunk(_ context.Context, hash string, data []byte) error {
-	path := s.chunkPath(hash)
+// Put writes the file through a temp file and a rename, so a reader never
+// observes half of it and a crash leaves a temp file — a name the garbage
+// collection's listing skips — instead of a truncated one.
+func (s *FS) Put(_ context.Context, key string, r io.Reader, _ int64) error {
+	path := s.path(key)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("storage: chunk directory: %w", err)
+		return fmt.Errorf("storage: file directory: %w", err)
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+hash+".*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(key)+".*")
 	if err != nil {
-		return fmt.Errorf("storage: write chunk %s: %w", hash, err)
+		return fmt.Errorf("storage: write file %s: %w", key, err)
 	}
-	if _, err := tmp.Write(data); err != nil {
+	if _, err = io.Copy(tmp, r); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmp.Name())
-		return fmt.Errorf("storage: write chunk %s: %w", hash, err)
+		return fmt.Errorf("storage: write file %s: %w", key, err)
 	}
-	if err := tmp.Close(); err != nil {
+	if err = tmp.Close(); err != nil {
 		_ = os.Remove(tmp.Name())
-		return fmt.Errorf("storage: write chunk %s: %w", hash, err)
+		return fmt.Errorf("storage: write file %s: %w", key, err)
 	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
+	if err = os.Rename(tmp.Name(), path); err != nil {
 		_ = os.Remove(tmp.Name())
-		return fmt.Errorf("storage: write chunk %s: %w", hash, err)
+		return fmt.Errorf("storage: write file %s: %w", key, err)
 	}
 	return nil
 }
 
-// GetChunk reads the chunk's bytes into dst.
-func (s *FS) GetChunk(_ context.Context, dst []byte, hash string) ([]byte, error) {
-	data, err := os.ReadFile(s.chunkPath(hash))
-	if errors.Is(err, fs.ErrNotExist) {
-		return dst, fmt.Errorf("storage: chunk %s: %w", hash, ErrNotFound)
+// Delete removes the key's file and the directories an empty subtree leaves
+// behind. A missing file is the state the caller asked for, not an error.
+func (s *FS) Delete(_ context.Context, key string) error {
+	if err := os.Remove(s.path(key)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("storage: delete file %s: %w", key, err)
 	}
-	if err != nil {
-		return dst, fmt.Errorf("storage: read chunk %s: %w", hash, err)
-	}
-	return append(dst, data...), nil
+	s.pruneDirs(key)
+	return nil
 }
 
-// DeleteChunk removes the chunk's file. A chunk already gone is the state
-// the caller asked for, not an error.
-func (s *FS) DeleteChunk(_ context.Context, hash string) error {
-	err := os.Remove(s.chunkPath(hash))
+// List walks the files directory and calls fn for every key. Temp files —
+// the crash leftovers a put's rename leaves behind — are skipped: only the
+// backend's real files are listed, and only they may be deleted.
+func (s *FS) List(_ context.Context, fn func(key string) error) error {
+	root := filepath.Join(s.root, filesDir)
+	entries, err := os.OpenRoot(root)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("storage: delete chunk %s: %w", hash, err)
+		return fmt.Errorf("storage: file directory: %w", err)
 	}
-	return nil
-}
+	defer entries.Close()
 
-// ListChunks walks the chunk directories and calls fn for every chunk whose
-// name is a hash. Names that are not — temp files, strays — are skipped:
-// only the backend's real chunks are listed, and only they may be deleted.
-func (s *FS) ListChunks(_ context.Context, fn func(hash string) error) error {
-	root := filepath.Join(s.root, "chunks")
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		return fmt.Errorf("storage: chunk directory: %w", err)
-	}
-	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+	return fs.WalkDir(entries.FS(), ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || !chunkHashPattern.MatchString(entry.Name()) {
+		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			return nil
 		}
-		return fn(entry.Name())
+		// A walk over an fs.FS yields the paths relative to its root —
+		// exactly the keys the backend stores.
+		return fn(filepath.ToSlash(path))
 	})
 }
 
-// chunkPath is where one chunk lives: chunks/<2 hex>/<hash>.
-func (s *FS) chunkPath(hash string) string {
-	return filepath.Join(s.root, "chunks", hash[:2], hash)
+// pruneDirs removes the directories a deleted file's subtree emptied, so a
+// churn of keys does not leave an empty skeleton behind. Errors are the
+// caller's to never see: an unremovable directory only costs a listing.
+func (s *FS) pruneDirs(key string) {
+	dir := filepath.Dir(s.path(key))
+	for root := filepath.Join(s.root, filesDir) + "/"; strings.HasPrefix(dir, root); dir = filepath.Dir(dir) {
+		if err := os.Remove(dir); err != nil {
+			return
+		}
+	}
+}
+
+// path is where one key's file lives: files/<key>.
+func (s *FS) path(key string) string {
+	return filepath.Join(s.root, filesDir, filepath.FromSlash(key))
 }

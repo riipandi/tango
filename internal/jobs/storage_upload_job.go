@@ -10,14 +10,15 @@ import (
 	"github.com/riipandi/tango/internal/storage"
 )
 
-// StorageUploadName is the queue the chunk uploads run on.
+// StorageUploadName is the queue the uploads run on.
 const StorageUploadName = "storage_upload"
 
-// ChunkUploadTask syncs one staging file into the backend: chunk it, upload
-// only the chunks the stored manifest does not describe, commit the new
-// manifest. The watcher enqueues it once a staging path settles, and a
-// caller may enqueue it itself — the processor is idempotent, so a repeated
-// task syncs nothing and returns.
+// ChunkUploadTask syncs one staging file into the backend: hash it, store it
+// whole under its key, commit the ready manifest. The watcher enqueues it
+// once a staging path settles, and a caller may enqueue it itself — the
+// processor is idempotent, so a repeated task syncs nothing and returns.
+// The task name predates the whole-file shape and stays: a queued task
+// serialized under the old name must still decode.
 type ChunkUploadTask struct {
 	// Key is the staging file's name, the manifest key it is stored under.
 	Key string `json:"key"`
@@ -25,8 +26,8 @@ type ChunkUploadTask struct {
 
 // Config returns the queue the uploads run on. The attempts are generous
 // because a backend outage is the ordinary reason for a retry, and the
-// timeout bounds one file's whole sync — chunking, diff, and the uploads —
-// rather than one chunk.
+// timeout bounds one file's whole sync — hashing and the PUT — rather than
+// one chunk of it.
 func (t ChunkUploadTask) Config() queue.QueueConfig {
 	return queue.QueueConfig{
 		Name:        StorageUploadName,

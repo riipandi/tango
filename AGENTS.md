@@ -51,7 +51,7 @@ Implemented today — treat as the contract.
 - `internal/observer` — traces + metrics; explicit exporter options (no env fallback); Prometheus bridge at `otel.metrics.prometheus_path`.
 - `internal/queue` — durable Postgres task queue (SKIP LOCKED, priority, dead letters, optional payload encryption). `internal/jobs` — concrete jobs; recurring ones re-enqueue. `internal/scheduler` — durable cron; row lock claims a tick, the queue executes it.
 - `internal/storage` — chunked file engine over local FS or S3; content-addressed chunks, manifest in Postgres, staging watcher, upload on durable queue; `storage.Key` keys, JSONB per-file metadata, resumable uploads, progress counters (endpoint stubbed — see TODO(notification)); `BeforeSyncHook`/`AfterSyncHook` extension points.
-- `internal/transport/static` — serves `storage.local_path/uploads` at `/static`, outside the throttled group, before the SPA (missing upload = 404, never `index.html`); driver behind `Upload` (`Local` today); never lists a directory; deliberately not the chunk store — chunks are never served, a feature wanting a URL writes a whole copy under `uploads/`.
+- `internal/transport/static` — serves `storage.local_path/uploads` at `/static`, outside the throttled group, before the SPA (missing upload = 404, never `index.html`); driver behind `Upload` (`Local` today); never lists a directory; deliberately not the file engine's tree — `files/` is never served, a feature wanting a URL writes a whole copy under `uploads/`.
 - `internal/kernel`, `internal/transport`, `internal/registry` — full contracts in `.llms/architecture.md`.
 - `api/connect/*.proto` — ConnectRPC contracts. `email/templates` — React Email sources. `web` — SPA embed and static serving.
 

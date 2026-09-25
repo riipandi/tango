@@ -46,29 +46,22 @@ type Service struct {
 	// nil in the tests that exercise the account procedures only; the
 	// picture procedures refuse while it is absent.
 	pictures *storage.Manager
-
-	// avatarsDir is the directory a local-driver deployment holds the
-	// account's picture in, as the one file a filesystem browser can see.
-	// An object-store deployment holds no local copy, so an empty dir is the
-	// state that writes none.
-	avatarsDir string
 }
 
 // NewService builds the service. The database writes run in one transaction
 // the service opens over the pool, so an account and its credential commit
 // together or not at all.
-func NewService(pool *datastore.Postgres, log *slog.Logger, pictures *storage.Manager, avatarsDir string) *Service {
+func NewService(pool *datastore.Postgres, log *slog.Logger, pictures *storage.Manager) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Service{
-		pool:       pool,
-		repo:       NewRepository(),
-		hasher:     crypto.NewPasswordHasher(),
-		log:        log,
-		pictures:   pictures,
-		avatarsDir: avatarsDir,
-		now:        time.Now,
+		pool:     pool,
+		repo:     NewRepository(),
+		hasher:   crypto.NewPasswordHasher(),
+		log:      log,
+		pictures: pictures,
+		now:      time.Now,
 	}
 }
 

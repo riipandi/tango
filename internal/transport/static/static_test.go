@@ -183,8 +183,9 @@ func TestTheMountReportsADriverFailureAsAServerError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
-// TestDirIsUnderTheDataDirectory keeps the served tree and the chunk store
-// apart: an upload is written whole under uploads/, never among the chunks.
+// TestDirIsUnderTheDataDirectory keeps the served tree and the file
+// engine's tree apart: an upload is written whole under uploads/, never
+// among the engine's files.
 func TestDirIsUnderTheDataDirectory(t *testing.T) {
 	assert.Equal(t, filepath.Join("storage", "uploads"), static.Dir("storage"))
 	assert.Equal(t, filepath.Join(".", "uploads"), static.Dir(""))

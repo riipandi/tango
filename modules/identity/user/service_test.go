@@ -17,10 +17,7 @@ import (
 
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	"github.com/riipandi/tango/database"
-	"io/fs"
 	"log/slog"
-	"os"
-	"path/filepath"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -70,20 +67,19 @@ func (s *Service) readPicture(ctx context.Context, id string) (io.ReadCloser, st
 
 func testService(t *testing.T, pool *datastore.Postgres) *Service {
 	t.Helper()
-	return NewService(pool, nil, nil, "")
+	return NewService(pool, nil, nil)
 }
 
 // testPictureService builds the service over the real storage engine — the
-// local driver in a throwaway directory and the small chunk size the engine's
-// own tests use — so a picture procedure runs the stage, sync, and read the
-// production path runs.
-func testPictureService(t *testing.T, pool *datastore.Postgres) *Service {
+// local driver in a throwaway directory — so a picture procedure runs the
+// stage, sync, and read the production path runs. The engine and its
+// directory travel with the test through the returned cleanup.
+func testPictureService(t *testing.T, pool *datastore.Postgres) (*Service, *storage.Manager) {
 	t.Helper()
 
-	manager, err := storage.NewManager(storage.NewFS(t.TempDir()), pool, 32,
-		t.TempDir(), 2, slog.New(slog.DiscardHandler))
-	require.NoError(t, err)
-	return NewService(pool, nil, manager, filepath.Join(t.TempDir(), "avatars"))
+	manager := storage.NewManager(storage.NewFS(t.TempDir()), pool,
+		t.TempDir(), slog.New(slog.DiscardHandler))
+	return NewService(pool, nil, manager), manager
 }
 
 // passwordCount reads how many credentials an account carries. An account
@@ -414,7 +410,7 @@ func TestThePictureFlowStagesSyncsAndReadsBack(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
 	pool := migratedPool(t)
-	service := testPictureService(t, pool)
+	service, pictures := testPictureService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
 		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
 		FirstName: "Hermione", LastName: "Granger",
@@ -435,13 +431,14 @@ func TestThePictureFlowStagesSyncsAndReadsBack(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, picture, read)
 
-	// The local deployment holds the picture as the one file the data
-	// directory's avatars carries — the visible form of what the engine
-	// holds as chunks.
-	name := created.ID + avatarExtensions["image/png"]
-	stored, err := os.ReadFile(filepath.Join(service.avatarsDir, name))
+	// The engine holds the file whole under the key the row names — the
+	// same tree of keys both drivers keep.
+	stored, err := pictures.Open(t.Context(), "avatars/"+created.ID+"/profile-picture")
 	require.NoError(t, err)
-	assert.Equal(t, picture, stored)
+	storedBody, err := io.ReadAll(stored)
+	require.NoError(t, err)
+	require.NoError(t, stored.Close())
+	assert.Equal(t, picture, storedBody)
 
 	// The row names the key the engine holds the file under.
 	var storedPath *string
@@ -461,7 +458,7 @@ func TestPictureUpdateSniffsTheBytesRatherThanTheDeclaration(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
 	pool := migratedPool(t)
-	service := testPictureService(t, pool)
+	service, _ := testPictureService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
 		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
 		FirstName: "Hermione", LastName: "Granger",
@@ -487,7 +484,7 @@ func TestPictureEditBelongsToTheOwnerOrAnAdministrator(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
 	pool := migratedPool(t)
-	service := testPictureService(t, pool)
+	service, _ := testPictureService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
 		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
 		FirstName: "Hermione", LastName: "Granger",
@@ -518,7 +515,7 @@ func TestPictureResetFallsBackToTheDefault(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
 	pool := migratedPool(t)
-	service := testPictureService(t, pool)
+	service, pictures := testPictureService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
 		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
 		FirstName: "Hermione", LastName: "Granger",
@@ -544,9 +541,9 @@ func TestPictureResetFallsBackToTheDefault(t *testing.T) {
 	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&storedPath))
 	assert.Nil(t, storedPath)
 
-	// The local copy left with the picture.
-	_, err = os.Stat(filepath.Join(service.avatarsDir, created.ID+avatarExtensions["image/png"]))
-	assert.True(t, errors.Is(err, fs.ErrNotExist))
+	// The file left the engine: no read answers the key anymore.
+	_, err = pictures.Open(t.Context(), "avatars/"+created.ID+"/profile-picture")
+	assert.ErrorIs(t, err, storage.ErrNotFound)
 
 	view, err := service.ProfilePicture(t.Context(), created.ID)
 	require.NoError(t, err)
@@ -567,7 +564,7 @@ func TestPictureRefusesAnUnknownAccount(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
 	pool := migratedPool(t)
-	service := testPictureService(t, pool)
+	service, _ := testPictureService(t, pool)
 	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: true}
 
 	id := "00000000-0000-0000-0000-000000000000"
@@ -616,9 +613,8 @@ func TestThePictureFlowLandsOnS3(t *testing.T) {
 		}
 	}
 
-	manager, err := storage.NewManager(store, pool, 32, t.TempDir(), 2, slog.New(slog.DiscardHandler))
-	require.NoError(t, err)
-	service := NewService(pool, nil, manager, "")
+	manager := storage.NewManager(store, pool, t.TempDir(), slog.New(slog.DiscardHandler))
+	service := NewService(pool, nil, manager)
 
 	created, err := service.CreateUser(t.Context(), CreateParams{
 		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
@@ -640,13 +636,37 @@ func TestThePictureFlowLandsOnS3(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, picture, read)
 
-	// The reset removes the objects the backend holds, so the account falls
+	// The bucket holds the final file at the key — the same tree the local
+	// driver keeps — and nothing else: no chunk-shaped object ever lands
+	// beside it.
+	listed, err := client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+		Bucket: awssdk.String("tango-user-test"),
+		Prefix: awssdk.String("tango-user-test/"),
+	})
+	require.NoError(t, err)
+	var keys []string
+	for _, item := range listed.Contents {
+		keys = append(keys, awssdk.ToString(item.Key))
+	}
+	assert.Equal(t,
+		[]string{"tango-user-test/avatars/" + created.ID + "/profile-picture"}, keys)
+
+	// The reset removes the object the backend holds, so the account falls
 	// back to the bundled default the same way it does on the local driver.
 	require.NoError(t, service.ResetProfilePicture(t.Context(), created.ID, claims))
 	fallback, err := service.ProfilePicture(t.Context(), created.ID)
 	require.NoError(t, err)
 	defer fallback.Body.Close()
 	assert.True(t, fallback.Default)
+
+	// The reset emptied the bucket: the object left with the account's
+	// key, the same state a local reset lands in.
+	listed, err = client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+		Bucket: awssdk.String("tango-user-test"),
+		Prefix: awssdk.String("tango-user-test/"),
+	})
+	require.NoError(t, err)
+	assert.Empty(t, listed.Contents)
 }
 
 // TestPictureProceduresRefuseARunWithoutTheEngine covers the deployment that

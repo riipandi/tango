@@ -48,7 +48,7 @@ func TestThePictureReadServesTheRESTRoute(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
 	pool := migratedPool(t)
-	service := testPictureService(t, pool)
+	service, _ := testPictureService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
 		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
 		FirstName: "Hermione", LastName: "Granger",

@@ -31,7 +31,6 @@ type storageMetrics struct {
 	uploads  metric.Int64Counter
 	duration metric.Float64Histogram
 	bytes    metric.Int64Counter
-	chunks   metric.Int64Counter
 	settled  metric.Int64Counter
 }
 
@@ -59,11 +58,6 @@ func newStorageMetrics() *storageMetrics {
 		metric.WithUnit("By")); err != nil {
 		panic("storage: " + err.Error())
 	}
-	if m.chunks, err = meter.Int64Counter("tango.storage.chunks.uploaded",
-		metric.WithDescription("Chunks the backend did not hold yet"),
-		metric.WithUnit("{chunk}")); err != nil {
-		panic("storage: " + err.Error())
-	}
 	if m.settled, err = meter.Int64Counter("tango.storage.staging.settled",
 		metric.WithDescription("Staging files that went quiet and had their upload enqueued"),
 		metric.WithUnit("{file}")); err != nil {
@@ -83,13 +77,12 @@ func (m *storageMetrics) recordSettled(ctx context.Context) {
 }
 
 // recordSync counts one finished sync round: the outcome, how long the round
-// took, and — on success — the bytes and chunks that reached the backend.
-func (m *storageMetrics) recordSync(ctx context.Context, outcome string, duration time.Duration, size int64, chunksUploaded int) {
+// took, and — on success — the bytes that reached the backend.
+func (m *storageMetrics) recordSync(ctx context.Context, outcome string, duration time.Duration, uploaded int64) {
 	attrs := metric.WithAttributes(attribute.String("outcome", outcome))
 	m.uploads.Add(ctx, 1, attrs)
 	m.duration.Record(ctx, duration.Seconds())
 	if outcome == uploadSuccess {
-		m.bytes.Add(ctx, size, attrs)
-		m.chunks.Add(ctx, int64(chunksUploaded), attrs)
+		m.bytes.Add(ctx, uploaded, attrs)
 	}
 }

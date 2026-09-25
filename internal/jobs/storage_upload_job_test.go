@@ -22,8 +22,7 @@ func TestChunkUploadJobSyncsAStagedFile(t *testing.T) {
 
 	pool, client := migratedClient(t, dsn)
 	store := storage.NewFS(t.TempDir())
-	manager, err := storage.NewManager(store, pool, 32, t.TempDir(), 2, slog.New(slog.DiscardHandler))
-	require.NoError(t, err)
+	manager := storage.NewManager(store, pool, t.TempDir(), slog.New(slog.DiscardHandler))
 	Register(client, time.Hour, manager, nil, "")
 
 	data := bytes.Repeat([]byte("queued"), 40)
@@ -44,11 +43,11 @@ func TestChunkUploadJobSyncsAStagedFile(t *testing.T) {
 	// The sync's effect: the manifest is ready and the staging file is gone.
 	require.Eventually(t, func() bool {
 		manifest, err := manager.Manifest(t.Context(), "uploads/report.bin")
-		return err == nil && manifest.File.Status == storage.StatusReady
+		return err == nil && manifest.Status == storage.StatusReady
 	}, 5*time.Second, 20*time.Millisecond, "the upload job must commit the manifest")
 
 	// The staging file has served its purpose: the bytes live in the
-	// backend, chunk for chunk.
+	// backend, whole under the key.
 	_, statErr := os.Stat(filepath.Join(manager.Staging(), "uploads/report.bin"))
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "the staging file must be gone after the sync")
 }

@@ -1,9 +1,10 @@
 package storage
 
 import (
-	"context"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,95 +14,103 @@ import (
 )
 
 // newFSStore builds a local backend over a throwaway directory and returns
-// a chunk hash with known bytes, the shape every store test runs through.
+// a key with known bytes, the shape every store test runs through.
 func newFSStore(t *testing.T) (*FS, string, []byte) {
 	t.Helper()
 
 	root := t.TempDir()
-	data := []byte("a chunk of bytes, stored once and named by its hash")
-	hash := sha256.Sum256(data)
-	return NewFS(root), hex.EncodeToString(hash[:]), data
+	data := []byte("a whole file, stored once under the key its feature composed")
+	return NewFS(root), "avatars/usr_1/profile-picture", data
 }
 
-// hasChunks answers the batch probe with one hash, the shape every store
-// test runs through.
-func hasChunks(store Store, ctx context.Context, hash string) (bool, error) {
-	found, err := store.HasChunks(ctx, []string{hash})
-	if err != nil {
-		return false, err
-	}
-	return found[hash], nil
-}
-
-func TestFSStoreRoundTripsAChunk(t *testing.T) {
-	store, hash, data := newFSStore(t)
+func TestFSStoreRoundTripsAFile(t *testing.T) {
+	store, key, data := newFSStore(t)
 	ctx := t.Context()
 
-	exists, err := hasChunks(store, ctx, hash)
+	keys, err := listedKeys(ctx, store)
 	require.NoError(t, err)
-	assert.False(t, exists)
+	assert.Empty(t, keys)
 
-	require.NoError(t, store.PutChunk(ctx, hash, data))
+	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data))))
 
-	exists, err = hasChunks(store, ctx, hash)
+	reader, err := store.Get(ctx, key)
 	require.NoError(t, err)
-	assert.True(t, exists)
-
-	got, err := store.GetChunk(ctx, nil, hash)
+	got, err := io.ReadAll(reader)
 	require.NoError(t, err)
+	require.NoError(t, reader.Close())
 	assert.Equal(t, data, got)
 
-	require.NoError(t, store.DeleteChunk(ctx, hash))
-	exists, err = hasChunks(store, ctx, hash)
+	keys, err = listedKeys(ctx, store)
 	require.NoError(t, err)
-	assert.False(t, exists)
+	assert.Equal(t, []string{key}, keys)
+
+	require.NoError(t, store.Delete(ctx, key))
+	keys, err = listedKeys(ctx, store)
+	require.NoError(t, err)
+	assert.Empty(t, keys)
 }
 
-func TestFSStorePutChunkIsIdempotent(t *testing.T) {
-	store, hash, data := newFSStore(t)
+func TestFSStorePutReplacesWhole(t *testing.T) {
+	store, key, data := newFSStore(t)
 	ctx := t.Context()
 
-	require.NoError(t, store.PutChunk(ctx, hash, data))
-	require.NoError(t, store.PutChunk(ctx, hash, data))
+	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data))))
+	changed := append(bytes.Clone(data), []byte("-changed")...)
+	require.NoError(t, store.Put(ctx, key, bytes.NewReader(changed), int64(len(changed))))
 
-	got, err := store.GetChunk(ctx, nil, hash)
+	reader, err := store.Get(ctx, key)
 	require.NoError(t, err)
-	assert.Equal(t, data, got)
+	got, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.NoError(t, reader.Close())
+	assert.Equal(t, changed, got)
 }
 
-func TestFSStoreGetMissingChunkIsNotFound(t *testing.T) {
-	store, hash, _ := newFSStore(t)
+func TestFSStoreGetMissingFileIsNotFound(t *testing.T) {
+	store, key, _ := newFSStore(t)
 
-	_, err := store.GetChunk(t.Context(), nil, hash)
+	_, err := store.Get(t.Context(), key)
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func TestFSStoreDeleteMissingChunkIsQuiet(t *testing.T) {
-	store, hash, _ := newFSStore(t)
+func TestFSStoreDeleteMissingFileIsQuiet(t *testing.T) {
+	store, key, _ := newFSStore(t)
 
-	assert.NoError(t, store.DeleteChunk(t.Context(), hash))
+	assert.NoError(t, store.Delete(t.Context(), key))
 }
 
-func TestFSStoreListChunksYieldsOnlyHashNames(t *testing.T) {
-	store, hash, data := newFSStore(t)
+func TestFSStoreListSkipsTempFiles(t *testing.T) {
+	store, key, data := newFSStore(t)
 	ctx := t.Context()
 
-	require.NoError(t, store.PutChunk(ctx, hash, data))
-	// A stray and a temp file share the chunk directories: the scan must
-	// name neither, because only real chunks may be deleted.
-	require.NoError(t, os.WriteFile(filepath.Join(store.root, "chunks", hash[:2], "notes.txt"), []byte("x"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(store.root, "chunks", hash[:2], "."+hash+".tmp"), []byte("x"), 0o600))
+	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data))))
+	// A temp file shares the file's directory: a crash's leftover, which
+	// the scan must not name, because only real files may be deleted.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(store.root, filesDir, "avatars", "usr_1", ".profile-picture.tmp"),
+		[]byte("x"), 0o600))
 
-	var listed []string
-	require.NoError(t, store.ListChunks(ctx, func(h string) error {
-		listed = append(listed, h)
-		return nil
-	}))
-	assert.Equal(t, []string{hash}, listed)
+	keys, err := listedKeys(ctx, store)
+	require.NoError(t, err)
+	assert.Equal(t, []string{key}, keys)
 }
 
-func TestChunkNameLayoutIsSharedByTheBackends(t *testing.T) {
-	// One layout, two backends: the garbage collection's scan and the
-	// drivers' addressing must never disagree about where a chunk lives.
-	assert.Equal(t, "chunks/ab/abcd", ChunkName("abcd"))
+func TestFSStoreDeletePrunesTheEmptyDirs(t *testing.T) {
+	store, key, data := newFSStore(t)
+	ctx := t.Context()
+
+	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data))))
+	require.NoError(t, store.Delete(ctx, key))
+
+	_, err := os.Stat(filepath.Join(store.root, filesDir, "avatars", "usr_1"))
+	assert.True(t, os.IsNotExist(err), "an emptied subtree must not linger")
+}
+
+func TestContentHashIsTheWholeFile(t *testing.T) {
+	// The content hash is the engine's "the backend holds these bytes"
+	// check; it is the SHA-256 of the whole file, the value the sync
+	// commits and the retry compares.
+	data := []byte("hash me whole")
+	sum := sha256.Sum256(data)
+	assert.Equal(t, hex.EncodeToString(sum[:]), hashOf(data))
 }

@@ -10,20 +10,19 @@ import (
 	"github.com/riipandi/tango/internal/storage"
 )
 
-// StorageGCName is the queue the chunk garbage collection runs on.
+// StorageGCName is the queue the garbage collection runs on.
 const StorageGCName = "storage_gc"
 
 // DefaultStorageGCInterval is how often the garbage collection runs. An
-// unreferenced chunk is never a correctness problem — a manifest never names
-// one — so the interval trades a little wasted backend space for a quiet
-// schedule.
+// unreferenced object is never a correctness problem — a manifest never
+// names one — so the interval trades a little wasted backend space for a
+// quiet schedule.
 const DefaultStorageGCInterval = 6 * time.Hour
 
-// StorageGCTask removes the chunks the backend holds that no manifest
-// references: the remains of an upload that died between its last PutChunk
-// and its manifest commit, and of a delete that released shared chunks.
-// The interval it re-enqueues itself with rides in the payload, the way the
-// cleanup task carries its own.
+// StorageGCTask removes the objects the backend holds that no manifest
+// names: the remains of a delete that finished its rows but not its object
+// removal. The interval it re-enqueues itself with rides in the payload,
+// the way the cleanup task carries its own.
 type StorageGCTask struct {
 	IntervalMillis int64 `json:"interval_millis"`
 }
@@ -60,7 +59,7 @@ func gcProcessor(ctx context.Context, task StorageGCTask, manager *storage.Manag
 		return err
 	}
 	if removed > 0 {
-		slog.InfoContext(ctx, "queue: storage garbage collected", "chunks", removed)
+		slog.InfoContext(ctx, "queue: storage garbage collected", "objects", removed)
 	}
 
 	// The next run is queued before this one succeeds, so the schedule
