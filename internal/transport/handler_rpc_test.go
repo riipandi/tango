@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	authv1 "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1"
+	authv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1/authv1connect"
 	systemv1 "github.com/riipandi/tango/codegen/proto/go/tango/system/v1"
 	"github.com/riipandi/tango/codegen/proto/go/tango/system/v1/systemv1connect"
 	"github.com/riipandi/tango/internal/config"
@@ -271,5 +273,43 @@ func (stubHealthService) Check(context.Context, *connect.Request[systemv1.CheckR
 	return connect.NewResponse(&systemv1.CheckResponse{
 		Status: "healthy",
 		TookMs: 1.5,
+	}), nil
+}
+
+// TestTheCodecWritesALifetimeAsANumber pins the int32 answer: protobuf's JSON
+// mapping writes a 64-bit integer as a string, and a token lifetime arriving
+// as `"expires_in":"900"` is what a client reading an OpenAPI-shaped response
+// cannot parse. The shared codec serializes the 32-bit field as a number.
+func TestTheCodecWritesALifetimeAsANumber(t *testing.T) {
+	feature := &rpcFeature{}
+	transport.NewRouter(transport.Options{
+		Config:  config.Default(),
+		Checker: health.NewChecker(),
+		Modules: []kernel.Module{feature},
+	})
+
+	_, handler := authv1connect.NewAuthServiceHandler(
+		stubAuthService{}, feature.options...)
+	req := httptest.NewRequest(http.MethodPost,
+		authv1connect.AuthServiceSignInProcedure, strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Connect-Protocol-Version", "1")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), `"expires_in":900`)
+	assert.NotContains(t, rec.Body.String(), `"expires_in":"900"`)
+}
+
+// stubAuthService answers the smallest SignIn response that carries the field.
+type stubAuthService struct{}
+
+func (stubAuthService) SignIn(context.Context, *connect.Request[authv1.SignInRequest]) (*connect.Response[authv1.SignInResponse], error) {
+	return connect.NewResponse(&authv1.SignInResponse{
+		AccessToken: "token",
+		TokenType:   "Bearer",
+		ExpiresIn:   900,
 	}), nil
 }

@@ -122,7 +122,7 @@ type User struct {
 type Result struct {
 	AccessToken  string
 	TokenType    string
-	ExpiresIn    int64
+	ExpiresIn    int32
 	RefreshToken string
 	SessionID    string
 	User         User
@@ -201,7 +201,7 @@ func (s *Service) SignIn(ctx context.Context, params Params) (Result, error) {
 	return Result{
 		AccessToken:  access,
 		TokenType:    TokenType,
-		ExpiresIn:    int64(s.accessTTL.Seconds()),
+		ExpiresIn:    int32(s.accessTTL.Seconds()),
 		RefreshToken: refresh.plain,
 		SessionID:    sessionID.String(),
 		User: User{

@@ -52,8 +52,10 @@ message SignInResponse {
   // token_type names the authorization scheme, always `Bearer`.
   string token_type = 2;
 
-  // expires_in is the access token's lifetime in seconds.
-  int64 expires_in = 3;
+  // expires_in is the access token's lifetime in seconds. It is a 32-bit
+  // integer on purpose: protobuf's JSON mapping writes a 64-bit integer as
+  // a string, which no client reading a token lifetime expects.
+  int32 expires_in = 3;
 
   // refresh_token is the long-lived credential that outlives the access
   // token. It is exchanged for a fresh pair (a later procedure) and is

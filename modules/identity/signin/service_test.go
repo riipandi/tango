@@ -133,7 +133,7 @@ func TestSignInIssuesTheTokenPair(t *testing.T) {
 	assert.Equal(t, TokenType, result.TokenType)
 	assert.Equal(t, "ada@example.com", result.User.Email)
 	assert.NotEmpty(t, result.RefreshToken)
-	assert.Equal(t, int64(testConfig().Auth.AccessTTL.Seconds()), result.ExpiresIn)
+	assert.Equal(t, int32(testConfig().Auth.AccessTTL.Seconds()), result.ExpiresIn)
 
 	// The session identifier is the typed id, and the refresh token is
 	// stored under its hash alone.
