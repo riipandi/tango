@@ -24,16 +24,19 @@ import (
 // proxy.
 const DefaultPicturePath = "/images/default-avatar.png"
 
-// The picture kinds the update accepts. The bytes decide, not a declared
-// type: the kind is read off the magic bytes, so a renamed archive never
-// lands in the picture slot.
+// The picture kinds the update accepts, with the extension each one's storage
+// key carries. The bytes decide, not a declared type: the kind is read off the
+// magic bytes, so a renamed archive never lands in the picture slot — and the
+// extension names what the bytes are rather than what the client called the
+// file it sent.
 var pictureKinds = []struct {
 	magic []byte
 	mime  string
+	ext   string
 }{
-	{magic: []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, mime: "image/png"},
-	{magic: []byte{0xff, 0xd8, 0xff}, mime: "image/jpeg"},
-	{magic: []byte("RIFF"), mime: "image/webp"}, // the WEBP form sits at offset 8
+	{magic: []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, mime: "image/png", ext: "png"},
+	{magic: []byte{0xff, 0xd8, 0xff}, mime: "image/jpeg", ext: "jpg"},
+	{magic: []byte("RIFF"), mime: "image/webp", ext: "webp"}, // the WEBP form sits at offset 8
 }
 
 // The failures the picture procedures report. The handler maps them to
@@ -57,21 +60,27 @@ type Picture struct {
 	Default     bool
 }
 
-// pictureKey composes the storage key one account's picture lives under.
-func pictureKey(userID uuid.UUID) string {
-	key, err := storage.Key("avatars", userID.String(), "profile-picture")
+// pictureKey composes the storage key one account's picture lives under:
+// `avatars/<id>.<ext>`. The extension travels in the name so the object says
+// what it is wherever it is listed — the backend's browser, a presigned URL,
+// the local deployment's file tree — without a lookup. It comes from the
+// sniffed bytes, never from the name the client sent.
+func pictureKey(userID uuid.UUID, ext string) string {
+	key, err := storage.Key("avatars", userID.String()+"."+ext)
 	if err != nil {
-		// A UUID and fixed segments cannot form an invalid key; the fallback
-		// is here for the validator's contract, not for this composition.
-		return "avatars/" + userID.String() + "/profile-picture"
+		// A UUID and an extension from the fixed table above cannot form an
+		// invalid key; the fallback is here for the validator's contract, not
+		// for this composition.
+		return "avatars/" + userID.String() + "." + ext
 	}
 	return key
 }
 
-// sniffPictureType reads the picture's kind off its magic bytes. The WebP
-// check reaches past the RIFF form to the format field, so a WAV audio file
-// — the other RIFF resident — is refused.
-func sniffPictureType(data []byte) (string, bool) {
+// sniffPictureType reads the picture's kind off its magic bytes, answering the
+// content type the manifest records and the extension the key carries. The
+// WebP check reaches past the RIFF form to the format field, so a WAV audio
+// file — the other RIFF resident — is refused.
+func sniffPictureType(data []byte) (mime, ext string, ok bool) {
 	for _, kind := range pictureKinds {
 		if !bytes.HasPrefix(data, kind.magic) {
 			continue
@@ -79,9 +88,9 @@ func sniffPictureType(data []byte) (string, bool) {
 		if kind.mime == "image/webp" && (len(data) < 12 || string(data[8:12]) != "WEBP") {
 			continue
 		}
-		return kind.mime, true
+		return kind.mime, kind.ext, true
 	}
-	return "", false
+	return "", "", false
 }
 
 // UpdateProfilePicture replaces an account's picture. The bytes are sniffed
@@ -91,6 +100,15 @@ func sniffPictureType(data []byte) (string, bool) {
 // also schedules finds nothing left to do. The account row names the key
 // last: a crash before it leaves an orphan the garbage collection sweeps,
 // never a picture the account cannot read.
+//
+// An upload that changes the image's kind also changes the key, because the
+// extension is part of the name. The replaced picture is deleted **before**
+// the new one is stored: the other order would leave an object and a manifest
+// row that nothing names — the row is what garbage collection keeps a file
+// for, so an orphan of that shape is kept forever. Losing the race instead
+// costs nothing the client can see: the account reads the bundled default,
+// the state a reset produces and the read already answers for a key the
+// engine no longer holds.
 func (s *Service) UpdateProfilePicture(ctx context.Context, id string, data []byte) error {
 	if s.pictures == nil {
 		return ErrPicturesUnavailable
@@ -99,21 +117,28 @@ func (s *Service) UpdateProfilePicture(ctx context.Context, id string, data []by
 	if err != nil {
 		return ErrUserNotFound
 	}
-	// The row is read to establish the account exists: the guard decided who
-	// may write this picture, and a key for an account that is gone would
-	// leave a file nothing names.
-	if _, err := s.repo.GetUser(ctx, s.pool, userID); err != nil {
+	// The row is read for two reasons: it establishes the account exists —
+	// the guard decided who may write this picture, and a key for an account
+	// that is gone would leave a file nothing names — and it names the
+	// picture this upload replaces.
+	row, err := s.repo.GetUser(ctx, s.pool, userID)
+	if err != nil {
 		if errors.Is(err, datastore.ErrNoRows) {
 			return ErrUserNotFound
 		}
 		return fmt.Errorf("user: read for picture update: %w", err)
 	}
-	mime, ok := sniffPictureType(data)
+	mime, ext, ok := sniffPictureType(data)
 	if !ok {
 		return ErrUnsupportedPicture
 	}
 
-	key := pictureKey(userID)
+	key := pictureKey(userID, ext)
+	if row.AvatarURL != nil && *row.AvatarURL != key {
+		if err := s.pictures.Delete(ctx, *row.AvatarURL); err != nil {
+			return fmt.Errorf("user: delete the replaced picture: %w", err)
+		}
+	}
 	metadata := map[string]any{"content_type": mime, "user_id": userID.String()}
 	if err := s.pictures.Stage(ctx, key, bytes.NewReader(data), metadata); err != nil {
 		return fmt.Errorf("user: stage picture: %w", err)

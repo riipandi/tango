@@ -20,7 +20,7 @@ func newFSStore(t *testing.T) (*FS, string, []byte) {
 
 	root := t.TempDir()
 	data := []byte("a whole file, stored once under the key its feature composed")
-	return NewFS(root), "avatars/usr_1/profile-picture", data
+	return NewFS(root), "avatars/usr_1.png", data
 }
 
 func TestFSStoreRoundTripsAFile(t *testing.T) {
@@ -85,9 +85,11 @@ func TestFSStoreListSkipsTempFiles(t *testing.T) {
 
 	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data)), "image/png"))
 	// A temp file shares the file's directory: a crash's leftover, which
-	// the scan must not name, because only real files may be deleted.
+	// the scan must not name, because only real files may be deleted. The
+	// backend writes one under the key's own basename, so the fixture does
+	// too.
 	require.NoError(t, os.WriteFile(
-		filepath.Join(store.root, filesDir, "avatars", "usr_1", ".profile-picture.tmp"),
+		filepath.Join(store.root, filesDir, "avatars", ".usr_1.png.tmp"),
 		[]byte("x"), 0o600))
 
 	keys, err := listedKeys(ctx, store)

@@ -403,7 +403,7 @@ func TestThePictureFlowStagesSyncsAndReadsBack(t *testing.T) {
 
 	// The engine holds the file whole under the key the row names — the
 	// same tree of keys both drivers keep.
-	stored, err := pictures.Open(t.Context(), "avatars/"+created.ID+"/profile-picture")
+	stored, err := pictures.Open(t.Context(), "avatars/"+created.ID+".png")
 	require.NoError(t, err)
 	storedBody, err := io.ReadAll(stored)
 	require.NoError(t, err)
@@ -419,7 +419,74 @@ func TestThePictureFlowStagesSyncsAndReadsBack(t *testing.T) {
 	query, args := sb.Build()
 	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&storedPath))
 	require.NotNil(t, storedPath)
-	assert.Equal(t, "avatars/"+created.ID+"/profile-picture", *storedPath)
+	assert.Equal(t, "avatars/"+created.ID+".png", *storedPath)
+}
+
+// TestPictureUpdateMovesTheKeyWhenTheKindChanges pins the naming contract: the
+// key is `avatars/<id>.<ext>` with the extension the sniffed bytes earned, so
+// an upload of another kind moves the picture rather than leaving the old one
+// under a name that lies about its content.
+func TestPictureUpdateMovesTheKeyWhenTheKindChanges(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service, pictures := testPictureService(t, pool)
+	created, err := service.CreateUser(t.Context(), CreateParams{
+		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
+		FirstName: "Hermione", LastName: "Granger",
+	})
+	require.NoError(t, err)
+
+	png := append([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, []byte("first")...)
+	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, png))
+	pngKey := "avatars/" + created.ID + ".png"
+	assert.Equal(t, pngKey, storedPictureKey(t, pool, created.ID))
+
+	// The second upload is another kind, so it lands under another key.
+	jpeg := append([]byte{0xff, 0xd8, 0xff}, []byte("second")...)
+	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, jpeg))
+	jpegKey := "avatars/" + created.ID + ".jpg"
+	assert.Equal(t, jpegKey, storedPictureKey(t, pool, created.ID))
+
+	// The replaced picture left the engine whole: no object answers its key,
+	// and no manifest row keeps the garbage collection from ever sweeping it.
+	_, err = pictures.Open(t.Context(), pngKey)
+	assert.ErrorIs(t, err, storage.ErrNotFound)
+	// The manifest row left with the object: a row without a file is what
+	// the garbage collection keeps a key for, so one that lingered would
+	// make the old name unsweepable forever.
+	_, err = storage.NewManifests().Load(t.Context(), pool, pngKey)
+	assert.ErrorIs(t, err, storage.ErrNoManifest)
+
+	// The read answers the picture the row now names.
+	body, mime, err := service.readPicture(t.Context(), created.ID)
+	require.NoError(t, err)
+	defer body.Close()
+	assert.Equal(t, "image/jpeg", mime)
+	read, err := io.ReadAll(body)
+	require.NoError(t, err)
+	assert.Equal(t, jpeg, read)
+
+	// The same kind again keeps its key: an update is not a move when the
+	// extension does not change.
+	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, jpeg))
+	assert.Equal(t, jpegKey, storedPictureKey(t, pool, created.ID))
+}
+
+// storedPictureKey reads the key the account's row names.
+func storedPictureKey(t *testing.T, pool *datastore.Postgres, userID string) string {
+	t.Helper()
+
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("avatar_url")
+	sb.From(UserTable)
+	sb.Where(sb.Equal("id", userID))
+	query, args := sb.Build()
+
+	var key *string
+	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&key))
+	require.NotNil(t, key, "the row names the picture it stored")
+	return *key
 }
 
 // TestPictureUpdateSniffsTheBytesRatherThanTheDeclaration refuses a payload
@@ -478,7 +545,7 @@ func TestPictureResetFallsBackToTheDefault(t *testing.T) {
 	assert.Nil(t, storedPath)
 
 	// The file left the engine: no read answers the key anymore.
-	_, err = pictures.Open(t.Context(), "avatars/"+created.ID+"/profile-picture")
+	_, err = pictures.Open(t.Context(), "avatars/"+created.ID+".png")
 	assert.ErrorIs(t, err, storage.ErrNotFound)
 
 	view, err := service.ProfilePicture(t.Context(), created.ID)
@@ -560,7 +627,7 @@ func TestThePictureFlowLandsOnS3(t *testing.T) {
 	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 9, 8, 7}
 	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, picture))
 
-	// The read streams the chunks the backend holds — the same flow the
+	// The read streams the file the backend holds — the same flow the
 	// local driver answers, no S3-specific branch anywhere in the feature.
 	view, mime, err := service.readPicture(t.Context(), created.ID)
 	require.NoError(t, err)
@@ -583,14 +650,14 @@ func TestThePictureFlowLandsOnS3(t *testing.T) {
 		keys = append(keys, awssdk.ToString(item.Key))
 	}
 	assert.Equal(t,
-		[]string{"tango-user-test/avatars/" + created.ID + "/profile-picture"}, keys)
+		[]string{"tango-user-test/avatars/" + created.ID + ".png"}, keys)
 
 	// The object carries the feature's content type: a direct read of the
 	// bucket — a presigned URL, a console preview — answers what the
 	// bytes are without consulting the manifest.
 	headed, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{
 		Bucket: awssdk.String("tango-user-test"),
-		Key:    awssdk.String("tango-user-test/avatars/" + created.ID + "/profile-picture"),
+		Key:    awssdk.String("tango-user-test/avatars/" + created.ID + ".png"),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "image/png", awssdk.ToString(headed.ContentType))
