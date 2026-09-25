@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_G9fgx6onpx
 createdAt: 2026-09-19T12:34:10.933279
-updatedAt: 2026-09-19T14:56:13.190810
+updatedAt: 2026-09-25T21:10:43.678762
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
 authentication: {}
@@ -15,7 +15,14 @@ body:
       "display_name": "REPLACE_DISPLAY_NAME"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Update an existing user group by ID
+
+  Mirror of Pocket ID `PUT /api/user-groups/{id}`.
+
+  Parameters:
+  - id (path, required): User Group ID
+  - userGroup (body, required): User group information
 headers:
 - enabled: true
   name: Content-Type
@@ -26,10 +33,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Update user group
-sortPriority: 0.0
+name: '[Pocket ID] Update user group (unimplemented)'
+sortPriority: 3000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/UpdateGroup
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

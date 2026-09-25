@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_QyWgKFRGM6
 createdAt: 2026-09-25T10:33:41.001350
-updatedAt: 2026-09-25T17:14:05.383614
+updatedAt: 2026-09-25T21:08:29.364656
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 body:
   text: |-
     {
-      "id": "REPLACE_USER_ID",
+      "id": "${[ userId ]}",
       "group_ids": []
     }
 bodyType: application/json

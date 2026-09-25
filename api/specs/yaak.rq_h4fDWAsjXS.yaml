@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_h4fDWAsjXS
 createdAt: 2026-09-25T10:33:41.815424
-updatedAt: 2026-09-25T17:13:18.288618
+updatedAt: 2026-09-25T21:09:20.572530
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 body:
   text: |-
     {
-      "username": "REPLACE_ADMIN_USERNAME",
+      "username": "admin",
       "email": "${[ identity ]}"
     }
 bodyType: application/json

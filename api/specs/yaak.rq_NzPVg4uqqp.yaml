@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_NzPVg4uqqp
 createdAt: 2026-09-25T10:33:42.091565
-updatedAt: 2026-09-25T17:13:52.217279
+updatedAt: 2026-09-25T21:07:16.549665
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 body:
   text: |-
     {
-      "id": "REPLACE_USER_ID"
+      "id": "${[ response.body.path(request='rq_6XVjYSdXiu', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC51c2Vyc1sxXS5pZA') ]}"
     }
 bodyType: application/json
 description: |-
@@ -32,7 +32,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Request one-time access email (admin) (unimplemented)'
-sortPriority: 13111.111111111111
+sortPriority: 12333.333333333334
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail
 urlParameters:
 - enabled: true

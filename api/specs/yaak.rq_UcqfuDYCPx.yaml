@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_UcqfuDYCPx
 createdAt: 2026-09-19T12:34:10.925104
-updatedAt: 2026-09-19T18:33:22.472590
+updatedAt: 2026-09-25T21:10:43.677174
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
 authentication: {}
@@ -14,7 +14,17 @@ body:
       "limit": 20
     }
 bodyType: application/json
-description: ListGroups takes a flat PageRequest; the nested object form predates the pagination alignment with the REST envelope.
+description: |-
+  Get a paginated list of user groups with optional search and sorting
+
+  Mirror of Pocket ID `GET /api/user-groups`.
+
+  Parameters:
+  - search (query, optional): Search term to filter user groups by name
+  - pagination[page] (query, optional): Page number for pagination
+  - pagination[limit] (query, optional): Number of items per page
+  - sort[column] (query, optional): Column to sort by
+  - sort[direction] (query, optional): Sort direction (asc or desc)
 headers:
 - enabled: true
   name: Content-Type
@@ -25,10 +35,30 @@ headers:
   value: '1'
   id: null
 method: POST
-name: List user groups
+name: '[Pocket ID] List user groups (unimplemented)'
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/ListGroups
-urlParameters: []
+urlParameters:
+- enabled: false
+  name: search
+  value: ''
+  id: null
+- enabled: false
+  name: pagination[page]
+  value: ''
+  id: null
+- enabled: false
+  name: pagination[limit]
+  value: ''
+  id: null
+- enabled: false
+  name: sort[column]
+  value: ''
+  id: null
+- enabled: false
+  name: sort[direction]
+  value: ''
+  id: null
 settingSendCookies:
   enabled: false
   value: true

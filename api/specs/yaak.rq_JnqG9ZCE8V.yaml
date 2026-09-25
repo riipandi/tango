@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_JnqG9ZCE8V
 createdAt: 2026-09-25T10:33:42.035450
-updatedAt: 2026-09-25T17:13:54.167555
+updatedAt: 2026-09-25T21:07:32.969513
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 body:
   text: |-
     {
-      "email": "user@example.com"
+      "email": "${[ response.body.path(request='rq_6XVjYSdXiu', behavior='smart', ttl='0', result='first', join=', ', path='$.users[1].email') ]}"
     }
 bodyType: application/json
 description: |-
@@ -31,7 +31,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Request one-time access email (unimplemented)'
-sortPriority: 13185.185185185186
+sortPriority: 12555.555555555557
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.OneTimeAccessService/RequestEmail
 urlParameters: []
 settingSendCookies:

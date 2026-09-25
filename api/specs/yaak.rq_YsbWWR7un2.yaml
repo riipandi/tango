@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_YsbWWR7un2
 createdAt: 2026-09-19T12:34:10.939167
-updatedAt: 2026-09-19T14:56:14.742275
+updatedAt: 2026-09-25T21:10:43.690478
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
 authentication: {}
@@ -13,7 +13,13 @@ body:
       "id": "REPLACE_GROUP_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Delete a specific user group by ID
+
+  Mirror of Pocket ID `DELETE /api/user-groups/{id}`.
+
+  Parameters:
+  - id (path, required): User Group ID
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +30,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Delete user group
-sortPriority: 0.0
+name: '[Pocket ID] Delete user group (unimplemented)'
+sortPriority: 4000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/DeleteGroup
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true
