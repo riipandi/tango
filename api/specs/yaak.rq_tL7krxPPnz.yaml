@@ -1,0 +1,41 @@
+type: http_request
+model: http_request
+id: rq_tL7krxPPnz
+createdAt: 2026-09-25T19:19:46.463349
+updatedAt: 2026-09-25T19:19:46.463355
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_DW9SfXAyKe
+authentication: {}
+authenticationType: null
+body:
+  text: |-
+    {
+      "prefix": "horcrux",
+      "uuid": "01920c1e-7bd2-7330-9f12-31f13c9aae3b"
+    }
+bodyType: application/json
+description: Debug-build only. Encodes a prefix and a UUID into the TypeID form the API prints. Refused with a 404 envelope by a release build.
+headers: []
+method: POST
+name: '[Tango] Encode Type ID'
+sortPriority: 0.0
+url: ${[ apiBaseURL ]}/debug/encode-id
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

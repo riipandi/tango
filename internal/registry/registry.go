@@ -103,6 +103,7 @@ func newRouter(i do.Injector, areas []Area) (chi.Router, error) {
 		RateLimiter:   limiter,
 		Modules:       mounted,
 		Authenticator: do.MustInvoke[middleware.Authenticator](i),
+		Injector:      i,
 	}), nil
 }
 

@@ -336,6 +336,17 @@ Passkey ceremonies are a browser contract and stay HTTP.
 | POST | `/rpc/tango.system.v1.VersionService/Current` | Get current deployed version | done — bearer required | `internal/transport.TestRPCVersionAuthBranches`, `internal/transport.TestRPCVersionCurrentWithoutInterceptor` |
 | POST | `/rpc/tango.system.v1.VersionService/Latest` | Get latest available version | done — anonymous; falls back to the deployed build when the feed never answered | `internal/transport.TestRPCVersionAuthBranches`, `internal/transport.TestRPCVersionCurrentWithoutInterceptor` |
 
+## Utilities
+
+Debug-build only: unauthenticated, mounted outside the throttled and bearer-guarded groups, and answered
+with a 404 envelope by a release build. Yaak folder `Utilities`.
+
+| Method | Endpoint | Summary / Yaak Title | Status | Evidence |
+| ------ | -------- | -------------------- | ------ | -------- |
+| GET | `/debug/do` | samber/do web UI (scope tree, service inspection) | debug build only | `internal/transport/devtool_debug.go` |
+| POST | `/debug/encode-id` | Encode Type ID | debug build only — body `{"prefix","uuid"}`, answers the TypeID form | `internal/transport/devtool_debug.go` |
+| POST | `/debug/decode-id` | Decode Type ID | debug build only — body `{"id"}`, answers prefix + uuid + id | `internal/transport/devtool_debug.go` |
+
 ## Well Known
 
 | Method | Endpoint | Summary / Yaak Title | Status | Evidence |

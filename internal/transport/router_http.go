@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/samber/do/v2"
 
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/health"
@@ -43,6 +44,9 @@ type Options struct {
 	// procedures run. A nil authenticator leaves the surface open, which is
 	// the state a test that reads only responses is in.
 	Authenticator Authenticator
+	// Injector is the samber/do container the run composed. Only the debug
+	// build's devtool reads it; a release build ignores the field.
+	Injector do.Injector
 }
 
 // NewRouter builds the HTTP surface: the request pipeline, then the endpoints
@@ -127,6 +131,12 @@ func NewRouter(opts Options) chi.Router {
 
 		mountRPC(throttled, opts.Checker, opts.Authenticator, opts.Modules)
 	})
+
+	// The devtool sits outside the throttled and bearer-guarded groups: a
+	// debug build serves the samber/do web UI and the TypeID codecs, a
+	// release build answers the same paths with a 404 envelope rather than
+	// letting the SPA claim them.
+	mountDevtool(r, opts.Injector)
 
 	// The uploads are served outside the group: a page that loads an image
 	// spends no rate-limit check, the budget belonging to the API a client

@@ -51,6 +51,10 @@ var restPublicRoutes = []middleware.PublicRoute{
 	{Method: http.MethodGet, Pattern: "/api/users/{id}/profile-picture.png"},
 }
 
+// devtoolUIPath is where the samber/do web UI mounts: served by a debug
+// build, refused with a 404 envelope by a release one.
+const devtoolUIPath = "/debug/do"
+
 var rpcRateLimitExclusions = []string{
 	healthCheckPath, // the same readiness a monitor watches over ConnectRPC
 }
