@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
+	"os"
 	"strings"
 	"uuid"
 
@@ -98,6 +100,83 @@ func mayEditPicture(caller *jwtutils.AccessClaims, username string) bool {
 	return caller.IsAdmin || strings.EqualFold(caller.Username, username)
 }
 
+// avatarExtensions map the accepted kinds onto the file name extension the
+// local copy carries.
+var avatarExtensions = map[string]string{
+	"image/png":  ".png",
+	"image/jpeg": ".jpg",
+	"image/webp": ".webp",
+}
+
+// avatarCopyNames are the file names one account's local copy can carry —
+// the accepted kinds only, so the directory is read without a glob.
+func avatarCopyNames(userID uuid.UUID) []string {
+	names := make([]string, 0, len(avatarExtensions))
+	for _, extension := range avatarExtensions {
+		names = append(names, userID.String()+extension)
+	}
+	return names
+}
+
+// writeAvatarCopy leaves the picture as the one file a local deployment
+// stores under the data directory's avatars — the visible form of what the
+// engine holds as chunks. The copies an update's kind change leaves behind
+// are removed first, so one account's picture is one file. Every write runs
+// through an os.Root over the directory, so a name resolves inside it or
+// not at all.
+func (s *Service) writeAvatarCopy(userID uuid.UUID, mime string, data []byte) error {
+	if s.avatarsDir == "" {
+		return nil
+	}
+	root, openErr := os.OpenRoot(s.avatarsDir)
+	if errors.Is(openErr, fs.ErrNotExist) {
+		if err := os.MkdirAll(s.avatarsDir, 0o755); err != nil {
+			return fmt.Errorf("user: create avatar directory: %w", err)
+		}
+		root, openErr = os.OpenRoot(s.avatarsDir)
+	}
+	if openErr != nil {
+		return fmt.Errorf("user: open avatar directory: %w", openErr)
+	}
+	defer root.Close()
+
+	for _, name := range avatarCopyNames(userID) {
+		if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("user: replace avatar copy: %w", err)
+		}
+	}
+	path := userID.String() + avatarExtensions[mime]
+	file, err := root.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("user: write avatar copy: %w", err)
+	}
+	defer file.Close()
+	if _, err := file.Write(data); err != nil {
+		return fmt.Errorf("user: write avatar copy: %w", err)
+	}
+	return nil
+}
+
+// removeAvatarCopy clears the local copy a reset leaves nothing to serve. A
+// missing file is the state a previous removal already reached.
+func (s *Service) removeAvatarCopy(userID uuid.UUID) {
+	if s.avatarsDir == "" {
+		return
+	}
+	root, err := os.OpenRoot(s.avatarsDir)
+	if err != nil {
+		s.log.Warn("user: open avatar directory", slog.String("error", err.Error()))
+		return
+	}
+	defer root.Close()
+
+	for _, name := range avatarCopyNames(userID) {
+		if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			s.log.Warn("user: remove avatar copy", slog.String("name", name), slog.String("error", err.Error()))
+		}
+	}
+}
+
 // UpdateProfilePicture replaces an account's picture. The bytes are sniffed
 // for their kind before anything is stored, then staged into the storage
 // engine and synced in the request — a picture is small, and the read that
@@ -136,7 +215,10 @@ func (s *Service) UpdateProfilePicture(ctx context.Context, id string, caller *j
 	if err := s.pictures.Sync(ctx, key); err != nil {
 		return fmt.Errorf("user: sync picture: %w", err)
 	}
-	if _, err := s.repo.SetProfilePicturePath(ctx, s.pool, userID, key); err != nil {
+	if err := s.writeAvatarCopy(userID, mime, data); err != nil {
+		return err
+	}
+	if _, err := s.repo.SetAvatarURL(ctx, s.pool, userID, key); err != nil {
 		return err
 	}
 	s.log.Info("user: profile picture updated",
@@ -167,12 +249,13 @@ func (s *Service) ResetProfilePicture(ctx context.Context, id string, caller *jw
 		return ErrPictureForbidden
 	}
 
-	if row.ProfilePicturePath != nil {
-		if err := s.pictures.Delete(ctx, *row.ProfilePicturePath); err != nil {
+	if row.AvatarURL != nil {
+		if err := s.pictures.Delete(ctx, *row.AvatarURL); err != nil {
 			return fmt.Errorf("user: delete picture: %w", err)
 		}
+		s.removeAvatarCopy(userID)
 	}
-	if _, err := s.repo.SetProfilePicturePath(ctx, s.pool, userID, ""); err != nil {
+	if _, err := s.repo.SetAvatarURL(ctx, s.pool, userID, ""); err != nil {
 		return err
 	}
 	s.log.Info("user: profile picture reset", slog.String("user_id", userID.String()))
@@ -195,11 +278,11 @@ func (s *Service) ProfilePicture(ctx context.Context, id string) (Picture, error
 	if err != nil {
 		return Picture{}, fmt.Errorf("user: read for picture: %w", err)
 	}
-	if row.ProfilePicturePath == nil {
+	if row.AvatarURL == nil {
 		return Picture{Body: io.NopCloser(bytes.NewReader(nil)), Default: true}, nil
 	}
 
-	manifest, err := s.pictures.Manifest(ctx, *row.ProfilePicturePath)
+	manifest, err := s.pictures.Manifest(ctx, *row.AvatarURL)
 	if errors.Is(err, storage.ErrNotFound) {
 		// The row names a key the engine holds no file for: the picture was
 		// lost without its row. The bundled default answers rather than an
@@ -211,7 +294,7 @@ func (s *Service) ProfilePicture(ctx context.Context, id string) (Picture, error
 		return Picture{}, fmt.Errorf("user: read picture manifest: %w", err)
 	}
 	mime, _ := manifest.File.Metadata["content_type"].(string)
-	body, err := s.pictures.Open(ctx, *row.ProfilePicturePath)
+	body, err := s.pictures.Open(ctx, *row.AvatarURL)
 	if err != nil {
 		return Picture{}, fmt.Errorf("user: open picture: %w", err)
 	}

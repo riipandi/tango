@@ -30,7 +30,7 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 		Checker: health.NewChecker(),
 		Modules: []kernel.Module{
 			signup.NewModule(signup.NewService(nil, nil)),
-			user.NewModule(user.NewService(nil, nil, nil)),
+			user.NewModule(user.NewService(nil, nil, nil, "")),
 			verification.NewModule(verification.NewService(nil, nil, nil, "", nil)),
 		},
 	})

@@ -17,8 +17,17 @@ import (
 
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	"github.com/riipandi/tango/database"
+	"io/fs"
 	"log/slog"
+	"os"
+	"path/filepath"
 
+	awssdk "github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	awshttp "github.com/aws/smithy-go/transport/http"
+	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/pkg/jwtutils"
@@ -61,7 +70,7 @@ func (s *Service) readPicture(ctx context.Context, id string) (io.ReadCloser, st
 
 func testService(t *testing.T, pool *datastore.Postgres) *Service {
 	t.Helper()
-	return NewService(pool, nil, nil)
+	return NewService(pool, nil, nil, "")
 }
 
 // testPictureService builds the service over the real storage engine — the
@@ -74,7 +83,7 @@ func testPictureService(t *testing.T, pool *datastore.Postgres) *Service {
 	manager, err := storage.NewManager(storage.NewFS(t.TempDir()), pool, 32,
 		t.TempDir(), 2, slog.New(slog.DiscardHandler))
 	require.NoError(t, err)
-	return NewService(pool, nil, manager)
+	return NewService(pool, nil, manager, filepath.Join(t.TempDir(), "avatars"))
 }
 
 // passwordCount reads how many credentials an account carries. An account
@@ -416,10 +425,18 @@ func TestThePictureFlowStagesSyncsAndReadsBack(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, picture, read)
 
+	// The local deployment holds the picture as the one file the data
+	// directory's avatars carries — the visible form of what the engine
+	// holds as chunks.
+	name := created.ID + avatarExtensions["image/png"]
+	stored, err := os.ReadFile(filepath.Join(service.avatarsDir, name))
+	require.NoError(t, err)
+	assert.Equal(t, picture, stored)
+
 	// The row names the key the engine holds the file under.
 	var storedPath *string
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select("profile_picture_path")
+	sb.Select("avatar_url")
 	sb.From(UserTable)
 	sb.Where(sb.Equal("id", created.ID))
 	query, args := sb.Build()
@@ -510,12 +527,16 @@ func TestPictureResetFallsBackToTheDefault(t *testing.T) {
 
 	var storedPath *string
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select("profile_picture_path")
+	sb.Select("avatar_url")
 	sb.From(UserTable)
 	sb.Where(sb.Equal("id", created.ID))
 	query, args := sb.Build()
 	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&storedPath))
 	assert.Nil(t, storedPath)
+
+	// The local copy left with the picture.
+	_, err = os.Stat(filepath.Join(service.avatarsDir, created.ID+avatarExtensions["image/png"]))
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
 
 	view, err := service.ProfilePicture(t.Context(), created.ID)
 	require.NoError(t, err)
@@ -546,6 +567,76 @@ func TestPictureRefusesAnUnknownAccount(t *testing.T) {
 	assert.ErrorIs(t, err, ErrUserNotFound)
 	_, err = service.ProfilePicture(t.Context(), id)
 	assert.ErrorIs(t, err, ErrUserNotFound)
+}
+
+// TestThePictureFlowLandsOnS3 runs the same update through the S3-compatible
+// backend — the local driver's twin — and reads the bytes back through the
+// engine, so the picture procedures are indifferent to the store they are
+// given.
+func TestThePictureFlowLandsOnS3(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	backend := testutils.StartMinIO(t.Context(), t)
+	store, err := storage.NewS3(config.S3{
+		AccessKeyID:     backend.AccessKey,
+		AccessKeySecret: backend.Secret,
+		BucketName:      "tango-user-test",
+		EndpointURL:     backend.Endpoint,
+		ForcePathStyle:  true,
+		Region:          "us-east-1",
+		PathPrefix:      "tango-user-test/",
+	})
+	require.NoError(t, err)
+	// The shared container starts empty: the bucket is this test's to make,
+	// and an existing one is fine. The client is built over the same
+	// endpoint the store addresses — the store itself owns no bucket.
+	awsCfg, err := awsconfig.LoadDefaultConfig(t.Context(), awsconfig.WithRegion("us-east-1"),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			backend.AccessKey, backend.Secret, "")),
+		awsconfig.WithBaseEndpoint(backend.Endpoint))
+	require.NoError(t, err)
+	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) { o.UsePathStyle = true })
+	if _, bucketErr := client.CreateBucket(t.Context(), &s3.CreateBucketInput{
+		Bucket: awssdk.String("tango-user-test"),
+	}); bucketErr != nil {
+		var apiErr *awshttp.ResponseError
+		if !errors.As(bucketErr, &apiErr) || apiErr.HTTPStatusCode() != 409 {
+			require.NoError(t, bucketErr)
+		}
+	}
+
+	manager, err := storage.NewManager(store, pool, 32, t.TempDir(), 2, slog.New(slog.DiscardHandler))
+	require.NoError(t, err)
+	service := NewService(pool, nil, manager, "")
+
+	created, err := service.CreateUser(t.Context(), CreateParams{
+		Username: "ada", Email: "ada@example.com", Password: "correct horse",
+		FirstName: "Ada", LastName: "Lovelace",
+	})
+	require.NoError(t, err)
+	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: false}
+
+	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 9, 8, 7}
+	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, claims, picture))
+
+	// The read streams the chunks the backend holds — the same flow the
+	// local driver answers, no S3-specific branch anywhere in the feature.
+	view, mime, err := service.readPicture(t.Context(), created.ID)
+	require.NoError(t, err)
+	defer view.Close()
+	assert.Equal(t, "image/png", mime)
+	read, err := io.ReadAll(view)
+	require.NoError(t, err)
+	assert.Equal(t, picture, read)
+
+	// The reset removes the objects the backend holds, so the account falls
+	// back to the bundled default the same way it does on the local driver.
+	require.NoError(t, service.ResetProfilePicture(t.Context(), created.ID, claims))
+	fallback, err := service.ProfilePicture(t.Context(), created.ID)
+	require.NoError(t, err)
+	defer fallback.Body.Close()
+	assert.True(t, fallback.Default)
 }
 
 // TestPictureProceduresRefuseARunWithoutTheEngine covers the deployment that

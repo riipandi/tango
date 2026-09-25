@@ -27,7 +27,7 @@ func NewRepository() *Repository {
 var userColumns = []string{
 	"id", "username", "email", "first_name", "last_name", "display_name",
 	"locale", "is_admin", "disabled", "email_verified_at", "created_at",
-	"banned_at", "ban_expires", "ban_reason", "profile_picture_path",
+	"banned_at", "ban_expires", "ban_reason", "avatar_url",
 }
 
 // scanUser reads one row into the schema. The nullable columns scan through
@@ -48,7 +48,7 @@ func scanUser(scan func(dest ...any) error) (UserSchema, error) {
 	row.LastName = deref(lastName)
 	row.Locale = deref(locale)
 	row.BanReason = banReason
-	row.ProfilePicturePath = picturePath
+	row.AvatarURL = picturePath
 	return row, nil
 }
 
@@ -235,10 +235,10 @@ func nullIfEmpty(value string) any {
 // SetProfilePicturePath points the account's picture at a storage key, or
 // clears it when the key is empty — the reset's way back to the bundled
 // default picture.
-func (r *Repository) SetProfilePicturePath(ctx context.Context, db datastore.Querier, id uuid.UUID, path string) (bool, error) {
+func (r *Repository) SetAvatarURL(ctx context.Context, db datastore.Querier, id uuid.UUID, path string) (bool, error) {
 	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
 	ub.Update(UserTable)
-	ub.SetMore(ub.Assign("profile_picture_path", nullIfEmpty(path)))
+	ub.SetMore(ub.Assign("avatar_url", nullIfEmpty(path)))
 	ub.Where(ub.Equal("id", id))
 
 	query, args := ub.Build()
