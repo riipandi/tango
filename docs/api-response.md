@@ -29,6 +29,15 @@ require it, and none is part of this envelope contract:
 - OIDC (planned) — its endpoints answer the shapes the specification
   defines, not the envelope.
 
+One field stays camelCase inside an otherwise snake_case body, and it is
+connect's, not ours: the `debug` echo connect attaches to each entry of a
+failure body's `details`. Connect renders it with protobuf's default JSON
+mapping, so it reads `ruleId`, `fieldNumber`. The authority beside it is
+`details[].value` — the base64 detail itself, whose fields are the proto
+ones (`rule_id`, `field`, `message`) and whose field paths name the proto
+field (`user_id`). `debug` is a reading aid, not a contract field: parse
+`value`.
+
 ## Where each fact lives
 
 | Fact                | ConnectRPC (internal, primary)                        | REST (external)                          |

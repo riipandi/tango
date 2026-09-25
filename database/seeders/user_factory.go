@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 	"uuid"
 
 	"github.com/huandu/go-sqlbuilder"
@@ -87,6 +88,7 @@ func applyDefaultUser(
 		LastName:    DefaultUser.LastName,
 		DisplayName: DefaultUser.DisplayName(),
 		IsAdmin:     true,
+		CreatedAt:   time.Now().UTC(),
 	}
 
 	inserted, err := insertUser(ctx, q, row)

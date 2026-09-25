@@ -188,8 +188,7 @@ func (h *rpcHandler) ResetProfilePicture(ctx context.Context, req *connect.Reque
 	if !ok {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
 	}
-
-	if err := h.service.ResetProfilePicture(ctx, req.Msg.UserId, claims); err != nil {
+	if err := h.service.ResetProfilePicture(ctx, req.Msg.Id, claims); err != nil {
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&identityv1.ResetProfilePictureResponse{

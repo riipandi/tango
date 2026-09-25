@@ -538,8 +538,9 @@ message DeleteUserResponse  {
 }
 
 message ResetProfilePictureRequest {
-  // The account whose picture is removed.
-  string user_id = 1 [(buf.validate.field).string.uuid = true];
+  // The account whose picture is removed — the same `id` its sibling
+  // account procedures (GetUser, UpdateUser, DeleteUser) address it by.
+  string id = 1 [(buf.validate.field).string.uuid = true];
 }
 
 message ResetProfilePictureResponse  {
