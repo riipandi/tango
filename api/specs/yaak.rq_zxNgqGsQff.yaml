@@ -2,44 +2,32 @@ type: http_request
 model: http_request
 id: rq_zxNgqGsQff
 createdAt: 2026-09-25T10:33:41.055291
-updatedAt: 2026-09-25T17:38:42.062082
+updatedAt: 2026-09-25T18:17:10.992676
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
 authenticationType: null
 body:
-  text: |-
-    {
-      "userId": "${[ userId ]}",
-      "data": "REPLACE_BASE64_IMAGE"
-    }
-bodyType: application/json
+  filePath: /Users/ariss/Downloads/DALL·E 2023-04-06 14.39.37 - a cool, cute, and stylish astronaout mascot wearing white costum in 2d but looks in 3d isomorphic.png
+bodyType: binary
 description: |-
   Update a specific user's profile picture.
 
-  Ported from Pocket ID `PUT /api/users/{id}/profile-picture` as the
-  `UpdateProfilePicture` procedure. Requires a Bearer token of the account's
-  owner or an administrator; the image bytes travel base64-encoded in the
-  request and are checked against their magic bytes — PNG, JPEG, or WebP, at
-  most 2 MiB. The engine stages the bytes and lands them on the storage
-  backend through the durable queue.
+  Ported from Pocket ID `PUT /api/users/{id}/profile-picture` — the write
+  stays a REST route, because a file upload is a browser's form job, not a
+  protocol procedure. Requires a Bearer token of the account's owner or an
+  administrator; the body is the raw image bytes, checked against their
+  magic bytes — PNG, JPEG, or WebP, at most 2 MiB. The engine stages the
+  bytes and lands them on the storage backend through the durable queue.
 
   Parameters:
-  - userId (string, required): User ID
+  - id (path, required): User ID
   - data (bytes, required): base64-encoded image bytes
-headers:
-- enabled: true
-  name: Content-Type
-  value: application/json
-  id: null
-- enabled: true
-  name: Connect-Protocol-Version
-  value: '1'
-  id: null
-method: POST
+headers: []
+method: PUT
 name: '[Pocket ID] Update user profile picture'
 sortPriority: 11333.333333333334
-url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/UpdateProfilePicture
+url: ${[ apiBaseURL ]}/api/users/${[ userId ]}/profile-picture
 urlParameters:
 - enabled: true
   name: id

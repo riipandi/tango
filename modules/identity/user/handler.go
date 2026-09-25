@@ -10,16 +10,27 @@ import (
 	"github.com/riipandi/tango/pkg/responder"
 )
 
-// The one REST route the feature serves: the picture read. It exists beside
-// the RPC surface because a picture is fetched by an <img> tag, not by a
-// client that speaks the protocol — the URL travels in the SPA's markup and
-// in emails, and neither follows a redirect through the RPC procedure set.
+// maxPictureSize is the read cap the picture write enforces before the bytes
+// reach the service: a picture is an avatar, and the engine's request path
+// stays cheap only while an upload is.
+const maxPictureSize = 2 << 20
+
+// The REST surface the feature claims. It exists beside the RPC procedures
+// because a picture is fetched and sent by a browser — an <img> tag and a
+// form's file picker — not by a client that speaks the protocol.
 //
-// The read is public: a picture the account has answers its bytes, and an
-// account without one answers the bundled default by redirect — the relative
-// location resolves against the host the client reached, so the same handler
-// serves the dev server's proxy and the production binary. An unknown
-// identifier is the one refusal, in the envelope the REST surface answers.
+// The read is public and named in the transport's restPublicRoutes: a stored
+// picture answers its bytes, and an account without one answers the bundled
+// default by redirect — the relative location resolves against the host the
+// client reached, so the same handler serves the dev server's proxy and the
+// production binary. An unknown identifier is the one refusal, in the
+// envelope the REST surface answers.
+//
+// The write is protected: the bearer middleware verified the caller before
+// this handler ran, so the claims are in the context. The body is the
+// picture — the raw bytes, not a wrapper around them — and the read cap
+// bounds it before it reaches the service, which owns the kind check and
+// the owner-or-administrator gate.
 func (m *Module) Mount(r chi.Router) {
 	r.Get("/api/users/{id}/profile-picture.png", func(w http.ResponseWriter, r *http.Request) {
 		picture, err := m.service.ProfilePicture(r.Context(), chi.URLParam(r, "id"))
@@ -49,6 +60,41 @@ func (m *Module) Mount(r chi.Router) {
 		// away mid-body; there is no answer left to send.
 		if _, err := io.Copy(w, picture.Body); err != nil {
 			responder.WriteError(w, r, err)
+		}
+	})
+
+	r.Put("/api/users/{id}/profile-picture", func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := callerFrom(r.Context())
+		if !ok {
+			responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
+			return
+		}
+
+		body := http.MaxBytesReader(w, r.Body, maxPictureSize)
+		data, err := io.ReadAll(body)
+		if err != nil {
+			responder.Fail(w, r, http.StatusRequestEntityTooLarge,
+				"the picture must be at most 2 MiB")
+			return
+		}
+
+		err = m.service.UpdateProfilePicture(r.Context(), chi.URLParam(r, "id"), claims, data)
+		switch {
+		case errors.Is(err, ErrUserNotFound):
+			responder.Fail(w, r, http.StatusNotFound, "user not found")
+		case errors.Is(err, ErrPictureForbidden):
+			responder.Fail(w, r, http.StatusForbidden,
+				"the caller may not edit this account's picture")
+		case errors.Is(err, ErrUnsupportedPicture):
+			responder.Fail(w, r, http.StatusUnsupportedMediaType,
+				"the picture must be a PNG, JPEG, or WebP image")
+		case errors.Is(err, ErrPicturesUnavailable):
+			responder.Fail(w, r, http.StatusServiceUnavailable,
+				"picture storage is not available")
+		case err != nil:
+			responder.WriteError(w, r, err)
+		default:
+			w.WriteHeader(http.StatusNoContent)
 		}
 	})
 }

@@ -104,8 +104,14 @@ func NewRouter(opts Options) chi.Router {
 		})
 
 		// The modules mount inside the group too, so every route a module
-		// claims is throttled by the same policy as the API's own.
-		kernel.Mount(throttled, opts.Modules...)
+		// claims is throttled by the same policy as the API's own. The
+		// bearer middleware wraps the modules' REST routes, and the routes
+		// the API mounts itself — the root and the health endpoint — stay
+		// outside it: they are the surface a monitor reaches.
+		throttled.Group(func(mod chi.Router) {
+			mod.Use(middleware.RESTBearer(opts.Authenticator, restPublicRoutes))
+			kernel.Mount(mod, opts.Modules...)
+		})
 	})
 
 	// The ConnectRPC surface is composed in rpc.go and throttled by the same

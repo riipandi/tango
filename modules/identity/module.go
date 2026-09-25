@@ -58,6 +58,11 @@ type Deps struct {
 	// Verification verifies an account's address over the mailer and the
 	// queue.
 	Verification *verification.Service
+
+	// Storage is the file engine the profile pictures live in. A nil engine
+	// leaves the picture procedures refusing while the account procedures
+	// serve as usual.
+	Storage *storage.Manager
 }
 
 // Module mounts every identity feature.

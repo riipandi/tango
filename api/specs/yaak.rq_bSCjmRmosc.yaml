@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_bSCjmRmosc
 createdAt: 2026-09-25T10:33:41.108464
-updatedAt: 2026-09-25T17:43:27.001019
+updatedAt: 2026-09-25T18:15:23.826022
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -27,11 +27,11 @@ headers:
 - enabled: true
   name: Content-Type
   value: application/json
-  id: null
+  id: Z4W2qBaiP4
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
+  id: E0tGzXIfnW
 method: POST
 name: '[Pocket ID] Reset user profile picture'
 sortPriority: 11555.555555555557

@@ -3,7 +3,7 @@ model: environment
 id: ev_HGobWkJjLK
 workspaceId: wk_kBiMYTkhPP
 createdAt: 2026-09-18T18:57:02.405679
-updatedAt: 2026-09-25T17:45:57.736887
+updatedAt: 2026-09-25T17:52:31.409778
 name: Proxy 8443
 public: true
 base: false
@@ -13,34 +13,22 @@ variables:
 - enabled: true
   name: apiBaseURL
   value: https://localhost:8443
-  id: b3QInK9IFF
+  id: tvXbEumz92
 - enabled: true
   name: identity
   value: admin@example.com
-  id: bM4Uzq6fAN
+  id: vDi50CGJt7
 - enabled: true
   name: password
   value: '@dmin123'
-  id: yhySj0aapR
-- enabled: true
-  name: accessToken
-  value: ${[ response.body.path(request='rq_5SgzmJyWWh', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC5hY2Nlc3NfdG9rZW4') ]}
-  id: Bc3kUvPERu
-- enabled: true
-  name: refreshToken
-  value: ${[ response.body.path(request='rq_5SgzmJyWWh', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC5yZWZyZXNoX3Rva2Vu') ]}
-  id: 5Jj9WDcpTp
-- enabled: true
-  name: userId
-  value: ${[ response.body.path(request='rq_5SgzmJyWWh', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC51c2VyLmlk') ]}
-  id: EvS3HVQ3Z2
+  id: nqpmbVMv8H
 - enabled: true
   name: apiKey
   value: sk_dummy
-  id: Y2uBEhf7EF
+  id: K76czWNf5C
 - enabled: true
   name: remember
   value: 'true'
-  id: jhJZTFhfPB
+  id: 75EpehTE5U
 color: null
 sortPriority: 111.1111111111111

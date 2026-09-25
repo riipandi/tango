@@ -20,6 +20,8 @@ import (
 	"github.com/riipandi/tango/internal/scheduler"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/identity"
+	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/pkg/crypto"
 )
 
@@ -208,6 +210,12 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 				Location: location,
 				Jobs:     jobs.Scheduled(),
 			})
+		}),
+
+		do.Lazy(func(i do.Injector) (middleware.Authenticator, error) {
+			c := do.MustInvoke[*config.Config](i)
+			keys := do.MustInvoke[*jwks.Service](i)
+			return identity.Authenticate(keys, *c), nil
 		}),
 
 		do.Lazy(func(i do.Injector) (middleware.Limiter, error) {

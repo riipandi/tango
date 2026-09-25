@@ -66,6 +66,12 @@ func TestAConsumerServesItsOwnArea(t *testing.T) {
 	do.Override[middleware.Limiter](injector, func(do.Injector) (middleware.Limiter, error) {
 		return allowAll{}, nil
 	})
+	// The authenticator is stubbed for the same reason: the consumer area's
+	// route is protected by default, and the stub is the caller its handler
+	// would read.
+	do.Override[middleware.Authenticator](injector, func(do.Injector) (middleware.Authenticator, error) {
+		return func(context.Context, *http.Request) (any, error) { return "the-caller", nil }, nil
+	})
 
 	router, err := do.Invoke[chi.Router](injector)
 	require.NoError(t, err)

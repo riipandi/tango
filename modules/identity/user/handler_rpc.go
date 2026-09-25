@@ -20,8 +20,10 @@ import (
 // qualifies it, so the name is the feature alone.
 const ModuleName = "user"
 
-// Module serves the account administration procedures. Everything it answers
-// is an RPC procedure, so its HTTP mount is empty by construction.
+// Module serves the account administration procedures: the RPC surface, and
+// the REST routes the picture read and write claim. Authentication is the
+// transport's bearer middleware for both — the module reads the claims the
+// context carries, it never verifies a token itself.
 type Module struct {
 	service *Service
 }
@@ -47,7 +49,6 @@ func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
 	r.Handle(identityv1connect.UserServiceCreateUserProcedure, handler)
 	r.Handle(identityv1connect.UserServiceUpdateUserProcedure, handler)
 	r.Handle(identityv1connect.UserServiceDeleteUserProcedure, handler)
-	r.Handle(identityv1connect.UserServiceUpdateProfilePictureProcedure, handler)
 	r.Handle(identityv1connect.UserServiceResetProfilePictureProcedure, handler)
 }
 
@@ -163,21 +164,6 @@ func (h *rpcHandler) DeleteUser(ctx context.Context, req *connect.Request[identi
 	return connect.NewResponse(&identityv1.DeleteUserResponse{}), nil
 }
 
-// UpdateProfilePicture replaces an account's picture. The write is the
-// account owner's or an administrator's; the service tells the two gates
-// apart and the mapError boundary answers the rest.
-func (h *rpcHandler) UpdateProfilePicture(ctx context.Context, req *connect.Request[identityv1.UpdateProfilePictureRequest]) (*connect.Response[identityv1.UpdateProfilePictureResponse], error) {
-	claims, ok := callerFrom(ctx)
-	if !ok {
-		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
-	}
-
-	if err := h.service.UpdateProfilePicture(ctx, req.Msg.UserId, claims, req.Msg.Data); err != nil {
-		return nil, mapError(err)
-	}
-	return connect.NewResponse(&identityv1.UpdateProfilePictureResponse{}), nil
-}
-
 // ResetProfilePicture removes an account's picture. The same two-gate rule
 // the update carries governs who may reset it.
 func (h *rpcHandler) ResetProfilePicture(ctx context.Context, req *connect.Request[identityv1.ResetProfilePictureRequest]) (*connect.Response[identityv1.ResetProfilePictureResponse], error) {
@@ -250,8 +236,6 @@ func mapError(err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("an administrator cannot delete the account they are signed in with"))
 	case errors.Is(err, ErrPictureForbidden):
 		return connect.NewError(connect.CodePermissionDenied, errors.New("the caller may not edit this account's picture"))
-	case errors.Is(err, ErrUnsupportedPicture):
-		return connect.NewError(connect.CodeInvalidArgument, errors.New("the picture must be a PNG, JPEG, or WebP image"))
 	case errors.Is(err, ErrPicturesUnavailable):
 		return connect.NewError(connect.CodeUnavailable, errors.New("picture storage is not available"))
 	default:

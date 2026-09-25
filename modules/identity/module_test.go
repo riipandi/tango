@@ -80,8 +80,6 @@ func TestTheAreaForwardsFeatureProcedures(t *testing.T) {
 		"the area must forward its features' procedures to the RPC router")
 	assert.True(t, claimed[identityv1connect.UserServiceDeleteUserProcedure],
 		"the area must forward its features' procedures to the RPC router")
-	assert.True(t, claimed[identityv1connect.UserServiceUpdateProfilePictureProcedure],
-		"the area must forward its features' procedures to the RPC router")
 	assert.True(t, claimed[identityv1connect.UserServiceResetProfilePictureProcedure],
 		"the area must forward its features' procedures to the RPC router")
 	assert.True(t, claimed[identityv1connect.EmailVerificationServiceSendEmailProcedure],

@@ -303,7 +303,7 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | POST | `/rpc/tango.identity.v1.UserService/UpdateUser` | Update user | done — admin Bearer; full replace; mandatory names; ban fields as a unit | `modules/identity/user` (service tests) |
 | POST | `/rpc/tango.identity.v1.UserService/DeleteUser` | Delete user | done — admin Bearer; refuses the signed-in account | `modules/identity/user` (service tests) |
 | POST | `/rpc/tango.identity.v1.UserService/UpdateMe` | Update current user | planned — self-service profile; not yet implemented | — |
-| POST | `/rpc/tango.identity.v1.UserService/UpdateProfilePicture` | Update user profile picture | done — owner or admin Bearer; bytes in request, magic-byte sniff (PNG/JPEG/WebP), max 2 MiB; staged then synced in-request | `modules/identity/user` (service + handler tests) |
+| PUT | `/api/users/{id}/profile-picture` | Update user profile picture | done — REST raw-body upload; owner or admin Bearer (transport REST bearer middleware); magic-byte sniff (PNG/JPEG/WebP), max 2 MiB; staged then synced in-request | `modules/identity/user` (service + handler tests) |
 | POST | `/rpc/tango.identity.v1.UserService/ResetProfilePicture` | Reset user profile picture | done — owner or admin Bearer; deletes the stored file and clears the row | `modules/identity/user` (service + handler tests) |
 | POST | `/rpc/tango.identity.v1.UserService/ListUserGroups` | Get user groups | planned — needs the usergroup feature; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.UserService/ReplaceUserGroups` | Update user groups | planned — needs the usergroup feature; not yet implemented | — |

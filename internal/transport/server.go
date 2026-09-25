@@ -39,6 +39,18 @@ var httpRateLimitExclusions = []string{
 	"/api/healthz", // liveness probes and load-balancer checks
 }
 
+// restPublicRoutes lists the REST routes the bearer middleware answers
+// without a caller, beside the rate-limit exclusion list above because both
+// encode the same default in opposite directions: a module route is
+// throttled and protected unless it is named here. The key set is public
+// because a verifier needs it before it can hold a token; the picture read
+// is public because an <img> tag fetches it — an account without a picture
+// answers the bundled default by redirect.
+var restPublicRoutes = []middleware.PublicRoute{
+	{Method: http.MethodGet, Pattern: "/.well-known/jwks.json"},
+	{Method: http.MethodGet, Pattern: "/api/users/{id}/profile-picture.png"},
+}
+
 var rpcRateLimitExclusions = []string{
 	healthCheckPath, // the same readiness a monitor watches over ConnectRPC
 }
