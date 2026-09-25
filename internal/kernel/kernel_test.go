@@ -91,8 +91,8 @@ func TestMountRPCSkipsModulesWithoutProcedures(t *testing.T) {
 		MountRPC(r, nil,
 			mountingModule{name: "plain", methods: map[string]string{http.MethodGet: "/plain"}},
 			rpcMountingModule{
-				mountingModule: mountingModule{name: "rpc"},
-				procedures:     []string{"/tango.test.v1.FeatureService/Ping"},
+				name:       "rpc",
+				procedures: []string{"/tango.test.v1.FeatureService/Ping"},
 			},
 		)
 	})
@@ -109,12 +109,12 @@ func TestMountRPCFailsOnAClaimedTwiceProcedure(t *testing.T) {
 		func() {
 			MountRPC(r, nil,
 				rpcMountingModule{
-					mountingModule: mountingModule{name: "a"},
-					procedures:     []string{"/tango.test.v1.FeatureService/Ping"},
+					name:       "a",
+					procedures: []string{"/tango.test.v1.FeatureService/Ping"},
 				},
 				rpcMountingModule{
-					mountingModule: mountingModule{name: "b"},
-					procedures:     []string{"/tango.test.v1.FeatureService/Ping"},
+					name:       "b",
+					procedures: []string{"/tango.test.v1.FeatureService/Ping"},
 				},
 			)
 		})
