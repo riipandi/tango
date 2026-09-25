@@ -58,7 +58,7 @@ func mailpitConfig(t *testing.T, server *testutils.Mailpit) config.Config {
 	cfg.Mailer.SMTPUsername = server.Username
 	cfg.Mailer.SMTPPassword = server.Password
 	cfg.Mailer.FromEmail = "no-reply@tango.test"
-	cfg.Mailer.FromName = "Tango Test"
+	cfg.Mailer.FromName = "Hogwarts Express"
 	return cfg
 }
 
@@ -67,7 +67,7 @@ func TestSendDeliversATemplatedMessage(t *testing.T) {
 	// and hand it to a real SMTP server.
 	service, server := startMailer(t)
 
-	recipient := "andi@tango.test"
+	recipient := "neveu@tango.test"
 	subject := uniqueSubject("mailer smoke")
 	require.NoError(t, service.Send(t.Context(), mailer.Request{
 		To:       []string{recipient},
@@ -130,10 +130,10 @@ func TestSendReportsRejectedCredentials(t *testing.T) {
 	require.NoError(t, err)
 
 	err = mailer.NewService(client, templates).Send(t.Context(), mailer.Request{
-		To:       []string{"andi@tango.test"},
+		To:       []string{"neveu@tango.test"},
 		Subject:  "should not arrive",
 		Template: mailer.TemplateTestEmail,
-		View:     mailer.View{Email: "andi@tango.test"},
+		View:     mailer.View{Email: "neveu@tango.test"},
 	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, mailer.ErrAuth)
@@ -155,7 +155,7 @@ func TestSendAllowsPlaintextCredentialsToALoopbackServer(t *testing.T) {
 
 	subject := uniqueSubject("mailer loopback plaintext")
 	require.NoError(t, client.Send(t.Context(), mailer.Message{
-		To:      []string{"andi@tango.test"},
+		To:      []string{"neveu@tango.test"},
 		Subject: subject,
 		Text:    "Hello",
 	}))

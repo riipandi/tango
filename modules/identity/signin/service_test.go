@@ -97,7 +97,7 @@ func createAccount(t *testing.T, pool *datastore.Postgres, username, email, pass
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto("public.users")
 	ib.Cols("id", "username", "email", "display_name", "disabled", "banned_at", "ban_expires")
-	ib.Values(id, fixture.username, fixture.email, "Test User", fixture.disabled, fixture.bannedAt, fixture.banExpires)
+	ib.Values(id, fixture.username, fixture.email, "Hogwarts Student", fixture.disabled, fixture.bannedAt, fixture.banExpires)
 	query, args := ib.Build()
 	_, err = pool.Exec(t.Context(), query, args...)
 	require.NoError(t, err)
@@ -119,11 +119,11 @@ func TestSignInIssuesTheTokenPair(t *testing.T) {
 	service := testService(t, pool)
 	ctx := t.Context()
 
-	const password = "correct horse"
-	userID := createAccount(t, pool, "ada", "ada@example.com", password, nil)
+	const password = "expecto-patronum"
+	userID := createAccount(t, pool, "hermione", "hermione@example.com", password, nil)
 
 	result, err := service.SignIn(ctx, Params{
-		Identity:  "ada@example.com",
+		Identity:  "hermione@example.com",
 		Password:  password,
 		UserAgent: "signin_test/1",
 		IPAddress: "192.0.2.10",
@@ -131,7 +131,7 @@ func TestSignInIssuesTheTokenPair(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, TokenType, result.TokenType)
-	assert.Equal(t, "ada@example.com", result.User.Email)
+	assert.Equal(t, "hermione@example.com", result.User.Email)
 	assert.NotEmpty(t, result.RefreshToken)
 	assert.Equal(t, int32(testConfig().Auth.AccessTTL.Seconds()), result.ExpiresIn)
 
@@ -160,7 +160,7 @@ func TestSignInIssuesTheTokenPair(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, userID.String(), verified.Subject)
 	assert.Equal(t, result.SessionID, verified.Private.SessionID)
-	assert.Equal(t, "ada@example.com", verified.Private.Email)
+	assert.Equal(t, "hermione@example.com", verified.Private.Email)
 	assert.False(t, verified.Private.IsAdmin)
 
 	// The refresh token is not stored in the clear, the caller address
@@ -201,9 +201,9 @@ func TestSignInAcceptsUsernameCaseInsensitively(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	createAccount(t, pool, "ada", "ada@example.com", "correct horse", nil)
+	createAccount(t, pool, "hermione", "hermione@example.com", "expecto-patronum", nil)
 
-	_, err := service.SignIn(t.Context(), Params{Identity: "ADA", Password: "correct horse"})
+	_, err := service.SignIn(t.Context(), Params{Identity: "HERMIONE", Password: "expecto-patronum"})
 	require.NoError(t, err)
 }
 
@@ -213,13 +213,13 @@ func TestSignInHidesWhichHalfFailed(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	createAccount(t, pool, "ada", "ada@example.com", "correct horse", nil)
+	createAccount(t, pool, "hermione", "hermione@example.com", "expecto-patronum", nil)
 
 	for name, params := range map[string]Params{
-		"unknown email":        {Identity: "nobody@example.com", Password: "correct horse"},
-		"unknown username":     {Identity: "nobody", Password: "correct horse"},
-		"wrong password":       {Identity: "ada@example.com", Password: "wrong horse"},
-		"cased email mismatch": {Identity: "ADA@EXAMPLE.COM", Password: "correct horse"},
+		"unknown email":        {Identity: "nobody@example.com", Password: "expecto-patronum"},
+		"unknown username":     {Identity: "nobody", Password: "expecto-patronum"},
+		"wrong password":       {Identity: "hermione@example.com", Password: "wrong horse"},
+		"cased email mismatch": {Identity: "ADA@EXAMPLE.COM", Password: "expecto-patronum"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := service.SignIn(t.Context(), params)
@@ -274,9 +274,9 @@ func TestSignInRefusesTheStatesThatCannotSignIn(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			createAccount(t, pool, tc.name, tc.name+"@example.com", "correct horse", tc.mutate)
+			createAccount(t, pool, tc.name, tc.name+"@example.com", "expecto-patronum", tc.mutate)
 
-			result, err := service.SignIn(t.Context(), Params{Identity: tc.name, Password: "correct horse"})
+			result, err := service.SignIn(t.Context(), Params{Identity: tc.name, Password: "expecto-patronum"})
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
 				return
@@ -293,9 +293,9 @@ func TestSignInStoresANullAddressWhenNoneIsKnown(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	createAccount(t, pool, "ada", "ada@example.com", "correct horse", nil)
+	createAccount(t, pool, "hermione", "hermione@example.com", "expecto-patronum", nil)
 
-	result, err := service.SignIn(t.Context(), Params{Identity: "ada", Password: "correct horse"})
+	result, err := service.SignIn(t.Context(), Params{Identity: "hermione", Password: "expecto-patronum"})
 	require.NoError(t, err)
 
 	sid, err := typeid.Parse[session.SessionID](result.SessionID)
@@ -325,11 +325,11 @@ func TestRememberSelectsTheConfiguredLifetime(t *testing.T) {
 	cfg.Auth.RefreshLongTTL = 48 * time.Hour
 	service := NewService(cfg, NewRepository(pool), jwks.NewService(cfg, nil, nil), nil)
 
-	createAccount(t, pool, "ada", "ada@example.com", "correct horse", nil)
+	createAccount(t, pool, "hermione", "hermione@example.com", "expecto-patronum", nil)
 
 	for name, params := range map[string]Params{
-		"short window": {Identity: "ada", Password: "correct horse"},
-		"long window":  {Identity: "ada", Password: "correct horse", Remember: true},
+		"short window": {Identity: "hermione", Password: "expecto-patronum"},
+		"long window":  {Identity: "hermione", Password: "expecto-patronum", Remember: true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result, err := service.SignIn(t.Context(), params)

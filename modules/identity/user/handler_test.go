@@ -34,8 +34,8 @@ func testVerifier(t *testing.T) (*jwtutils.AccessVerifier, string) {
 	require.NoError(t, err)
 	signer, err := jwtutils.NewSigner[jwtutils.AccessClaims](key, algorithm)
 	require.NoError(t, err)
-	token, err := signer.Sign(jwtutils.AccessClaims{Username: "ada", IsAdmin: true},
-		jwtutils.Standard{Issuer: cfg.Auth.Issuer, Subject: "ada", IssuedAt: time.Now()})
+	token, err := signer.Sign(jwtutils.AccessClaims{Username: "hermione", IsAdmin: true},
+		jwtutils.Standard{Issuer: cfg.Auth.Issuer, Subject: "hermione", IssuedAt: time.Now()})
 	require.NoError(t, err)
 	return jwtutils.NewAccessVerifier(keys, cfg.Auth.Issuer), token
 }
@@ -50,8 +50,8 @@ func TestThePictureReadServesTheRESTRoute(t *testing.T) {
 	pool := migratedPool(t)
 	service := testPictureService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
-		Username: "ada", Email: "ada@example.com", Password: "correct horse",
-		FirstName: "Ada", LastName: "Lovelace",
+		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
+		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
 	verifier, token := testVerifier(t)

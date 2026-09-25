@@ -100,27 +100,27 @@ func TestSignupCreatesTheAccount(t *testing.T) {
 
 	pool := migratedPool(t)
 	service := testService(t, pool)
-	insertToken(t, pool, "valid-token", 3, 0)
+	insertToken(t, pool, "elder-wand", 3, 0)
 
 	user, err := service.Signup(t.Context(), Params{
-		Username:  "ada",
-		Email:     "ada@example.com",
-		Password:  "correct horse",
-		Token:     "valid-token",
-		FirstName: "Ada",
-		LastName:  "Lovelace",
+		Username:  "hermione",
+		Email:     "hermione@example.com",
+		Password:  "expecto-patronum",
+		Token:     "elder-wand",
+		FirstName: "Hermione",
+		LastName:  "Granger",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "Ada Lovelace", user.DisplayName)
+	assert.Equal(t, "Hermione Granger", user.DisplayName)
 
 	// The answer is the canonical account view: the names, the creation
 	// instant the database stamped, and the unverified state.
-	assert.Equal(t, "ada", user.Username)
-	assert.Equal(t, "ada@example.com", user.Email)
+	assert.Equal(t, "hermione", user.Username)
+	assert.Equal(t, "hermione@example.com", user.Email)
 	require.NotNil(t, user.FirstName)
-	assert.Equal(t, "Ada", *user.FirstName)
+	assert.Equal(t, "Hermione", *user.FirstName)
 	require.NotNil(t, user.LastName)
-	assert.Equal(t, "Lovelace", *user.LastName)
+	assert.Equal(t, "Granger", *user.LastName)
 	assert.False(t, user.EmailVerified)
 	assert.False(t, user.IsAdmin)
 	assert.False(t, user.Disabled)
@@ -131,13 +131,13 @@ func TestSignupCreatesTheAccount(t *testing.T) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("email", "display_name", "email_verified_at", "is_admin")
 	sb.From("public.users")
-	sb.Where(sb.Equal("username", "ada"))
+	sb.Where(sb.Equal("username", "hermione"))
 	query, args := sb.Build()
 	var email, displayName string
 	var verifiedAt *time.Time
 	var isAdmin bool
 	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&email, &displayName, &verifiedAt, &isAdmin))
-	assert.Equal(t, "ada@example.com", email)
+	assert.Equal(t, "hermione@example.com", email)
 	assert.Nil(t, verifiedAt)
 	assert.False(t, isAdmin)
 
@@ -150,17 +150,17 @@ func TestSignupCreatesTheAccount(t *testing.T) {
 	query, args = pb.Build()
 	var passwordHash string
 	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&passwordHash))
-	match, err := crypto.NewPasswordHasher().Verify("correct horse", passwordHash)
+	match, err := crypto.NewPasswordHasher().Verify("expecto-patronum", passwordHash)
 	require.NoError(t, err)
 	assert.True(t, match)
 
-	assert.Equal(t, int32(1), tokenUsageCount(t, pool, "valid-token"))
+	assert.Equal(t, int32(1), tokenUsageCount(t, pool, "elder-wand"))
 
 	// The password the caller chose signs in immediately.
 	signinService := signin.NewService(testConfig(), signin.NewRepository(pool), jwks.NewService(testConfig(), nil, nil), nil)
 	result, err := signinService.SignIn(t.Context(), signin.Params{
-		Identity: "ada",
-		Password: "correct horse",
+		Identity: "hermione",
+		Password: "expecto-patronum",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, user.ID, result.User.ID)
@@ -179,18 +179,18 @@ func TestSignupComposesTheDisplayNameFromTheNames(t *testing.T) {
 
 	pool := migratedPool(t)
 	service := testService(t, pool)
-	insertToken(t, pool, "valid-token", 1, 0)
+	insertToken(t, pool, "elder-wand", 1, 0)
 
 	user, err := service.Signup(t.Context(), Params{
-		Username:  "ada",
-		Email:     "ada@example.com",
-		Password:  "correct horse",
-		Token:     "valid-token",
-		FirstName: "Ada",
-		LastName:  "Lovelace",
+		Username:  "hermione",
+		Email:     "hermione@example.com",
+		Password:  "expecto-patronum",
+		Token:     "elder-wand",
+		FirstName: "Hermione",
+		LastName:  "Granger",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "Ada Lovelace", user.DisplayName)
+	assert.Equal(t, "Hermione Granger", user.DisplayName)
 }
 
 func TestSignupRequiresValidToken(t *testing.T) {
@@ -201,8 +201,8 @@ func TestSignupRequiresValidToken(t *testing.T) {
 
 	// The unknown token shares the failure with the expired and the spent
 	// one, so the endpoint does not disclose which half was wrong.
-	insertToken(t, pool, "spent-token", 1, 1)
-	insertToken(t, pool, "exhausted-token", 2, 2)
+	insertToken(t, pool, "spent-horcrux", 1, 1)
+	insertToken(t, pool, "exhausted-horcrux", 2, 2)
 
 	expired := testService(t, pool)
 	expired.now = func() time.Time { return time.Now().Add(2 * time.Hour) }
@@ -212,15 +212,15 @@ func TestSignupRequiresValidToken(t *testing.T) {
 		token   string
 	}{
 		"unknown":   {service, "nobody-token"},
-		"spent":     {service, "spent-token"},
-		"exhausted": {service, "exhausted-token"},
-		"expired":   {expired, "exhausted-token"},
+		"spent":     {service, "spent-horcrux"},
+		"exhausted": {service, "exhausted-horcrux"},
+		"expired":   {expired, "exhausted-horcrux"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := tc.service.Signup(t.Context(), Params{FirstName: "Ada", LastName: "Lovelace",
-				Username: "ada",
-				Email:    "ada@example.com",
-				Password: "correct horse",
+			_, err := tc.service.Signup(t.Context(), Params{FirstName: "Hermione", LastName: "Granger",
+				Username: "hermione",
+				Email:    "hermione@example.com",
+				Password: "expecto-patronum",
 				Token:    tc.token,
 			})
 			require.ErrorIs(t, err, ErrInvalidToken)
@@ -236,14 +236,14 @@ func TestSignupConsumesASingleUseTokenOnce(t *testing.T) {
 	service := testService(t, pool)
 	insertToken(t, pool, "single-use", 1, 0)
 
-	params := Params{FirstName: "Ada", LastName: "Lovelace", Username: "ada", Email: "ada@example.com", Password: "correct horse", Token: "single-use"}
+	params := Params{FirstName: "Hermione", LastName: "Granger", Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum", Token: "single-use"}
 	_, err := service.Signup(t.Context(), params)
 	require.NoError(t, err)
 
-	_, err = service.Signup(t.Context(), Params{FirstName: "Ada", LastName: "Lovelace",
-		Username: "grace",
-		Email:    "grace@example.com",
-		Password: "correct horse",
+	_, err = service.Signup(t.Context(), Params{FirstName: "Hermione", LastName: "Granger",
+		Username: "langdon",
+		Email:    "langdon@example.com",
+		Password: "expecto-patronum",
 		Token:    "single-use",
 	})
 	require.ErrorIs(t, err, ErrInvalidToken)
@@ -258,22 +258,22 @@ func TestSignupRejectsDuplicateAccount(t *testing.T) {
 
 	pool := migratedPool(t)
 	service := testService(t, pool)
-	insertToken(t, pool, "first-token", 1, 0)
-	for _, token := range []string{"second-token", "third-token", "fourth-token"} {
+	insertToken(t, pool, "philosophers-stone", 1, 0)
+	for _, token := range []string{"chamber-of-secrets", "prisoner-of-azkaban", "goblet-of-fire"} {
 		insertToken(t, pool, token, 1, 0)
 	}
 
-	_, err := service.Signup(t.Context(), Params{FirstName: "Ada", LastName: "Lovelace",
-		Username: "ada", Email: "ada@example.com", Password: "correct horse", Token: "first-token",
+	_, err := service.Signup(t.Context(), Params{FirstName: "Hermione", LastName: "Granger",
+		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum", Token: "philosophers-stone",
 	})
 	require.NoError(t, err)
 
 	// The email is TEXT matched exactly, the way its unique index is, so a
 	// cased variant of a live address is a different address and signs up.
 	for name, params := range map[string]Params{
-		"same username":  {Username: "ada", Email: "grace@example.com", Password: "correct horse", Token: "second-token", FirstName: "Ada", LastName: "Lovelace"},
-		"cased username": {Username: "ADA", Email: "grace@example.com", Password: "correct horse", Token: "third-token", FirstName: "Ada", LastName: "Lovelace"},
-		"same email":     {Username: "grace", Email: "ada@example.com", Password: "correct horse", Token: "fourth-token", FirstName: "Grace", LastName: "Hopper"},
+		"same username":  {Username: "hermione", Email: "langdon@example.com", Password: "expecto-patronum", Token: "chamber-of-secrets", FirstName: "Hermione", LastName: "Granger"},
+		"cased username": {Username: "HERMIONE", Email: "langdon@example.com", Password: "expecto-patronum", Token: "prisoner-of-azkaban", FirstName: "Hermione", LastName: "Granger"},
+		"same email":     {Username: "langdon", Email: "hermione@example.com", Password: "expecto-patronum", Token: "goblet-of-fire", FirstName: "Robert", LastName: "Langdon"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := service.Signup(t.Context(), params)
@@ -283,7 +283,7 @@ func TestSignupRejectsDuplicateAccount(t *testing.T) {
 
 	// The refused attempts wrote nothing: one account, no use spent.
 	assert.Equal(t, 1, userCount(t, pool))
-	assert.Equal(t, int32(0), tokenUsageCount(t, pool, "second-token"))
+	assert.Equal(t, int32(0), tokenUsageCount(t, pool, "chamber-of-secrets"))
 }
 
 func TestMapErrorCarriesTheConnectCodes(t *testing.T) {
@@ -331,10 +331,10 @@ func TestSignupTokenIssueStoresTheHashAlone(t *testing.T) {
 	assert.WithinDuration(t, time.Now().Add(24*time.Hour), expiresAt, time.Minute)
 
 	// The raw value admits the sign-up it was issued for.
-	user, err := service.Signup(t.Context(), Params{FirstName: "Ada", LastName: "Lovelace",
-		Username: "ada",
-		Email:    "ada@example.com",
-		Password: "correct horse",
+	user, err := service.Signup(t.Context(), Params{FirstName: "Hermione", LastName: "Granger",
+		Username: "hermione",
+		Email:    "hermione@example.com",
+		Password: "expecto-patronum",
 		Token:    created.RawToken,
 	})
 	require.NoError(t, err)

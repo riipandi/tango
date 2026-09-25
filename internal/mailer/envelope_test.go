@@ -24,7 +24,7 @@ func testConfig() config.Config {
 	cfg := config.Default()
 	cfg.Mailer.SMTPHost = "smtp.example.com"
 	cfg.Mailer.SMTPPort = 587
-	cfg.Mailer.FromEmail = "no-reply@example.com"
+	cfg.Mailer.FromEmail = "owl-post@example.com"
 	cfg.Mailer.FromName = "Tango"
 	return cfg
 }
@@ -93,7 +93,7 @@ func readBody(msg *mail.Message) (string, error) {
 func TestEnvelopeWritesBothBodiesAsAlternatives(t *testing.T) {
 	m := testMailer(t)
 	raw, err := renderMessage(t, m, Message{
-		To:      []string{"user@example.com"},
+		To:      []string{"muggle@example.com"},
 		Subject: "Hello",
 		HTML:    "<p>Hello</p>",
 		Text:    "Hello",
@@ -122,7 +122,7 @@ func TestEnvelopeWritesBothBodiesAsAlternatives(t *testing.T) {
 
 func TestEnvelopeWritesOneBodyWithoutAMultipartWrapper(t *testing.T) {
 	m := testMailer(t)
-	raw, err := renderMessage(t, m, Message{To: []string{"user@example.com"}, Subject: "Hello", Text: "Hello"})
+	raw, err := renderMessage(t, m, Message{To: []string{"muggle@example.com"}, Subject: "Hello", Text: "Hello"})
 	require.NoError(t, err)
 
 	msg := parseMessage(t, raw)
@@ -138,42 +138,42 @@ func TestEnvelopeOmitsAnEmptyToHeader(t *testing.T) {
 	// than none at all, so the header is written only when it has an address.
 	m := testMailer(t)
 	env, err := m.prepare(Message{
-		Cc:      []string{"watcher@example.com"},
+		Cc:      []string{"dumbledore@example.com"},
 		Subject: "Hello",
 	}, mustBody(t, "", "Hello"))
 	require.NoError(t, err)
 
-	assert.Equal(t, []string{"watcher@example.com"}, env.rcpt)
+	assert.Equal(t, []string{"dumbledore@example.com"}, env.rcpt)
 	var out bytes.Buffer
 	require.NoError(t, env.writeTo(&out))
 
 	msg := parseMessage(t, out.Bytes())
 	assert.Empty(t, msg.header.Get("To"))
-	assert.Equal(t, "watcher@example.com", msg.header.Get("Cc"))
+	assert.Equal(t, "dumbledore@example.com", msg.header.Get("Cc"))
 }
 
 func TestEnvelopeKeepsBccOffTheHeaders(t *testing.T) {
 	m := testMailer(t)
 	env, err := m.prepare(Message{
-		To:      []string{"user@example.com"},
-		Bcc:     []string{"audit@example.com"},
+		To:      []string{"muggle@example.com"},
+		Bcc:     []string{"mcgonagall@example.com"},
 		Subject: "Hello",
 	}, mustBody(t, "", "Hello"))
 	require.NoError(t, err)
 
 	// The blind recipient is an envelope recipient only.
-	assert.Equal(t, []string{"user@example.com", "audit@example.com"}, env.rcpt)
+	assert.Equal(t, []string{"muggle@example.com", "mcgonagall@example.com"}, env.rcpt)
 
 	var out bytes.Buffer
 	require.NoError(t, env.writeTo(&out))
-	assert.NotContains(t, out.String(), "audit@example.com")
+	assert.NotContains(t, out.String(), "mcgonagall@example.com")
 	assert.Empty(t, parseMessage(t, out.Bytes()).header.Get("Bcc"))
 }
 
 func TestEnvelopeEncodesNonASCII(t *testing.T) {
 	m := testMailer(t)
 	raw, err := renderMessage(t, m, Message{
-		To:      []string{"user@example.com"},
+		To:      []string{"muggle@example.com"},
 		Subject: "Pendaftaran — selesai",
 		HTML:    "<p>Halo, Andi</p>",
 	})
@@ -191,7 +191,7 @@ func TestEnvelopeEncodesNonASCII(t *testing.T) {
 func TestEnvelopeEncodesTheBodyAsQuotedPrintable(t *testing.T) {
 	m := testMailer(t)
 	raw, err := renderMessage(t, m, Message{
-		To:      []string{"user@example.com"},
+		To:      []string{"muggle@example.com"},
 		Subject: "Hello",
 		Text:    "Halo — panjang " + strings.Repeat("x", 200),
 	})
@@ -218,7 +218,7 @@ func TestEnvelopeRefusesHeaderInjection(t *testing.T) {
 	assert.Contains(t, err.Error(), "line break")
 
 	_, err = renderMessage(t, m, Message{
-		To:      []string{"user@example.com"},
+		To:      []string{"muggle@example.com"},
 		Subject: "Hello",
 		Text:    "Hello",
 		Headers: map[string]string{"X-Note": "value\r\nBcc: attacker@example.com"},
@@ -232,7 +232,7 @@ func TestEnvelopeRefusesAnEmptyMessage(t *testing.T) {
 
 	for name, msg := range map[string]Message{
 		"no recipient": {Subject: "Hello", Text: "Hello"},
-		"no subject":   {To: []string{"user@example.com"}, Text: "Hello"},
+		"no subject":   {To: []string{"muggle@example.com"}, Text: "Hello"},
 		"bad address":  {To: []string{"not-an-address"}, Subject: "Hello", Text: "Hello"},
 	} {
 		_, err := renderMessage(t, m, msg)
@@ -267,7 +267,7 @@ func TestSendRefusesWithoutAServer(t *testing.T) {
 	require.NoError(t, err)
 
 	err = client.Send(t.Context(), Message{
-		To:      []string{"user@example.com"},
+		To:      []string{"muggle@example.com"},
 		Subject: "Hello",
 		Text:    "Hello",
 	})
@@ -326,7 +326,7 @@ func TestClassifyTreatsATransportFailureAsNetwork(t *testing.T) {
 }
 
 func TestLocalNameIsTheSendersDomain(t *testing.T) {
-	assert.Equal(t, "example.com", localName("no-reply@example.com"))
+	assert.Equal(t, "example.com", localName("owl-post@example.com"))
 	assert.Equal(t, "localhost", localName("no-reply"))
 }
 
@@ -394,10 +394,10 @@ func TestTemplatedBodyIsStreamedNotBuffered(t *testing.T) {
 
 	m := testMailer(t)
 	raw, err := renderTemplateMessage(t, m, templates, Message{
-		To:      []string{"andi@example.com"},
+		To:      []string{"neveu@example.com"},
 		Subject: "Reset your password",
 	}, TemplatePasswordReset, View{Data: PasswordResetData{
-		Email:     "andi@example.com",
+		Email:     "neveu@example.com",
 		ResetLink: "https://app.example.com/reset?token=abc",
 	}})
 	require.NoError(t, err)
@@ -420,7 +420,7 @@ func TestRenderToMatchesRender(t *testing.T) {
 	templates, err := NewTemplates(SenderFrom(config.Default()))
 	require.NoError(t, err)
 	view := View{Data: PasswordResetData{
-		Email:     "andi@example.com",
+		Email:     "neveu@example.com",
 		ResetLink: "https://app.example.com/reset?token=abc",
 	}}
 

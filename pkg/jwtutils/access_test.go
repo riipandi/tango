@@ -53,8 +53,8 @@ func TestAccessVerifierRoundTripsTheClaims(t *testing.T) {
 	signer = signer.WithIssuer("https://tango.example").WithTTL(time.Hour)
 
 	token, err := signer.Sign(AccessClaims{
-		Email:     "ada@example.com",
-		Username:  "ada",
+		Email:     "hermione@example.com",
+		Username:  "hermione",
 		IsAdmin:   true,
 		SessionID: "sess_01abc",
 	}, Standard{Subject: "0197abc", IssuedAt: time.Now()})
@@ -64,8 +64,8 @@ func TestAccessVerifierRoundTripsTheClaims(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "0197abc", verified.Subject)
-	assert.Equal(t, "ada@example.com", verified.Private.Email)
-	assert.Equal(t, "ada", verified.Private.Username)
+	assert.Equal(t, "hermione@example.com", verified.Private.Email)
+	assert.Equal(t, "hermione", verified.Private.Username)
 	assert.True(t, verified.Private.IsAdmin)
 	assert.Equal(t, "sess_01abc", verified.Private.SessionID)
 }

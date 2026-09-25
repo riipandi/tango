@@ -10,7 +10,7 @@ import (
 
 func benchView() mailer.View {
 	return mailer.View{Data: mailer.PasswordResetData{
-		Email:     "andi@example.com",
+		Email:     "neveu@example.com",
 		ResetLink: "https://app.example.com/reset?token=0123456789abcdef",
 	}}
 }

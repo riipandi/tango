@@ -41,15 +41,15 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 	}{
 		"bad username": {
 			"/tango.identity.v1.SignupService/Signup",
-			`{"username":"a","email":"ada@example.com","password":"correct horse","token":"tok"}`,
+			`{"username":"a","email":"hermione@example.com","password":"expecto-patronum","token":"elder-wand"}`,
 		},
 		"missing password": {
 			"/tango.identity.v1.SignupService/Signup",
-			`{"username":"ada","email":"ada@example.com","token":"tok"}`,
+			`{"username":"hermione","email":"hermione@example.com","token":"elder-wand"}`,
 		},
 		"bad email": {
 			"/tango.identity.v1.SignupService/Signup",
-			`{"username":"ada","email":"ada@example","password":"correct horse","token":"tok"}`,
+			`{"username":"hermione","email":"hermione@example","password":"expecto-patronum","token":"elder-wand"}`,
 		},
 		"ttl below the window": {
 			"/tango.identity.v1.SignupService/CreateSignupToken",
@@ -69,11 +69,11 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 		},
 		"empty display name": {
 			"/tango.identity.v1.UserService/UpdateUser",
-			`{"id":"018f0000-0000-7000-8000-000000000000","username":"ada","email":"ada@example.com","display_name":""}`,
+			`{"id":"018f0000-0000-7000-8000-000000000000","username":"hermione","email":"hermione@example.com","display_name":""}`,
 		},
 		"bad username on update": {
 			"/tango.identity.v1.UserService/UpdateUser",
-			`{"id":"018f0000-0000-7000-8000-000000000000","username":"a b","email":"ada@example.com","display_name":"Ada"}`,
+			`{"id":"018f0000-0000-7000-8000-000000000000","username":"a b","email":"hermione@example.com","display_name":"Hermione"}`,
 		},
 		"empty verification token": {
 			"/tango.identity.v1.EmailVerificationService/VerifyEmail",
@@ -81,11 +81,11 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 		},
 		"empty first name on create": {
 			"/tango.identity.v1.UserService/CreateUser",
-			`{"username":"ada","email":"ada@example.com","first_name":"","last_name":"Lovelace"}`,
+			`{"username":"hermione","email":"hermione@example.com","first_name":"","last_name":"Granger"}`,
 		},
 		"empty names on signup": {
 			"/tango.identity.v1.SignupService/Signup",
-			`{"username":"ada","email":"ada@example.com","password":"correct horse","token":"tok"}`,
+			`{"username":"hermione","email":"hermione@example.com","password":"expecto-patronum","token":"elder-wand"}`,
 		},
 		"bad user id on reset": {
 			"/tango.identity.v1.UserService/ResetProfilePicture",

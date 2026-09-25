@@ -39,9 +39,9 @@ func TestRegistryWiresTheService(t *testing.T) {
 
 	// The templates are the embedded set, not an empty placeholder.
 	body, err := service.Templates().Render(mailer.TemplateTestEmail, mailer.View{
-		Email: "andi@example.com",
-		Data:  mailer.TestEmailData{Email: "andi@example.com"},
+		Email: "neveu@example.com",
+		Data:  mailer.TestEmailData{Email: "neveu@example.com"},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, body.HTML, "andi@example.com")
+	assert.Contains(t, body.HTML, "neveu@example.com")
 }

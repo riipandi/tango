@@ -48,14 +48,14 @@ func fixtures() map[string]mailer.View {
 			Name: "Andi", APIKeyName: "deploy key", ExpiresAt: "2 January 2026",
 		}},
 		mailer.TemplateEmailChangeNotice: {Data: mailer.EmailChangeNoticeData{
-			Name: "Andi", OldEmail: "old@example.com", NewEmail: "new@example.com",
+			Name: "Andi", OldEmail: "flamel@example.com", NewEmail: "neville@example.com",
 		}},
 		mailer.TemplateEmailChangeRequest: {Data: mailer.EmailChangeRequestData{
-			Name: "Andi", OldEmail: "old@example.com", NewEmail: "new@example.com",
+			Name: "Andi", OldEmail: "flamel@example.com", NewEmail: "neville@example.com",
 			ConfirmLink: "https://app.example.com/confirm?token=abc",
 		}},
 		mailer.TemplateEmailChangeSuccess: {Data: mailer.EmailChangeSuccessData{
-			Name: "Andi", NewEmail: "new@example.com",
+			Name: "Andi", NewEmail: "neville@example.com",
 		}},
 		mailer.TemplateEmailVerification: {Data: mailer.EmailVerificationData{
 			UserFullName: "Andi Pratama", VerificationLink: "https://app.example.com/verify?code=abc",
@@ -70,10 +70,10 @@ func fixtures() map[string]mailer.View {
 			ExpirationString:  "5 minutes",
 		}},
 		mailer.TemplatePasswordReset: {Data: mailer.PasswordResetData{
-			Email: "andi@example.com", ResetLink: "https://app.example.com/reset?token=abc",
+			Email: "neveu@example.com", ResetLink: "https://app.example.com/reset?token=abc",
 		}},
-		mailer.TemplateTestEmail: {Email: "andi@example.com", Data: mailer.TestEmailData{
-			Email: "andi@example.com",
+		mailer.TemplateTestEmail: {Email: "neveu@example.com", Data: mailer.TestEmailData{
+			Email: "neveu@example.com",
 		}},
 	}
 }

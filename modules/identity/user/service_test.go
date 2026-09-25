@@ -112,20 +112,20 @@ func TestCreateUserStoresTheAccountAndTheCredential(t *testing.T) {
 	service := testService(t, pool)
 
 	created, err := service.CreateUser(t.Context(), CreateParams{
-		Username:      "ada",
-		Email:         "ada@example.com",
-		Password:      "correct horse",
-		FirstName:     "Ada",
-		LastName:      "Lovelace",
+		Username:      "hermione",
+		Email:         "hermione@example.com",
+		Password:      "expecto-patronum",
+		FirstName:     "Hermione",
+		LastName:      "Granger",
 		IsAdmin:       true,
 		EmailVerified: true,
 	})
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, created.ID)
-	assert.Equal(t, "ada", created.Username)
-	assert.Equal(t, "ada@example.com", created.Email)
-	assert.Equal(t, "Ada Lovelace", created.DisplayName)
+	assert.Equal(t, "hermione", created.Username)
+	assert.Equal(t, "hermione@example.com", created.Email)
+	assert.Equal(t, "Hermione Granger", created.DisplayName)
 	assert.True(t, created.IsAdmin)
 	assert.True(t, created.EmailVerified)
 	assert.False(t, created.CreatedAt.IsZero())
@@ -133,9 +133,9 @@ func TestCreateUserStoresTheAccountAndTheCredential(t *testing.T) {
 
 	read, err := service.GetUser(t.Context(), created.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "Ada Lovelace", read.DisplayName)
+	assert.Equal(t, "Hermione Granger", read.DisplayName)
 	require.NotNil(t, read.FirstName)
-	assert.Equal(t, "Ada", *read.FirstName)
+	assert.Equal(t, "Hermione", *read.FirstName)
 }
 
 func TestCreateUserWithoutAPasswordCarriesNoCredential(t *testing.T) {
@@ -144,15 +144,15 @@ func TestCreateUserWithoutAPasswordCarriesNoCredential(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Grace", LastName: "Hopper",
-		Username: "grace",
-		Email:    "grace@example.com",
+	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Robert", LastName: "Langdon",
+		Username: "langdon",
+		Email:    "langdon@example.com",
 	})
 	require.NoError(t, err)
 
 	// The display name is composed from the mandatory names, and no
 	// credential row exists to sign in with.
-	assert.Equal(t, "Grace Hopper", created.DisplayName)
+	assert.Equal(t, "Robert Langdon", created.DisplayName)
 	assert.False(t, created.EmailVerified)
 	assert.Equal(t, 0, passwordCount(t, pool, created.ID))
 }
@@ -163,14 +163,14 @@ func TestCreateUserRefusesADuplicateAccount(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	_, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "ada", Email: "ada@example.com"})
+	_, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Hermione", LastName: "Granger", Username: "hermione", Email: "hermione@example.com"})
 	require.NoError(t, err)
 
 	// The username matches case-insensitively, the way its unique index does.
-	_, err = service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "ADA", Email: "other@example.com"})
+	_, err = service.CreateUser(t.Context(), CreateParams{FirstName: "Hermione", LastName: "Granger", Username: "HERMIONE", Email: "other@example.com"})
 	assert.ErrorIs(t, err, ErrAccountExists)
 
-	_, err = service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "other", Email: "ada@example.com"})
+	_, err = service.CreateUser(t.Context(), CreateParams{FirstName: "Hermione", LastName: "Granger", Username: "other", Email: "hermione@example.com"})
 	assert.ErrorIs(t, err, ErrAccountExists)
 }
 
@@ -193,8 +193,18 @@ func TestListUsersSearchesAndPaginates(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	for _, name := range []string{"ada", "grace", "alan", "marie"} {
-		_, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: name, Email: name + "@example.com"})
+	// The four accounts carry distinct names, so the search's one match is
+	// observable: the Granger name is hers alone.
+	for _, account := range []struct{ username, first, last string }{
+		{"hermione", "Hermione", "Granger"},
+		{"langdon", "Robert", "Langdon"},
+		{"sophie", "Sophie", "Neveu"},
+		{"vittoria", "Vittoria", "Vetra"},
+	} {
+		_, err := service.CreateUser(t.Context(), CreateParams{
+			Username: account.username, Email: account.username + "@example.com",
+			FirstName: account.first, LastName: account.last,
+		})
 		require.NoError(t, err)
 	}
 
@@ -204,12 +214,12 @@ func TestListUsersSearchesAndPaginates(t *testing.T) {
 	require.NotNil(t, pagination.TotalItems)
 	assert.Equal(t, 4, *pagination.TotalItems)
 
-	// The search matches the username, case-insensitively, and answers only
-	// the accounts it names.
+	// The search matches the username and the name parts, case-insensitively,
+	// and answers only the accounts it names.
 	users, _, err = service.ListUsers(t.Context(), "GRA", 1, 10)
 	require.NoError(t, err)
 	require.Len(t, users, 1)
-	assert.Equal(t, "grace", users[0].Username)
+	assert.Equal(t, "hermione", users[0].Username)
 }
 
 func TestUpdateUserReplacesTheFields(t *testing.T) {
@@ -219,9 +229,9 @@ func TestUpdateUserReplacesTheFields(t *testing.T) {
 	service := testService(t, pool)
 
 	created, err := service.CreateUser(t.Context(), CreateParams{
-		Username:  "ada",
-		Email:     "ada@example.com",
-		FirstName: "Ada",
+		Username:  "hermione",
+		Email:     "hermione@example.com",
+		FirstName: "Hermione",
 	})
 	require.NoError(t, err)
 
@@ -229,20 +239,20 @@ func TestUpdateUserReplacesTheFields(t *testing.T) {
 	// names are mandatory, so a name part left empty is a contract refusal
 	// the transport answers before the service runs.
 	updated, err := service.UpdateUser(t.Context(), created.ID, UpdateParams{
-		Username:    "ada",
-		Email:       "countess@example.com",
-		FirstName:   "Ada",
+		Username:    "hermione",
+		Email:       "grey.lady@example.com",
+		FirstName:   "Hermione",
 		LastName:    "King",
-		DisplayName: "The Countess",
+		DisplayName: "The Grey Lady",
 		Locale:      "en-GB",
 		Disabled:    true,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "The Countess", updated.DisplayName)
-	assert.Equal(t, "countess@example.com", updated.Email)
+	assert.Equal(t, "The Grey Lady", updated.DisplayName)
+	assert.Equal(t, "grey.lady@example.com", updated.Email)
 	assert.True(t, updated.Disabled)
 	require.NotNil(t, updated.FirstName)
-	assert.Equal(t, "Ada", *updated.FirstName)
+	assert.Equal(t, "Hermione", *updated.FirstName)
 	require.NotNil(t, updated.LastName)
 	assert.Equal(t, "King", *updated.LastName)
 	require.NotNil(t, updated.Locale)
@@ -260,16 +270,16 @@ func TestUpdateUserAppliesAndLiftsTheBan(t *testing.T) {
 	service := testService(t, pool)
 	service.now = func() time.Time { return time.Unix(2000000000, 0) }
 
-	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "ada", Email: "ada@example.com"})
+	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Hermione", LastName: "Granger", Username: "hermione", Email: "hermione@example.com"})
 	require.NoError(t, err)
 
 	expires := service.now().Add(24 * time.Hour)
 	banned, err := service.UpdateUser(t.Context(), created.ID, UpdateParams{
-		Username:     "ada",
-		Email:        "ada@example.com",
-		FirstName:    "Ada",
-		LastName:     "Lovelace",
-		DisplayName:  "ada",
+		Username:     "hermione",
+		Email:        "hermione@example.com",
+		FirstName:    "Hermione",
+		LastName:     "Granger",
+		DisplayName:  "hermione",
 		BanExpiresAt: &expires,
 		BanReason:    strPtr("unruly behaviour"),
 	})
@@ -283,20 +293,20 @@ func TestUpdateUserAppliesAndLiftsTheBan(t *testing.T) {
 	// when", so applying a new expiry does not move it.
 	later := expires.Add(24 * time.Hour)
 	rebanned, err := service.UpdateUser(t.Context(), created.ID, UpdateParams{
-		Username:     "ada",
-		Email:        "ada@example.com",
-		FirstName:    "Ada",
-		LastName:     "Lovelace",
-		DisplayName:  "ada",
+		Username:     "hermione",
+		Email:        "hermione@example.com",
+		FirstName:    "Hermione",
+		LastName:     "Granger",
+		DisplayName:  "hermione",
 		BanExpiresAt: &later,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, service.now(), *rebanned.BannedAt)
 
 	lifted, err := service.UpdateUser(t.Context(), created.ID, UpdateParams{
-		Username:    "ada",
-		Email:       "ada@example.com",
-		DisplayName: "ada",
+		Username:    "hermione",
+		Email:       "hermione@example.com",
+		DisplayName: "hermione",
 	})
 	require.NoError(t, err)
 	assert.Nil(t, lifted.BannedAt)
@@ -310,19 +320,19 @@ func TestUpdateUserRefusesAnUnknownIdentifierAndADuplicate(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	_, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "ada", Email: "ada@example.com"})
+	_, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Hermione", LastName: "Granger", Username: "hermione", Email: "hermione@example.com"})
 	require.NoError(t, err)
 
 	_, err = service.UpdateUser(t.Context(), uuid.NewV7().String(), UpdateParams{
-		Username: "ada", Email: "x@example.com", DisplayName: "x", FirstName: "Ada", LastName: "Lovelace",
+		Username: "hermione", Email: "ron@example.com", DisplayName: "x", FirstName: "Hermione", LastName: "Granger",
 	})
 	assert.ErrorIs(t, err, ErrUserNotFound)
 
-	other, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "grace", Email: "grace@example.com"})
+	other, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Hermione", LastName: "Granger", Username: "langdon", Email: "langdon@example.com"})
 	require.NoError(t, err)
 
 	_, err = service.UpdateUser(t.Context(), other.ID, UpdateParams{
-		Username: "ada", Email: "grace@example.com", DisplayName: "grace", FirstName: "Ada", LastName: "Lovelace",
+		Username: "hermione", Email: "langdon@example.com", DisplayName: "langdon", FirstName: "Hermione", LastName: "Granger",
 	})
 	assert.ErrorIs(t, err, ErrAccountExists)
 }
@@ -333,21 +343,21 @@ func TestDeleteUserRefusesTheSignedInAccount(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
-	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "ada", Email: "ada@example.com"})
+	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Hermione", LastName: "Granger", Username: "hermione", Email: "hermione@example.com"})
 	require.NoError(t, err)
 
 	// The signed-in account is refused, whatever case the claims carry it in.
-	err = service.DeleteUser(t.Context(), created.ID, "ADA")
+	err = service.DeleteUser(t.Context(), created.ID, "HERMIONE")
 	assert.ErrorIs(t, err, ErrSelfDeletion)
 
-	other, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Ada", LastName: "Lovelace", Username: "grace", Email: "grace@example.com"})
+	other, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Hermione", LastName: "Granger", Username: "langdon", Email: "langdon@example.com"})
 	require.NoError(t, err)
-	require.NoError(t, service.DeleteUser(t.Context(), other.ID, "ada"))
+	require.NoError(t, service.DeleteUser(t.Context(), other.ID, "hermione"))
 
 	_, err = service.GetUser(t.Context(), other.ID)
 	assert.ErrorIs(t, err, ErrUserNotFound)
 
-	err = service.DeleteUser(t.Context(), other.ID, "ada")
+	err = service.DeleteUser(t.Context(), other.ID, "hermione")
 	assert.ErrorIs(t, err, ErrUserNotFound)
 }
 
@@ -406,11 +416,11 @@ func TestThePictureFlowStagesSyncsAndReadsBack(t *testing.T) {
 	pool := migratedPool(t)
 	service := testPictureService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
-		Username: "ada", Email: "ada@example.com", Password: "correct horse",
-		FirstName: "Ada", LastName: "Lovelace",
+		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
+		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: false}
+	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: false}
 
 	picture := bytes.Repeat([]byte("A"), 80) // PNG magic + filler
 	picture[0], picture[3] = 0x89, 'N'
@@ -453,11 +463,11 @@ func TestPictureUpdateSniffsTheBytesRatherThanTheDeclaration(t *testing.T) {
 	pool := migratedPool(t)
 	service := testPictureService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
-		Username: "ada", Email: "ada@example.com", Password: "correct horse",
-		FirstName: "Ada", LastName: "Lovelace",
+		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
+		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: false}
+	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: false}
 
 	err = service.UpdateProfilePicture(t.Context(), created.ID, claims, []byte("definitely not an image"))
 	assert.ErrorIs(t, err, ErrUnsupportedPicture)
@@ -479,16 +489,16 @@ func TestPictureEditBelongsToTheOwnerOrAnAdministrator(t *testing.T) {
 	pool := migratedPool(t)
 	service := testPictureService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
-		Username: "ada", Email: "ada@example.com", Password: "correct horse",
-		FirstName: "Ada", LastName: "Lovelace",
+		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
+		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
 	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
 
 	for name, claims := range map[string]*jwtutils.AccessClaims{
-		"owner":    {Username: "ADA", IsAdmin: false},
-		"admin":    {Username: "grace", IsAdmin: true},
-		"stranger": {Username: "grace", IsAdmin: false},
+		"owner":    {Username: "HERMIONE", IsAdmin: false},
+		"admin":    {Username: "langdon", IsAdmin: true},
+		"stranger": {Username: "langdon", IsAdmin: false},
 	} {
 		updateErr := service.UpdateProfilePicture(t.Context(), created.ID, claims, picture)
 		if name == "stranger" {
@@ -498,7 +508,7 @@ func TestPictureEditBelongsToTheOwnerOrAnAdministrator(t *testing.T) {
 		assert.NoError(t, updateErr, name)
 	}
 
-	err = service.ResetProfilePicture(t.Context(), created.ID, &jwtutils.AccessClaims{Username: "grace", IsAdmin: false})
+	err = service.ResetProfilePicture(t.Context(), created.ID, &jwtutils.AccessClaims{Username: "langdon", IsAdmin: false})
 	assert.ErrorIs(t, err, ErrPictureForbidden)
 }
 
@@ -510,11 +520,11 @@ func TestPictureResetFallsBackToTheDefault(t *testing.T) {
 	pool := migratedPool(t)
 	service := testPictureService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
-		Username: "ada", Email: "ada@example.com", Password: "correct horse",
-		FirstName: "Ada", LastName: "Lovelace",
+		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
+		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: false}
+	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: false}
 	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 1, 2}
 	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, claims, picture))
 
@@ -558,7 +568,7 @@ func TestPictureRefusesAnUnknownAccount(t *testing.T) {
 
 	pool := migratedPool(t)
 	service := testPictureService(t, pool)
-	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: true}
+	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: true}
 
 	id := "00000000-0000-0000-0000-000000000000"
 	err := service.UpdateProfilePicture(t.Context(), id, claims, []byte("x"))
@@ -611,11 +621,11 @@ func TestThePictureFlowLandsOnS3(t *testing.T) {
 	service := NewService(pool, nil, manager, "")
 
 	created, err := service.CreateUser(t.Context(), CreateParams{
-		Username: "ada", Email: "ada@example.com", Password: "correct horse",
-		FirstName: "Ada", LastName: "Lovelace",
+		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
+		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: false}
+	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: false}
 
 	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 9, 8, 7}
 	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, claims, picture))
@@ -648,11 +658,11 @@ func TestPictureProceduresRefuseARunWithoutTheEngine(t *testing.T) {
 	pool := migratedPool(t)
 	service := testService(t, pool)
 	created, err := service.CreateUser(t.Context(), CreateParams{
-		Username: "ada", Email: "ada@example.com", Password: "correct horse",
-		FirstName: "Ada", LastName: "Lovelace",
+		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
+		FirstName: "Hermione", LastName: "Granger",
 	})
 	require.NoError(t, err)
-	claims := &jwtutils.AccessClaims{Username: "ada", IsAdmin: false}
+	claims := &jwtutils.AccessClaims{Username: "hermione", IsAdmin: false}
 
 	err = service.UpdateProfilePicture(t.Context(), created.ID, claims, []byte("x"))
 	assert.ErrorIs(t, err, ErrPicturesUnavailable)

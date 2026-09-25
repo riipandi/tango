@@ -126,13 +126,13 @@ func TestSendEmailRefusesTheStatesItCannotServe(t *testing.T) {
 	err = service.SendEmail(t.Context(), "nobody")
 	assert.ErrorIs(t, err, ErrUserNotFound)
 
-	seedUser(t, pool, "verified", "verified@example.com", true)
+	seedUser(t, pool, "verified", "patronus@example.com", true)
 	err = service.SendEmail(t.Context(), "verified")
 	assert.ErrorIs(t, err, ErrAlreadyVerified)
 
 	unconfigured := testService(t, pool, false)
-	seedUser(t, pool, "ada", "ada@example.com", false)
-	err = unconfigured.SendEmail(t.Context(), "ada")
+	seedUser(t, pool, "hermione", "hermione@example.com", false)
+	err = unconfigured.SendEmail(t.Context(), "hermione")
 	assert.ErrorIs(t, err, ErrMailUnavailable)
 }
 
@@ -141,9 +141,9 @@ func TestSendEmailIssuesOneTokenPerAccount(t *testing.T) {
 
 	pool := migratedPool(t)
 	service := testService(t, pool, true)
-	seedUser(t, pool, "ada", "ada@example.com", false)
+	seedUser(t, pool, "hermione", "hermione@example.com", false)
 
-	require.NoError(t, service.SendEmail(t.Context(), "ada"))
+	require.NoError(t, service.SendEmail(t.Context(), "hermione"))
 
 	// The table carries one row per account and purpose, and the queue
 	// carries the message that will deliver it.
@@ -154,11 +154,11 @@ func TestSendEmailIssuesOneTokenPerAccount(t *testing.T) {
 	// A re-request inside the cooldown refuses. Past the window the same
 	// request replaces the token: the row the first hash named no longer
 	// exists, and the queue carries one more message, not a second row.
-	err = service.SendEmail(t.Context(), "ada")
+	err = service.SendEmail(t.Context(), "hermione")
 	assert.ErrorIs(t, err, ErrResendTooSoon)
 
 	service.now = func() time.Time { return time.Now().Add(2 * time.Minute) }
-	require.NoError(t, service.SendEmail(t.Context(), "ada"))
+	require.NoError(t, service.SendEmail(t.Context(), "hermione"))
 
 	pending, err = service.queue.Pending(t.Context(), jobs.EmailVerificationName)
 	require.NoError(t, err)
@@ -179,7 +179,7 @@ func TestVerifyEmailConsumesTheToken(t *testing.T) {
 
 	pool := migratedPool(t)
 	service := testService(t, pool, true)
-	userID := seedUser(t, pool, "ada", "ada@example.com", false)
+	userID := seedUser(t, pool, "hermione", "hermione@example.com", false)
 
 	raw := "verification-token-value"
 	seedToken(t, pool, userID, raw, time.Now().Add(tokenTTL))
@@ -192,7 +192,7 @@ func TestVerifyEmailConsumesTheToken(t *testing.T) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("email_verified_at")
 	sb.From("public.users")
-	sb.Where(sb.Equal("username", "ada"))
+	sb.Where(sb.Equal("username", "hermione"))
 	query, args := sb.Build()
 	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&verifiedAt))
 	require.NotNil(t, verifiedAt)
@@ -206,7 +206,7 @@ func TestVerifyEmailRefusesAnUnknownAndAnExpiredToken(t *testing.T) {
 
 	pool := migratedPool(t)
 	service := testService(t, pool, true)
-	userID := seedUser(t, pool, "ada", "ada@example.com", false)
+	userID := seedUser(t, pool, "hermione", "hermione@example.com", false)
 
 	err := service.VerifyEmail(t.Context(), "no-such-token")
 	assert.ErrorIs(t, err, ErrInvalidToken)
@@ -229,7 +229,7 @@ func TestTheFlowEndToEnd(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
 	pool := migratedPool(t)
-	seedUser(t, pool, "ada", "ada@example.com", false)
+	seedUser(t, pool, "hermione", "hermione@example.com", false)
 
 	mailpit := testutils.StartMailpit(t.Context(), t)
 
@@ -254,7 +254,7 @@ func TestTheFlowEndToEnd(t *testing.T) {
 	t.Cleanup(func() { client.Shutdown(context.Background()) })
 
 	service := NewService(pool, mail, client, "http://localhost:3000", nil)
-	require.NoError(t, service.SendEmail(t.Context(), "ada"))
+	require.NoError(t, service.SendEmail(t.Context(), "hermione"))
 
 	link := waitForLink(t, mailpit)
 	token := link[strings.Index(link, "token=")+len("token="):]
@@ -266,7 +266,7 @@ func TestTheFlowEndToEnd(t *testing.T) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("email_verified_at")
 	sb.From("public.users")
-	sb.Where(sb.Equal("username", "ada"))
+	sb.Where(sb.Equal("username", "hermione"))
 	query, args := sb.Build()
 	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&verifiedAt))
 	assert.NotNil(t, verifiedAt)
