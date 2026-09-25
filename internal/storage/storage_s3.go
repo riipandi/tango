@@ -74,15 +74,18 @@ func (s *S3) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 }
 
 // Put stores the object whole — one PUT, whose ceiling (5 GiB on the
-// services this targets) is a deployment ceiling, not a code path. A failed
-// PUT leaves nothing behind: the object store arrives whole or not at all,
-// the property the whole-file design leans on.
-func (s *S3) Put(ctx context.Context, key string, r io.Reader, size int64) error {
+// services this targets) is a deployment ceiling, not a code path. The
+// content type rides with the object, so a direct read — a presigned URL,
+// a console preview — answers what the bytes are. A failed PUT leaves
+// nothing behind: the object store arrives whole or not at all, the
+// property the whole-file design leans on.
+func (s *S3) Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error {
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
 		Key:           aws.String(s.path(key)),
 		Body:          r,
 		ContentLength: aws.Int64(size),
+		ContentType:   aws.String(contentType),
 	})
 	if err != nil {
 		return fmt.Errorf("storage: put file %s: %w", key, err)

@@ -184,7 +184,13 @@ func TestManagerCollectGarbageRemovesOnlyUnreferencedObjects(t *testing.T) {
 	// A delete that finished its manifest rows but not its object removal:
 	// the bytes are in the backend, no manifest names them.
 	orphan := []byte("orphaned object bytes")
-	require.NoError(t, store.Put(ctx, "orphans/lost", bytes.NewReader(orphan), int64(len(orphan))))
+	require.NoError(t, store.Put(ctx, "orphans/lost", bytes.NewReader(orphan), int64(len(orphan)), "image/png"))
+
+	// A foreign object the engine's key vocabulary cannot name: a bucket
+	// shared with another tenant, or the deployment's own stray, is not
+	// the garbage collection's to sweep.
+	foreign := []byte("not the engine's object")
+	require.NoError(t, store.Put(ctx, "Not a key/with spaces", bytes.NewReader(foreign), int64(len(foreign)), "image/png"))
 
 	removed, err := manager.CollectGarbage(ctx)
 	require.NoError(t, err)
@@ -192,7 +198,7 @@ func TestManagerCollectGarbageRemovesOnlyUnreferencedObjects(t *testing.T) {
 
 	paths, err := listedKeys(ctx, store)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"k"}, paths)
+	assert.Equal(t, []string{"Not a key/with spaces", "k"}, paths)
 }
 
 func TestManagerSyncWithoutAStagingFileIsQuiet(t *testing.T) {

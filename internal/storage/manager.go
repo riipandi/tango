@@ -317,7 +317,14 @@ func (m *Manager) sync(ctx context.Context, key string) (string, int64, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return uploadError, 0, fmt.Errorf("storage: rewind staging %q: %w", key, err)
 	}
-	if err := m.store.Put(ctx, key, f, fingerprint.size); err != nil {
+	// The content type is the feature's own record, carried from the stage
+	// and riding on the stored object: a direct read answers what the
+	// bytes are without consulting the manifest.
+	contentType, _ := checkpoint.Metadata["content_type"].(string)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	if err := m.store.Put(ctx, key, f, fingerprint.size, contentType); err != nil {
 		return uploadError, 0, err
 	}
 
@@ -387,8 +394,11 @@ func (m *Manager) Delete(ctx context.Context, key string) error {
 
 // CollectGarbage removes every object the backend holds that no manifest
 // names. It is the drain of the paths a crash can leave: a delete that
-// finished its rows but not its object removal. Returns the number of
-// objects removed.
+// finished its rows but not its object removal. A listed name that is not
+// a valid key is skipped, not deleted — a bucket shared with another
+// tenant's objects, or a prefix that carries the deployment's own strays,
+// is never swept by the engine's vocabulary. Returns the number of objects
+// removed.
 func (m *Manager) CollectGarbage(ctx context.Context) (int, error) {
 	keep, err := m.manifests.StoredKeys(ctx, m.db)
 	if err != nil {
@@ -398,6 +408,9 @@ func (m *Manager) CollectGarbage(ctx context.Context) (int, error) {
 	var removed int
 	err = m.store.List(ctx, func(key string) error {
 		if _, ok := keep[key]; ok {
+			return nil
+		}
+		if invalid := ValidateKey(key); invalid != nil {
 			return nil
 		}
 		if delErr := m.store.Delete(ctx, key); delErr != nil {

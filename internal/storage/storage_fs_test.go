@@ -31,7 +31,7 @@ func TestFSStoreRoundTripsAFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, keys)
 
-	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data))))
+	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data)), "image/png"))
 
 	reader, err := store.Get(ctx, key)
 	require.NoError(t, err)
@@ -54,9 +54,9 @@ func TestFSStorePutReplacesWhole(t *testing.T) {
 	store, key, data := newFSStore(t)
 	ctx := t.Context()
 
-	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data))))
+	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data)), "image/png"))
 	changed := append(bytes.Clone(data), []byte("-changed")...)
-	require.NoError(t, store.Put(ctx, key, bytes.NewReader(changed), int64(len(changed))))
+	require.NoError(t, store.Put(ctx, key, bytes.NewReader(changed), int64(len(changed)), "image/png"))
 
 	reader, err := store.Get(ctx, key)
 	require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestFSStoreListSkipsTempFiles(t *testing.T) {
 	store, key, data := newFSStore(t)
 	ctx := t.Context()
 
-	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data))))
+	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data)), "image/png"))
 	// A temp file shares the file's directory: a crash's leftover, which
 	// the scan must not name, because only real files may be deleted.
 	require.NoError(t, os.WriteFile(
@@ -99,7 +99,7 @@ func TestFSStoreDeletePrunesTheEmptyDirs(t *testing.T) {
 	store, key, data := newFSStore(t)
 	ctx := t.Context()
 
-	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data))))
+	require.NoError(t, store.Put(ctx, key, bytes.NewReader(data), int64(len(data)), "image/png"))
 	require.NoError(t, store.Delete(ctx, key))
 
 	_, err := os.Stat(filepath.Join(store.root, filesDir, "avatars", "usr_1"))

@@ -47,8 +47,10 @@ func (s *FS) Get(_ context.Context, key string) (io.ReadCloser, error) {
 
 // Put writes the file through a temp file and a rename, so a reader never
 // observes half of it and a crash leaves a temp file — a name the garbage
-// collection's listing skips — instead of a truncated one.
-func (s *FS) Put(_ context.Context, key string, r io.Reader, _ int64) error {
+// collection's listing skips — instead of a truncated one. The content type
+// is the local filesystem's to have no opinion about: the feature serves it
+// from the manifest's own record.
+func (s *FS) Put(_ context.Context, key string, r io.Reader, _ int64, _ string) error {
 	path := s.path(key)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("storage: file directory: %w", err)

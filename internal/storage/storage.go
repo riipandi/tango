@@ -49,8 +49,10 @@ type Store interface {
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	// Put stores the file under the key, replacing what was there. size is
 	// the byte count the reader holds; the local driver's rename needs it
-	// and an S3 PUT carries it as the content length.
-	Put(ctx context.Context, key string, r io.Reader, size int64) error
+	// and an S3 PUT carries it as the content length. contentType is what
+	// a direct read of the object serves — the feature's record of what
+	// the bytes are, never guessed from the key.
+	Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error
 	// Delete removes the file, if present. A key already gone is the state
 	// the caller asked for, not an error.
 	Delete(ctx context.Context, key string) error

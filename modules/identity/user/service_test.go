@@ -651,6 +651,16 @@ func TestThePictureFlowLandsOnS3(t *testing.T) {
 	assert.Equal(t,
 		[]string{"tango-user-test/avatars/" + created.ID + "/profile-picture"}, keys)
 
+	// The object carries the feature's content type: a direct read of the
+	// bucket — a presigned URL, a console preview — answers what the
+	// bytes are without consulting the manifest.
+	headed, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{
+		Bucket: awssdk.String("tango-user-test"),
+		Key:    awssdk.String("tango-user-test/avatars/" + created.ID + "/profile-picture"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "image/png", awssdk.ToString(headed.ContentType))
+
 	// The reset removes the object the backend holds, so the account falls
 	// back to the bundled default the same way it does on the local driver.
 	require.NoError(t, service.ResetProfilePicture(t.Context(), created.ID, claims))
