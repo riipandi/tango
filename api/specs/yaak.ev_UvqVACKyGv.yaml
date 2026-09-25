@@ -3,7 +3,7 @@ model: environment
 id: ev_UvqVACKyGv
 workspaceId: wk_kBiMYTkhPP
 createdAt: 2026-09-17T18:31:24.819966
-updatedAt: 2026-09-25T17:36:47.446110
+updatedAt: 2026-09-25T17:45:53.016375
 name: Local Testing
 public: true
 base: false
@@ -13,34 +13,34 @@ variables:
 - enabled: true
   name: apiBaseURL
   value: https://localhost:3443
-  id: mwpkGmwsgb
+  id: 9cHvA2Pz35
 - enabled: true
   name: identity
   value: admin@example.com
-  id: ycNNXZipUe
+  id: qcmZ53ayHq
 - enabled: true
   name: password
   value: '@dmin123'
-  id: WBEa5Un7kj
+  id: XNsKQRmqde
 - enabled: true
   name: accessToken
-  value: ${[ response.body.path(request='rq_7bY6RFnbv9', path='$.data.access_token') ]}
-  id: TA3d7dVIiQ
+  value: ${[ response.body.path(request='rq_5SgzmJyWWh', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC5hY2Nlc3NfdG9rZW4') ]}
+  id: G8zZKYx42u
 - enabled: true
   name: refreshToken
   value: ${[ response.body.path(request='rq_5SgzmJyWWh', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC5yZWZyZXNoX3Rva2Vu') ]}
-  id: VxIkjFpZf9
+  id: mcDF5BnBSw
 - enabled: true
   name: userId
   value: ${[ response.body.path(request='rq_5SgzmJyWWh', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC51c2VyLmlk') ]}
-  id: U4zAsnXPYZ
+  id: ee6Wi6Ac3j
 - enabled: true
   name: apiKey
   value: sk_dummy
-  id: 57WhQdr9nn
+  id: wsBydr8AC8
 - enabled: true
   name: remember
   value: 'true'
-  id: 5QE6g3PmKj
+  id: KQRHnIDI6R
 color: null
 sortPriority: 4.115226337448559

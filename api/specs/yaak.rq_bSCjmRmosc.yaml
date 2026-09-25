@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_bSCjmRmosc
 createdAt: 2026-09-25T10:33:41.108464
-updatedAt: 2026-09-25T17:40:36.104762
+updatedAt: 2026-09-25T17:43:27.001019
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -39,8 +39,12 @@ url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/ResetProfilePicture
 urlParameters:
 - enabled: true
   name: id
-  value: REPLACE_ID
-  id: null
+  value: ${[ userId ]}
+  id: Y3vUFWg4vc
+- enabled: true
+  name: ''
+  value: ''
+  id: 5n9IRhvyst
 settingSendCookies:
   enabled: false
   value: true

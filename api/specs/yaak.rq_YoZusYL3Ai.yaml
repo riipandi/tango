@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_YoZusYL3Ai
 createdAt: 2026-09-25T10:33:41.162193
-updatedAt: 2026-09-25T17:40:53.352925
+updatedAt: 2026-09-25T17:42:48.927604
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -32,7 +32,7 @@ urlParameters:
 - enabled: true
   name: ''
   value: ''
-  id: DZz0X35uSw
+  id: 9PPsSSgS4q
 settingSendCookies:
   enabled: false
   value: true
