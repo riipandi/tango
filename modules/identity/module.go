@@ -23,6 +23,7 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/modules/identity/jwks"
+	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/pkg/jwtutils"
 )
 
@@ -37,6 +38,9 @@ type Deps struct {
 	// provider interface rather than the service, so the cache in front of
 	// the service is invisible to the feature.
 	KeySet jwtutils.KeyProvider
+
+	// SignIn verifies the primary credential and issues the token pair.
+	SignIn *signin.Service
 }
 
 // Module mounts every identity feature.
@@ -84,6 +88,14 @@ var Package = do.Package(
 		service := do.MustInvoke[*jwks.Service](i)
 		return jwtutils.NewCachedKeyProvider(service, jwks.KeyCacheTTL), nil
 	}),
+
+	do.Lazy(func(i do.Injector) (*signin.Service, error) {
+		c := do.MustInvoke[*config.Config](i)
+		log := do.MustInvoke[*slog.Logger](i)
+		pool := do.MustInvoke[*datastore.Postgres](i)
+		keys := do.MustInvoke[*jwks.Service](i)
+		return signin.NewService(*c, signin.NewRepository(pool), keys, log), nil
+	}),
 )
 
 // Mount resolves what this area's features need and builds the module the
@@ -105,7 +117,7 @@ func Mount(i do.Injector) (kernel.Module, error) {
 		return nil, err
 	}
 
-	return NewModule(Deps{KeySet: keySet}), nil
+	return NewModule(Deps{KeySet: keySet, SignIn: do.MustInvoke[*signin.Service](i)}), nil
 }
 
 // features is the area's feature list, the one place an identity feature is
@@ -113,7 +125,11 @@ func Mount(i do.Injector) (kernel.Module, error) {
 // document — is mounted on the router's root; one that serves the application
 // API mounts itself under /api.
 func features(deps Deps) []kernel.Module {
-	return []kernel.Module{
+	modules := []kernel.Module{
 		jwks.NewModule(deps.KeySet),
 	}
+	if deps.SignIn != nil {
+		modules = append(modules, signin.NewModule(deps.SignIn))
+	}
+	return modules
 }

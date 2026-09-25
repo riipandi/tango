@@ -1,0 +1,88 @@
+// The authentication contract: the procedures that establish who a caller is.
+//
+// Sign-in verifies the primary credential — an identifier that may be the
+// account's username or its email, plus the password — and answers the stateless
+// token pair the protocol section of the architecture settles: a Bearer access
+// token (a JWT the published key set verifies) and a refresh token whose only
+// server-side trace is a hashed row in `public.sessions`.
+//
+// The two transports answer one contract (docs/api-response.md): ConnectRPC
+// carries status over the protocol as a connect code, so this service reports
+// a failed credential as `unauthenticated` and a refused account as
+// `permission_denied`, both with the detail message naming the reason.
+syntax = "proto3";
+
+package tango.auth.v1;
+
+option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1;authv1";
+
+// AuthService issues the credentials a caller presents on every later call.
+service AuthService {
+  // SignIn verifies the primary credential and issues the token pair.
+  //
+  // The identity matches the account's username (case-insensitive) or its
+  // email (matched exactly, the way the unique index does). A wrong
+  // identity and a wrong password answer the same failure, so the endpoint
+  // does not disclose which half was wrong.
+  rpc SignIn(SignInRequest) returns (SignInResponse);
+}
+
+// SignInRequest carries the credential and the session shape the caller asks
+// for.
+message SignInRequest {
+  // identity is the account's username or email address.
+  string identity = 1;
+
+  // password is the account's primary credential, in clear text. The field
+  // travels only over TLS and is never logged.
+  string password = 2;
+
+  // remember asks the refresh token to outlive the browser session. It
+  // defaults to false.
+  optional bool remember = 3;
+}
+
+// SignInResponse is the token pair and the account it was issued for.
+message SignInResponse {
+  // access_token is the Bearer JWT. It is short-lived and stateless: the
+  // caller sends it in the Authorization header and the server verifies it
+  // against the published key set without a round trip.
+  string access_token = 1;
+
+  // token_type names the authorization scheme, always `Bearer`.
+  string token_type = 2;
+
+  // expires_in is the access token's lifetime in seconds.
+  int64 expires_in = 3;
+
+  // refresh_token is the long-lived credential that outlives the access
+  // token. It is exchanged for a fresh pair (a later procedure) and is
+  // stored server-side only as a hash, so a database leak cannot replay it.
+  string refresh_token = 4;
+
+  // session_id is the TypeID (`sess_…`) of the session row the refresh
+  // token is stored under. It is what a later revocation names.
+  string session_id = 5;
+
+  // user is the account the tokens name.
+  AuthenticatedUser user = 6;
+}
+
+// AuthenticatedUser is the account view the tokens were issued for. It carries
+// the fields a client renders, not the row: no password hash, no ban bookkeeping.
+message AuthenticatedUser {
+  // id is the account's identifier, a UUID string.
+  string id = 1;
+
+  // username is the account's handle, case preserved.
+  string username = 2;
+
+  // email is the account's address.
+  string email = 3;
+
+  // display_name is the name shown in the UI.
+  string display_name = 4;
+
+  // is_admin reports administrative privileges.
+  bool is_admin = 5;
+}
