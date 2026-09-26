@@ -162,8 +162,7 @@ message AuthenticatedUser {
 message SignOutRequest {}
 
 // SignOutResponse is empty: a successful sign-out says so with the protocol.
-message SignOutResponse  {
-
+message SignOutResponse {
   // status is the outcome word the client checks — success; a
   // failure never reaches this body, it is a connect error.
   string status = 1;
@@ -268,8 +267,7 @@ message RevokeSessionRequest {
 // RevokeSessionResponse is empty: a successful revocation says so with the
 // protocol, and a session that is not the account's answers the not-found
 // code.
-message RevokeSessionResponse  {
-
+message RevokeSessionResponse {
   // status is the outcome word the client checks — success; a
   // failure never reaches this body, it is a connect error.
   string status = 1;

@@ -140,7 +140,10 @@ message ListRequest {
   optional int32 page = 1 [(buf.validate.field).int32.gte = 1];
 
   // limit is the page size.
-  optional int32 limit = 2 [(buf.validate.field).int32 = {gte: 1, lte: 100}];
+  optional int32 limit = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
 }
 
 // ListResponse is the page of the caller's own records.
@@ -165,7 +168,10 @@ message ListAllRequest {
   optional int32 page = 1 [(buf.validate.field).int32.gte = 1];
 
   // limit is the page size.
-  optional int32 limit = 2 [(buf.validate.field).int32 = {gte: 1, lte: 100}];
+  optional int32 limit = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
 
   // event filters by what happened, matched exactly. Absent means every
   // event. The values to offer are the ones FilterOptions answers.
@@ -173,7 +179,7 @@ message ListAllRequest {
 
   // user_id filters by the account the action is about. Absent means every
   // account.
-  optional string user_id = 4 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+  optional string user_id = 4 [(buf.validate.field).string.min_len = 1];
 
   // search filters by a term matched against the account's username and
   // email, so an administrator can find an account's activity by naming it
@@ -200,14 +206,17 @@ message ListAllResponse {
 // ListForUserRequest names the account whose records are read.
 message ListForUserRequest {
   // user_id is the account's identifier in its wire form, a TypeID
-// (`user_…`) encoded from the row's UUID.
-  string user_id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+  // (`user_…`) encoded from the row's UUID.
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
 
   // page is the one-based page number.
   optional int32 page = 2 [(buf.validate.field).int32.gte = 1];
 
   // limit is the page size.
-  optional int32 limit = 3 [(buf.validate.field).int32 = {gte: 1, lte: 100}];
+  optional int32 limit = 3 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
 }
 
 // ListForUserResponse is the page of one account's records.

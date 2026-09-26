@@ -45,8 +45,8 @@ service OneTimeAccessService {
 // CreateOneTimeAccessTokenRequest names the account and the code's window.
 message CreateOneTimeAccessTokenRequest {
   // id is the account's identifier in its wire form, a TypeID (`user_…`)
-// encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 
   // ttl_seconds is how long the code works, between one minute and a day.
   // Unset means fifteen minutes, the window the email path uses.
@@ -128,8 +128,8 @@ message ExchangeOneTimeAccessTokenResponse {
 // code's window.
 message RequestOneTimeAccessEmailAsAdminRequest {
   // id is the account's identifier in its wire form, a TypeID (`user_…`)
-// encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 
   // ttl_seconds is how long the emailed code works, between one minute and a
   // day. Unset means fifteen minutes.

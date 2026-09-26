@@ -180,8 +180,7 @@ message SendVerificationEmailRequest {}
 
 // SendVerificationEmailResponse is empty: acceptance says the token was
 // issued and the task enqueued, not that a message was delivered.
-message SendVerificationEmailResponse  {
-
+message SendVerificationEmailResponse {
   // status is the outcome word the client checks — success; a
   // failure never reaches this body, it is a connect error.
   string status = 1;
@@ -198,8 +197,7 @@ message VerifyEmailRequest {
 }
 
 // VerifyEmailResponse is empty: the protocol carries the success.
-message VerifyEmailResponse  {
-
+message VerifyEmailResponse {
   // status is the outcome word the client checks — success; a
   // failure never reaches this body, it is a connect error.
   string status = 1;
@@ -399,8 +397,7 @@ message DeleteSignupTokenRequest {
 
 // DeleteSignupTokenResponse is empty: a successful deletion says so with the
 // protocol, and a missed one with the not-found code.
-message DeleteSignupTokenResponse  {
-
+message DeleteSignupTokenResponse {
   // status is the outcome word the client checks — success; a
   // failure never reaches this body, it is a connect error.
   string status = 1;
@@ -441,8 +438,8 @@ message ListUsersResponse {
 // GetUserRequest names the account to read.
 message GetUserRequest {
   // id is the account's identifier in its wire form, a TypeID (`user_…`)
-// encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
 // GetUserResponse is the account.
@@ -522,8 +519,8 @@ message CreateUserResponse {
 // applies the ban, absent lifts it.
 message UpdateUserRequest {
   // id is the account's identifier in its wire form, a TypeID (`user_…`)
-// encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 
   // username is the account's handle: 3-32 characters of ASCII letters,
   // digits, and underscores, matched case-insensitively.
@@ -585,14 +582,13 @@ message UpdateUserResponse {
 // DeleteUserRequest names the account to remove.
 message DeleteUserRequest {
   // id is the account's identifier in its wire form, a TypeID (`user_…`)
-// encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
 // DeleteUserResponse is empty: a successful deletion says so with the
 // protocol, and a missed one with the not-found code.
-message DeleteUserResponse  {
-
+message DeleteUserResponse {
   // status is the outcome word the client checks — success; a
   // failure never reaches this body, it is a connect error.
   string status = 1;
@@ -604,11 +600,10 @@ message DeleteUserResponse  {
 message ResetProfilePictureRequest {
   // The account whose picture is removed — the same `id` its sibling
   // account procedures (GetUser, UpdateUser, DeleteUser) address it by.
-  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
-message ResetProfilePictureResponse  {
-
+message ResetProfilePictureResponse {
   // status is the outcome word the client checks — success; a
   // failure never reaches this body, it is a connect error.
   string status = 1;
@@ -743,7 +738,12 @@ message ListUserGroupsRequest {
   // sort_by names the column the page orders by. Absent, the display name
   // orders the page.
   optional string sort_by = 4 [(buf.validate.field).string = {
-    in: ["name", "display_name", "user_count", "created_at"]
+    in: [
+      "name",
+      "display_name",
+      "user_count",
+      "created_at"
+    ]
   }];
 
   // sort_order flips the direction; absent means ascending.
@@ -783,7 +783,7 @@ message ListUserGroupsResponse {
 message GetUserGroupRequest {
   // id is the group's identifier in its wire form, a TypeID (`ugrp_…`)
   // encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^ugrp_[0-9a-z]{26}$"];
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
 // GetUserGroupResponse is the group with its members.
@@ -831,7 +831,7 @@ message CreateUserGroupResponse {
 message UpdateUserGroupRequest {
   // id is the group's identifier in its wire form, a TypeID (`ugrp_…`)
   // encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^ugrp_[0-9a-z]{26}$"];
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 
   // name is the group's unique handle: 2-255 characters.
   string name = 2 [
@@ -863,13 +863,12 @@ message UpdateUserGroupResponse {
 message DeleteUserGroupRequest {
   // id is the group's identifier in its wire form, a TypeID (`ugrp_…`)
   // encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^ugrp_[0-9a-z]{26}$"];
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
 // DeleteUserGroupResponse is empty: a successful deletion says so with the
 // protocol, and a missed one with the not-found code.
-message DeleteUserGroupResponse  {
-
+message DeleteUserGroupResponse {
   // status is the outcome word the client checks — success; a
   // failure never reaches this body, it is a connect error.
   string status = 1;
@@ -882,13 +881,13 @@ message DeleteUserGroupResponse  {
 message SetUserGroupMembersRequest {
   // id is the group's identifier in its wire form, a TypeID (`ugrp_…`)
   // encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^ugrp_[0-9a-z]{26}$"];
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 
   // user_ids are the accounts that belong to the group after the call.
   // An empty list empties the group.
   repeated string user_ids = 2 [
     (buf.validate.field).repeated.unique = true,
-    (buf.validate.field).repeated.items.string.pattern = "^user_[0-9a-z]{26}$"
+    (buf.validate.field).repeated.items.string.min_len = 1
   ];
 }
 
@@ -909,7 +908,7 @@ message SetUserGroupMembersResponse {
 message GetUserGroupsRequest {
   // id is the account's identifier in its wire form, a TypeID (`user_…`)
   // encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
 // GetUserGroupsResponse is the groups the account belongs to.
@@ -929,7 +928,7 @@ message GetUserGroupsResponse {
 message UpdateUserGroupsRequest {
   // id is the account's identifier in its wire form, a TypeID (`user_…`)
   // encoded from the row's UUID — the UUID never leaves the server.
-  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 
   // group_ids are the groups the account belongs to after the call. An
   // empty list removes the account from every group. Every identifier must
@@ -937,7 +936,7 @@ message UpdateUserGroupsRequest {
   // unknown one by the service.
   repeated string group_ids = 2 [
     (buf.validate.field).repeated.unique = true,
-    (buf.validate.field).repeated.items.string.pattern = "^ugrp_[0-9a-z]{26}$"
+    (buf.validate.field).repeated.items.string.min_len = 1
   ];
 }
 

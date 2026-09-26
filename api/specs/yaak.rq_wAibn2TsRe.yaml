@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_wAibn2TsRe
 createdAt: 2026-09-19T12:34:10.928958
-updatedAt: 2026-09-26T17:01:02.172607
+updatedAt: 2026-09-26T17:17:27.605998
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
 authentication:
@@ -12,7 +12,7 @@ body:
   bodyType: application/json
   text: |-
     {
-      "id": "${[ response.body.path(request='rq_UcqfuDYCPx', behavior='smart', ttl='0', result='first', join=', ', path='$.groups[0].id') ]}"
+      "id": "${[ response.body.path(request='rq_UcqfuDYCPx', behavior='always', ttl='0', result='first', join=', ', path='$.groups[0].id') ]}"
     }
 bodyType: application/json
 description: |-
@@ -21,9 +21,7 @@ description: |-
   Ported from Pocket ID `GET /api/user-groups/{id}` as the `tango.identity.v1.UserGroupService/GetUserGroup` procedure.
 
   Parameters:
-  - id (body, required): user group ID
-
-  The `id` field is the group's wire TypeID (`ugrp_...`), not the row's UUID - the UUID never leaves the server. Member ids stay the account's `user_` TypeID.
+  - id (body, required): user group ID in its wire TypeID form (`ugrp_...`), not the row's UUID — the UUID never leaves the server. Member ids stay the account's `user_` TypeID. An identifier that names no group — unknown or malformed — answers `not_found`.
 headers:
 - enabled: true
   name: Content-Type

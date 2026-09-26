@@ -26,6 +26,11 @@ import (
 // refusal. A valid request would reach the service (and panic over the nil
 // pool these tests carry), so every case below is one the contract itself
 // refuses; the accepted-shape cases live in the feature's own tests.
+//
+// Identifier fields carry no shape constraint on purpose: a malformed
+// identifier names no account or group, and the service is the boundary
+// that refuses it with the not-found failure — the same answer an unknown
+// one earns — so the wire cannot tell a caller which half was wrong.
 func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 	router := transport.NewRouter(transport.Options{
 		Config:  config.Default(),
@@ -73,10 +78,6 @@ func TestProtovalidateRefusesTheContractViolations(t *testing.T) {
 		"usage limit over budget": {
 			"/tango.identity.v1.SignupService/CreateSignupToken",
 			`{"ttl_seconds":86400,"usage_limit":1001}`,
-		},
-		"bad user id": {
-			"/tango.identity.v1.UserService/GetUser",
-			`{"id":"not-a-uuid"}`,
 		},
 		"empty display name": {
 			"/tango.identity.v1.UserService/UpdateUser",
