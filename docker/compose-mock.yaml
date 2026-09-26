@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json
+
+x-common: &common
+  networks: ["intranet"]
+  extra_hosts: ["host.docker.internal:host-gateway"]
+  restart: unless-stopped
+  security_opt: ['no-new-privileges:true']
+  shm_size: 128m # set shared memory limit
+  mem_limit: 256m # set memory limit
+  cpus: 1.0 # set CPUs limit
+
+#####################################################################
+# ngauth comes with pre-seeded data for immediate testing:
+# 
+# Test Users
+#   Username: testuser / Password: password123
+#   Username: alice / Password: alice123
+#   Username: bob / Password: bob123
+# 
+# Test Clients
+#   Client ID: test-client
+#   Client Secret: test-secret
+#   Redirect URI: http://localhost:3000/callback
+#####################################################################
+
+services:
+  ngauth-google:
+    <<: *common
+    image: docker.io/ngauth/server:${NGAUTH_VERSION:-latest}
+    platform: linux/amd64
+    hostname: ngauth-google
+    ports: ["3220:3000"]
+    volumes:
+      - "../.storage/ngauth_google_data:/app/data:rw"
+      - "../storage/certs/localhost_key.pem:/app/data/private-key.pem:ro"
+    environment:
+      NGAUTH_PRESET: google
+      NGAUTH_ACCESS_TOKEN_TTL: 7200
+      NGAUTH_ISSUER: https://localhost:3220
+      NGAUTH_DATA: /app/data
+      NODE_ENV: development
+    healthcheck:
+      test: ["CMD", "nc", "-vz", "127.0.0.1", "3000"]
+      interval: 3s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  ngauth_google_data:
+
+networks:
+  intranet:
+    driver: bridge
+    enable_ipv6: false

@@ -50,6 +50,8 @@ func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
 	r.Handle(identityv1connect.UserServiceUpdateUserProcedure, handler)
 	r.Handle(identityv1connect.UserServiceDeleteUserProcedure, handler)
 	r.Handle(identityv1connect.UserServiceResetProfilePictureProcedure, handler)
+	r.Handle(identityv1connect.UserServiceGetCurrentUserProcedure, handler)
+	r.Handle(identityv1connect.UserServiceUpdateCurrentUserProcedure, handler)
 }
 
 // rpcHandler is the transport mapping of the procedures. The service carries
@@ -179,6 +181,49 @@ func (h *rpcHandler) ResetProfilePicture(ctx context.Context, req *connect.Reque
 	return connect.NewResponse(&identityv1.ResetProfilePictureResponse{
 		Status:  responder.StatusSuccess,
 		Message: "the profile picture was reset",
+	}), nil
+}
+
+// GetCurrentUser answers the account the caller is. The request carries no
+// target: the subject the bearer middleware verified is the account read.
+func (h *rpcHandler) GetCurrentUser(ctx context.Context, req *connect.Request[identityv1.GetCurrentUserRequest]) (*connect.Response[identityv1.GetCurrentUserResponse], error) {
+	caller, ok := jwtutils.CallerFrom(ctx)
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
+	}
+	user, err := h.service.GetCurrentUser(ctx, caller.UserID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.GetCurrentUserResponse{
+		User:    WireView(user),
+		Status:  responder.StatusSuccess,
+		Message: "the current user was fetched",
+	}), nil
+}
+
+// UpdateCurrentUser replaces the signed-in account's own profile fields.
+// The request carries no identifier on purpose: the caller is the account,
+// and a target the request named would be a second identity to disagree.
+func (h *rpcHandler) UpdateCurrentUser(ctx context.Context, req *connect.Request[identityv1.UpdateCurrentUserRequest]) (*connect.Response[identityv1.UpdateCurrentUserResponse], error) {
+	caller, ok := jwtutils.CallerFrom(ctx)
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
+	}
+	body := req.Msg
+	user, err := h.service.UpdateCurrentUser(ctx, caller.UserID, ProfileParams{
+		FirstName:   body.FirstName,
+		LastName:    body.LastName,
+		DisplayName: body.DisplayName,
+		Locale:      body.Locale,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.UpdateCurrentUserResponse{
+		User:    WireView(user),
+		Status:  responder.StatusSuccess,
+		Message: "the current user was updated",
 	}), nil
 }
 

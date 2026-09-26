@@ -179,8 +179,94 @@ func TestCreateUserRefusesADuplicateAccount(t *testing.T) {
 	assert.ErrorIs(t, err, ErrAccountExists)
 }
 
+// mustID parses a wire identifier in a test helper. A view identifier is
+// always valid, so the failure is the test's own bug.
+func mustID(t *testing.T, wire string) UserID {
+	t.Helper()
+	parsed, err := ParseID(wire)
+	require.NoError(t, err)
+	return parsed
+}
+
+// TestGetCurrentUserAnswersTheSubject reads the account the caller is: the
+// subject travels as the wire identifier, and the answer is the same view
+// the identifier-addressed read produces.
+func TestGetCurrentUserAnswersTheSubject(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testService(t, pool)
+	ctx := t.Context()
+
+	created, err := service.CreateUser(ctx, CreateParams{
+		Username:  "sophie_neveu",
+		Email:     "sophie.neveu@holy.grail",
+		FirstName: "Sophie",
+		LastName:  "Neveu",
+	})
+	require.NoError(t, err)
+
+	view, err := service.GetCurrentUser(ctx, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "sophie_neveu", view.Username)
+	assert.Equal(t, created.ID, view.ID)
+}
+
+// TestGetCurrentUserRefusesAnUnknownSubject keeps the boundary honest: an
+// identifier that names no account is the not-found failure, whatever
+// surface read it.
+func TestGetCurrentUserRefusesAnUnknownSubject(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	service := testService(t, migratedPool(t))
+
+	_, err := service.GetCurrentUser(t.Context(), "user_00000000000000000000000000")
+	assert.ErrorIs(t, err, ErrUserNotFound)
+}
+
+// TestUpdateCurrentUserTouchesOnlyTheProfile pins the self-service
+// boundary: the names and the locale travel, and everything the
+// administrative surface owns — the username, the email, the role, the
+// disabled flag — rides through untouched.
+func TestUpdateCurrentUserTouchesOnlyTheProfile(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testService(t, pool)
+	ctx := t.Context()
+
+	created, err := service.CreateUser(ctx, CreateParams{
+		Username:  "vittoria_vetra",
+		Email:     "vittoria.vetra@infinite.bound",
+		FirstName: "Vittoria",
+		LastName:  "Vetra",
+		IsAdmin:   true,
+		Locale:    "id-ID",
+	})
+	require.NoError(t, err)
+
+	updated, err := service.UpdateCurrentUser(ctx, created.ID, ProfileParams{
+		FirstName:   "Vittoria",
+		LastName:    "Vetra",
+		DisplayName: "V. Vetra",
+		Locale:      "en-US",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "V. Vetra", updated.DisplayName)
+	assert.Equal(t, "en-US", *updated.Locale)
+
+	// The identity fields are not the caller's to rewrite: read them back
+	// from the store the administrative procedures would.
+	row, err := service.repo.GetUser(ctx, pool, IDToUUID(mustID(t, created.ID)))
+	require.NoError(t, err)
+	assert.Equal(t, "vittoria_vetra", row.Username)
+	assert.Equal(t, "vittoria.vetra@infinite.bound", row.Email)
+	assert.True(t, row.IsAdmin)
+}
+
 func TestGetUserRefusesAnUnknownIdentifier(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
+
 
 	pool := migratedPool(t)
 	service := testService(t, pool)

@@ -157,11 +157,13 @@ configs:
       # server {
       #   http2 on;
       #   listen 3443 ssl;
+      #   listen 3443 quic reuseport;
       #   server_name localhost;
       #   ssl_certificate /etc/nginx/certs/localhost_crt.pem;
       #   ssl_certificate_key /etc/nginx/certs/localhost_key.pem;
-      #   ssl_protocols TLSv1.2 TLSv1.3;
+      #   ssl_protocols TLSv1.3;
       #   ssl_ciphers HIGH:!aNULL:!MD5;
+      #   add_header Alt-Svc 'h3=":3443"; ma=86400';
       #   location / {
       #     proxy_pass http://tango:3000;
       #     proxy_set_header X-Forwarded-Proto https;
@@ -171,11 +173,13 @@ configs:
       server {
         http2 on;
         listen 8443 ssl;
+        listen 8443 quic reuseport;
         server_name localhost;
         ssl_certificate /etc/nginx/certs/localhost_crt.pem;
         ssl_certificate_key /etc/nginx/certs/localhost_key.pem;
-        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_protocols TLSv1.3;
         ssl_ciphers HIGH:!aNULL:!MD5;
+        add_header Alt-Svc 'h3=":8443"; ma=86400';
         location / {
           proxy_pass http://host.docker.internal:3080;
           proxy_set_header X-Forwarded-Proto https;

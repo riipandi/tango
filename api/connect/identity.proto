@@ -88,6 +88,17 @@ service UserService {
   // falls back to the bundled default picture the read answers with. The
   // caller may be the account's owner or an administrator.
   rpc ResetProfilePicture(ResetProfilePictureRequest) returns (ResetProfilePictureResponse);
+
+  // GetCurrentUser answers the account the caller is. The target is the
+  // token's subject, never something the request names — this is the `/me`
+  // door upstream answers beside the identifier-addressed `GetUser`.
+  rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse);
+
+  // UpdateCurrentUser replaces the signed-in account's own profile fields:
+  // the names the account displays and its locale. The credential, the
+  // username, the address, and the role are not the caller's to rewrite
+  // here — the administrative surface owns them.
+  rpc UpdateCurrentUser(UpdateCurrentUserRequest) returns (UpdateCurrentUserResponse);
 }
 
 // UserGroupService administers the groups accounts belong to. A group is an
@@ -122,6 +133,19 @@ service UserGroupService {
   // the request names. An empty list empties the group — a group may be
   // emptied, only not made wrong by a member that does not exist.
   rpc SetUserGroupMembers(SetUserGroupMembersRequest) returns (SetUserGroupMembersResponse);
+
+  // GetUserGroups answers the groups one account belongs to, ordered by the
+  // group's display name. The target is the account the request names; the
+  // administrative procedures address accounts by identifier, which is the
+  // shape the upstream port carries.
+  rpc GetUserGroups(GetUserGroupsRequest) returns (GetUserGroupsResponse);
+
+  // UpdateUserGroups replaces the set of groups one account belongs to.
+  // The replacement, like its per-group sibling, is whole: the request
+  // names every group the account belongs to after the call, and an empty
+  // list removes the account from all of them. Every named group must
+  // exist — a membership is not created into nothing.
+  rpc UpdateUserGroups(UpdateUserGroupsRequest) returns (UpdateUserGroupsResponse);
 }
 
 // EmailVerificationService verifies an account's address. The verification
@@ -593,6 +617,62 @@ message ResetProfilePictureResponse  {
   string message = 2;
 }
 
+// GetCurrentUserRequest is empty: the account is the caller the token names.
+message GetCurrentUserRequest {}
+
+// GetCurrentUserResponse is the signed-in account.
+message GetCurrentUserResponse {
+  // user is the caller's own account view.
+  User user = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
+}
+
+// UpdateCurrentUserRequest carries the signed-in account's profile fields.
+// The writable set is the account's display surface — the names and the
+// locale — not its identity: the username, the email, and the role are the
+// administrative surface's to change.
+message UpdateCurrentUserRequest {
+  // first_name is the given name; never empty.
+  string first_name = 1 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 100
+  ];
+
+  // last_name is the family name; never empty.
+  string last_name = 2 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 100
+  ];
+
+  // display_name is the name the UI shows; never empty.
+  string display_name = 3 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 200
+  ];
+
+  // locale is the preferred locale tag; empty clears it.
+  string locale = 4;
+}
+
+// UpdateCurrentUserResponse is the account as the update left it.
+message UpdateCurrentUserResponse {
+  // user is the caller's own account view.
+  User user = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
+}
+
 // UserGroup is the group's minimal view: the shape the list answers. The
 // member count travels with the row — it is not a column, it is the count
 // the query computes, so a list never needs a second round trip per row.
@@ -816,6 +896,56 @@ message SetUserGroupMembersRequest {
 message SetUserGroupMembersResponse {
   // group is the group's detail view.
   UserGroupDetail group = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
+}
+
+// GetUserGroupsRequest names the account whose groups are read.
+message GetUserGroupsRequest {
+  // id is the account's identifier in its wire form, a TypeID (`user_…`)
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+}
+
+// GetUserGroupsResponse is the groups the account belongs to.
+message GetUserGroupsResponse {
+  // groups are the account's groups, ordered by display name.
+  repeated UserGroup groups = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
+}
+
+// UpdateUserGroupsRequest replaces the set of groups one account belongs to.
+message UpdateUserGroupsRequest {
+  // id is the account's identifier in its wire form, a TypeID (`user_…`)
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
+
+  // group_ids are the groups the account belongs to after the call. An
+  // empty list removes the account from every group. Every identifier must
+  // name an existing group: a duplicate is refused by the contract, an
+  // unknown one by the service.
+  repeated string group_ids = 2 [
+    (buf.validate.field).repeated.unique = true,
+    (buf.validate.field).repeated.items.string.pattern = "^ugrp_[0-9a-z]{26}$"
+  ];
+}
+
+// UpdateUserGroupsResponse is the groups the account belongs to after the
+// replacement.
+message UpdateUserGroupsResponse {
+  // groups are the account's groups, ordered by display name.
+  repeated UserGroup groups = 1;
 
   // status is the outcome word the client checks — success; a
   // failure never reaches this body, it is a connect error.

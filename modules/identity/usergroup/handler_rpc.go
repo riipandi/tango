@@ -53,6 +53,8 @@ func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
 	r.Handle(identityv1connect.UserGroupServiceUpdateUserGroupProcedure, handler)
 	r.Handle(identityv1connect.UserGroupServiceDeleteUserGroupProcedure, handler)
 	r.Handle(identityv1connect.UserGroupServiceSetUserGroupMembersProcedure, handler)
+	r.Handle(identityv1connect.UserGroupServiceGetUserGroupsProcedure, handler)
+	r.Handle(identityv1connect.UserGroupServiceUpdateUserGroupsProcedure, handler)
 }
 
 // rpcHandler is the transport mapping of the procedures. The service carries
@@ -161,6 +163,32 @@ func (h *rpcHandler) SetUserGroupMembers(ctx context.Context, req *connect.Reque
 	}), nil
 }
 
+// GetUserGroups answers the groups one account belongs to.
+func (h *rpcHandler) GetUserGroups(ctx context.Context, req *connect.Request[identityv1.GetUserGroupsRequest]) (*connect.Response[identityv1.GetUserGroupsResponse], error) {
+	groups, err := h.service.GetUserGroups(ctx, req.Msg.Id)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.GetUserGroupsResponse{
+		Groups:  wireGroups(groups),
+		Status:  responder.StatusSuccess,
+		Message: "the user's groups were fetched",
+	}), nil
+}
+
+// UpdateUserGroups replaces the set of groups one account belongs to.
+func (h *rpcHandler) UpdateUserGroups(ctx context.Context, req *connect.Request[identityv1.UpdateUserGroupsRequest]) (*connect.Response[identityv1.UpdateUserGroupsResponse], error) {
+	groups, err := h.service.UpdateUserGroups(ctx, req.Msg.Id, req.Msg.GroupIds)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.UpdateUserGroupsResponse{
+		Groups:  wireGroups(groups),
+		Status:  responder.StatusSuccess,
+		Message: "the user's groups were updated",
+	}), nil
+}
+
 // wireGroup maps the group view onto the wire message the list answers with.
 func wireGroup(view GroupView) *identityv1.UserGroup {
 	group := &identityv1.UserGroup{
@@ -174,6 +202,27 @@ func wireGroup(view GroupView) *identityv1.UserGroup {
 		group.UpdatedAt = new(view.UpdatedAt.Format(time.RFC3339))
 	}
 	return group
+}
+
+// wireGroups maps the stored rows a per-user answer carries onto the wire
+// messages. The rows hold no member count — the count belongs to the group
+// list, not to the account's — so the wire field is left at zero rather
+// than being computed with a query per row.
+func wireGroups(rows []GroupSchema) []*identityv1.UserGroup {
+	groups := make([]*identityv1.UserGroup, 0, len(rows))
+	for _, row := range rows {
+		group := &identityv1.UserGroup{
+			Id:          row.ID.String(),
+			Name:        row.Name,
+			DisplayName: row.DisplayName,
+			CreatedAt:   row.CreatedAt.Format(time.RFC3339),
+		}
+		if row.UpdatedAt != nil {
+			group.UpdatedAt = new(row.UpdatedAt.Format(time.RFC3339))
+		}
+		groups = append(groups, group)
+	}
+	return groups
 }
 
 // wireDetail maps the detail view onto the wire message the single-group

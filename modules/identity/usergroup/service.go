@@ -28,6 +28,13 @@ var (
 	// group is not made wrong by a member that does not exist, so the
 	// replacement is refused whole.
 	ErrMemberNotFound = user.ErrUserNotFound
+
+	// ErrUserExists is an account identifier the per-user membership
+	// procedures refuse: the account the request names does not exist. It
+	// is the same failure ErrMemberNotFound names — one account, two
+	// directions — kept as an alias so each procedure reads by its own
+	// direction.
+	ErrUserExists = ErrMemberNotFound
 )
 
 // Service carries the rules of group administration: what a group is, who may
@@ -285,6 +292,92 @@ func (s *Service) SetUserGroupMembers(ctx context.Context, id string, memberIDs 
 		return GroupDetailView{}, err
 	}
 	return updated, nil
+}
+
+// GetUserGroups answers the groups one account belongs to, ordered by the
+// group's display name. The account is read first: a malformed or unknown
+// identifier is the not-found failure, so an account that exists answers
+// even with an empty set — belonging to no group is a state, not an error.
+func (s *Service) GetUserGroups(ctx context.Context, id string) ([]GroupSchema, error) {
+	userID, err := user.UUIDFromWire(id)
+	if err != nil {
+		return nil, ErrMemberNotFound
+	}
+	if err := s.accountExists(ctx, userID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListGroupsOfUser(ctx, s.pool, userID)
+}
+
+// accountExists answers whether the identifier names an account. It is the
+// not-found boundary the per-user procedures share: a malformed identifier
+// and an unknown one are the same refusal, the way the group procedures
+// answer a group the database does not hold.
+func (s *Service) accountExists(ctx context.Context, userID uuid.UUID) error {
+	row := s.pool.QueryRow(ctx, "SELECT 1 FROM "+user.UserTable+" WHERE id = $1", userID)
+	var one int
+	if err := row.Scan(&one); errors.Is(err, datastore.ErrNoRows) {
+		return ErrMemberNotFound
+	} else if err != nil {
+		return fmt.Errorf("usergroup: read account: %w", err)
+	}
+	return nil
+}
+
+// UpdateUserGroups replaces the set of groups one account belongs to. The
+// replacement, the read-back, and the record of it are one transaction: a
+// membership set that changed and the record saying so commit together.
+// Every named group must exist — the repository's existence check runs
+// inside this transaction, so a group deleted between the request's arrival
+// and its write is still refused.
+//
+// The account is read before the transaction opens: an identifier that
+// names no account is the not-found refusal, and the record the change
+// writes names its account, so writing it for one that does not exist
+// would abort the transaction the change ran in.
+func (s *Service) UpdateUserGroups(ctx context.Context, id string, groupIDs []string) ([]GroupSchema, error) {
+	userID, err := user.UUIDFromWire(id)
+	if err != nil {
+		return nil, ErrMemberNotFound
+	}
+	if existErr := s.accountExists(ctx, userID); existErr != nil {
+		return nil, existErr
+	}
+	ids := make([]GroupID, 0, len(groupIDs))
+	for _, raw := range groupIDs {
+		groupID, parseErr := ParseID(raw)
+		if parseErr != nil {
+			return nil, ErrGroupNotFound
+		}
+		ids = append(ids, groupID)
+	}
+
+	var groups []GroupSchema
+	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		if _, setErr := s.repo.SetUserGroups(ctx, tx, userID, ids); setErr != nil {
+			return setErr
+		}
+
+		read, readErr := s.repo.ListGroupsOfUser(ctx, tx, userID)
+		if readErr != nil {
+			return readErr
+		}
+		groups = read
+
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:  audit.EventUserGroupsUpdated,
+			Status: audit.StatusSuccess,
+			UserID: userID.String(),
+			Payload: map[string]string{
+				"group_ids": fmt.Sprint(len(ids)),
+			},
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return groups, nil
 }
 
 // readDetail answers the group and its members over the given query surface.

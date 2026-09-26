@@ -108,6 +108,15 @@ var ProcedureRules = map[string]Entry{
 		Prototype: &identityv1.ResetProfilePictureRequest{},
 	},
 
+	// The account's own door, beside the administrative surface: the target
+	// is the token's subject and the request names nothing, so being
+	// authenticated is the whole requirement — the same reason the audit
+	// trail's self listing and the verification mail carry `Authenticated`.
+	// A delegated caller is refused by the rule itself: a session opened for
+	// another account is not the door to that account's own profile.
+	identityv1connect.UserServiceGetCurrentUserProcedure:      {Rule: Authenticated},
+	identityv1connect.UserServiceUpdateCurrentUserProcedure:   {Rule: Authenticated},
+
 	// Administrative, declared explicitly rather than left to the default so
 	// the table reads as the complete policy of the surface. Upstream guards
 	// every one of these with its admin-required middleware.
@@ -125,6 +134,8 @@ var ProcedureRules = map[string]Entry{
 	identityv1connect.UserGroupServiceUpdateUserGroupProcedure:     {Rule: Admin},
 	identityv1connect.UserGroupServiceDeleteUserGroupProcedure:     {Rule: Admin},
 	identityv1connect.UserGroupServiceSetUserGroupMembersProcedure: {Rule: Admin},
+	identityv1connect.UserGroupServiceGetUserGroupsProcedure:       {Rule: Admin},
+	identityv1connect.UserGroupServiceUpdateUserGroupsProcedure:    {Rule: Admin},
 
 	// The API keys' own surface is session-only: a key cannot manage keys,
 	// the refusal the upstream spells with a middleware switch and this
@@ -184,6 +195,18 @@ var RestRules = []RestEntry{
 	// without one answers the bundled default by redirect.
 	{Method: http.MethodGet, Pattern: "/.well-known/jwks.json", Rule: Public},
 	{Method: http.MethodGet, Pattern: "/api/users/{id}/profile-picture.png", Rule: Public},
+
+	// The `/me` writes come before the `/{id}` write: the table is matched
+	// in order, and a `{id}` pattern checked first would swallow `me` and
+	// compare the word against a subject — the refusal a real identifier
+	// earns, applied to a route that names no account at all.
+	//
+	// They are the account's own by construction: no identifier travels, so
+	// the target is the caller the bearer middleware verified, and being
+	// authenticated is the whole requirement. The rules are the `/{id}`
+	// write's answer to the routes upstream offers beside it.
+	{Method: http.MethodPut, Pattern: "/api/users/me/profile-picture", Rule: Authenticated},
+	{Method: http.MethodDelete, Pattern: "/api/users/me/profile-picture", Rule: Authenticated},
 
 	// The write is the account's own: the caller must be the account named in
 	// the path. An administrator does not pass by virtue of the role — the

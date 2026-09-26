@@ -76,6 +76,11 @@ const (
 	// log's one filter cannot see inside a payload.
 	EventGroupMembersUpdated = "group_members_updated"
 
+	// EventUserGroupsUpdated is the account's own group set replaced — the
+	// per-user direction of the membership change, which names the account
+	// rather than the group and so is its own event too.
+	EventUserGroupsUpdated = "user_groups_updated"
+
 	// EventSignOut is a session ended by its own holder. It is the closing
 	// counterpart of sign_in, and the record names the session it ended so
 	// an operator can pair the two lines.

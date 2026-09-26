@@ -107,6 +107,17 @@ type UpdateParams struct {
 	BanReason    *string
 }
 
+// ProfileParams carries the fields a signed-in account may change about
+// itself: the display surface only. The narrow shape is the self-service
+// boundary — a caller cannot smuggle a role or an address through a
+// request the administrative surface does not own.
+type ProfileParams struct {
+	FirstName   string
+	LastName    string
+	DisplayName string
+	Locale      string
+}
+
 // UserView is an account as the procedures answer it: the fields a client
 // renders or an operator manages, never the credential hash.
 type UserView struct {
@@ -217,6 +228,91 @@ func (s *Service) GetUser(ctx context.Context, id string) (UserView, error) {
 	if errors.Is(err, datastore.ErrNoRows) {
 		return UserView{}, ErrUserNotFound
 	}
+	if err != nil {
+		return UserView{}, err
+	}
+	return view(row), nil
+}
+
+// GetCurrentUser answers the account the caller is. The caller's identifier
+// is the token's subject — a wire-form TypeID — so the read takes no target
+// from the request. An account the identifier no longer names is the
+// not-found failure, the same refusal a deleted account earns anywhere.
+func (s *Service) GetCurrentUser(ctx context.Context, subject string) (UserView, error) {
+	userID, err := parseWire(subject)
+	if err != nil {
+		return UserView{}, ErrUserNotFound
+	}
+	row, err := s.repo.GetUser(ctx, s.pool, userID)
+	if errors.Is(err, datastore.ErrNoRows) {
+		return UserView{}, ErrUserNotFound
+	}
+	if err != nil {
+		return UserView{}, err
+	}
+	return view(row), nil
+}
+
+// UpdateCurrentUser replaces the signed-in account's own profile fields.
+// The writable set is deliberately narrower than the administrative
+// replace: the names and the locale travel, the credential and the role do
+// not. The self rule the guard applied has already established the caller
+// is the account; the read supplies the immutable columns the update
+// statement leaves alone.
+func (s *Service) UpdateCurrentUser(ctx context.Context, subject string, params ProfileParams) (UserView, error) {
+	userID, err := parseWire(subject)
+	if err != nil {
+		return UserView{}, ErrUserNotFound
+	}
+	existing, err := s.repo.GetUser(ctx, s.pool, userID)
+	if errors.Is(err, datastore.ErrNoRows) {
+		return UserView{}, ErrUserNotFound
+	}
+	if err != nil {
+		return UserView{}, err
+	}
+
+	row := UserSchema{
+		ID:          userID,
+		Username:    existing.Username,
+		Email:       existing.Email,
+		FirstName:   params.FirstName,
+		LastName:    params.LastName,
+		DisplayName: params.DisplayName,
+		Locale:      params.Locale,
+		IsAdmin:     existing.IsAdmin,
+		Disabled:    existing.Disabled,
+		// The immutable columns and the ban state ride through untouched:
+		// this update owns the profile, nothing else.
+		CreatedAt:       existing.CreatedAt,
+		BannedAt:        existing.BannedAt,
+		BanExpires:      existing.BanExpires,
+		BanReason:       existing.BanReason,
+		EmailVerifiedAt: existing.EmailVerifiedAt,
+	}
+
+	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		updated, updateErr := s.repo.UpdateUser(ctx, tx, row)
+		if errUniqueViolation(updateErr) {
+			return ErrAccountExists
+		}
+		if updateErr != nil {
+			return updateErr
+		}
+		if !updated {
+			return ErrUserNotFound
+		}
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:  audit.EventAccountUpdated,
+			Status: audit.StatusSuccess,
+			UserID: userID.String(),
+			Payload: map[string]string{
+				"username": row.Username,
+				"source":   "self",
+			},
+		})
+		return nil
+	})
 	if err != nil {
 		return UserView{}, err
 	}

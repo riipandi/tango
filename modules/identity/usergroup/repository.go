@@ -316,6 +316,93 @@ func (r *Repository) SetMembers(ctx context.Context, db datastore.Querier, group
 	return len(userIDs), nil
 }
 
+// ListGroupsOfUser answers the groups one account belongs to, ordered by the
+// group's display name. The join is an INNER one: a membership row survives
+// only beside its group, so the inner form drops nothing.
+func (r *Repository) ListGroupsOfUser(ctx context.Context, db datastore.Querier, userID uuid.UUID) ([]GroupSchema, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("g.id", "g.name", "g.display_name", "g.created_at", "g.updated_at")
+	sb.From(GroupTable + " g")
+	sb.Join(GroupMemberTable+" m", "m.user_group_id = g.id")
+	sb.Where(sb.Equal("m.user_id", userID))
+	sb.OrderBy("lower(g.display_name)", "g.id")
+
+	query, args := sb.Build()
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("usergroup: list groups of user: %w", err)
+	}
+	defer rows.Close()
+
+	groups := []GroupSchema{}
+	for rows.Next() {
+		group, err := scanGroup(rows.Scan)
+		if err != nil {
+			return nil, fmt.Errorf("usergroup: list groups of user: %w", err)
+		}
+		groups = append(groups, group)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("usergroup: list groups of user: %w", err)
+	}
+	return groups, nil
+}
+
+// SetUserGroups replaces the set of groups one account belongs to. It is
+// the per-user mirror of SetMembers: a delete of the account's memberships
+// and a batched insert, one statement pair inside the caller's transaction.
+//
+// The groups are checked first, the way SetMembers checks the accounts:
+// every identifier must name a group, because a membership into nothing
+// would make the account wrong rather than merely ungrouped.
+func (r *Repository) SetUserGroups(ctx context.Context, db datastore.Querier, userID uuid.UUID, groupIDs []GroupID) (int, error) {
+	if len(groupIDs) > 0 {
+		keys := make([]any, 0, len(groupIDs))
+		for _, id := range groupIDs {
+			keys = append(keys, id.UUID())
+		}
+		cb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+		cb.Select("count(*)")
+		cb.From(GroupTable)
+		cb.Where(cb.In("id", keys...))
+
+		query, args := cb.Build()
+		var found int
+		if err := db.QueryRow(ctx, query, args...).Scan(&found); err != nil {
+			return 0, fmt.Errorf("usergroup: count groups of user: %w", err)
+		}
+		if found != len(groupIDs) {
+			return 0, ErrGroupNotFound
+		}
+	}
+
+	dbl := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	dbl.DeleteFrom(GroupMemberTable)
+	dbl.Where(dbl.Equal("user_id", userID))
+
+	query, args := dbl.Build()
+	if _, err := db.Exec(ctx, query, args...); err != nil {
+		return 0, fmt.Errorf("usergroup: clear user groups: %w", err)
+	}
+
+	if len(groupIDs) == 0 {
+		return 0, nil
+	}
+
+	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+	ib.InsertInto(GroupMemberTable)
+	ib.Cols("user_id", "user_group_id")
+	for _, groupID := range groupIDs {
+		ib.Values(userID, groupID.UUID())
+	}
+
+	query, args = ib.Build()
+	if _, err := db.Exec(ctx, query, args...); err != nil {
+		return 0, fmt.Errorf("usergroup: insert user groups: %w", err)
+	}
+	return len(groupIDs), nil
+}
+
 // errUniqueViolation reports whether the write failed on a unique index, the
 // way the name index answers a duplicate group.
 func errUniqueViolation(err error) bool {

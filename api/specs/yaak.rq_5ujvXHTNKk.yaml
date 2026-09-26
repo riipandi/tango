@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_5ujvXHTNKk
 createdAt: 2026-09-19T12:34:22.896626
-updatedAt: 2026-09-26T12:27:44.647504
+updatedAt: 2026-09-26T17:00:13.227533
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
 authentication:
@@ -12,8 +12,8 @@ body:
   bodyType: application/json
   text: |-
     {
-      "id": "${[ response.body.path(request='rq_UcqfuDYCPx', behavior='smart', ttl='0', result='first', join=', ', path='') ]}",
-      "user_ids": []
+      "id": "${[ response.body.path(request='rq_UcqfuDYCPx', behavior='smart', ttl='0', result='first', join=', ', path='$.groups[0].id') ]}",
+      "user_ids": ["${[ userId ]}"]
     }
 bodyType: application/json
 description: |-
@@ -24,6 +24,8 @@ description: |-
   Parameters:
   - id (body, required): user group ID
   - user_ids (body, required): user IDs; every one must name an account
+
+  The `id` field is the group's wire TypeID (`ugrp_...`), not the row's UUID - the UUID never leaves the server. Member ids stay the account's `user_` TypeID.
 headers:
 - enabled: true
   name: Content-Type

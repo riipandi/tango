@@ -7,6 +7,7 @@ import (
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/audit"
@@ -298,6 +299,109 @@ func created(t *testing.T, service *Service, name, displayName string) GroupDeta
 func rowID(t *testing.T, id GroupID) string {
 	t.Helper()
 	return id.UUID()
+}
+
+// userAuditCount reads how many records the log holds of one event about one
+// account — the per-user membership change names its account, not a group.
+func userAuditCount(t *testing.T, pool *datastore.Postgres, event, userID string) int {
+	t.Helper()
+
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("count(*)")
+	sb.From("public.audit_logs")
+	sb.Where(sb.Equal("event", event), sb.Equal("user_id", userID))
+
+	query, args := sb.Build()
+	var count int
+	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&count))
+	return count
+}
+
+// TestGetUserGroupsAnswersTheAccountSMembership reads the groups back from
+// the per-user direction, ordered by display name, after the memberships
+// were written from the per-group one. An account in no group answers an
+// empty set, not an error.
+func TestGetUserGroupsAnswersTheAccountSMembership(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testService(t, pool)
+
+	gryffindor := created(t, service, "gryffindor", "Gryffindor")
+	slytherin := created(t, service, "slytherin", "Slytherin")
+
+	hermione := seedAccount(t, pool, "hermione")
+	_, err := service.SetUserGroupMembers(t.Context(), slytherin.ID.String(), []string{wireOf(t, hermione)})
+	require.NoError(t, err)
+
+	groups, err := service.GetUserGroups(t.Context(), wireOf(t, hermione))
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	assert.Equal(t, "slytherin", groups[0].Name)
+
+	// The replace from the other direction, then the read again: the two
+	// directions share the same junction table.
+	_, err = service.UpdateUserGroups(t.Context(), wireOf(t, hermione), []string{gryffindor.ID.String()})
+	require.NoError(t, err)
+	groups, err = service.GetUserGroups(t.Context(), wireOf(t, hermione))
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	assert.Equal(t, "gryffindor", groups[0].Name)
+
+	ron := seedAccount(t, pool, "ron")
+	groups, err = service.GetUserGroups(t.Context(), wireOf(t, ron))
+	require.NoError(t, err)
+	assert.Empty(t, groups)
+}
+
+// TestUpdateUserGroupsReplacesAndRefusesTheUnknown pins the replace: the
+// request names the whole set, an empty list ungroups the account, and a
+// group that does not exist refuses the call whole — a membership is not
+// created into nothing.
+func TestUpdateUserGroupsReplacesAndRefusesTheUnknown(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testService(t, pool)
+
+	gryffindor := created(t, service, "gryffindor", "Gryffindor")
+	slytherin := created(t, service, "slytherin", "Slytherin")
+
+	hermione := seedAccount(t, pool, "hermione")
+	hermioneWire := wireOf(t, hermione)
+
+	groups, err := service.UpdateUserGroups(t.Context(), hermioneWire, []string{slytherin.ID.String(), gryffindor.ID.String()})
+	require.NoError(t, err)
+	require.Len(t, groups, 2)
+
+	// An empty list is the ungrouped state.
+	groups, err = service.UpdateUserGroups(t.Context(), hermioneWire, nil)
+	require.NoError(t, err)
+	assert.Empty(t, groups)
+
+	// A group that does not exist refuses the whole replace.
+	unknown, err := usergroupUnknownID(t)
+	require.NoError(t, err)
+	_, err = service.UpdateUserGroups(t.Context(), hermioneWire, []string{unknown})
+	assert.ErrorIs(t, err, ErrGroupNotFound)
+
+	// An account that does not exist is the same refusal from the other end.
+	_, err = service.UpdateUserGroups(t.Context(), "user_00000000000000000000000000", nil)
+	assert.ErrorIs(t, err, ErrMemberNotFound)
+
+	// The record of the change names the account, not a group.
+	assert.Equal(t, 2, userAuditCount(t, pool, audit.EventUserGroupsUpdated, hermione))
+}
+
+// usergroupUnknownID mints a well-formed group identifier no row answers,
+// for the refusal boundary.
+func usergroupUnknownID(t *testing.T) (string, error) {
+	t.Helper()
+	id, err := typeid.New[GroupID]()
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
 }
 
 func auditCount(t *testing.T, pool *datastore.Postgres, event, groupID string) int {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -32,6 +33,65 @@ const maxPictureSize = 2 << 20
 // the picture — the raw bytes, not a wrapper around them — and the read cap
 // bounds it before it reaches the service, which owns the kind check.
 func (m *Module) Mount(r chi.Router) {
+	// The `/me` writes come first. chi matches the first pattern whose trie
+	// node claims a segment, so a param node registered before the static
+	// one would swallow `me` and answer the self-service write with the
+	// identifier-addressed one.
+	//
+	// They are the account's own by construction: the guard's Authenticated
+	// rule established the caller and refused a delegation, so the handler
+	// reads the subject the bearer middleware verified. The request names no
+	// identifier on purpose — an identifier would be a second identity the
+	// two halves could disagree about.
+	r.Put("/api/users/me/profile-picture", func(w http.ResponseWriter, r *http.Request) {
+		caller, ok := jwtutils.CallerFrom(r.Context())
+		if !ok {
+			responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
+			return
+		}
+
+		body := http.MaxBytesReader(w, r.Body, maxPictureSize)
+		data, err := io.ReadAll(body)
+		if err != nil {
+			responder.Fail(w, r, http.StatusRequestEntityTooLarge,
+				"the picture must be at most 2 MiB")
+			return
+		}
+
+		err = m.service.UpdateProfilePicture(r.Context(), caller.UserID, data)
+		switch {
+		case errors.Is(err, ErrUnsupportedPicture):
+			responder.Fail(w, r, http.StatusUnsupportedMediaType,
+				"the picture must be a PNG, JPEG, or WebP image")
+		case errors.Is(err, ErrPicturesUnavailable):
+			responder.Fail(w, r, http.StatusServiceUnavailable,
+				"picture storage is not available")
+		case err != nil:
+			responder.WriteError(w, r, err)
+		default:
+			responder.Success(w, r, http.StatusOK, nil, responder.WithMessage("the profile picture was updated"))
+		}
+	})
+
+	r.Delete("/api/users/me/profile-picture", func(w http.ResponseWriter, r *http.Request) {
+		caller, ok := jwtutils.CallerFrom(r.Context())
+		if !ok {
+			responder.Fail(w, r, http.StatusUnauthorized, "authentication required")
+			return
+		}
+
+		err := m.service.ResetProfilePicture(r.Context(), caller.UserID)
+		switch {
+		case errors.Is(err, ErrPicturesUnavailable):
+			responder.Fail(w, r, http.StatusServiceUnavailable,
+				"picture storage is not available")
+		case err != nil:
+			responder.WriteError(w, r, err)
+		default:
+			responder.Success(w, r, http.StatusOK, nil, responder.WithMessage("the profile picture was reset"))
+		}
+	})
+
 	r.Get("/api/users/{id}/profile-picture.png", func(w http.ResponseWriter, r *http.Request) {
 		picture, err := m.service.ProfilePicture(r.Context(), chi.URLParam(r, "id"))
 		switch {
