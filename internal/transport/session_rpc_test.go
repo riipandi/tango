@@ -170,6 +170,13 @@ func TestTheSessionLifecycleEndsInAStamp(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
 	assert.Contains(t, rec.Body.String(), "the session has ended")
 
+	// The account-scoped procedures honour the same gate: the list a
+	// sign-out ends is not served to the credential that signed out.
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceListSessionsProcedure, `{}`))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "the session has ended")
+
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceRefreshProcedure,
 		`{"refresh_token":"`+refreshed.RefreshToken+`"}`))
@@ -231,10 +238,13 @@ func TestTheBulkSignOutsSweepTheAccountSessions(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &all))
 	assert.Equal(t, 1, all.RevokedCount)
 
+	// The caller's own row is dead now, and the session surface honours
+	// that: the sweep answers the ended failure instead of running, because
+	// a credential the surface no longer honours cannot manage sessions.
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceSignOutAllSessionsProcedure, `{}`))
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Contains(t, rec.Body.String(), "you had no live sessions to sign out")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "the session has ended")
 }
 
 // TestTheSessionGuardIsDeclared pins the five procedures' rule: every one is

@@ -184,6 +184,42 @@ func TestSignOutStampsTheRowAndTheRefreshTokenDies(t *testing.T) {
 	assert.Equal(t, 1, auditCount(t, pool, audit.EventSignOut, sid.UUID()))
 }
 
+func TestAnEndedSessionCannotManageSessions(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service, now := testService(t, pool)
+	userID := seedAccount(t, pool, "hermione")
+	live, _ := seedSession(t, pool, userID, "live", "password", false)
+	dead, _ := seedSession(t, pool, userID, "dead", "password", false)
+
+	// The stamped row: the holder signed out from this client, and the
+	// surface no longer honours the credential it left behind.
+	_, err := service.SignOut(t.Context(), dead.String(), userID.String())
+	require.NoError(t, err)
+
+	_, _, err = service.ListSessions(t.Context(), dead.String(), userID.String(), 1, 10)
+	assert.ErrorIs(t, err, ErrSessionEnded)
+	_, err = service.SignOutOtherSessions(t.Context(), dead.String(), userID.String())
+	assert.ErrorIs(t, err, ErrSessionEnded)
+	_, err = service.SignOutAllSessions(t.Context(), dead.String(), userID.String())
+	assert.ErrorIs(t, err, ErrSessionEnded)
+	assert.ErrorIs(t, service.RevokeSession(t.Context(), dead.String(), userID.String(), live.String()), ErrSessionEnded)
+
+	// A live row still manages as before, until its own window closes.
+	_, _, err = service.ListSessions(t.Context(), live.String(), userID.String(), 1, 10)
+	require.NoError(t, err)
+
+	// The window closing without a stamp is the same refusal: the row is
+	// still unstamped, and no procedure of the surface answers for it.
+	live2, _ := seedSession(t, pool, userID, "live-2", "password", false)
+	jump(t, now, 48*time.Hour)
+	_, _, err = service.ListSessions(t.Context(), live2.String(), userID.String(), 1, 10)
+	assert.ErrorIs(t, err, ErrSessionEnded)
+	_, err = service.SignOutOtherSessions(t.Context(), live2.String(), userID.String())
+	assert.ErrorIs(t, err, ErrSessionEnded)
+}
+
 func TestSignOutOtherSessionsSweepsEveryLiveRowButTheCallerOwn(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
@@ -333,9 +369,14 @@ func TestRevokeSessionEndsOneOfTheAccountsAndRefusesAnOthers(t *testing.T) {
 	assert.ErrorIs(t, service.RevokeSession(t.Context(), current.String(), userID.String(), theirs.String()), ErrSessionNotFound)
 	assert.ErrorIs(t, service.RevokeSession(t.Context(), current.String(), userID.String(), "sess_000000000000000000000000a"), ErrSessionNotFound)
 
+	// A caller whose own session has ended cannot manage sessions at all:
+	// the gate is the caller's own row, not the target's.
+	assert.ErrorIs(t, service.RevokeSession(t.Context(), other.String(), userID.String(), theirs.String()), ErrSessionEnded)
+
 	// Ending the current session is what SignOut does; the event names the
 	// happening so the log can tell the two apart.
-	require.NoError(t, service.RevokeSession(t.Context(), other.String(), userID.String(), current.String()))
+	third, _ := seedSession(t, pool, userID, "third", "password", false)
+	require.NoError(t, service.RevokeSession(t.Context(), third.String(), userID.String(), current.String()))
 	assert.Equal(t, 1, auditCount(t, pool, audit.EventSessionRevoked, current.UUID()))
 }
 
@@ -351,7 +392,7 @@ func TestListSessionsAnswersTheAccountsOwnNewestFirst(t *testing.T) {
 	secondOfFirst, _ := seedSession(t, pool, userID, "second", "one_time_access", true)
 	seedSession(t, pool, second, "theirs", "password", false)
 
-	rows, pagination, err := service.ListSessions(t.Context(), userID.String(), 1, 10)
+	rows, pagination, err := service.ListSessions(t.Context(), first.String(), userID.String(), 1, 10)
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
 	assert.Equal(t, 2, *pagination.TotalItems)

@@ -191,10 +191,39 @@ func (s *Service) GetSession(ctx context.Context, callerSession string) (Session
 	return row, view, nil
 }
 
+// liveOwnSession is the gate the account-scoped procedures read through: a
+// caller whose own session row is no longer live — stamped, or past its
+// window — holds a credential the protocol still verifies but the session
+// surface no longer honours. The gate is the session surface's alone: the
+// rest of the API stays stateless, the trade the protocol settled.
+func (s *Service) liveOwnSession(ctx context.Context, db datastore.Querier, sid SessionID) error {
+	row, err := s.repo.GetSession(ctx, db, sid)
+	if errors.Is(err, datastore.ErrNoRows) {
+		return ErrSessionEnded
+	}
+	if err != nil {
+		return err
+	}
+	if row.RevokedAt != nil || !row.ExpiresAt.After(s.now()) {
+		return ErrSessionEnded
+	}
+	return nil
+}
+
 // ListSessions answers one page of the account's sessions, newest first,
-// ended ones included.
-func (s *Service) ListSessions(ctx context.Context, callerID string, page, limit int) ([]SessionSchema, responder.Pagination, error) {
+// ended ones included. The gate is the caller's own session: a sign-out ends
+// the holder's view of the list along with everything else the session
+// surface serves.
+func (s *Service) ListSessions(ctx context.Context, callerSession, callerID string, page, limit int) ([]SessionSchema, responder.Pagination, error) {
 	page, limit = responder.NormalizePage(page, limit, responder.DefaultPageSize, responder.MaxPageSize)
+
+	sid, err := parseSessionID(callerSession)
+	if err != nil {
+		return nil, responder.Pagination{}, ErrSessionEnded
+	}
+	if liveErr := s.liveOwnSession(ctx, s.pool, sid); liveErr != nil {
+		return nil, responder.Pagination{}, liveErr
+	}
 
 	userID, err := uuid.Parse(callerID)
 	if err != nil {
@@ -229,6 +258,9 @@ func (s *Service) RevokeSession(ctx context.Context, callerSession, callerID, ta
 	}
 
 	return s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		if liveErr := s.liveOwnSession(ctx, tx, sid); liveErr != nil {
+			return liveErr
+		}
 		row, getErr := s.repo.GetSession(ctx, tx, targetID)
 		if errors.Is(getErr, datastore.ErrNoRows) {
 			return ErrSessionNotFound
@@ -310,6 +342,9 @@ func (s *Service) revokeBulk(ctx context.Context, callerSession, callerID, reaso
 
 	revoked := 0
 	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		if liveErr := s.liveOwnSession(ctx, tx, sid); liveErr != nil {
+			return liveErr
+		}
 		rows, bulkErr := s.repo.RevokeLiveForUser(ctx, tx, userID, keep, userID, s.now())
 		if bulkErr != nil {
 			return bulkErr

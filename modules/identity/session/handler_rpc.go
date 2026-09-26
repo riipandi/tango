@@ -197,7 +197,7 @@ func (h *rpcHandler) ListSessions(ctx context.Context, req *connect.Request[auth
 		return nil, connect.NewError(connect.CodeInternal, errors.New("authentication state missing"))
 	}
 
-	rows, pagination, err := h.service.ListSessions(ctx, caller.UserID, int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
+	rows, pagination, err := h.service.ListSessions(ctx, caller.SessionID, caller.UserID, int(req.Msg.GetPage()), int(req.Msg.GetLimit()))
 	if err != nil {
 		return nil, mapError(err)
 	}
