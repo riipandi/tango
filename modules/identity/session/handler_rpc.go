@@ -337,6 +337,8 @@ func mapError(err error) error {
 	switch {
 	case errors.Is(err, ErrSessionEnded):
 		return connect.NewError(connect.CodeUnauthenticated, errors.New("the session has ended"))
+	case errors.Is(err, ErrSessionNotFound):
+		return connect.NewError(connect.CodeNotFound, errors.New("session not found"))
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("session operation failed"))
 	}

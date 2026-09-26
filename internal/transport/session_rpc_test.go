@@ -247,6 +247,45 @@ func TestTheBulkSignOutsSweepTheAccountSessions(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "the session has ended")
 }
 
+// TestARevocationNamingNoSessionAnswersNotFound pins the wire code a target
+// the caller cannot name gets: a well-formed identifier that names no row —
+// theirs or another account's — is the not-found refusal the guard spells,
+// never the internal failure an unmapped service error would leak.
+func TestARevocationNamingNoSessionAnswersNotFound(t *testing.T) {
+	pool := sessionPool(t)
+
+	insertSession := func(name string) string {
+		t.Helper()
+		_, err := pool.Exec(t.Context(), `
+			INSERT INTO public.sessions (user_id, provider, token_hash, user_agent, remember, created_at, expires_at)
+			VALUES ($1, 'password', $2, 'test-agent/1.0', false, now() - interval '1 minute', now() + interval '24 hours')`,
+			hermioneSessionOwner, crypto.HashRefreshToken("refresh-token-"+name))
+		require.NoError(t, err)
+		var rawID string
+		require.NoError(t, pool.QueryRow(t.Context(),
+			`SELECT id FROM public.sessions WHERE token_hash = $1`,
+			crypto.HashRefreshToken("refresh-token-"+name)).Scan(&rawID))
+		sid, err := typeid.FromUUID[session.SessionID](rawID)
+		require.NoError(t, err)
+		return sid.String()
+	}
+	current := insertSession("current")
+
+	router, _ := newSessionRouter(t, sessionCallerAuthenticator(wireID(t, hermioneSessionOwner), current, false), pool)
+
+	for name, body := range map[string]string{
+		"unknown identifier": `{"id":"sess_00000000000000000000000000"}`,
+		"foreign identifier": `{"id":"sess_01a0da3e11117000800000000001"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceRevokeSessionProcedure, body))
+			assert.Equal(t, http.StatusNotFound, rec.Code, rec.Body.String())
+			assert.NotContains(t, rec.Body.String(), "internal", rec.Body.String())
+		})
+	}
+}
+
 // TestTheSessionGuardIsDeclared pins the session procedures' rule: every one
 // but Refresh is session-only, so a caller without a credential is refused as
 // unauthenticated, a machine credential is refused with the not-found shape —
