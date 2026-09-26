@@ -32,6 +32,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/modules/identity/signup"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/modules/identity/usergroup"
 	"github.com/riipandi/tango/modules/identity/verification"
 	"github.com/riipandi/tango/pkg/jwtutils"
 )
@@ -64,6 +65,9 @@ type Deps struct {
 	// OneTimeAccess issues and consumes the codes that sign an account in
 	// without its password.
 	OneTimeAccess *onetimeaccess.Service
+
+	// UserGroups administers the groups accounts belong to.
+	UserGroups *usergroup.Service
 
 	// Storage is the file engine the profile pictures live in. A nil engine
 	// leaves the picture procedures refusing while the account procedures
@@ -175,6 +179,13 @@ var Package = do.Package(
 		client := do.MustInvoke[*queue.Client](i)
 		return onetimeaccess.NewService(*c, pool, issuer, recorder, mail, client, log), nil
 	}),
+
+	do.Lazy(func(i do.Injector) (*usergroup.Service, error) {
+		log := do.MustInvoke[*slog.Logger](i)
+		pool := do.MustInvoke[*datastore.Postgres](i)
+		recorder := do.MustInvoke[*audit.Recorder](i)
+		return usergroup.NewService(pool, recorder, log), nil
+	}),
 )
 
 // Mount resolves what this area's features need and builds the module the
@@ -203,6 +214,7 @@ func Mount(i do.Injector) (kernel.Module, error) {
 		Users:         do.MustInvoke[*user.Service](i),
 		Verification:  do.MustInvoke[*verification.Service](i),
 		OneTimeAccess: do.MustInvoke[*onetimeaccess.Service](i),
+		UserGroups:    do.MustInvoke[*usergroup.Service](i),
 	}), nil
 }
 
@@ -228,6 +240,9 @@ func features(deps Deps) []kernel.Module {
 	}
 	if deps.OneTimeAccess != nil {
 		modules = append(modules, onetimeaccess.NewModule(deps.OneTimeAccess))
+	}
+	if deps.UserGroups != nil {
+		modules = append(modules, usergroup.NewModule(deps.UserGroups))
 	}
 	return modules
 }

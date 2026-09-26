@@ -60,6 +60,21 @@ const (
 
 	// EventProfilePictureReset is an account's picture cleared.
 	EventProfilePictureReset = "profile_picture_reset"
+
+	// EventGroupCreated is a user group that did not exist now does.
+	EventGroupCreated = "group_created"
+
+	// EventGroupUpdated is a user group's fields rewritten.
+	EventGroupUpdated = "group_updated"
+
+	// EventGroupDeleted is a user group removed.
+	EventGroupDeleted = "group_deleted"
+
+	// EventGroupMembersUpdated is a user group's member set replaced. The
+	// membership change is the happening the reader looks for, so it is its
+	// own event rather than the group_updated event with a payload — the
+	// log's one filter cannot see inside a payload.
+	EventGroupMembersUpdated = "group_members_updated"
 )
 
 // The trigger values the trigger_type column's enum allows. A record this

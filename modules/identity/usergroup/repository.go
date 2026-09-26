@@ -1,1 +1,315 @@
 package usergroup
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/huandu/go-sqlbuilder"
+	"github.com/jackc/pgx/v5/pgconn"
+	"uuid"
+
+	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/modules/identity/user"
+)
+
+// The columns a sort answers by, mapped to the SQL expression each is ordered
+// by. The name columns are case-insensitive because a group named `aardvark`
+// and one named `Zebra` read in dictionary order, not in byte order; the count
+// is ordered by what the join computes, not by any column.
+var sortColumns = map[string]string{
+	"name":         "lower(g.name)",
+	"display_name": "lower(g.display_name)",
+	"user_count":   "count(m.user_id)",
+	"created_at":   "g.created_at",
+}
+
+// Repository reads and writes the group rows the administration procedures
+// manage. Every method takes the query surface, so the service passes either
+// the pool or the transaction it runs in.
+type Repository struct{}
+
+// NewRepository builds the repository over the shared pool.
+func NewRepository() *Repository {
+	return &Repository{}
+}
+
+// groupColumns are the columns the group procedures read, in scan order.
+var groupColumns = []string{"g.id", "g.name", "g.display_name", "g.created_at", "g.updated_at"}
+
+// scanGroup reads one group row into the schema.
+func scanGroup(scan func(dest ...any) error) (GroupSchema, error) {
+	var row GroupSchema
+	err := scan(&row.ID, &row.Name, &row.DisplayName, &row.CreatedAt, &row.UpdatedAt)
+	if err != nil {
+		return GroupSchema{}, err
+	}
+	return row, nil
+}
+
+// ListGroups answers one page of the groups, ordered as the caller asked, with
+// the total count the pagination metadata needs.
+//
+// The join is a LEFT join, and it is spelled with the option because
+// `JoinWithOption` is the only door to it: `sb.Join` is an INNER join, which
+// would drop every group whose membership is empty — exactly the groups an
+// administrator just created and is about to fill. The GROUP BY turns the
+// joined membership rows into one row per group, and the aggregate is the
+// member count the list carries.
+func (r *Repository) ListGroups(ctx context.Context, db datastore.Querier, search, sortBy string, ascending bool, offset, limit int) ([]GroupRow, int, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select(append(groupColumns, "count(m.user_id)")...)
+	sb.From(GroupTable + " g")
+	sb.JoinWithOption(sqlbuilder.LeftJoin, GroupMemberTable+" m", "m.user_group_id = g.id")
+	sb.GroupBy("g.id")
+	applySearch(sb, search)
+	order, ok := sortColumns[sortBy]
+	if !ok {
+		order = sortColumns["display_name"]
+	}
+	if !ascending {
+		order += " DESC"
+	} else {
+		order += " ASC"
+	}
+	sb.OrderBy(order, "g.id")
+	sb.Limit(limit).Offset(offset)
+
+	query, args := sb.Build()
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("usergroup: list: %w", err)
+	}
+	defer rows.Close()
+
+	groups := []GroupRow{}
+	for rows.Next() {
+		group, err := scanListRow(rows.Scan)
+		if err != nil {
+			return nil, 0, fmt.Errorf("usergroup: list: %w", err)
+		}
+		groups = append(groups, group)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("usergroup: list: %w", err)
+	}
+
+	// The count query filters by the same search but joins nothing: the
+	// member count belongs to the page's rows, not to the pagination.
+	cb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	cb.Select("count(*)")
+	cb.From(GroupTable + " g")
+	applySearch(cb, search)
+	query, args = cb.Build()
+	var total int
+	if err := db.QueryRow(ctx, query, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("usergroup: count: %w", err)
+	}
+	return groups, total, nil
+}
+
+// applySearch narrows a list to the groups whose name or display name matches
+// the term. It is applied to the page query and to the count query separately,
+// because a builder's condition and its argument list are one thing.
+func applySearch(sb *sqlbuilder.SelectBuilder, search string) {
+	if search != "" {
+		pattern := "%" + search + "%"
+		sb.Where(sb.Or(
+			sb.ILike("g.name", pattern),
+			sb.ILike("g.display_name", pattern),
+		))
+	}
+}
+
+// scanListRow reads one row of the joined list answer. The group's columns
+// and the member count scan together: one row is one Scan call, and a second
+// call would read a row that is not there.
+func scanListRow(scan func(dest ...any) error) (GroupRow, error) {
+	var row GroupRow
+	var count int
+	err := scan(
+		&row.ID, &row.Name, &row.DisplayName, &row.CreatedAt, &row.UpdatedAt,
+		&count,
+	)
+	if err != nil {
+		return GroupRow{}, err
+	}
+	// A LEFT join answers no joined rows as zero, which is the count a group
+	// without members carries.
+	row.UserCount = count
+	return row, nil
+}
+
+// GetGroup reads one group by its identifier. An identifier that names no
+// group is the caller's not-found failure.
+func (r *Repository) GetGroup(ctx context.Context, db datastore.Querier, id uuid.UUID) (GroupSchema, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("id", "name", "display_name", "created_at", "updated_at")
+	sb.From(GroupTable)
+	sb.Where(sb.Equal("id", id))
+
+	query, args := sb.Build()
+	row, err := scanGroup(func(dest ...any) error {
+		return db.QueryRow(ctx, query, args...).Scan(dest...)
+	})
+	if errors.Is(err, datastore.ErrNoRows) {
+		return GroupSchema{}, datastore.ErrNoRows
+	}
+	if err != nil {
+		return GroupSchema{}, fmt.Errorf("usergroup: get: %w", err)
+	}
+	return row, nil
+}
+
+// CreateGroup inserts the group row and answers its identifier. The unique
+// index on the name is the storage of the name rule, and the service reads
+// the write's failure to answer a duplicate.
+func (r *Repository) CreateGroup(ctx context.Context, db datastore.Querier, row GroupSchema) (uuid.UUID, error) {
+	row.ID = uuid.NewV7()
+
+	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+	ib.InsertInto(GroupTable)
+	ib.Cols("id", "name", "display_name")
+	ib.Values(row.ID, row.Name, row.DisplayName)
+
+	query, args := ib.Build()
+	if _, err := db.Exec(ctx, query, args...); err != nil {
+		return uuid.Nil(), err
+	}
+	return row.ID, nil
+}
+
+// UpdateGroup replaces a group's two fields and answers whether the identifier
+// named a row. The updated instant is the trigger's job, not this query's.
+func (r *Repository) UpdateGroup(ctx context.Context, db datastore.Querier, row GroupSchema) (bool, error) {
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(GroupTable)
+	ub.Set(
+		ub.Assign("name", row.Name),
+		ub.Assign("display_name", row.DisplayName),
+	)
+	ub.Where(ub.Equal("id", row.ID))
+
+	query, args := ub.Build()
+	tag, err := db.Exec(ctx, query, args...)
+	if err != nil {
+		return false, fmt.Errorf("usergroup: update: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// DeleteGroup removes a group and answers whether an identifier named a row.
+// The membership rows die with the group by the foreign keys' cascade.
+func (r *Repository) DeleteGroup(ctx context.Context, db datastore.Querier, id uuid.UUID) (bool, error) {
+	dbl := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	dbl.DeleteFrom(GroupTable)
+	dbl.Where(dbl.Equal("id", id))
+
+	query, args := dbl.Build()
+	tag, err := db.Exec(ctx, query, args...)
+	if err != nil {
+		return false, fmt.Errorf("usergroup: delete: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// ListMembers answers the accounts that belong to a group, ordered by
+// username. The join is an INNER one on purpose: a membership row whose
+// account is gone cannot exist, because the foreign key cascades, so a LEFT
+// join would have nothing to preserve.
+func (r *Repository) ListMembers(ctx context.Context, db datastore.Querier, groupID uuid.UUID) ([]user.UserSchema, error) {
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select(user.UserColumns...)
+	sb.From(user.UserTable + " u")
+	sb.Join(GroupMemberTable+" m", "m.user_id = u.id")
+	sb.Where(sb.Equal("m.user_group_id", groupID))
+	sb.OrderBy("u.username", "u.id")
+
+	query, args := sb.Build()
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("usergroup: list members: %w", err)
+	}
+	defer rows.Close()
+
+	members := []user.UserSchema{}
+	for rows.Next() {
+		row, err := user.ScanSchema(rows.Scan)
+		if err != nil {
+			return nil, fmt.Errorf("usergroup: list members: %w", err)
+		}
+		members = append(members, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("usergroup: list members: %w", err)
+	}
+	return members, nil
+}
+
+// SetMembers replaces a group's member set with the accounts the caller
+// named. The replacement is a delete and a batched insert, one statement
+// pair inside the caller's transaction — a group read mid-replacement sees
+// either the old set or the new one, never a half of each.
+//
+// The accounts are checked first: every identifier must name an account,
+// because a member that does not exist would make the group wrong rather
+// than merely empty. The caller refuses otherwise.
+func (r *Repository) SetMembers(ctx context.Context, db datastore.Querier, groupID uuid.UUID, userIDs []uuid.UUID) (int, error) {
+	if len(userIDs) > 0 {
+		cb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+		cb.Select("count(*)")
+		cb.From(user.UserTable)
+		cb.Where(cb.In("id", toList(userIDs)...))
+
+		query, args := cb.Build()
+		var found int
+		if err := db.QueryRow(ctx, query, args...).Scan(&found); err != nil {
+			return 0, fmt.Errorf("usergroup: count members: %w", err)
+		}
+		if found != len(userIDs) {
+			return 0, user.ErrUserNotFound
+		}
+	}
+
+	dbl := sqlbuilder.PostgreSQL.NewDeleteBuilder()
+	dbl.DeleteFrom(GroupMemberTable)
+	dbl.Where(dbl.Equal("user_group_id", groupID))
+
+	query, args := dbl.Build()
+	if _, err := db.Exec(ctx, query, args...); err != nil {
+		return 0, fmt.Errorf("usergroup: clear members: %w", err)
+	}
+
+	if len(userIDs) == 0 {
+		return 0, nil
+	}
+
+	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+	ib.InsertInto(GroupMemberTable)
+	ib.Cols("user_id", "user_group_id")
+	for _, userID := range userIDs {
+		ib.Values(userID, groupID)
+	}
+
+	query, args = ib.Build()
+	if _, err := db.Exec(ctx, query, args...); err != nil {
+		return 0, fmt.Errorf("usergroup: insert members: %w", err)
+	}
+	return len(userIDs), nil
+}
+
+// errUniqueViolation reports whether the write failed on a unique index, the
+// way the name index answers a duplicate group.
+func errUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// toList is the identifiers' slice, for the IN clause's variadic form.
+func toList(ids []uuid.UUID) []any {
+	values := make([]any, 0, len(ids))
+	for _, id := range ids {
+		values = append(values, id)
+	}
+	return values
+}

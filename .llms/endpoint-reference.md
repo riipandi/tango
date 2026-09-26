@@ -303,16 +303,26 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 
 ## User Groups
 
+The groups accounts belong to. A group carries no permission of its own; the members it gathers
+are addressed together, and a later feature may hang claims on a group or gate a client on it.
+Every procedure is administrative — upstream guards the surface with its admin middleware — and
+the member count every answer carries is what the query computes, never a column.
+
 | Method | Procedure | Summary / Yaak Title | Status | Evidence |
 | ------ | --------- | -------------------- | ------ | -------- |
-| POST | `/rpc/tango.identity.v1.UserGroupService/ListGroups` | List user groups | done | `modules/identity/usergroup.TestGroupRPCAdminCRUD` |
-| POST | `/rpc/tango.identity.v1.UserGroupService/CreateGroup` | Create user group | done | `modules/identity/usergroup.TestGroupRPCAdminCRUD` |
-| POST | `/rpc/tango.identity.v1.UserGroupService/GetGroup` | Get user group by ID | done | `modules/identity/usergroup.TestGroupRPCAdminCRUD` |
-| POST | `/rpc/tango.identity.v1.UserGroupService/UpdateGroup` | Update user group | done | `modules/identity/usergroup.TestGroupRPCAdminCRUD` |
-| POST | `/rpc/tango.identity.v1.UserGroupService/DeleteGroup` | Delete user group | done | `modules/identity/usergroup.TestGroupRPCAdminCRUD` |
-| POST | `/rpc/tango.identity.v1.UserGroupService/ListGroupUsers` | List users in a group | done | `modules/identity/usergroup.TestGroupRPCAdminCRUD` |
-| POST | `/rpc/tango.identity.v1.UserGroupService/ReplaceGroupUsers` | Update users in a group | done — replaces the set atomically | `modules/identity/usergroup.TestGroupRPCAdminCRUD` |
-| POST | `/rpc/tango.identity.v1.UserGroupService/ReplaceAllowedOidcClients` | Update allowed OIDC clients | done | `modules/identity/usergroup.TestGroupRPCAdminCRUD` |
+| POST | `/rpc/tango.identity.v1.UserGroupService/ListUserGroups` | List user groups | done — page/limit/search over the name and the display name; sorted by `name`, `display_name`, `user_count`, or `created_at`, ascending by default, the name columns case-insensitively; the LEFT join makes an empty group a row with a zero count, not an absence | `modules/identity/usergroup.TestListGroupsSearchesPaginatesAndSorts`, `internal/transport.TestTheUserGroupLoopEndsInAMemberList` |
+| POST | `/rpc/tango.identity.v1.UserGroupService/GetUserGroup` | Get user group by ID | done — the detail carries the members as the account wire view, ordered by username | `modules/identity/usergroup.TestCreateGroupStoresTheRowAndRefusesADuplicateName`, `internal/transport.TestTheUserGroupLoopEndsInAMemberList` |
+| POST | `/rpc/tango.identity.v1.UserGroupService/CreateUserGroup` | Create user group | done — the duplicate name is the unique index's answer read from the write's failure, mapped to `already_exists`; the created row is read back inside the transaction | `modules/identity/usergroup.TestCreateGroupStoresTheRowAndRefusesADuplicateName` |
+| POST | `/rpc/tango.identity.v1.UserGroupService/UpdateUserGroup` | Update user group | done — full replace of the two fields; a name another group holds is refused and the other group stays intact; an unknown identifier is `not_found` | `modules/identity/usergroup.TestUpdateGroupReplacesTheFieldsAndRefusesADuplicate` |
+| POST | `/rpc/tango.identity.v1.UserGroupService/DeleteUserGroup` | Delete user group | done — the membership rows die with the group by the foreign keys' cascade, the accounts are untouched; the record of the deletion names the member count it took away, the one fact a later reader cannot reconstruct | `modules/identity/usergroup.TestDeleteGroupRemovesTheMemberships` |
+| POST | `/rpc/tango.identity.v1.UserGroupService/SetUserGroupMembers` | Update users in a group | done — the replace, not a delta: an empty list empties the group; every identifier must name an account, and a member that does not exist refuses the replacement whole, so the group keeps the set it held | `modules/identity/usergroup.TestSetMembersReplacesTheWholeSet` |
+
+Audit events: `group_created`, `group_updated`, `group_deleted`, and `group_members_updated` —
+the membership change is its own event, because the log's one filter cannot see inside a payload.
+Upstream records nothing for groups; tango records every administrative write, the way it does
+for accounts. Not ported: the allowed-OIDC-clients update (the federation surface decides it),
+the LDAP guards (tango has no LDAP), and the custom claims a group carries (the customclaim
+feature owns them when it lands).
 
 ## Users
 
@@ -332,17 +342,15 @@ Device-flow codes are stored hashed; the poll answers `authorization_pending`, `
 | POST | `/rpc/tango.identity.v1.UserService/UpdateMe` | Update current user | planned — self-service profile; not yet implemented | — |
 | PUT | `/api/users/{id}/profile-picture` | Update user profile picture | done — REST raw-body upload; self-service Bearer (guard `Self("id")` on the path param); magic-byte sniff (PNG/JPEG/WebP), max 2 MiB; stored at `avatars/<id>.<ext>` with the extension the sniffed bytes earn, so a kind change moves the key and deletes the replaced picture first; staged then synced in-request | `modules/identity/user` (service + handler tests), `internal/guard` (rule) |
 | POST | `/rpc/tango.identity.v1.UserService/ResetProfilePicture` | Reset user profile picture | done — self-service Bearer (guard `Self("id")`); deletes the stored file and clears the row | `modules/identity/user` (service tests), `internal/guard` (rule), `internal/transport` (guard) |
-| POST | `/rpc/tango.identity.v1.UserService/ListUserGroups` | Get user groups | planned — needs the usergroup feature; not yet implemented | — |
-| POST | `/rpc/tango.identity.v1.UserService/ReplaceUserGroups` | Update user groups | planned — needs the usergroup feature; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.UserService/ListWebAuthnCredentials` | List user passkeys | planned — needs the webauthn feature; not yet implemented | — |
 | POST | `/rpc/tango.identity.v1.UserService/UpdateWebAuthnCredential` | Rename user passkey | planned — needs the webauthn feature; not yet implemented | — |
 | POST | `ImpersonateUser` (procedure name TBD) | Impersonate a user (admin) | TODO(impersonation) — **not implemented**: no procedure, nothing sets `AccessClaims.ActorID`, `public.sessions.impersonated_by` unused. The guard rule that *refuses* an impersonated caller on self-service requests is in place and tested (`internal/guard`), which is the half that had to land first | `pkg/jwtutils` (claim round-trip), `internal/guard` (refusal), `internal/transport` (guard) |
 | POST | `StopImpersonating` (procedure name TBD) | Stop impersonating | TODO(impersonation) — **not implemented**; must be `Authenticated` in `guard.ProcedureRules`, not `Self`, because it has to be callable while the delegation is active | — |
-| POST | `/rpc/tango.identity.v1.UserService/DeleteWebAuthnCredential` | Delete user passkey | done — admin | `modules/identity/user.TestUserRPCAdminLifecycle` |
-| POST | `/rpc/tango.identity.v1.OneTimeAccessService/RequestEmail` | Request one-time access email | done — answers success unconditionally | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
-| POST | `/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail` | Request one-time access email (admin) | done — admin | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
-| POST | `/rpc/tango.identity.v1.OneTimeAccessService/AdminIssueToken` | Create one-time access token for user (admin) | done — raw token shown once | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
-| POST | `/api/one-time-access-token/{token}` | Exchange one-time access token | REST — email link; single use, sets the session cookie | `modules/identity/onetimeaccess.TestOneTimeAccessRPCBranches` |
+| POST | `/rpc/tango.identity.v1.UserService/DeleteWebAuthnCredential` | Delete user passkey | planned — needs the webauthn feature; not yet implemented | — |
+| POST | `/rpc/tango.auth.v1.OneTimeAccessService/RequestEmail` | Request one-time access email | done — public; anti-enumeration: an unknown address answers the same success and a real device token; refused with `permission_denied` while `auth.one_time_access_email_as_unauthenticated_enabled` is off | `modules/identity/onetimeaccess.TestRequestEmailAnswersTheSameForAnUnknownAddress` |
+| POST | `/rpc/tango.auth.v1.OneTimeAccessService/RequestEmailAsAdmin` | Request one-time access email (admin) | done — admin; refused with `permission_denied` while `auth.one_time_access_email_as_admin_enabled` is off; the code travels by email alone | `modules/identity/onetimeaccess.TestRequestEmailAsAdminSendsWithoutExposingTheCode` |
+| POST | `/rpc/tango.auth.v1.OneTimeAccessService/CreateToken` | Create one-time access token for user (admin) | done — admin; the six-character code is the short window’s form; only the hash is stored, so the response is the last the code exists | `modules/identity/onetimeaccess.TestCreateTokenIssuesACodeTheExchangeAccepts` |
+| POST | `/rpc/tango.auth.v1.OneTimeAccessService/ExchangeToken` | Exchange one-time access token | done — public; the code’s spend, the session, and the audit record commit in one transaction, so a rollback returns the code; a device token the email request paired with the code must come back exact | `modules/identity/onetimeaccess.TestExchangeRefusesADeviceTokenThatDoesNotMatch`, `internal/transport.TestTheOneTimeAccessLoopEndsInASession` |
 | POST | `/rpc/tango.identity.v1.EmailVerificationService/SendEmail` | Send email verification | done — self-service Bearer; refuses verified; resend cooldown on last_sent_at; token row upserted, email via the durable queue | `modules/identity/verification` (service tests, Mailpit end-to-end) |
 | POST | `/rpc/tango.identity.v1.EmailVerificationService/VerifyEmail` | Verify email | done — public; token is the credential; consumed on success | `modules/identity/verification` (service tests) |
 | GET | `/api/users/{id}/profile-picture.png` | Get user profile picture | done — REST; public; streams the stored bytes, an account without one answers the bundled default by redirect to `/images/default-avatar.png` | `modules/identity/user` (handler test) |

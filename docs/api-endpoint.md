@@ -290,18 +290,30 @@ User management, sign-up, one-time access, email verification, and profile pictu
 
 ## User Groups
 
-User group management operations.
+A user group is an organizing unit: it carries no permission of its own, but the members it
+gathers are addressed together — a later feature may hang claims on a group or gate a client on
+it, and every member inherits the outcome. Upstream attaches custom claims to groups and gates
+OIDC clients on them; tango's group is the membership alone until those features land, which is
+why the surface holds the six procedures below and nothing about claims or clients.
 
-| Method   | Procedure / Endpoint                                                       | Protocol     | Summary                       |
-| -------- | -------------------------------------------------------------------------- | ------------ | ----------------------------- |
-| POST     | `/rpc/tango.identity.v1.UserGroupService/ListGroups`                       | ConnectRPC   | List user groups              |
-| POST     | `/rpc/tango.identity.v1.UserGroupService/CreateGroup`                      | ConnectRPC   | Create user group             |
-| POST     | `/rpc/tango.identity.v1.UserGroupService/GetGroup`                         | ConnectRPC   | Get user group by ID          |
-| POST     | `/rpc/tango.identity.v1.UserGroupService/UpdateGroup`                      | ConnectRPC   | Update user group             |
-| POST     | `/rpc/tango.identity.v1.UserGroupService/DeleteGroup`                      | ConnectRPC   | Delete user group             |
-| POST     | `/rpc/tango.identity.v1.UserGroupService/ListGroupUsers`                   | ConnectRPC   | List users in a group         |
-| POST     | `/rpc/tango.identity.v1.UserGroupService/ReplaceGroupUsers`                | ConnectRPC   | Update users in a group       |
-| POST     | `/rpc/tango.identity.v1.UserGroupService/ReplaceAllowedOidcClients`        | ConnectRPC   | Update allowed OIDC clients   |
+The `name` is the group's unique handle — the unique index is the storage of that rule, and a
+duplicate answers `already_exists`. The `display_name` is what the UI shows. The member count in
+every answer is what the query computes, never a column, so a group with no members answers zero
+because the join is left.
+
+The membership update is a replace, the way the upstream endpoint it ports is: the request names
+the whole member set, and an empty list empties the group. Every identifier must name an account
+— a member that does not exist would make the group wrong rather than merely empty, so the
+replacement is refused whole and the group keeps the set it held.
+
+| Method   | Procedure / Endpoint                                                             | Protocol     | Summary                           |
+| -------- | -------------------------------------------------------------------------------- | ------------ | --------------------------------- |
+| POST     | `/rpc/tango.identity.v1.UserGroupService/ListUserGroups`                          | ConnectRPC   | List user groups                  |
+| POST     | `/rpc/tango.identity.v1.UserGroupService/GetUserGroup`                            | ConnectRPC   | Get user group by ID              |
+| POST     | `/rpc/tango.identity.v1.UserGroupService/CreateUserGroup`                         | ConnectRPC   | Create user group                 |
+| POST     | `/rpc/tango.identity.v1.UserGroupService/UpdateUserGroup`                         | ConnectRPC   | Update user group                 |
+| POST     | `/rpc/tango.identity.v1.UserGroupService/DeleteUserGroup`                         | ConnectRPC   | Delete user group                 |
+| POST     | `/rpc/tango.identity.v1.UserGroupService/SetUserGroupMembers`                     | ConnectRPC   | Update users in a group           |
 
 ## Well Known
 

@@ -280,6 +280,42 @@ The `User` wire message is the canonical account view the account procedures ans
 
 The picture's key is `avatars/<account-id>.<ext>`: the extension comes from the sniffed bytes, so the object names what it holds wherever it is listed — a bucket browser, a presigned URL, the local deployment's file tree — with no lookup and no dependence on the file name the client sent. That makes the kind part of the identity: an upload of another kind lands under another key, so the replaced picture is deleted **before** the new one is stored. The other order is the one that cannot be repaired — the replaced file would keep its manifest row, and the row is exactly what the garbage collection keeps an object for, so the orphan would never be swept — while losing the race the first order can lose costs nothing visible: the row names the key it always named, and a picture whose object is missing already answers the bundled default, the state a reset produces. The key is recomposed on every update, so no path migration exists and none is needed. The read is the feature's other REST route, because an `<img>` tag fetches a URL rather than speaking the protocol: a stored picture streams with the content type the update recorded, an account without one answers the bundled default by redirect to `/images/default-avatar.png` — a frontend asset under `public/images/`, shipped in the compiled SPA — and the row naming a key the engine has lost lands on the same default rather than an error. The self-service profile edit (`/users/me`) and the group and passkey joins stay planned: they need the self-service shape and the usergroup/webauthn features respectively.
 
+### modules/identity/usergroup
+
+The groups accounts belong to: an organizing unit that carries no permission of its own. Upstream
+hangs custom claims on groups, gates OIDC clients on them, and syncs them from LDAP; tango's group
+is the membership alone until those features land, which is why the surface holds six procedures
+and nothing about claims, clients, or directory sources. The `signup_tokens_user_groups` junction
+is the one upstream purpose already reserved in the schema — a signup token names the groups its
+account joins — and it waits for the signup feature to grow it.
+
+The member count every answer carries is what the query computes, never a column. The list's LEFT
+join is spelled with the option for the reason the audit trail's is: an INNER join would drop
+every group whose membership is empty — exactly the group an administrator just created and is
+about to fill — while the GROUP BY turns the joined rows into one row per group and the aggregate
+into the count. The count is sortable, which no column is: the ORDER BY is the aggregate the query
+computed. The name columns sort case-insensitively, because a group named `aardvark` and one named
+`Zebra` read in dictionary order, not in byte order.
+
+The name's uniqueness is the unique index's job, and the create and update read the write's
+failure — the duplicate is answered from the write, not from a SELECT that would only narrow the
+race. The membership update is a **replace**: the request names the whole set, an empty list
+empties the group, and the replacement is a delete and a batched insert inside the caller's
+transaction, so a group read mid-replacement sees one set or the other, never a half of each.
+Every identifier must name an account before the replace runs — a member that does not exist
+would make the group wrong rather than merely empty, so the replacement is refused whole and the
+group keeps the set it held. Upstream instead drops unknown identifiers silently, which makes an
+answered request a lie about what was asked.
+
+The audit events follow tango's convention rather than upstream's silence:
+`group_created`, `group_updated`, `group_deleted`, and `group_members_updated` — the membership
+change is its own event, because the log's one filter cannot see inside a payload. The records
+name the group in `resource_type`/`resource_id` and leave `user_id` empty: a group is not an
+account. The deletion's payload carries the member count the removal took away, the one fact
+about the deleted group a later reader cannot reconstruct. The members travel through the user
+package's exported view — the account wire view is written once — and the feature defines no
+shape of its own for an account.
+
 ### modules/identity/onetimeaccess
 
 The one-time access codes: a credential an administrator or an emailed message puts in one

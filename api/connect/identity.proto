@@ -90,6 +90,40 @@ service UserService {
   rpc ResetProfilePicture(ResetProfilePictureRequest) returns (ResetProfilePictureResponse);
 }
 
+// UserGroupService administers the groups accounts belong to. A group is an
+// organizing unit: it carries no permission of its own, but the members it
+// gathers are addressed together — a later feature may hang claims on a
+// group or gate a client on it, and every member inherits the outcome. The
+// surface is administrative end to end, and the membership update is a
+// replace, the way the upstream endpoint it ports is: the request names the
+// whole member set, not a delta.
+service UserGroupService {
+  // ListUserGroups answers one page of the groups, optionally filtered by a
+  // search term matched against the name and the display name, and sorted by
+  // one column. The default order is the display name, ascending.
+  rpc ListUserGroups(ListUserGroupsRequest) returns (ListUserGroupsResponse);
+
+  // GetUserGroup answers one group with its members.
+  rpc GetUserGroup(GetUserGroupRequest) returns (GetUserGroupResponse);
+
+  // CreateUserGroup creates a group. The name is unique — the unique index
+  // is the storage of that rule, and a duplicate answers `already_exists`.
+  rpc CreateUserGroup(CreateUserGroupRequest) returns (CreateUserGroupResponse);
+
+  // UpdateUserGroup replaces a group's two fields. Both are required, the
+  // way the upstream endpoint it ports is.
+  rpc UpdateUserGroup(UpdateUserGroupRequest) returns (UpdateUserGroupResponse);
+
+  // DeleteUserGroup removes a group. Membership rows die with it by the
+  // foreign keys' cascade, and the accounts themselves are untouched.
+  rpc DeleteUserGroup(DeleteUserGroupRequest) returns (DeleteUserGroupResponse);
+
+  // SetUserGroupMembers replaces the group's member set with the accounts
+  // the request names. An empty list empties the group — a group may be
+  // emptied, only not made wrong by a member that does not exist.
+  rpc SetUserGroupMembers(SetUserGroupMembersRequest) returns (SetUserGroupMembersResponse);
+}
+
 // EmailVerificationService verifies an account's address. The verification
 // email is the only mail the flow sends, and the token it carries is the
 // flow's whole credential: it is generated here, shown once in the message,
@@ -551,4 +585,232 @@ message ResetProfilePictureResponse  {
 
   // message is the human-readable sentence describing what the call did.
   string message = 2;
+}
+
+// UserGroup is the group's minimal view: the shape the list answers. The
+// member count travels with the row — it is not a column, it is the count
+// the query computes, so a list never needs a second round trip per row.
+message UserGroup {
+  // id is the group's identifier, a UUID string.
+  string id = 1;
+
+  // name is the group's unique handle.
+  string name = 2;
+
+  // display_name is the name the UI shows.
+  string display_name = 3;
+
+  // user_count is how many accounts belong to the group.
+  int32 user_count = 4;
+
+  // created_at is the creation instant, RFC 3339.
+  string created_at = 5;
+
+  // updated_at is the last field-changing write, RFC 3339, absent when the
+  // row was never updated.
+  optional string updated_at = 6;
+}
+
+// UserGroupDetail is the group's full view: the minimal shape plus the
+// members, the accounts the group gathers.
+message UserGroupDetail {
+  // id is the group's identifier, a UUID string.
+  string id = 1;
+
+  // name is the group's unique handle.
+  string name = 2;
+
+  // display_name is the name the UI shows.
+  string display_name = 3;
+
+  // users are the members, ordered by username.
+  repeated User users = 4;
+
+  // user_count is how many accounts belong to the group — always the size
+  // of users, carried so a caller never derives it.
+  int32 user_count = 5;
+
+  // created_at is the creation instant, RFC 3339.
+  string created_at = 6;
+
+  // updated_at is the last field-changing write, RFC 3339, absent when the
+  // row was never updated.
+  optional string updated_at = 7;
+}
+
+// ListUserGroupsRequest carries the page, the filter, and the sort the list
+// answers with.
+message ListUserGroupsRequest {
+  // page is the one-based page number.
+  optional int32 page = 1 [(buf.validate.field).int32.gte = 1];
+
+  // limit is the page size.
+  optional int32 limit = 2 [
+    (buf.validate.field).int32.gte = 1,
+    (buf.validate.field).int32.lte = 100
+  ];
+
+  // search filters by a term matched against the name and the display name.
+  // Absent means every group.
+  optional string search = 3 [(buf.validate.field).string.max_len = 100];
+
+  // sort_by names the column the page orders by. Absent, the display name
+  // orders the page.
+  optional string sort_by = 4 [(buf.validate.field).string = {
+    in: ["name", "display_name", "user_count", "created_at"]
+  }];
+
+  // sort_order flips the direction; absent means ascending.
+  optional SortOrder sort_order = 5;
+}
+
+// SortOrder is the direction a sorted page answers in. Unspecified means
+// ascending — the direction every list reads naturally.
+enum SortOrder {
+  // SORT_ORDER_UNSPECIFIED answers ascending.
+  SORT_ORDER_UNSPECIFIED = 0;
+
+  // SORT_ORDER_ASC answers ascending.
+  SORT_ORDER_ASC = 1;
+
+  // SORT_ORDER_DESC answers descending.
+  SORT_ORDER_DESC = 2;
+}
+
+// ListUserGroupsResponse is the page of groups and their pagination block.
+message ListUserGroupsResponse {
+  // groups are the groups in the page order.
+  repeated UserGroup groups = 1;
+
+  // metadata is the pagination block the list responses carry.
+  tango.common.v1.ListMetadata metadata = 2;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 3;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 4;
+}
+
+// GetUserGroupRequest names the group to read.
+message GetUserGroupRequest {
+  // id is the group's identifier.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetUserGroupResponse is the group with its members.
+message GetUserGroupResponse {
+  // group is the group's detail view.
+  UserGroupDetail group = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
+}
+
+// CreateUserGroupRequest carries the two fields a group is made of.
+message CreateUserGroupRequest {
+  // name is the group's unique handle: 2-255 characters.
+  string name = 1 [
+    (buf.validate.field).string.min_len = 2,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  // display_name is the name the UI shows: 2-50 characters.
+  string display_name = 2 [
+    (buf.validate.field).string.min_len = 2,
+    (buf.validate.field).string.max_len = 50
+  ];
+}
+
+// CreateUserGroupResponse is the created group.
+message CreateUserGroupResponse {
+  // group is the group's detail view — its member set is empty.
+  UserGroupDetail group = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
+}
+
+// UpdateUserGroupRequest replaces a group's two fields. Both are required.
+message UpdateUserGroupRequest {
+  // id is the group's identifier.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // name is the group's unique handle: 2-255 characters.
+  string name = 2 [
+    (buf.validate.field).string.min_len = 2,
+    (buf.validate.field).string.max_len = 255
+  ];
+
+  // display_name is the name the UI shows: 2-50 characters.
+  string display_name = 3 [
+    (buf.validate.field).string.min_len = 2,
+    (buf.validate.field).string.max_len = 50
+  ];
+}
+
+// UpdateUserGroupResponse is the updated group.
+message UpdateUserGroupResponse {
+  // group is the group's detail view.
+  UserGroupDetail group = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
+}
+
+// DeleteUserGroupRequest names the group to remove.
+message DeleteUserGroupRequest {
+  // id is the group's identifier.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteUserGroupResponse is empty: a successful deletion says so with the
+// protocol, and a missed one with the not-found code.
+message DeleteUserGroupResponse  {
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 1;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 2;
+}
+
+// SetUserGroupMembersRequest replaces the group's member set.
+message SetUserGroupMembersRequest {
+  // id is the group's identifier.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+
+  // user_ids are the accounts that belong to the group after the call.
+  // An empty list empties the group.
+  repeated string user_ids = 2 [
+    (buf.validate.field).repeated.unique = true,
+    (buf.validate.field).repeated.items.string.uuid = true
+  ];
+}
+
+// SetUserGroupMembersResponse is the group after the replacement.
+message SetUserGroupMembersResponse {
+  // group is the group's detail view.
+  UserGroupDetail group = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
 }

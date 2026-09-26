@@ -323,6 +323,13 @@ func ReadAccount(ctx context.Context, db datastore.Querier, id uuid.UUID) (UserV
 	return view(row), nil
 }
 
+// ViewSchema maps a stored row onto the account view, for the features that
+// answer accounts they read through this package: the row is this package's
+// shape, the view is what every procedure answers with.
+func ViewSchema(row UserSchema) UserView {
+	return view(row)
+}
+
 // WireView maps the account view onto the wire message the identity
 // contract carries. The procedures that answer an account — sign-up and the
 // administration CRUD — share it, so the wire form of an account is written

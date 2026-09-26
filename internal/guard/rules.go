@@ -100,14 +100,20 @@ var ProcedureRules = map[string]Entry{
 	// Administrative, declared explicitly rather than left to the default so
 	// the table reads as the complete policy of the surface. Upstream guards
 	// every one of these with its admin-required middleware.
-	identityv1connect.SignupServiceCreateSignupTokenProcedure: {Rule: Admin},
-	identityv1connect.SignupServiceListSignupTokensProcedure:  {Rule: Admin},
-	identityv1connect.SignupServiceDeleteSignupTokenProcedure: {Rule: Admin},
-	identityv1connect.UserServiceListUsersProcedure:           {Rule: Admin},
-	identityv1connect.UserServiceGetUserProcedure:             {Rule: Admin},
-	identityv1connect.UserServiceCreateUserProcedure:          {Rule: Admin},
-	identityv1connect.UserServiceUpdateUserProcedure:          {Rule: Admin},
-	identityv1connect.UserServiceDeleteUserProcedure:          {Rule: Admin},
+	identityv1connect.SignupServiceCreateSignupTokenProcedure:      {Rule: Admin},
+	identityv1connect.SignupServiceListSignupTokensProcedure:       {Rule: Admin},
+	identityv1connect.SignupServiceDeleteSignupTokenProcedure:      {Rule: Admin},
+	identityv1connect.UserServiceListUsersProcedure:                {Rule: Admin},
+	identityv1connect.UserServiceGetUserProcedure:                  {Rule: Admin},
+	identityv1connect.UserServiceCreateUserProcedure:               {Rule: Admin},
+	identityv1connect.UserServiceUpdateUserProcedure:               {Rule: Admin},
+	identityv1connect.UserServiceDeleteUserProcedure:               {Rule: Admin},
+	identityv1connect.UserGroupServiceListUserGroupsProcedure:      {Rule: Admin},
+	identityv1connect.UserGroupServiceGetUserGroupProcedure:        {Rule: Admin},
+	identityv1connect.UserGroupServiceCreateUserGroupProcedure:     {Rule: Admin},
+	identityv1connect.UserGroupServiceUpdateUserGroupProcedure:     {Rule: Admin},
+	identityv1connect.UserGroupServiceDeleteUserGroupProcedure:     {Rule: Admin},
+	identityv1connect.UserGroupServiceSetUserGroupMembersProcedure: {Rule: Admin},
 }
 
 // RuleFor answers the rule a procedure gets. A procedure the table does not

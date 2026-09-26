@@ -24,7 +24,7 @@ func NewRepository() *Repository {
 }
 
 // userColumns are the columns the account procedures read, in scan order.
-var userColumns = []string{
+var UserColumns = []string{
 	"id", "username", "email", "first_name", "last_name", "display_name",
 	"locale", "is_admin", "disabled", "email_verified_at", "created_at",
 	"banned_at", "ban_expires", "ban_reason", "avatar_url",
@@ -32,7 +32,7 @@ var userColumns = []string{
 
 // scanUser reads one row into the schema. The nullable columns scan through
 // pointers, so an absent name part or ban reads as nil, not as a zero value.
-func scanUser(scan func(dest ...any) error) (UserSchema, error) {
+func ScanSchema(scan func(dest ...any) error) (UserSchema, error) {
 	var row UserSchema
 	var firstName, lastName, locale, banReason, picturePath *string
 	err := scan(
@@ -66,12 +66,12 @@ func deref(value *string) string {
 // account is the caller's not-found failure.
 func (r *Repository) GetUser(ctx context.Context, db datastore.Querier, id uuid.UUID) (UserSchema, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select(userColumns...)
+	sb.Select(UserColumns...)
 	sb.From(UserTable)
 	sb.Where(sb.Equal("id", id))
 
 	query, args := sb.Build()
-	row, err := scanUser(func(dest ...any) error {
+	row, err := ScanSchema(func(dest ...any) error {
 		return db.QueryRow(ctx, query, args...).Scan(dest...)
 	})
 	if errors.Is(err, datastore.ErrNoRows) {
@@ -89,7 +89,7 @@ func (r *Repository) GetUser(ctx context.Context, db datastore.Querier, id uuid.
 // the indexes exist for.
 func (r *Repository) ListUsers(ctx context.Context, db datastore.Querier, search string, offset, limit int) ([]UserSchema, int, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
-	sb.Select(userColumns...)
+	sb.Select(UserColumns...)
 	sb.From(UserTable)
 	if search != "" {
 		pattern := "%" + search + "%"
@@ -111,7 +111,7 @@ func (r *Repository) ListUsers(ctx context.Context, db datastore.Querier, search
 
 	users := []UserSchema{}
 	for rows.Next() {
-		row, err := scanUser(rows.Scan)
+		row, err := ScanSchema(rows.Scan)
 		if err != nil {
 			return nil, 0, fmt.Errorf("user: list: %w", err)
 		}

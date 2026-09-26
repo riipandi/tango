@@ -2,29 +2,27 @@ type: http_request
 model: http_request
 id: rq_UcqfuDYCPx
 createdAt: 2026-09-19T12:34:10.925104
-updatedAt: 2026-09-25T21:10:43.677174
+updatedAt: 2026-09-26T01:55:38.713547
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
-authentication: {}
-authenticationType: null
+authentication:
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
-  text: |-
-    {
-      "page": 1,
-      "limit": 20
-    }
+  bodyType: application/json
+  text: '{}'
 bodyType: application/json
 description: |-
-  Get a paginated list of user groups with optional search and sorting
+  One page of the groups, optionally filtered and sorted.
 
-  Mirror of Pocket ID `GET /api/user-groups`.
+  Ported from Pocket ID `GET /api/user-groups` as the `tango.identity.v1.UserGroupService/ListUserGroups` procedure.
 
   Parameters:
-  - search (query, optional): Search term to filter user groups by name
-  - pagination[page] (query, optional): Page number for pagination
-  - pagination[limit] (query, optional): Number of items per page
-  - sort[column] (query, optional): Column to sort by
-  - sort[direction] (query, optional): Sort direction (asc or desc)
+  - page (body, optional): one-based page number
+  - limit (body, optional): page size
+  - search (body, optional): matched against the name and the display name
+  - sort_by (body, optional): name | display_name | user_count | created_at
+  - sort_order (body, optional): ASC | DESC
 headers:
 - enabled: true
   name: Content-Type
@@ -35,9 +33,9 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] List user groups (unimplemented)'
+name: '[Pocket ID] List user groups'
 sortPriority: 0.0
-url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/ListGroups
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/ListUserGroups
 urlParameters:
 - enabled: false
   name: search

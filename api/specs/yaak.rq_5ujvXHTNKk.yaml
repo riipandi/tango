@@ -2,26 +2,28 @@ type: http_request
 model: http_request
 id: rq_5ujvXHTNKk
 createdAt: 2026-09-19T12:34:22.896626
-updatedAt: 2026-09-25T21:10:44.701907
+updatedAt: 2026-09-26T01:55:38.716882
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
-authentication: {}
-authenticationType: null
+authentication:
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
+  bodyType: application/json
   text: |-
     {
-      "id": "REPLACE_GROUP_ID",
+      "id": "${[ userGroupId ]}",
       "user_ids": []
     }
 bodyType: application/json
 description: |-
-  Update the list of users belonging to a specific user group
+  Replace the group's member set with the accounts the request names. An empty list empties the group.
 
-  Mirror of Pocket ID `PUT /api/user-groups/{id}/users`.
+  Ported from Pocket ID `PUT /api/user-groups/{id}/users` as the `tango.identity.v1.UserGroupService/SetUserGroupMembers` procedure.
 
   Parameters:
-  - id (path, required): User Group ID
-  - users (body, required): List of user IDs to assign to this group
+  - id (body, required): user group ID
+  - user_ids (body, required): user IDs; every one must name an account
 headers:
 - enabled: true
   name: Content-Type
@@ -32,9 +34,9 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Update users in a group (unimplemented)'
-sortPriority: 4333.333333333333
-url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/ReplaceGroupUsers
+name: '[Pocket ID] Update users in a group'
+sortPriority: 5000.0
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/SetUserGroupMembers
 urlParameters:
 - enabled: true
   name: id
