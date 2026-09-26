@@ -104,10 +104,11 @@ func (allowAll) Allow(context.Context, string) (middleware.Result, error) {
 // on purpose — a second area is a decision, and this is where it is noticed.
 func TestTheApplicationAreasAreListedOnce(t *testing.T) {
 	areas := registry.Areas()
-	require.Len(t, areas, 2)
+	require.Len(t, areas, 3)
 
 	assert.Equal(t, "identity", areas[0].Name)
-	assert.Equal(t, "auditlog", areas[1].Name)
+	assert.Equal(t, "apikey", areas[1].Name)
+	assert.Equal(t, "auditlog", areas[2].Name)
 	for _, area := range areas {
 		assert.NotNil(t, area.Package, "area %q must register its own services", area.Name)
 		assert.NotNil(t, area.Mount, "area %q must build its own module", area.Name)

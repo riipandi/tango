@@ -368,6 +368,56 @@ The email-verification flow: `tango.identity.v1.EmailVerificationService/SendEma
 
 `VerifyEmail` is public and the token is the whole credential: the procedure hashes the presented value, reads the row under the verification purpose, and an unknown, expired, and spent token answer one failure (`permission_denied`) — the disclosure rule the signup token applies. The stamp and the delete run in one transaction, so a token cannot verify twice under a race: the delete is what a second caller loses, and the conditional update (`email_verified_at IS NULL`) keeps an earlier verification instant. The endpoint carries no caller: the token identifies the account, so the frontend the message links to can forward it from a browser that holds no session — this is why the flow has no REST twin, per the upstream shape's `/api/users/me/verify-email` being folded into the RPC surface.
 
+### modules/apikey
+
+The machine credentials: an API key is a personal access token an account issues for its own
+scripting, and the surface is `tango.apikey.v1.ApiKeyService` — its own area, because the
+credential is not an account fact but a transport-authenticated one, the way a session is.
+
+The credential answers as its owner, and the owner is read **live on every request**: the hash
+lookup joins the account, so a role change or a disablement takes effect on the key's next request
+rather than at a token mint. That is the difference between this credential and a JWT, whose claims
+are a sign-in-time snapshot — and it is the reason the key can be trusted with the administrative
+surface its owner holds. The authwall's refusal never says which half failed: an unknown, expired,
+revoked, or disabled-owner key is one answer, because each is the fact a probing caller would want
+to distinguish. The `last_used_at` the lookup touches is written beside the read rather than folded
+into it — the query builder's UPDATE carries no RETURNING, and a metric that loses its write is not
+a decision — so the touch is best-effort by construction.
+
+The key itself is drawn as `<prefix>.<secret>` — an eight-character prefix an operator reads, a
+thirty-two character secret a client sends, both from the full alphanumeric alphabet with the
+crypto source — and the row stores the SHA-256 of the presented string and nothing else. The
+prefix is what makes a leaked key identifiable without the key: it travels in every view, so an
+operator can find the row a leaked credential belongs to and revoke it. The name is unique per
+owner by the `(name, owner)` index, and the duplicate is answered from the write's failure, the
+way the group's name is.
+
+The management surface refuses the credential it manages. `Session` is the guard rule that reads
+the caller's credential kind — the field `jwtutils.Caller` now carries beside its claims, because
+the kind is how the caller arrived, not something a token asserts — and a machine credential is
+refused on the four procedures that create, list, renew, and revoke keys, with the not_found shape
+every other refusal takes. The upstream it ports spells the same refusal with a middleware switch
+on its own routes; here it is one rule against the one caller type, which is why the surface can
+grow a second machine credential without a second middleware. The refusal exists for a reason a
+credential cannot fix itself: a key that could issue and revoke keys would outlive its owner's
+intent, surviving every revocation by minting its successor first.
+
+Revocation is soft: the `revoked_at` stamp the schema reserved is the write, the row survives it,
+and the view carries the instant — a reader can still tell what a revoked key had access to, which
+a deletion would have erased. A second revocation is the same success and records nothing, because
+the caller's intent is the state the key is already in. Renewal is the mirror of the refusal: an
+unexpired key is refused (`failed_precondition`), because renewal is how a key lives past its
+expiry, not how it escapes one — and the reminder stamp the old window earned dies with it, so the
+new window earns a fresh reminder.
+
+The expiry reminder is the area's one background job: a recurring queue task reads the seven-day
+window, enqueues one reminder per unreminded key, and marks the row so the next pass does not
+repeat itself — the mark is written when the reminder is **enqueued**, not when it is delivered,
+because a durable queue's promise is the delivery attempt, and an unmarked row is exactly what a
+failed enqueue needs to retry. A key whose owner has no address is skipped unmarked, so an address
+that appears later still earns its reminder. The switch is `api_key.expiry_email_enabled`, off by
+default: a mailer that writes to account holders on a schedule is a deployment's decision.
+
 ## Protocol and authentication (settled 2026-09-24)
 
 The two transports serve different audiences, and the split decides where each fact lives. **ConnectRPC is the primary protocol** — internal communication and the backoffice client, whose generated clients read response headers natively and think in `connect.Code`. **REST serves external integrations**, and the OAuth2/OIDC identity-provider features are planned on the REST surface, where third-party tooling expects conventional shapes.
@@ -406,7 +456,7 @@ Four rules, in `guard.go`:
 
 **TODO(impersonation): the feature is not implemented — only its refusal is.** Verified against the tree on 2026-09-26: nothing sets `ActorID`/`ActorUsername` outside tests, no `Impersonate*` procedure exists in any contract or in `guard.ProcedureRules`, and `public.sessions.impersonated_by` (migration 00002, with its partial index) is not referenced by any Go code. So `IsImpersonating()` is always false in a running server and the `ErrImpersonated` branch is unreachable in practice. What exists is the part that had to come first — the `act` claims, the `Caller` that carries them, the round-trip test that pins them, and the rule that refuses them on a self-service request — because a surface that gained impersonation *without* that refusal would hand an account's own procedures to whoever impersonates it. What is missing, in the order it should land: (1) an `ImpersonateUser` procedure that mints a token with the pair set and writes `impersonated_by` on the session row, admin-only, with a bounded TTL (Better Auth defaults to one hour) and refusing to impersonate another administrator without an explicit permission; (2) a `StopImpersonating` procedure, `Authenticated` in the table, that returns the caller to their own account — it must be reachable *while* the delegation is active; (3) a revocation path, because the session row is the only place a delegation can be cancelled before its token expires; (4) audit records naming the actor, which is what `ActorUsername` is for. Until (1)–(3) land, the guard table needs no change — the rules are already correct for the surface being added.
 
-**Machine credentials (`X-API-Key`) are still the `middleware/apikey.go` scaffold**, and the guard has no rule for them: an API key that reaches the surface today is refused like an absent caller. When it lands it becomes another `Authenticated`-shaped principal, not a fifth rule.
+**Machine credentials (`X-API-Key`) are the `modules/apikey` area.** The credential acts as its owner through the same guard table — an administrator’s key administers — and the one surface that refuses it is the keys’ own, by the guard’s `Session` rule reading the credential kind `jwtutils.Caller` now carries. See `### modules/apikey` above.
 
 
 The OIDC surface, when built, is specification-driven and becomes the third naming exception beside SCIM and WebAuthn (`docs/api-response.md` carries the list): its endpoints answer the shapes the specification defines, not the envelope.

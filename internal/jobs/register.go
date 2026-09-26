@@ -20,7 +20,10 @@ import (
 // run through. A nil uploader registers none of its jobs: a queue that
 // cannot answer its tasks is not a schedule, it is a failure. mail is the
 // service the verification email submits through, and the same rule applies.
-func Register(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager, mail *mailer.Service, pool *datastore.Postgres, baseURL string) {
+// expiryEmailEnabled says whether the API-key expiry reminder runs: the scan
+// is seeded only when the deployment asked for it, and a scan a deployment
+// did not ask for would remind nobody and still cost a query a day.
+func Register(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager, mail *mailer.Service, pool *datastore.Postgres, baseURL string, expiryEmailEnabled bool) {
 	client.Register(queue.NewQueue[CleanupTask](cleanupProcessor))
 	// The audit retention runs on the pool rather than through a service: it
 	// deletes rows nothing reads back, so it needs no feature to own it.
@@ -35,9 +38,15 @@ func Register(client *queue.Client, cleanupInterval time.Duration, uploader *sto
 			return gcProcessor(ctx, task, uploader)
 		}))
 	}
+	client.Register(queue.NewQueue[APIKeyExpiryScanTask](func(ctx context.Context, task APIKeyExpiryScanTask) error {
+		return apiKeyExpiryScanProcessor(ctx, task, pool, client, expiryEmailEnabled && mail != nil, mail)
+	}))
 	if mail != nil {
 		client.Register(queue.NewQueue[EmailVerificationTask](func(ctx context.Context, task EmailVerificationTask) error {
 			return emailVerificationProcessor(ctx, task, mail, baseURL)
+		}))
+		client.Register(queue.NewQueue[APIKeyExpiryEmailTask](func(ctx context.Context, task APIKeyExpiryEmailTask) error {
+			return apiKeyExpiryEmailProcessor(ctx, task, mail)
 		}))
 		client.Register(queue.NewQueue[OneTimeAccessEmailTask](func(ctx context.Context, task OneTimeAccessEmailTask) error {
 			return oneTimeAccessProcessor(ctx, task, mail, baseURL)
@@ -60,6 +69,7 @@ type Seeder struct {
 	cleanupInterval time.Duration
 	uploader        *storage.Manager
 	retentionDays   int
+	expiryEmail     bool
 	log             *slog.Logger
 }
 
@@ -67,12 +77,13 @@ type Seeder struct {
 // wired. retentionDays is the audit window the retention job is seeded with;
 // a run that changes the configuration carries the new window into the
 // seeded task, which is what makes the change take effect at the next run.
-func NewSeeder(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager, retentionDays int, log *slog.Logger) *Seeder {
+func NewSeeder(client *queue.Client, cleanupInterval time.Duration, uploader *storage.Manager, retentionDays int, expiryEmail bool, log *slog.Logger) *Seeder {
 	return &Seeder{
 		client:          client,
 		cleanupInterval: cleanupInterval,
 		uploader:        uploader,
 		retentionDays:   retentionDays,
+		expiryEmail:     expiryEmail,
 		log:             log,
 	}
 }
@@ -86,6 +97,11 @@ func (s *Seeder) Seed(ctx context.Context) error {
 		auditCleanupSeed(DefaultAuditCleanupInterval, s.retentionDays),
 		DefaultAuditCleanupInterval); err != nil {
 		return err
+	}
+	if s.expiryEmail {
+		if err := s.seedOnce(ctx, APIKeyExpiryScanName, APIKeyExpiryScanTask{}, DefaultAPIKeyExpiryInterval); err != nil {
+			return err
+		}
 	}
 	if s.uploader == nil {
 		return nil

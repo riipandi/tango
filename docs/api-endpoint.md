@@ -174,15 +174,27 @@ Passkey ceremonies are a browser contract and stay on HTTP.
 
 ## API Key
 
-Manage API keys for authentication. The surface is self-scoped: a key may list and revoke its own
-rows, while create and renew require a session.
+An API key is a machine credential a holder issues for their own scripting and integrations. It
+acts as its owner: the claims it carries are the owner's account read live on every request, so an
+administrator's key administers and a disabled account's keys open nothing from the moment the
+flag moves. The one surface a key is refused on is the keys' own — a credential that cannot revoke
+itself must not be the one managing credentials — which is what the `Session` guard rule is for.
 
-| Method   | Procedure / Endpoint                              | Protocol     | Summary          |
-| -------- | ------------------------------------------------- | ------------ | ---------------- |
-| POST     | `/rpc/tango.admin.v1.ApiKeyService/List`          | ConnectRPC   | List API keys    |
-| POST     | `/rpc/tango.admin.v1.ApiKeyService/Create`        | ConnectRPC   | Create API key   |
-| POST     | `/rpc/tango.admin.v1.ApiKeyService/Renew`         | ConnectRPC   | Renew API key    |
-| POST     | `/rpc/tango.admin.v1.ApiKeyService/Delete`        | ConnectRPC   | Revoke API key   |
+The key is shown once, in the create and renew responses, and stored only as a SHA-256 hash of the
+presented string, so a database leak cannot replay it. The presentation form is
+`<prefix>.<secret>`: an eight-character prefix an operator reads (it travels in every view, so a
+leaked key can be identified without the key itself) and a thirty-two character secret a client
+sends. The name is unique per owner. The expiry reminder is off by default
+(`api_key.expiry_email_enabled`): a mailer that writes to account holders on a schedule is a
+decision, not a default.
+
+| Method   | Procedure / Endpoint                                                        | Protocol     | Summary          |
+| -------- | --------------------------------------------------------------------------- | ------------ | ---------------- |
+| POST     | `/rpc/tango.apikey.v1.ApiKeyService/CreateAPIKey`                            | ConnectRPC   | Create API key   |
+| POST     | `/rpc/tango.apikey.v1.ApiKeyService/ListAPIKeys`                             | ConnectRPC   | List API keys    |
+| POST     | `/rpc/tango.apikey.v1.ApiKeyService/RenewAPIKey`                             | ConnectRPC   | Renew API key    |
+| POST     | `/rpc/tango.apikey.v1.ApiKeyService/RevokeAPIKey`                            | ConnectRPC   | Revoke API key   |
+| POST     | `/rpc/tango.apikey.v1.ApiKeyService/ListAllAPIKeys`                          | ConnectRPC   | List all API keys (tango-only, administrative) |
 
 ## Application Configuration
 

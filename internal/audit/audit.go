@@ -75,6 +75,25 @@ const (
 	// own event rather than the group_updated event with a payload — the
 	// log's one filter cannot see inside a payload.
 	EventGroupMembersUpdated = "group_members_updated"
+
+	// EventAPIKeyCreated is a machine credential that did not exist now
+	// does. The raw key is never in the record: it exists in the response
+	// and the hash, so the payload names the key and its window only.
+	EventAPIKeyCreated = "api_key_created"
+
+	// EventAPIKeyRenewed is an expired key's secret and window replaced. It
+	// is not the created event with a payload: a renewal answers "this
+	// credential lived past its expiry", which is the fact a reader audits
+	// for.
+	EventAPIKeyRenewed = "api_key_renewed"
+
+	// EventAPIKeyRevoked is a machine credential withdrawn. The stamp is
+	// the happening; the row survives it.
+	EventAPIKeyRevoked = "api_key_revoked"
+
+	// EventAPIKeyExpiryEmailSent is the expiry reminder submitted. Like
+	// every email record, it names the delivery, not the message's contents.
+	EventAPIKeyExpiryEmailSent = "api_key_expiry_email_sent"
 )
 
 // The trigger values the trigger_type column's enum allows. A record this

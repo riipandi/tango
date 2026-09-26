@@ -38,6 +38,15 @@ var (
 	// audit record and the server log, which an operator reads.
 	ErrNotSelf = errors.New("the caller may only act on their own account")
 
+	// ErrMachineCredential is a request the guard's session rule refuses
+	// because the caller proved itself through a machine credential. The
+	// API keys' own management surface is the rule's home: a credential
+	// that cannot revoke itself must not be the one managing credentials.
+	//
+	// The refusal is the not_found shape like every other, so a key holder
+	// probing the surface learns nothing about it.
+	ErrMachineCredential = errors.New("a machine credential may not use a session-only request")
+
 	// ErrImpersonated is a request that belongs to the account itself,
 	// refused because the caller is acting for another account. An
 	// administrator's delegation is not a way to act as somebody else on a
@@ -109,6 +118,27 @@ func Public(*jwtutils.Caller, Target) error { return nil }
 func Authenticated(caller *jwtutils.Caller, _ Target) error {
 	if caller == nil {
 		return ErrUnauthenticated
+	}
+	if caller.IsImpersonating() {
+		return ErrImpersonated
+	}
+	return nil
+}
+
+// Session answers a caller who proved itself through a session — a signed
+// access token — and refuses a machine credential.
+//
+// It is `Authenticated` narrowed by the credential kind. A key that could
+// list, create, and revoke keys would not survive its owner's intent: the
+// upstream it ports disables API-key authentication on its own management
+// routes, and this rule is that refusal expressed against the one caller
+// type instead of a second middleware.
+func Session(caller *jwtutils.Caller, _ Target) error {
+	if caller == nil {
+		return ErrUnauthenticated
+	}
+	if caller.IsMachine() {
+		return ErrMachineCredential
 	}
 	if caller.IsImpersonating() {
 		return ErrImpersonated

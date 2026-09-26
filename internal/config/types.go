@@ -13,6 +13,7 @@ import (
 // a json tag (how it is written back out, and how Default is flattened), a
 // default in Default(), and a rule in Validate().
 type Config struct {
+	APIKey    APIKey    `koanf:"api_key" json:"api_key"`
 	App       App       `koanf:"app" json:"app"`
 	Audit     Audit     `koanf:"audit" json:"audit"`
 	Auth      Auth      `koanf:"auth" json:"auth"`
@@ -47,6 +48,16 @@ type Audit struct {
 	// is why Validate refuses it: an unbounded audit table is a decision a
 	// deployment should make on purpose, not a default it never noticed.
 	RetentionDays int `koanf:"retention_days" json:"retention_days"`
+}
+
+// APIKey holds the machine credentials' settings. An API key acts as the
+// account that issued it; what a deployment decides here is only whether its
+// holders are warned before a key expires.
+type APIKey struct {
+	// ExpiryEmailEnabled turns the expiry reminder on. Off by default, the
+	// way the upstream feature ships: a mailer that reaches account holders
+	// on a schedule is a decision, not a default.
+	ExpiryEmailEnabled bool `koanf:"expiry_email_enabled" json:"expiry_email_enabled"`
 }
 
 // App holds process-level settings.

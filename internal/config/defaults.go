@@ -230,6 +230,12 @@ func Default() Config {
 			OneTimeAccessEmailAsAdminEnabled:           false,
 			OneTimeAccessEmailAsUnauthenticatedEnabled: false,
 		},
+		APIKey: APIKey{
+			// Off by default: the reminder emails account holders before
+			// their keys expire, and a mailer that writes on a schedule is
+			// a deployment's decision to make.
+			ExpiryEmailEnabled: false,
+		},
 		Cache: Cache{
 			// Off by default: a feature that wants caching switches it on
 			// in the file, so a fresh checkout carries no cache at all.

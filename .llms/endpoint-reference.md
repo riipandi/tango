@@ -147,12 +147,31 @@ ciphertext.
 
 ## API Keys
 
+The machine credentials an account issues for its own scripting and integrations. A key acts as
+its owner through the same guard table a session does — an administrator's key administers — but
+the surface that manages the keys refuses it, the way the upstream it ports disables API-key
+authentication on its own routes: a credential that cannot revoke itself must not be the one
+managing credentials.
+
 | Method | Procedure | Summary / Yaak Title | Status | Evidence |
 | ------ | --------- | -------------------- | ------ | -------- |
-| POST | `/rpc/tango.admin.v1.ApiKeyService/List` | List API keys | done — self-scoped; accepts `X-API-KEY` | `modules/admin/apikey.TestRPCKeyLifecycle` |
-| POST | `/rpc/tango.admin.v1.ApiKeyService/Create` | Create API key | done — self-scoped; raw value shown once; session-only | `modules/admin/apikey.TestRPCKeyLifecycle` |
-| POST | `/rpc/tango.admin.v1.ApiKeyService/Renew` | Renew API key | done — session-only, API keys cannot renew themselves | `modules/admin/apikey.TestRPCKeyErrors` |
-| POST | `/rpc/tango.admin.v1.ApiKeyService/Delete` | Revoke API key | done — self-scoped; accepts `X-API-KEY` | `modules/admin/apikey.TestRPCKeyLifecycle` |
+| POST | `/rpc/tango.apikey.v1.ApiKeyService/CreateAPIKey` | Create API key | done — guard `Session`, the rule a machine credential is refused by; the raw key is `<prefix>.<secret>`, drawn from the full alphanumeric alphabet with the crypto source, and shown exactly once — the row stores the SHA-256 of the presented string, so a database leak cannot replay it; the name is unique per owner (the `(name, owner)` index), the window must lie in the future, and a duplicate answers `already_exists` | `modules/apikey.TestCreateShowsTheKeyOnceAndRefusesADuplicateName` |
+| POST | `/rpc/tango.apikey.v1.ApiKeyService/ListAPIKeys` | List API keys | done — the caller's own keys, newest first, revoked ones included; revoked stays listed because the revocation is a stamp the view carries, not a deletion | `modules/apikey.TestListOwnScopesToTheOwnerAndListAllSeesEverything` |
+| POST | `/rpc/tango.apikey.v1.ApiKeyService/RenewAPIKey` | Renew API key | done — guard `Session`; an unexpired key is refused with `failed_precondition` (renewal is how a key lives past its expiry, not how it escapes one); an expired one earns a new secret and a new window, the reminder stamp dies with the old window, and the new raw key is shown once | `modules/apikey.TestRenewReplacesAnExpiredKeyAndRefusesALiveOne` |
+| POST | `/rpc/tango.apikey.v1.ApiKeyService/RevokeAPIKey` | Revoke API key | done — guard `Session`; soft by the `revoked_at` stamp the schema reserved, idempotent (a second revocation is the same success and records nothing), and a key another account owns answers `not_found` | `modules/apikey.TestRevokeIsSoftAndIdempotent` |
+| POST | `/rpc/tango.apikey.v1.ApiKeyService/ListAllAPIKeys` | List all API keys | done — guard `Admin`; tango-only, the administrative view over every key the deployment holds (upstream has none); the answer names each key's owner | `modules/apikey.TestListOwnScopesToTheOwnerAndListAllSeesEverything`, `internal/transport.TestTheAPIKeyGuardIsDeclared` |
+
+Shared rules: the authwall is one read — the hash of the presented header is looked up against
+`revoked_at IS NULL AND expires_at > now AND NOT users.disabled`, so an unknown, expired, revoked,
+or disabled-owner key answers the same refusal and the disablement of an account takes effect on
+its keys' next request, not at a token mint; the `last_used_at` the lookup touches is a metric,
+not a decision, and its write is best-effort. The refusal never says which half failed. Audit
+events: `api_key_created`, `api_key_renewed`, `api_key_revoked`, and
+`api_key_expiry_email_sent` — recorded in the transaction that caused them, naming the owner in
+`user_id` and the key in `resource_type`/`resource_id`. Not ported: the static API key (a
+configuration credential acting as a manufactured administrator — tango issues keys through the
+surface instead) and the upstream's direct-send reminder mail (tango's reminder travels the
+durable queue).
 
 ## APIs
 

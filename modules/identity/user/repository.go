@@ -30,7 +30,7 @@ var UserColumns = []string{
 	"banned_at", "ban_expires", "ban_reason", "avatar_url",
 }
 
-// scanUser reads one row into the schema. The nullable columns scan through
+// ScanSchema reads one row into the schema. The nullable columns scan through
 // pointers, so an absent name part or ban reads as nil, not as a zero value.
 func ScanSchema(scan func(dest ...any) error) (UserSchema, error) {
 	var row UserSchema

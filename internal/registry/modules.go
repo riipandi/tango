@@ -4,6 +4,7 @@ import (
 	"github.com/samber/do/v2"
 
 	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/modules/apikey"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/modules/identity"
 )
@@ -39,6 +40,11 @@ type Area struct {
 func Areas() []Area {
 	return []Area{
 		{Name: identity.ModuleName, Package: identity.Package, Mount: identity.Mount},
+		// The API-key area carries its own procedures and the credential the
+		// authwall validates. Its service is registered by the area, the way
+		// the key set is: the authenticator resolves it through the
+		// container like any other consumer.
+		{Name: apikey.ModuleName, Package: apikey.Package, Mount: apikey.Mount},
 		// The audit-log area reads what every other area writes. It mounts
 		// after identity because it serves its own paths and claims nothing
 		// identity claims, so the order is descriptive rather than a

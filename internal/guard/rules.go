@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	apikeyv1 "github.com/riipandi/tango/codegen/proto/go/tango/apikey/v1"
+	apikeyv1connect "github.com/riipandi/tango/codegen/proto/go/tango/apikey/v1/apikeyv1connect"
 	auditlogv1 "github.com/riipandi/tango/codegen/proto/go/tango/auditlog/v1"
 	auditlogv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auditlog/v1/auditlogv1connect"
 	authv1 "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1"
@@ -114,6 +116,16 @@ var ProcedureRules = map[string]Entry{
 	identityv1connect.UserGroupServiceUpdateUserGroupProcedure:     {Rule: Admin},
 	identityv1connect.UserGroupServiceDeleteUserGroupProcedure:     {Rule: Admin},
 	identityv1connect.UserGroupServiceSetUserGroupMembersProcedure: {Rule: Admin},
+
+	// The API keys' own surface is session-only: a key cannot manage keys,
+	// the refusal the upstream spells with a middleware switch and this
+	// surface spells with a rule against the caller's credential kind. The
+	// administrative view over every key is a plain admin procedure.
+	apikeyv1connect.ApiKeyServiceCreateAPIKeyProcedure:   {Rule: Session},
+	apikeyv1connect.ApiKeyServiceListAPIKeysProcedure:    {Rule: Session},
+	apikeyv1connect.ApiKeyServiceRenewAPIKeyProcedure:    {Rule: Session},
+	apikeyv1connect.ApiKeyServiceRevokeAPIKeyProcedure:   {Rule: Session},
+	apikeyv1connect.ApiKeyServiceListAllAPIKeysProcedure: {Rule: Admin},
 }
 
 // RuleFor answers the rule a procedure gets. A procedure the table does not
@@ -203,6 +215,7 @@ func ContractProcedures() []string {
 		auditlogv1.File_auditlog_proto,
 		authv1.File_auth_proto,
 		authv1.File_one_time_access_proto,
+		apikeyv1.File_api_key_proto,
 		identityv1.File_identity_proto,
 		systemv1.File_system_proto,
 	}

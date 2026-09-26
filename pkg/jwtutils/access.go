@@ -62,6 +62,29 @@ type AccessClaims struct {
 // TODO(impersonation): the delegation half is plumbing only — see the note on
 // AccessClaims.ActorID. The subject half is complete and is what every guard
 // rule compares.
+// CredentialKind names the channel a caller proved itself through. The kind
+// is not a claim a token carries — it is how the caller arrived — so it lives
+// on the Caller beside the claims rather than inside them.
+//
+// A machine credential is not a lesser caller: it acts as its owner through
+// the same guard table. What the kind exists for is the refusal one surface
+// owes every credential that cannot revoke itself: the API keys' own
+// management surface is browser-session work, and a key that could manage
+// keys could outlive its owner's intent.
+type CredentialKind string
+
+const (
+	// CredentialSession is a caller who presented an access token the
+	// verifier signed. It is the kind every bearer caller carries, and the
+	// zero value a caller built without a kind answers: a token is the only
+	// credential that exists without this field.
+	CredentialSession CredentialKind = "session"
+
+	// CredentialAPIKey is a caller who presented an X-API-Key header the
+	// key service validated against its stored hash.
+	CredentialAPIKey CredentialKind = "api_key"
+)
+
 type Caller struct {
 	// AccessClaims describe the account the request acts as, as the token
 	// asserted them when it was signed.
@@ -71,6 +94,11 @@ type Caller struct {
 	// separate from the claims because the subject is a registered claim, not
 	// a private one, and a request's identity is its subject.
 	UserID string
+
+	// Credential names the channel the caller proved itself through. The
+	// zero value is a session, because a token is the only credential the
+	// field's absence can mean.
+	Credential CredentialKind
 }
 
 // NewCaller builds the caller from a verified token. A token whose subject is
@@ -97,6 +125,14 @@ func NewCaller(verified Verified[AccessClaims]) (*Caller, error) {
 // whoever impersonates it.
 func (c *Caller) IsImpersonating() bool {
 	return c != nil && c.ActorID != ""
+}
+
+// IsMachine reports whether the caller proved itself through a credential
+// that is not a session — today, an API key. The guard's session rule refuses
+// such a caller on the surface that manages the credentials themselves: a
+// key that could issue and revoke keys would outlive its owner's intent.
+func (c *Caller) IsMachine() bool {
+	return c != nil && c.Credential == CredentialAPIKey
 }
 
 // ActsFor reports whether the caller is the named account. An empty name is

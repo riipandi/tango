@@ -21,6 +21,7 @@ import (
 	"github.com/riipandi/tango/internal/scheduler"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/internal/transport/middleware"
+	"github.com/riipandi/tango/modules/apikey"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/pkg/crypto"
@@ -179,7 +180,7 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			// The processors are wired onto the engine here — pure wiring, no
 			// connection is touched. The recurring seeds are the Seeder's
 			// service, resolved by the prewarm walk.
-			jobs.Register(client, c.Queue.CleanupInterval, uploader, mailer, pool, c.App.BaseURL)
+			jobs.Register(client, c.Queue.CleanupInterval, uploader, mailer, pool, c.App.BaseURL, c.APIKey.ExpiryEmailEnabled)
 			return client, nil
 		}),
 
@@ -188,7 +189,7 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			client := do.MustInvoke[*queue.Client](i)
 			uploader := do.MustInvoke[*storage.Manager](i)
 			log := do.MustInvoke[*slog.Logger](i)
-			return jobs.NewSeeder(client, c.Queue.CleanupInterval, uploader, c.Audit.RetentionDays, log), nil
+			return jobs.NewSeeder(client, c.Queue.CleanupInterval, uploader, c.Audit.RetentionDays, c.APIKey.ExpiryEmailEnabled, log), nil
 		}),
 
 		do.Lazy(func(i do.Injector) (*storage.Watcher, error) {
@@ -228,7 +229,8 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 		do.Lazy(func(i do.Injector) (middleware.Authenticator, error) {
 			c := do.MustInvoke[*config.Config](i)
 			keys := do.MustInvoke[*jwks.Service](i)
-			return identity.Authenticate(keys, *c), nil
+			machine := do.MustInvoke[*apikey.Service](i)
+			return identity.Authenticate(keys, *c, machine), nil
 		}),
 
 		do.Lazy(func(i do.Injector) (middleware.Limiter, error) {
