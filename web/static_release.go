@@ -17,7 +17,27 @@ import (
 var webFS embed.FS
 
 func SetupStatic(r chi.Router) {
-	r.NotFound(spaHandler())
+	// The SPA answers only reads. A write method that names no claimed route
+	// falls through to the not-found handler — chi cannot tell "no such
+	// path" from "no such method for the SPA" — so the handler itself
+	// refuses anything but GET and HEAD with the method-not-allowed shape.
+	// TRACE in particular must never echo a request back to whoever asked.
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			responder.Fail(w, r, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		spaHandler()(w, r)
+	})
+	// The not-found boundary above covers the paths nothing claimed. For a
+	// path some other route claimed with another method, chi's own
+	// method-not-allowed boundary answers, and it carries Allow: GET, HEAD
+	// so a caller learns what a SPA path accepts without being reflected.
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", "GET, HEAD")
+		responder.Fail(w, r, http.StatusMethodNotAllowed, "method not allowed")
+	})
 }
 
 func spaHandler() http.HandlerFunc {

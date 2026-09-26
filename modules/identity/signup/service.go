@@ -83,6 +83,9 @@ type Params struct {
 // which is the column's default and needs no code here yet. The password is
 // hashed and stored with the account, so the account can sign in immediately.
 func (s *Service) Signup(ctx context.Context, params Params) (user.UserView, error) {
+	if policyErr := password.Validate(params.Password); policyErr != nil {
+		return user.UserView{}, policyErr
+	}
 	passwordHash, err := s.hasher.Hash(params.Password)
 	if err != nil {
 		return user.UserView{}, fmt.Errorf("signup: hash password: %w", err)

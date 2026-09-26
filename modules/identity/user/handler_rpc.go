@@ -11,6 +11,7 @@ import (
 	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	identityv1 "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1"
 	identityv1connect "github.com/riipandi/tango/codegen/proto/go/tango/identity/v1/identityv1connect"
+	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
 )
@@ -221,7 +222,16 @@ func mapError(err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("an administrator cannot delete the account they are signed in with"))
 	case errors.Is(err, ErrPicturesUnavailable):
 		return connect.NewError(connect.CodeUnavailable, errors.New("picture storage is not available"))
+	case isPasswordPolicy(err):
+		return connect.NewError(connect.CodeInvalidArgument, err)
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("user operation failed"))
 	}
+}
+
+// isPasswordPolicy reports whether the failure is the credential policy's
+// refusal. The rule lives in the password package, so the check does too —
+// the handler maps the answer without learning the policy's rules.
+func isPasswordPolicy(err error) bool {
+	return errors.Is(err, password.ErrWeakPassword)
 }

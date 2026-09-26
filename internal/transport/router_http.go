@@ -73,6 +73,10 @@ func NewRouter(opts Options) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
+	// The security headers ride every response, refusals included: they are
+	// written before the handler runs, at the top of the chain, so no
+	// surface — API, protocol, SPA, metrics — answers without them.
+	r.Use(middleware.SecurityHeaders)
 	// The client facts are captured here rather than per surface: both the
 	// REST routes and the procedures read them from the context, and the
 	// groups below inherit this chain, so there is one place a fact is

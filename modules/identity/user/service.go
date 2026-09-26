@@ -14,6 +14,7 @@ import (
 	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/storage"
+	"github.com/riipandi/tango/modules/identity/password"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/responder"
 )
@@ -131,6 +132,9 @@ type UserView struct {
 func (s *Service) CreateUser(ctx context.Context, params CreateParams) (UserView, error) {
 	passwordHash := ""
 	if params.Password != "" {
+		if policyErr := password.Validate(params.Password); policyErr != nil {
+			return UserView{}, policyErr
+		}
 		hash, err := s.hasher.Hash(params.Password)
 		if err != nil {
 			return UserView{}, fmt.Errorf("user: hash password: %w", err)

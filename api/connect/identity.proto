@@ -196,8 +196,9 @@ message SignupRequest {
   string email = 2 [(buf.validate.field).string.pattern = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"];
 
   // password is the account's primary credential, in clear text. The field
-  // travels only over TLS and is never logged.
-  string password = 3 [(buf.validate.field).string.min_len = 1];
+  // travels only over TLS and is never logged. The transport's floor keeps a
+  // degenerate answer cheap; the strength rule itself is the service's.
+  string password = 3 [(buf.validate.field).string.min_len = 8];
 
   // token is the raw signup token the account is created under.
   string token = 4 [(buf.validate.field).string.min_len = 1];
@@ -444,8 +445,9 @@ message CreateUserRequest {
 
   // password is the account's primary credential, in clear text. It travels
   // only over TLS and is never logged. Absent means the account carries no
-  // credential until one is set.
-  optional string password = 3 [(buf.validate.field).string.min_len = 1];
+  // credential until one is set. The transport's floor keeps a degenerate
+  // answer cheap; the strength rule itself is the service's.
+  optional string password = 3 [(buf.validate.field).string.min_len = 8];
 
   // first_name is the given name.
   string first_name = 4 [
