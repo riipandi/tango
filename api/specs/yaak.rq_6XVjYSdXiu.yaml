@@ -2,13 +2,11 @@ type: http_request
 model: http_request
 id: rq_6XVjYSdXiu
 createdAt: 2026-09-25T10:33:40.668220
-updatedAt: 2026-09-25T17:13:18.256901
+updatedAt: 2026-09-26T11:09:22.301287
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
-authentication:
-  prefix: Bearer
-  token: ${[ accessToken ]}
-authenticationType: bearer
+authentication: {}
+authenticationType: null
 body:
   bodyType: application/json
   text: |-
@@ -31,11 +29,11 @@ headers:
 - enabled: true
   name: Content-Type
   value: application/json
-  id: null
+  id: KYF7juaMec
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
+  id: 3CirqgauVh
 method: POST
 name: '[Pocket ID] List users'
 sortPriority: 6000.0

@@ -3,7 +3,7 @@ model: environment
 id: ev_HGobWkJjLK
 workspaceId: wk_kBiMYTkhPP
 createdAt: 2026-09-18T18:57:02.405679
-updatedAt: 2026-09-25T17:52:31.409778
+updatedAt: 2026-09-26T11:08:11.385622
 name: Proxy 8443
 public: true
 base: false
@@ -13,22 +13,18 @@ variables:
 - enabled: true
   name: apiBaseURL
   value: https://localhost:8443
-  id: tvXbEumz92
+  id: BDIyDKQEvD
 - enabled: true
   name: identity
   value: admin@example.com
-  id: vDi50CGJt7
+  id: DNqjbNsXf2
 - enabled: true
   name: password
   value: '@dmin123'
-  id: nqpmbVMv8H
-- enabled: true
-  name: apiKey
-  value: sk_dummy
-  id: K76czWNf5C
+  id: PF7CyCGjt4
 - enabled: true
   name: remember
   value: 'true'
-  id: 75EpehTE5U
+  id: zmrPda5HVP
 color: null
 sortPriority: 111.1111111111111
