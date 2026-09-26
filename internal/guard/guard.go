@@ -126,19 +126,25 @@ func Authenticated(caller *jwtutils.Caller, _ Target) error {
 }
 
 // Session answers a caller who proved itself through a session — a signed
-// access token — and refuses a machine credential.
+// access token that carries the session's identifier — and refuses a machine
+// credential.
 //
-// It is `Authenticated` narrowed by the credential kind. A key that could
-// list, create, and revoke keys would not survive its owner's intent: the
-// upstream it ports disables API-key authentication on its own management
-// routes, and this rule is that refusal expressed against the one caller
-// type instead of a second middleware.
+// It is `Authenticated` narrowed by the credential kind, and narrowed again
+// by the claim: a session credential names the row it acts on, so a caller
+// without the `sid` claim is not a session, whatever signed it. A key that
+// could list, create, and revoke sessions or keys would not survive its
+// owner's intent: the upstream it ports disables API-key authentication on
+// its own management routes, and this rule is that refusal expressed against
+// the one caller type instead of a second middleware.
 func Session(caller *jwtutils.Caller, _ Target) error {
 	if caller == nil {
 		return ErrUnauthenticated
 	}
 	if caller.IsMachine() {
 		return ErrMachineCredential
+	}
+	if caller.SessionID == "" {
+		return ErrUnauthenticated
 	}
 	if caller.IsImpersonating() {
 		return ErrImpersonated

@@ -29,6 +29,7 @@ import (
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/onetimeaccess"
+	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/modules/identity/signup"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -51,6 +52,9 @@ type Deps struct {
 
 	// SignIn verifies the primary credential and issues the token pair.
 	SignIn *signin.Service
+
+	// Sessions carries the lifecycle of the session a sign-in opened.
+	Sessions *session.Service
 
 	// Signup creates an account from a signup token.
 	Signup *signup.Service
@@ -138,6 +142,18 @@ var Package = do.Package(
 		return signin.NewService(*c, pool, signin.NewRepository(pool), keys, recorder, log), nil
 	}),
 
+	// The session lifecycle builds over the sign-in issuer through the
+	// interface the session package defines — the renewal and the opening
+	// must not drift apart, and the issuer satisfies it without an adapter.
+	do.Lazy(func(i do.Injector) (*session.Service, error) {
+		log := do.MustInvoke[*slog.Logger](i)
+		pool := do.MustInvoke[*datastore.Postgres](i)
+		issuer := do.MustInvoke[*signin.Service](i)
+		users := do.MustInvoke[*user.Service](i)
+		recorder := do.MustInvoke[*audit.Recorder](i)
+		return session.NewService(pool, issuer, users, recorder, log), nil
+	}),
+
 	do.Lazy(func(i do.Injector) (*signup.Service, error) {
 		log := do.MustInvoke[*slog.Logger](i)
 		pool := do.MustInvoke[*datastore.Postgres](i)
@@ -210,6 +226,7 @@ func Mount(i do.Injector) (kernel.Module, error) {
 	return NewModule(Deps{
 		KeySet:        keySet,
 		SignIn:        do.MustInvoke[*signin.Service](i),
+		Sessions:      do.MustInvoke[*session.Service](i),
 		Signup:        do.MustInvoke[*signup.Service](i),
 		Users:         do.MustInvoke[*user.Service](i),
 		Verification:  do.MustInvoke[*verification.Service](i),
@@ -231,6 +248,9 @@ func features(deps Deps) []kernel.Module {
 	}
 	if deps.Signup != nil {
 		modules = append(modules, signup.NewModule(deps.Signup))
+	}
+	if deps.Sessions != nil {
+		modules = append(modules, session.NewModule(deps.Sessions))
 	}
 	if deps.Users != nil {
 		modules = append(modules, user.NewModule(deps.Users))

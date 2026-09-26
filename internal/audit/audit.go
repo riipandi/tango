@@ -76,6 +76,18 @@ const (
 	// log's one filter cannot see inside a payload.
 	EventGroupMembersUpdated = "group_members_updated"
 
+	// EventSignOut is a session ended by its own holder. It is the closing
+	// counterpart of sign_in, and the record names the session it ended so
+	// an operator can pair the two lines.
+	EventSignOut = "sign_out"
+
+	// EventSessionRevoked is a session ended by naming it — the account's
+	// holder closing a device they no longer hold. It is not the sign_out
+	// event with a payload: ending your own current session and ending one
+	// you named are different happenings, and the log's one filter cannot
+	// see inside a payload.
+	EventSessionRevoked = "session_revoked"
+
 	// EventAPIKeyCreated is a machine credential that did not exist now
 	// does. The raw key is never in the record: it exists in the response
 	// and the hash, so the payload names the key and its window only.

@@ -62,6 +62,11 @@ type AccessClaims struct {
 // TODO(impersonation): the delegation half is plumbing only — see the note on
 // AccessClaims.ActorID. The subject half is complete and is what every guard
 // rule compares.
+// BearerScheme is the authorization scheme the access token is presented
+// under. It is written once, because the sign-in that answers token_type and
+// the renewal that answers it again must spell the same word.
+const BearerScheme = "Bearer"
+
 // CredentialKind names the channel a caller proved itself through. The kind
 // is not a claim a token carries — it is how the caller arrived — so it lives
 // on the Caller beside the claims rather than inside them.

@@ -262,6 +262,49 @@ Account state is refused after the credential verifies: `disabled` and a live ba
 
 Opening the session is `IssueSession`, the issuer the one-time access exchange shares: it takes the query surface its writes run on, so a caller holding a transaction passes its tx and the session and whatever caused it commit together, and it carries the account-state checks every issuer owes. The password verification stays here; the session's shape and the audit record do not.
 
+### modules/identity/session
+
+The session lifecycle: what happens to the row a sign-in wrote once the caller walks away from it.
+The surface is `tango.auth.v1.SessionService` beside the issuing `AuthService`, because the two
+halves are one story — the opening and the ending — carried by one contract.
+
+The access token stays stateless by decision, and the lifecycle is what makes that honest. A
+sign-out stamps `revoked_at` and `revoked_by` on the row in the transaction the audit record
+commits in, and the refresh token dies with the stamp — but the access token keeps authenticating
+until its own expiry, because a logout that required a round trip per request would turn every
+token into a lookup, which is the statelessness the protocol settled. The consequence is a
+semantic the surface states rather than hides: after a sign-out, `GetSession` answers
+`unauthenticated` — the token verified, the session behind it did not survive — and that is the
+signal a resuming client needs. The two failures the service defines are deliberately different:
+an **ended session of your own** is an authentication state (`unauthenticated`), while a **session
+you cannot name** is a target that does not exist (`not_found`), because the owner's list is the
+only way to learn which sessions exist and the answer discloses nothing about any other account's.
+
+The renewal rotates **in place**: the row keeps its identifier while the token hash and the window
+are replaced, so a client's session keeps its identity across renewals and the old access token's
+`sid` still names a live row. The rotation's write carries the gate in its WHERE clause —
+`revoked_at IS NULL` beside the identifier — so a session revoked between the read and the write
+costs the new secret and nothing else: the renewal dies before it spent anything, and the new
+secret is thrown away rather than restored. No audit record is written for a renewal: it is the
+session continuing, not a happening an operator audits for, and one line per heartbeat would drown
+the log in the very renewals it exists to see past.
+
+The issuer is a **seam, not an import**. The opening and the renewal must not drift apart — they
+sign the same claims shape for the same session identifier, and they write the session window from
+the same two configuration keys — but the sign-in feature reads this package's schema, so a direct
+import would cycle. `session.Issuer` is the interface the lifecycle defines and `*signin.Service`
+satisfies structurally: `SignSessionToken` signs the claims the caller assembled (the account-level
+`SignAccessToken` is its thin wrapper), `SessionLifetime` is the window a renewal writes, and
+`AccessTokenTTL` is the `expires_in` a renewal answers. The refresh token's draw lives in
+`pkg/crypto.NewRefreshTokenPair` for the same reason: two issuers draw it, and a token's entropy
+must not depend on which procedure issued it.
+
+The guard's `Session` rule carries the surface's whole policy: a machine credential is refused
+because it has no session behind it, and a caller whose claims carry no `sid` is refused because a
+token without one is not a session — whatever signed it. The audit events name the happening:
+`sign_out` ends the current session, `session_revoked` ends one the holder named, and the record
+names the session it ended so an operator can pair it with the sign-in line.
+
 ### modules/identity/signup
 
 The sign-up feature: `tango.identity.v1.SignupService/Signup`, the contract in `api/connect/identity.proto` (the identity package, unlike sign-in's `tango.auth.v1` — authentication is its own package, account creation is identity's). RPC only: there is no REST route and none is planned for it. The account carries its primary credential from the first call — the password is required and hashed with the shared `crypto.PasswordHasher` — so the account can sign in immediately; it is created unverified, and email verification is a later procedure (`public.auth_tokens` with purpose `email_verification` already exists for it).

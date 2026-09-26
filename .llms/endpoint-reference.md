@@ -42,28 +42,27 @@ are pinned by `internal/transport/handler_rpc_test.go`.
 ## Authentication (tango-only)
 
 Password authentication is a tango-only surface: upstream Pocket ID signs users in with passkeys
-only. Contracts below define the full password lifecycle.
+only. The contract lives in `api/connect/auth.proto` under `tango.auth.v1` — `AuthService` issues
+the credentials, `SessionService` carries the lifecycle of the session a sign-in opened. The
+session is the server's one trace of an authenticated caller: who opened it, from where, under
+which refresh token, and — since the lifecycle landed — whether it has ended and who ended it.
 
-| Method | Procedure / Endpoint | Summary / Yaak Title | Status | Evidence |
-| ------ | -------------------- | -------------------- | ------ | -------- |
-| POST | `/rpc/tango.identity.v1.AuthService/SignIn` | Sign in with password | done — body `{identity, password, remember}`; indistinguishable failures for unknown identity vs wrong password; disabled accounts fail closed; `remember` selects the long or short session lifetime; sets the token cookies | `modules/identity/session.TestRPCSignInIssuesCookies`, `modules/identity/session.TestRPCSignInPendingFlow`, `modules/identity/session.TestRPCSignInRememberSelectsLifetime` |
-| POST | `/rpc/tango.identity.v1.AuthService/SignOut` | Sign out | done — revokes the token family and clears cookies; the REST twin below is the worker's cookie-channel fallback | `modules/identity/session.TestRPCSignOutAndSession` |
-| POST | `/rpc/tango.identity.v1.AuthService/GetSession` | Inspect current session | done | `modules/identity/session.TestRPCSignOutAndSession` |
-| POST | `/rpc/tango.identity.v1.AuthService/ForgotPassword` | Request a password reset (RPC, unimplemented) | done — declared for contract completeness; answers `unimplemented`; recovery is served by the retained REST routes | `modules/identity/recovery.TestForgotIsAlwaysGeneric` |
-| POST | `/rpc/tango.identity.v1.AuthService/ResetPassword` | Reset a password (RPC, unimplemented) | done — declared for contract completeness; answers `unimplemented`; recovery is served by the retained REST routes | `modules/identity/recovery.TestResetLifecycle` |
-| POST | `/rpc/tango.identity.v1.AccountService/ChangePassword` | Change own password | done — current secret required; other sessions revoked; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
-| POST | `/rpc/tango.identity.v1.AccountService/ListSessions` | List own sessions | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
-| POST | `/rpc/tango.identity.v1.AccountService/RevokeSession` | Revoke one own session | done — self-service; refuses a machine credential | `modules/identity/account.TestAccountRPCSelfService` |
-| POST | `/api/auth/token` | Cookie bridge for the auth worker | REST — access/refresh cookies in, access token + rotation out; never bearer | `modules/identity/session.TestTokenBridgeBootstrapAndRotation`, `modules/identity/session.TestTokenBridgeRejectsAnonymous` |
-| POST | `/api/auth/sign-out` | Sign out (cookie channel) | REST — worker fallback when the bearer path is unusable | `modules/identity/session.TestRPCSignOutAndSession` |
-| POST | `/api/auth/forgot-password` | Request a password reset | REST — anonymous; always 204; queues recovery email; the RPC twin answers `unimplemented` | `modules/identity/recovery.TestForgotIsAlwaysGeneric` |
-| POST | `/api/auth/reset-password` | Reset with a reset token | REST — hashed single-use token; revokes sessions; rotates cookies; the RPC twin answers `unimplemented` | `modules/identity/recovery.TestResetLifecycle` |
+| Method | Procedure | Summary / Yaak Title | Status | Evidence |
+| ------ | --------- | -------------------- | ------ | -------- |
+| POST | `/rpc/tango.auth.v1.AuthService/SignIn` | Sign in with password | done — body `{identity, password, remember}`; indistinguishable failures for unknown identity vs wrong password; disabled or banned accounts fail closed; `remember` selects the long or short session lifetime; answers the token pair + session id + user view | `modules/identity/signin` (service tests), `internal/transport.TestTheSessionLifecycleEndsInAStamp` |
+| POST | `/rpc/tango.auth.v1.SessionService/SignOut` | Sign out | done — guard `Session` (machine credential + sid-less token refused); stamps `revoked_at`/`revoked_by` in a transaction, idempotent; the refresh token dies with the stamp and the access token keeps working until its own expiry — the statelessness the protocol settles; audit `sign_out` names the session | `modules/identity/session.TestSignOutStampsTheRowAndTheRefreshTokenDies`, `internal/transport.TestTheSessionLifecycleEndsInAStamp` |
+| POST | `/rpc/tango.auth.v1.SessionService/GetSession` | Inspect current session | done — the session's view (provider, remember, agent, address, the instant it ends) beside the account view; an ended session answers `unauthenticated`, which is the signal a resuming client needs | `modules/identity/session.TestGetSessionAnswersTheLiveRowAndRefusesAnEndedOne`, `internal/transport.TestTheSessionLifecycleEndsInAStamp` |
+| POST | `/rpc/tango.auth.v1.SessionService/ListSessions` | List own sessions | done — newest first, ended ones included, the caller's own marked; a holder reads where each sign-in happened | `modules/identity/session.TestListSessionsAnswersTheAccountsOwnNewestFirst` |
+| POST | `/rpc/tango.auth.v1.SessionService/RevokeSession` | Revoke one own session | done — guard `Session`; ownership is the not-found shape, an already-ended one is the same success that records nothing; audit `session_revoked` is its own event, because ending your current session and ending one you named are different happenings | `modules/identity/session.TestRevokeSessionEndsOneOfTheAccountsAndRefusesAnOthers` |
+| POST | `/rpc/tango.auth.v1.SessionService/Refresh` | Refresh token pair | done — guard `Session`; the refresh token is rotated in place (the row keeps its identifier, the secret and the window are replaced), a disabled or banned account's renewal is refused, and a session ended between the read and the write costs the new secret and nothing else; no audit record — a renewal is the session continuing, not a happening an operator audits for | `modules/identity/session.TestRefreshRotatesTheTokenAndKeepsTheSession`, `internal/transport.TestTheSessionLifecycleEndsInAStamp` |
 
-Shared rules: the sign-in procedure and both recovery endpoints ride the tight auth rate budget;
-recovery responses never reveal whether the address exists; reset tokens are SHA-256 hashed with
-purpose-prefixed keys and expire in 15 minutes; a completed reset revokes every sign-in session of
-the account and issues a fresh session for the requester; audit events cover sign-in, sign-out,
-password changes, and reset requests/completions without logging secrets.
+Shared rules: the sign-in procedure rides the tight auth rate budget; the sign-in failure never
+reveals whether the identity exists; refresh tokens are SHA-256 hashed with 256 bits of base64url
+randomness (`pkg/crypto.NewRefreshTokenPair`, the one draw both the opening and the renewal use);
+the account-state checks are the issuer's, so every way of opening or continuing a session refuses
+the same. Audit events cover sign-in, sign-out, and named revocations; a renewal records nothing.
+The RPC `ForgotPassword`/`ResetPassword` twins stay unimplemented — recovery is served by the
+retained REST routes below.
 
 ## One-Time Access
 

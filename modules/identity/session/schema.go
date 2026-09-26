@@ -24,6 +24,11 @@ func (SessionPrefix) Prefix() string { return "sess" }
 // SessionID is the typed identifier of one row of SessionTable.
 type SessionID = typeid.TypeID[SessionPrefix]
 
+// ResourceSession is the resource type an audit record names when the change
+// is about a session. The record's user_id names the account the session
+// belongs to, and the session is named in resource_type and resource_id.
+const ResourceSession = "session"
+
 // SessionSchema is one row of SessionTable. It lists only the columns the
 // application writes, so a migration can add a column with a default without
 // touching this struct. The db tags are the column names the query builder
@@ -43,4 +48,13 @@ type SessionSchema struct {
 	Remember          bool        `db:"remember"`
 	CreatedAt         time.Time   `db:"created_at"`
 	ExpiresAt         time.Time   `db:"expires_at"`
+	// RefreshedAt is the last renewal's instant, nil while the refresh token
+	// was never spent.
+	RefreshedAt *time.Time `db:"refreshed_at"`
+	// RevokedAt is when the session ended, nil while it is live. The stamp
+	// is the soft revocation the lifecycle writes; the row survives it.
+	RevokedAt *time.Time `db:"revoked_at"`
+	// RevokedBy names the account that ended the session — its own holder,
+	// or nobody yet.
+	RevokedBy *uuid.UUID `db:"revoked_by"`
 }

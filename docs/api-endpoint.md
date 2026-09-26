@@ -59,6 +59,9 @@ matching upstream's `GET`/`PUT /api/users/me`; the account surface carries only 
 password and session procedures.
 
 `SignIn` takes `{"identity": "<username or email>", "password": "<plaintext>", "remember": <bool>}`.
+The `session_token` field below is spelled `refresh_token` on the wire, and the procedures live
+under `tango.auth.v1.AuthService` and `tango.auth.v1.SessionService` — the authentication package,
+not `tango.identity.v1`.
 `remember` selects the session duration: `true` issues the long lifetime
 (`AUTH_SESSION_LIFETIME`), `false` or absent the short one
 (`AUTH_SESSION_SHORT_LIFETIME`). Both are seconds and must be configured so the

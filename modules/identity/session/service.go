@@ -1,1 +1,347 @@
 package session
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"uuid"
+
+	"github.com/riipandi/tango/internal/audit"
+	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/pkg/crypto"
+	"github.com/riipandi/tango/pkg/jwtutils"
+	"github.com/riipandi/tango/pkg/responder"
+
+	"go.jetify.com/typeid"
+)
+
+// The failures the service defines. The handler maps them onto the codes the
+// Connect protocol carries; the service defines what happened, not how it is
+// answered.
+var (
+	// ErrSessionEnded is a session that no longer authenticates: it was
+	// revoked, or its window closed. A refresh token that names one answers
+	// the same failure an unknown token does.
+	ErrSessionEnded = errors.New("session: session has ended")
+
+	// ErrSessionNotFound is an identifier that names no session, or one
+	// another account holds — the two are the same answer, because the
+	// owner's list is the only way to learn which sessions exist. It is a
+	// different failure from ErrSessionEnded on purpose: an ended session of
+	// your own is an authentication state, a session you cannot name is a
+	// target that does not exist, and the two wire codes must not share a
+	// shape.
+	ErrSessionNotFound = errors.New("session: session not found")
+)
+
+// Issuer is the signing half of the authwall the session lifecycle calls: the
+// access token a renewal answers with, and the two lifetimes the session
+// window is written from. It is an interface this package defines rather than
+// a package it imports — the opening and the renewal must not drift apart,
+// and a seam is what keeps them one vocabulary without an import cycle, since
+// the sign-in issuer itself reads this package's schema.
+type Issuer interface {
+	// SignSessionToken mints the access token from the claims the caller
+	// assembled, for the session identifier the token carries in `sid`.
+	SignSessionToken(ctx context.Context, subject string, claims jwtutils.AccessClaims, sessionID SessionID, at time.Time) (string, error)
+	// SessionLifetime is the window a session's renewal writes, by the
+	// remember flag the opening recorded.
+	SessionLifetime(remember bool) time.Duration
+	// AccessTokenTTL is the lifetime the access token is signed with, so a
+	// renewal answers the same expires_in the sign-in does.
+	AccessTokenTTL() time.Duration
+}
+
+// Service carries the rules of the session lifecycle: what ends a session,
+// what a renewal costs, and what a change records. The repository carries the
+// SQL; the issuer carries the signing and the lifetimes.
+type Service struct {
+	pool *datastore.Postgres
+	repo *Repository
+	// issuer mints the access token a renewal answers with and owns the two
+	// lifetimes the session window is written from — the opening and the
+	// renewal must not drift apart, which is why they are one vocabulary.
+	issuer Issuer
+	users  *user.Service
+	audit  *audit.Recorder
+	log    *slog.Logger
+
+	// now is the instant the service's decisions read. It is a field so a
+	// test can hold the clock still.
+	now func() time.Time
+}
+
+// NewService builds the service over the shared pool.
+func NewService(pool *datastore.Postgres, issuer Issuer, users *user.Service, recorder *audit.Recorder, log *slog.Logger) *Service {
+	return &Service{
+		pool:   pool,
+		repo:   NewRepository(),
+		issuer: issuer,
+		users:  users,
+		audit:  recorder,
+		log:    log,
+		now:    time.Now,
+	}
+}
+
+// SignOut ends the session the access token names. The stamp is the write,
+// the refresh token dies with it, and the access token keeps working until
+// its own expiry — the statelessness the protocol settles. A session that is
+// already ended is the same success: the caller's intent is the state the
+// session is in.
+func (s *Service) SignOut(ctx context.Context, callerSession string, callerID string) error {
+	sid, err := parseSessionID(callerSession)
+	if err != nil {
+		return ErrSessionEnded
+	}
+	userID, err := uuid.Parse(callerID)
+	if err != nil {
+		return ErrSessionEnded
+	}
+
+	return s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		row, getErr := s.repo.GetSession(ctx, tx, sid)
+		if errors.Is(getErr, datastore.ErrNoRows) {
+			return ErrSessionEnded
+		}
+		if getErr != nil {
+			return getErr
+		}
+
+		ended, revokeErr := s.repo.Revoke(ctx, tx, sid, userID, s.now())
+		if revokeErr != nil {
+			return revokeErr
+		}
+		if !ended {
+			return nil
+		}
+
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:        audit.EventSignOut,
+			Status:       audit.StatusSuccess,
+			UserID:       row.UserID.String(),
+			ResourceType: ResourceSession,
+			ResourceID:   sid.UUID(),
+			Payload: map[string]string{
+				"provider":   row.Provider,
+				"session_id": sid.String(),
+			},
+		})
+		return nil
+	})
+}
+
+// GetSession answers the session the access token names and the account it
+// belongs to — the "who am I" a client asks when it resumes. A session that
+// has ended answers the ended failure, which is the signal a resuming client
+// needs: the token verified, the session behind it did not survive.
+func (s *Service) GetSession(ctx context.Context, callerSession string) (SessionSchema, user.UserView, error) {
+	sid, err := parseSessionID(callerSession)
+	if err != nil {
+		return SessionSchema{}, user.UserView{}, ErrSessionEnded
+	}
+
+	row, err := s.repo.GetSession(ctx, s.pool, sid)
+	if errors.Is(err, datastore.ErrNoRows) {
+		return SessionSchema{}, user.UserView{}, ErrSessionEnded
+	}
+	if err != nil {
+		return SessionSchema{}, user.UserView{}, err
+	}
+	if row.RevokedAt != nil || !row.ExpiresAt.After(s.now()) {
+		return SessionSchema{}, user.UserView{}, ErrSessionEnded
+	}
+
+	view, err := s.users.GetUser(ctx, row.UserID.String())
+	if err != nil {
+		return SessionSchema{}, user.UserView{}, err
+	}
+	return row, view, nil
+}
+
+// ListSessions answers one page of the account's sessions, newest first,
+// ended ones included.
+func (s *Service) ListSessions(ctx context.Context, callerID string, page, limit int) ([]SessionSchema, responder.Pagination, error) {
+	page, limit = responder.NormalizePage(page, limit, responder.DefaultPageSize, responder.MaxPageSize)
+
+	userID, err := uuid.Parse(callerID)
+	if err != nil {
+		return nil, responder.Pagination{}, ErrSessionEnded
+	}
+
+	rows, total, err := s.repo.ListOwn(ctx, s.pool, userID, responder.Offset(page, limit), limit)
+	if err != nil {
+		return nil, responder.Pagination{}, err
+	}
+	return rows, responder.NewPagination(responder.PaginationParams{Page: page, Limit: limit}, total), nil
+}
+
+// RevokeSession ends one of the account's sessions. Ending the current one is
+// what SignOut does; ending another is how a holder closes a device they no
+// longer hold. A session that is not the account's answers the ended failure
+// — the not-found shape the handler maps, because the caller learns nothing
+// about whether the session exists — and an already-ended one is the same
+// success that records nothing.
+func (s *Service) RevokeSession(ctx context.Context, callerSession, callerID, target string) error {
+	sid, err := parseSessionID(callerSession)
+	if err != nil {
+		return ErrSessionEnded
+	}
+	userID, err := uuid.Parse(callerID)
+	if err != nil {
+		return ErrSessionEnded
+	}
+	targetID, err := parseSessionID(target)
+	if err != nil {
+		return ErrSessionNotFound
+	}
+
+	return s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		row, getErr := s.repo.GetSession(ctx, tx, targetID)
+		if errors.Is(getErr, datastore.ErrNoRows) {
+			return ErrSessionNotFound
+		}
+		if getErr != nil {
+			return getErr
+		}
+		if row.UserID != userID {
+			return ErrSessionNotFound
+		}
+
+		ended, revokeErr := s.repo.Revoke(ctx, tx, targetID, userID, s.now())
+		if revokeErr != nil {
+			return revokeErr
+		}
+		if !ended {
+			return nil
+		}
+
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:        audit.EventSessionRevoked,
+			Status:       audit.StatusSuccess,
+			UserID:       userID.String(),
+			ResourceType: ResourceSession,
+			ResourceID:   targetID.UUID(),
+			Payload: map[string]string{
+				"provider":    row.Provider,
+				"session_id":  targetID.String(),
+				"was_current": fmt.Sprint(targetID == sid),
+			},
+		})
+		return nil
+	})
+}
+
+// Refreshed is what a renewal answers: the fresh pair and the session it
+// kept.
+type Refreshed struct {
+	AccessToken  string
+	TokenType    string
+	ExpiresIn    int32
+	RefreshToken string
+	SessionID    string
+	User         user.UserView
+}
+
+// Refresh exchanges a refresh token for a fresh pair. The token is rotated in
+// place — the row keeps its identifier, the secret and the window are
+// replaced — so the session a client opened keeps its identity across
+// renewals, and the old access token's claims name a session that still
+// exists.
+//
+// The rotation's write carries the gate in its WHERE clause, so a session
+// that was revoked between the read and the write costs the new secret and
+// nothing else: the renewal dies before it spent anything, and the caller
+// signs in again.
+//
+// No audit record is written: a renewal is the session continuing, not a
+// happening an operator audits for, and one line per heartbeat would drown
+// the log in the very renewals it exists to see past.
+func (s *Service) Refresh(ctx context.Context, presented string) (Refreshed, error) {
+	if presented == "" {
+		return Refreshed{}, ErrSessionEnded
+	}
+
+	now := s.now()
+	row, err := s.repo.FindActiveByTokenHash(ctx, s.pool, crypto.HashRefreshToken(presented), now)
+	if errors.Is(err, datastore.ErrNoRows) {
+		return Refreshed{}, ErrSessionEnded
+	}
+	if err != nil {
+		return Refreshed{}, err
+	}
+
+	// The account's state is the issuer's check, the way every way of
+	// continuing a session refuses the same: a disabled or banned account's
+	// renewal ends here, not at the next request.
+	view, err := s.users.GetUser(ctx, row.UserID.String())
+	if err != nil {
+		return Refreshed{}, err
+	}
+	if view.Disabled || bannedAt(view, now) {
+		return Refreshed{}, ErrSessionEnded
+	}
+
+	replacement, err := crypto.NewRefreshTokenPair()
+	if err != nil {
+		return Refreshed{}, fmt.Errorf("session: refresh token: %w", err)
+	}
+
+	var rotated bool
+	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		var rotateErr error
+		rotated, rotateErr = s.repo.Rotate(ctx, tx, row.ID, replacement.Hash, now,
+			now.Add(s.issuer.SessionLifetime(row.Remember)))
+		return rotateErr
+	})
+	if err != nil {
+		return Refreshed{}, err
+	}
+	if !rotated {
+		// The session ended between the read and the write: the new secret
+		// is thrown away and the caller signs in again.
+		return Refreshed{}, ErrSessionEnded
+	}
+
+	access, err := s.issuer.SignSessionToken(ctx, view.ID, jwtutils.AccessClaims{
+		Email:       view.Email,
+		Username:    view.Username,
+		DisplayName: view.DisplayName,
+		IsAdmin:     view.IsAdmin,
+		SessionID:   row.ID.String(),
+	}, row.ID, now)
+	if err != nil {
+		return Refreshed{}, err
+	}
+
+	return Refreshed{
+		AccessToken:  access,
+		TokenType:    jwtutils.BearerScheme,
+		ExpiresIn:    int32(s.issuer.AccessTokenTTL().Seconds()),
+		RefreshToken: replacement.Plain,
+		SessionID:    row.ID.String(),
+		User:         view,
+	}, nil
+}
+
+// bannedAt reports whether the account sits inside its ban window. A ban
+// without an expiry never lifts by itself — the same rule the sign-in issuer
+// applies.
+func bannedAt(view user.UserView, at time.Time) bool {
+	return view.BannedAt != nil && (view.BanExpires == nil || view.BanExpires.After(at))
+}
+
+// parseSessionID turns the identifier the claims or the request carry into
+// the typed id the rows hold. A malformed identifier names no session, so it
+// is the ended failure the same as an unknown one.
+func parseSessionID(raw string) (SessionID, error) {
+	parsed, err := typeid.Parse[SessionID](raw)
+	if err != nil {
+		return SessionID{}, err
+	}
+	return parsed, nil
+}

@@ -2,10 +2,6 @@ package signin
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -44,12 +40,7 @@ var (
 )
 
 // TokenType is the authorization scheme the access token is presented under.
-const TokenType = "Bearer"
-
-// refreshTokenBytes is the entropy of a refresh token. The token is shown to
-// the caller once; only its hash is stored, so 256 bits of randomness is the
-// whole defense against a database leak.
-const refreshTokenBytes = 32
+const TokenType = jwtutils.BearerScheme
 
 // Service verifies the primary credential and issues the token pair.
 type Service struct {
@@ -214,7 +205,7 @@ func (s *Service) IssueSession(ctx context.Context, db datastore.Querier, accoun
 		return Result{}, ErrAccountBanned
 	}
 
-	refresh, err := newRefreshToken()
+	refresh, err := NewRefreshToken()
 	if err != nil {
 		return Result{}, fmt.Errorf("signin: refresh token: %w", err)
 	}
@@ -227,13 +218,13 @@ func (s *Service) IssueSession(ctx context.Context, db datastore.Querier, accoun
 		ID:                sessionID,
 		UserID:            account.ID,
 		Provider:          provider,
-		TokenHash:         refresh.hash,
+		TokenHash:         refresh.Hash,
 		UserAgent:         params.UserAgent,
 		DeviceFingerprint: params.Fingerprint,
 		IPAddress:         addrPtr(params.IPAddress),
 		Remember:          params.Remember,
 		CreatedAt:         now,
-		ExpiresAt:         now.Add(s.sessionTTL(params.Remember)),
+		ExpiresAt:         now.Add(s.SessionLifetime(params.Remember)),
 	}
 	repo := s.repo.WithQuerier(db)
 	if createErr := repo.CreateSession(ctx, sessionRow); createErr != nil {
@@ -252,7 +243,7 @@ func (s *Service) IssueSession(ctx context.Context, db datastore.Querier, accoun
 		},
 	})
 
-	access, err := s.signAccess(ctx, account, sessionID, now)
+	access, err := s.SignAccessToken(ctx, account, sessionID, now)
 	if err != nil {
 		return Result{}, err
 	}
@@ -261,7 +252,7 @@ func (s *Service) IssueSession(ctx context.Context, db datastore.Querier, accoun
 		AccessToken:  access,
 		TokenType:    TokenType,
 		ExpiresIn:    int32(s.accessTTL.Seconds()),
-		RefreshToken: refresh.plain,
+		RefreshToken: refresh.Plain,
 		SessionID:    sessionID.String(),
 		User: User{
 			ID:          account.ID.String(),
@@ -279,21 +270,45 @@ func bannedAt(account *Account, at time.Time) bool {
 	return account.BannedAt != nil && (account.BanExpires == nil || account.BanExpires.After(at))
 }
 
-// sessionTTL picks the session lifetime the caller asked for: the short
+// AccessTokenTTL is the lifetime the access token is signed with, so a
+// renewal answers the same expires_in the sign-in does.
+func (s *Service) AccessTokenTTL() time.Duration {
+	return s.accessTTL
+}
+
+// SessionLifetime picks the session lifetime the caller asked for: the short
 // window a shared machine forgets by the end of the day, the long one a
 // remembered device keeps. Both are configuration keys, so a deployment
-// decides the two windows.
-func (s *Service) sessionTTL(remember bool) time.Duration {
+// decides the two windows. It is exported because the refresh renewal writes
+// the same column the opening does, and the two must agree.
+func (s *Service) SessionLifetime(remember bool) time.Duration {
 	if remember {
 		return s.longTTL
 	}
 	return s.shortTTL
 }
 
-// signAccess mints the stateless token. The key and algorithm resolve on
-// every call rather than at construction, so a rotation is picked up without
-// a restart.
-func (s *Service) signAccess(ctx context.Context, account *Account, sessionID session.SessionID, now time.Time) (string, error) {
+// SignAccessToken mints the stateless token for an account the caller has
+// already read: the claims are the account's identity, the subject is the
+// account's identifier, and the session identifier is what the caller carries
+// in `sid`. It is the shape the renewal signs through, and it exists so the
+// two issuers — the opening and the renewal — cannot drift apart.
+func (s *Service) SignAccessToken(ctx context.Context, account *Account, sessionID session.SessionID, now time.Time) (string, error) {
+	return s.SignSessionToken(ctx, account.ID.String(), jwtutils.AccessClaims{
+		Email:       account.Email,
+		Username:    account.Username,
+		DisplayName: account.DisplayName,
+		IsAdmin:     account.IsAdmin,
+		SessionID:   sessionID.String(),
+	}, sessionID, now)
+}
+
+// SignSessionToken mints the stateless token from the claims the caller
+// assembled. The key and algorithm resolve on every call rather than at
+// construction, so a rotation is picked up without a restart. It is exported
+// because a renewal signs the same claims for the same session, and the two
+// issuers must not drift apart.
+func (s *Service) SignSessionToken(ctx context.Context, subject string, claims jwtutils.AccessClaims, sessionID session.SessionID, now time.Time) (string, error) {
 	algorithm, err := s.keys.SigningAlgorithm()
 	if err != nil {
 		return "", fmt.Errorf("signin: signing algorithm: %w", err)
@@ -309,14 +324,8 @@ func (s *Service) signAccess(ctx context.Context, account *Account, sessionID se
 	}
 	signer = signer.WithIssuer(s.issuer).WithTTL(s.accessTTL)
 
-	token, err := signer.Sign(jwtutils.AccessClaims{
-		Email:       account.Email,
-		Username:    account.Username,
-		DisplayName: account.DisplayName,
-		IsAdmin:     account.IsAdmin,
-		SessionID:   sessionID.String(),
-	}, jwtutils.Standard{
-		Subject:   account.ID.String(),
+	token, err := signer.Sign(claims, jwtutils.Standard{
+		Subject:   subject,
 		IssuedAt:  now,
 		NotBefore: now,
 	})
@@ -336,21 +345,18 @@ func (s *Service) signingKey(ctx context.Context, algorithm jwa.SignatureAlgorit
 	return s.keys.SignKey(ctx)
 }
 
-type tokenPair struct {
-	plain string
-	hash  string
-}
+// TokenPair is the refresh token the caller sees beside the hash the session
+// row stores. It is crypto.RefreshTokenPair spelled in this package's
+// vocabulary, so a caller of the issuer never reaches past the issuer.
+type TokenPair = crypto.RefreshTokenPair
 
-// newRefreshToken draws the token the caller sees and returns it beside the
-// hash the session row stores.
-func newRefreshToken() (tokenPair, error) {
-	raw := make([]byte, refreshTokenBytes)
-	if _, err := rand.Read(raw); err != nil {
-		return tokenPair{}, err
-	}
-	plain := base64.RawURLEncoding.EncodeToString(raw)
-	sum := sha256.Sum256([]byte(plain))
-	return tokenPair{plain: plain, hash: hex.EncodeToString(sum[:])}, nil
+// NewRefreshToken draws the token the caller sees and returns it beside the
+// hash the session row stores. The draw lives in pkg/crypto, because the
+// renewal draws a replacement the same way and a token's entropy must not
+// depend on which procedure issued it.
+func NewRefreshToken() (TokenPair, error) {
+	pair, err := crypto.NewRefreshTokenPair()
+	return TokenPair(pair), err
 }
 
 // verifyDummy runs the password verifier against a hash of nothing, so a

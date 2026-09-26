@@ -3,7 +3,7 @@ model: environment
 id: ev_WCMcNHoAdN
 workspaceId: wk_kBiMYTkhPP
 createdAt: 2026-09-13T08:08:50.987531
-updatedAt: 2026-09-26T11:08:17.776869
+updatedAt: 2026-09-26T11:43:59.964693
 name: Development
 public: true
 base: false
@@ -26,5 +26,9 @@ variables:
   name: remember
   value: 'true'
   id: qATNTTVvvs
+- enabled: true
+  name: sessionId
+  value: ''
+  id: dwrFu5tk5X
 color: null
 sortPriority: 0.1

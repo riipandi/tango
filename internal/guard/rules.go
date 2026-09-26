@@ -126,6 +126,17 @@ var ProcedureRules = map[string]Entry{
 	apikeyv1connect.ApiKeyServiceRenewAPIKeyProcedure:    {Rule: Session},
 	apikeyv1connect.ApiKeyServiceRevokeAPIKeyProcedure:   {Rule: Session},
 	apikeyv1connect.ApiKeyServiceListAllAPIKeysProcedure: {Rule: Admin},
+
+	// The session lifecycle is the caller's own: every procedure acts on the
+	// session the claims name or the account it belongs to, so the session
+	// rule is the whole requirement — a machine credential has no session
+	// behind it and is refused with the keys' surface, and a caller without
+	// the sid claim is not a session at all.
+	authv1connect.SessionServiceSignOutProcedure:       {Rule: Session},
+	authv1connect.SessionServiceGetSessionProcedure:    {Rule: Session},
+	authv1connect.SessionServiceListSessionsProcedure:  {Rule: Session},
+	authv1connect.SessionServiceRevokeSessionProcedure: {Rule: Session},
+	authv1connect.SessionServiceRefreshProcedure:       {Rule: Session},
 }
 
 // RuleFor answers the rule a procedure gets. A procedure the table does not

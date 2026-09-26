@@ -14,6 +14,9 @@ syntax = "proto3";
 
 package tango.auth.v1;
 
+import "buf/validate/validate.proto";
+import "common.proto";
+
 option go_package = "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1;authv1";
 
 // AuthService issues the credentials a caller presents on every later call.
@@ -25,6 +28,46 @@ service AuthService {
   // identity and a wrong password answer the same failure, so the endpoint
   // does not disclose which half was wrong.
   rpc SignIn(SignInRequest) returns (SignInResponse);
+}
+
+// SessionService is the lifecycle of the session a sign-in opened.
+//
+// The sign-in row is the server's one trace of a session: who opened it, from
+// where, and under which refresh token. These procedures keep that row honest
+// — ended sessions are stamped rather than forgotten, a caller can see the
+// sessions its account holds, and a refresh token that outlives its access
+// token has a procedure to spend it on. Every procedure is the caller's own:
+// the session the claims name is the one they act on, and a machine
+// credential — which has no session — is refused by the guard.
+service SessionService {
+  // SignOut ends the session the access token names. The row is stamped, the
+  // refresh token dies with it, and the access token keeps working until its
+  // own expiry — the statelessness the protocol settles: a logout that
+  // required a round trip per request would make every token a lookup.
+  rpc SignOut(SignOutRequest) returns (SignOutResponse);
+
+  // GetSession answers the session the access token names and the account it
+  // belongs to — the "who am I" a client asks when it resumes. A session
+  // that has ended answers `unauthenticated`, which is the signal a
+  // resuming client needs.
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+
+  // ListSessions answers one page of the account's sessions, newest first,
+  // ended ones included, with the caller's own marked.
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  // RevokeSession ends one of the account's sessions. Ending the current one
+  // is what SignOut does; ending another is how a holder closes a device
+  // they no longer hold. A session that is not the account's answers the
+  // not-found code, and an already-ended one is the same success.
+  rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
+
+  // Refresh exchanges the refresh token for a fresh pair. The refresh token
+  // is rotated in place — the row keeps its identifier, the secret and the
+  // window are replaced — so the session a client opened keeps its identity
+  // across renewals. A spent, ended, or expired refresh token answers the
+  // same failure an unknown one does.
+  rpc Refresh(RefreshRequest) returns (RefreshResponse);
 }
 
 // SignInRequest carries the credential and the session shape the caller asks
@@ -94,4 +137,164 @@ message AuthenticatedUser {
 
   // is_admin reports administrative privileges.
   bool is_admin = 5;
+}
+
+// SignOutRequest is empty: the session it ends is the one the access token
+// names.
+message SignOutRequest {}
+
+// SignOutResponse is empty: a successful sign-out says so with the protocol.
+message SignOutResponse  {
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 1;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 2;
+}
+
+// GetSessionRequest is empty: the session it reads is the one the access
+// token names.
+message GetSessionRequest {}
+
+// GetSessionResponse is the session and the account it belongs to.
+message GetSessionResponse {
+  // session is the session's view.
+  Session session = 1;
+
+  // user is the account the session belongs to.
+  AuthenticatedUser user = 2;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 3;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 4;
+}
+
+// Session is the server's record of one sign-in. The request facts it carries
+// are what the row stored when it was opened — where the sign-in happened, so
+// a holder can recognise a device they never used.
+message Session {
+  // id is the session's TypeID (`sess_…`).
+  string id = 1;
+
+  // provider names how the session was opened — the password sign-in, a
+  // one-time access code.
+  string provider = 2;
+
+  // remember says whether the session holds the long lifetime.
+  bool remember = 3;
+
+  // user_agent is the agent string the sign-in request carried, absent when
+  // the request carried none.
+  optional string user_agent = 4;
+
+  // ip_address is the address the sign-in came from, absent when it was
+  // unknown.
+  optional string ip_address = 5;
+
+  // created_at is the instant the session was opened.
+  string created_at = 6;
+
+  // expires_at is when the session's refresh token stops renewing.
+  string expires_at = 7;
+
+  // refreshed_at is the last renewal, absent when the token was never spent.
+  optional string refreshed_at = 8;
+
+  // revoked_at is when the session ended, absent while it is live.
+  optional string revoked_at = 9;
+
+  // current says whether this is the session the access token names.
+  bool current = 10;
+}
+
+// ListSessionsRequest carries the page the caller asks for. Both fields unset
+// answer the first default-sized page.
+message ListSessionsRequest {
+  // page is the one-based page number.
+  optional int32 page = 1 [(buf.validate.field).int32.gte = 1];
+
+  // limit is the page size.
+  optional int32 limit = 2 [
+    (buf.validate.field).int32.gte = 1,
+    (buf.validate.field).int32.lte = 100
+  ];
+}
+
+// ListSessionsResponse is the page of the account's sessions.
+message ListSessionsResponse {
+  // sessions are the sessions, newest first, ended ones included.
+  repeated Session sessions = 1;
+
+  // metadata is the pagination block the list responses carry.
+  tango.common.v1.ListMetadata metadata = 2;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 3;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 4;
+}
+
+// RevokeSessionRequest names the session to end.
+message RevokeSessionRequest {
+  // id is the session's TypeID (`sess_…`).
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// RevokeSessionResponse is empty: a successful revocation says so with the
+// protocol, and a session that is not the account's answers the not-found
+// code.
+message RevokeSessionResponse  {
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 1;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 2;
+}
+
+// RefreshRequest carries the refresh token a sign-in or a renewal answered
+// with.
+message RefreshRequest {
+  // refresh_token is the credential being spent. It is stored server-side
+  // only as a hash, so the raw value travels in this field alone.
+  string refresh_token = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// RefreshResponse is the fresh pair and the session it renews — the shape
+// SignIn answers with, because a client rotating its token treats the two the
+// same way.
+message RefreshResponse {
+  // access_token is the new Bearer JWT.
+  string access_token = 1;
+
+  // token_type names the authorization scheme, always `Bearer`.
+  string token_type = 2;
+
+  // expires_in is the new access token's lifetime in seconds.
+  int32 expires_in = 3;
+
+  // refresh_token is the replacement credential. The one this request spent
+  // is dead the moment this row is written.
+  string refresh_token = 4;
+
+  // session_id is the session the renewal kept.
+  string session_id = 5;
+
+  // user is the account the tokens name.
+  AuthenticatedUser user = 6;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 7;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 8;
 }

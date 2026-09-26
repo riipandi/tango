@@ -1,0 +1,263 @@
+package transport_test
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"connectrpc.com/authn"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	authv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auth/v1/authv1connect"
+	"github.com/riipandi/tango/database"
+	"github.com/riipandi/tango/internal/audit"
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/health"
+	"github.com/riipandi/tango/internal/kernel"
+	"github.com/riipandi/tango/internal/transport"
+	"github.com/riipandi/tango/modules/identity/jwks"
+	"github.com/riipandi/tango/modules/identity/session"
+	"github.com/riipandi/tango/modules/identity/signin"
+	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/pkg/jwtutils"
+	"github.com/riipandi/tango/pkg/testutils"
+)
+
+// The fixture account, named after the test-copywriting convention.
+const hermioneSessionOwner = "01a0da3e-1111-7000-8000-000000000001"
+
+// sessionPool opens a migrated database with one account.
+func sessionPool(t *testing.T) *datastore.Postgres {
+	t.Helper()
+
+	dsn := testutils.StartPostgres(t.Context(), t).NewDatabase(t)
+
+	migrationDB, err := datastore.OpenMigrationDB(t.Context(), datastore.PostgresOptions{DSN: dsn})
+	require.NoError(t, err)
+	migrator, err := database.NewMigrator(t.Context(), migrationDB, database.MigratorOptions{})
+	require.NoError(t, err)
+	_, err = migrator.Up(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, migrationDB.Close())
+
+	pool, err := datastore.NewPostgres(t.Context(), datastore.PostgresOptions{
+		DSN:             dsn,
+		ApplicationName: "transport_session_test",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { pool.Shutdown(t.Context()) })
+
+	_, err = pool.Exec(t.Context(), `
+		INSERT INTO public.users (id, username, email, first_name, last_name, display_name)
+		VALUES ($1, 'hermione', 'hermione@example.com', 'Hermione', 'Granger', 'Hermione Granger')`,
+		hermioneSessionOwner)
+	require.NoError(t, err)
+	return pool
+}
+
+// newSessionRouter mounts the real session feature over the transport's
+// guard, with the caller the test asks for. The issuer behind the service is
+// the real sign-in service, so a renewal signs through the same key source
+// the opening does.
+func newSessionRouter(t *testing.T, auth transport.Authenticator, pool *datastore.Postgres) (http.Handler, *signin.Service) {
+	t.Helper()
+
+	cfg := config.Default()
+	cfg.Auth.SecretKey = "0123456789abcdeffedcba98765432100123456789abcdeffedcba9876543210"
+	issuer := signin.NewService(cfg, pool, signin.NewRepository(pool),
+		jwks.NewService(cfg, nil, nil), audit.NewRecorder(slog.New(slog.DiscardHandler)), slog.New(slog.DiscardHandler))
+	users := user.NewService(pool, nil, nil, nil)
+	service := session.NewService(pool, issuer, users,
+		audit.NewRecorder(slog.New(slog.DiscardHandler)), slog.New(slog.DiscardHandler))
+
+	return transport.NewRouter(transport.Options{
+		Config:        cfg,
+		Checker:       health.NewChecker(),
+		Authenticator: auth,
+		Modules:       []kernel.Module{session.NewModule(service)},
+	}), issuer
+}
+
+// sessionCallerAuthenticator answers the caller a bearer token produces, with
+// the session identifier the claims carry.
+func sessionCallerAuthenticator(subject, sessionID string, admin bool) transport.Authenticator {
+	return func(ctx context.Context, req *http.Request) (any, error) {
+		if subject == "" {
+			return nil, authn.Errorf("authentication required")
+		}
+		claims := jwtutils.AccessClaims{Username: subject, IsAdmin: admin, SessionID: sessionID}
+		return &jwtutils.Caller{UserID: subject, AccessClaims: claims}, nil
+	}
+}
+
+// TestTheSessionLifecycleEndsInAStamp runs the flow a client walks: sign in,
+// read the session, renew the pair, list, and sign out — every step over the
+// real procedure, the renewal rotating the row the opening wrote.
+func TestTheSessionLifecycleEndsInAStamp(t *testing.T) {
+	pool := sessionPool(t)
+
+	cfg := config.Default()
+	cfg.Auth.SecretKey = "0123456789abcdeffedcba98765432100123456789abcdeffedcba9876543210"
+	issuer := signin.NewService(cfg, pool, signin.NewRepository(pool),
+		jwks.NewService(cfg, nil, nil), audit.NewRecorder(slog.New(slog.DiscardHandler)), nil)
+	account := signin.Account{ID: mustUUID(t, hermioneSessionOwner), Username: "hermione",
+		Email: "hermione@example.com", DisplayName: "Hermione Granger"}
+	result, err := issuer.IssueSession(t.Context(), pool, &account, signin.ProviderPassword,
+		audit.EventSignIn, signin.SessionParams{})
+	require.NoError(t, err)
+
+	router, _ := newSessionRouter(t, sessionCallerAuthenticator(hermioneSessionOwner, result.SessionID, false), pool)
+
+	// The session answers: the row the opening wrote, with the caller's own
+	// marked.
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceGetSessionProcedure, `{}`))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got struct {
+		Session struct {
+			ID      string `json:"id"`
+			Current bool   `json:"current"`
+		} `json:"session"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, result.SessionID, got.Session.ID)
+	assert.True(t, got.Session.Current)
+
+	// The renewal rotates in place: the session identifier survives, the
+	// refresh token does not, and the spent token answers the refusal an
+	// unknown one does.
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceRefreshProcedure,
+		`{"refresh_token":"`+result.RefreshToken+`"}`))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var refreshed struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		SessionID    string `json:"session_id"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &refreshed))
+	assert.Equal(t, result.SessionID, refreshed.SessionID)
+	assert.NotEqual(t, result.RefreshToken, refreshed.RefreshToken)
+
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceRefreshProcedure,
+		`{"refresh_token":"`+result.RefreshToken+`"}`))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+
+	// The list answers the one session the account holds.
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceListSessionsProcedure, `{}`))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	// The sign-out stamps the row. The access token keeps passing the guard
+	// — the statelessness the protocol settles — but the session it names
+	// answers the ended failure, and the refresh token dies with the stamp.
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceSignOutProcedure, `{}`))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceGetSessionProcedure, `{}`))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "the session has ended")
+
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceRefreshProcedure,
+		`{"refresh_token":"`+refreshed.RefreshToken+`"}`))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+}
+
+// TestTheSessionGuardIsDeclared pins the five procedures' rule: every one is
+// session-only, so a caller without a credential is refused as
+// unauthenticated, a machine credential is refused with the not-found shape —
+// the surface does not exist for a credential that has no session — and a
+// bearer whose claims carry no session identifier is refused as
+// unauthenticated too, because a token without one is not a session.
+func TestTheSessionGuardIsDeclared(t *testing.T) {
+	pool := sessionPool(t)
+
+	noSessionCaller := func(subject string) transport.Authenticator {
+		return callerAuthenticator(subject, false, false)
+	}
+
+	for name, tc := range map[string]struct {
+		procedure string
+		body      string
+		auth      transport.Authenticator
+		status    int
+		code      string
+	}{
+		"sign out without a credential": {
+			procedure: authv1connect.SessionServiceSignOutProcedure,
+			body:      `{}`,
+			auth:      callerAuthenticator("", false, false),
+			status:    http.StatusUnauthorized,
+			code:      "unauthenticated",
+		},
+		"sign out with a machine credential": {
+			procedure: authv1connect.SessionServiceSignOutProcedure,
+			body:      `{}`,
+			auth:      machineAuthenticator(hermioneSessionOwner, false),
+			status:    http.StatusNotFound,
+			code:      "not_found",
+		},
+		"list without a credential": {
+			procedure: authv1connect.SessionServiceListSessionsProcedure,
+			body:      `{}`,
+			auth:      callerAuthenticator("", false, false),
+			status:    http.StatusUnauthorized,
+			code:      "unauthenticated",
+		},
+		"list with a machine credential": {
+			procedure: authv1connect.SessionServiceListSessionsProcedure,
+			body:      `{}`,
+			auth:      machineAuthenticator(hermioneSessionOwner, false),
+			status:    http.StatusNotFound,
+			code:      "not_found",
+		},
+		"revoke with a machine credential": {
+			procedure: authv1connect.SessionServiceRevokeSessionProcedure,
+			body:      `{"id":"sess_01a0da3e11117000800000000001"}`,
+			auth:      machineAuthenticator(hermioneSessionOwner, false),
+			status:    http.StatusNotFound,
+			code:      "not_found",
+		},
+		"get session without the session claim": {
+			procedure: authv1connect.SessionServiceGetSessionProcedure,
+			body:      `{}`,
+			auth:      noSessionCaller(hermioneSessionOwner),
+			status:    http.StatusUnauthorized,
+			code:      "unauthenticated",
+		},
+		"refresh without a credential": {
+			procedure: authv1connect.SessionServiceRefreshProcedure,
+			body:      `{"refresh_token":"x"}`,
+			auth:      callerAuthenticator("", false, false),
+			status:    http.StatusUnauthorized,
+			code:      "unauthenticated",
+		},
+		"refresh with a machine credential": {
+			procedure: authv1connect.SessionServiceRefreshProcedure,
+			body:      `{"refresh_token":"x"}`,
+			auth:      machineAuthenticator(hermioneSessionOwner, false),
+			status:    http.StatusNotFound,
+			code:      "not_found",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			router, _ := newSessionRouter(t, tc.auth, pool)
+
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, rpcRequest(t, tc.procedure, tc.body))
+
+			require.Equal(t, tc.status, rec.Code, rec.Body.String())
+			assert.Contains(t, rec.Body.String(), tc.code)
+		})
+	}
+}
