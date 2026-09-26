@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_JJM6p4NuM3
 createdAt: 2026-09-19T12:31:58.362266
-updatedAt: 2026-09-19T14:58:12.291329
+updatedAt: 2026-09-26T14:38:41.487897
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_WNyJqCXLvz
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
@@ -13,7 +13,13 @@ body:
       "id": "REPLACE_CLIENT_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Delete an OIDC client by ID
+
+  Mirror of Pocket ID `DELETE /api/oidc/clients/{id}`.
+
+  Parameters:
+  - id (path, required): Client ID
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +30,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Delete OIDC client
-sortPriority: 0.0
+name: '[Pocket ID] Delete OIDC client (unimplemented)'
+sortPriority: 2000.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/DeleteClient
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

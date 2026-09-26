@@ -163,6 +163,12 @@ const (
 // the only zone that needs no data file and reads the same on every host.
 const DefaultSchedulerTimezone = "UTC"
 
+// DefaultMaxRequestBytes is the body size one RPC request may carry. A
+// contract's largest legitimate message — a profile picture upload rides the
+// REST surface with its own bound — stays far below it, and a caller with
+// more to send has an upload route, not a procedure payload.
+const DefaultMaxRequestBytes = 1 << 20
+
 // Defaults for the outbound HTTP client. The waits are long enough that a
 // blip is retried and short enough that a dead upstream is abandoned, and
 // the breaker opens only after more failures than one call can produce.
@@ -174,10 +180,7 @@ const (
 	DefaultFetcherCircuitFailures = 5
 	DefaultFetcherCircuitSuccess  = 2
 	DefaultFetcherCircuitReset    = 30 * time.Second
-	// DefaultFetcherMaxBody is the response body kept from one call.
-	// Large enough for an API document, small enough that one response
-	// cannot dominate the process.
-	DefaultFetcherMaxBody = 16 << 20
+	DefaultFetcherMaxBody         = 16 << 20
 )
 
 // DefaultUserAgent is the product token the outbound client sends when a
@@ -358,6 +361,7 @@ func Default() Config {
 			WriteTimeout:    30 * time.Second,
 			IdleTimeout:     60 * time.Second,
 			ShutdownTimeout: 15 * time.Second,
+			MaxRequestBytes: DefaultMaxRequestBytes,
 			// The process is reached directly by default: a header is only
 			// believed once a deployment says its proxy sets it. An empty
 			// slice rather than nil, so a generated file writes it as [] and

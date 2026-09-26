@@ -495,6 +495,11 @@ type Server struct {
 	IdleTimeout  time.Duration `koanf:"idle_timeout" json:"idle_timeout"`
 	// ShutdownTimeout bounds the graceful shutdown drain.
 	ShutdownTimeout time.Duration `koanf:"shutdown_timeout" json:"shutdown_timeout"`
+	// MaxRequestBytes bounds the body one RPC request may carry. The Connect
+	// handler refuses a larger one before a procedure runs, which is what
+	// keeps a caller from pinning the process with an oversized payload; the
+	// REST surface bounds its own reads where the shape of a route demands it.
+	MaxRequestBytes int `koanf:"max_request_bytes" json:"max_request_bytes"`
 	// TrustedProxyHeaders name the headers the deployment's reverse proxies
 	// set the client's address in, in precedence order, and which this
 	// process therefore believes. Empty means the process is reached directly

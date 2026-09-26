@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_FKJnADn4kL
 createdAt: 2026-09-25T23:15:13.717881
-updatedAt: 2026-09-25T23:27:20.619077
+updatedAt: 2026-09-26T14:34:08.434644
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LLg3fisc5c
 authentication: {}
@@ -19,6 +19,8 @@ description: |-
   List one account's audit records, newest first: the administrative view of a single account, where `List` is the caller's own view of theirs.
 
   Guard: Admin.
+
+  The `id`/`user_id` field is the account's wire TypeID (`user_...`), not the row's UUID - the UUID never leaves the server.
 headers:
 - enabled: true
   name: Content-Type

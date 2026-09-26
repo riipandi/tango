@@ -2,32 +2,44 @@ type: http_request
 model: http_request
 id: rq_z7AXTcG7wN
 createdAt: 2026-09-13T16:08:36.116262
-updatedAt: 2026-09-18T10:25:08.371571
+updatedAt: 2026-09-26T14:50:46.941419
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_R5pypBKj8u
 authentication: {}
 authenticationType: null
-body: {}
+body:
+  bodyType: application/json
+  text: '{}'
 bodyType: null
-description: Wait for a device login decision and create a browser session after it has been approved — the polling device authenticates with the X-Device-Token header (or tango_device_login cookie) from create
+description: |-
+  Wait for a device login decision and create a browser session after it has been approved
+
+  Mirror of Pocket ID `POST /api/device-login/requests/{id}/exchange`.
+
+  Parameters:
+  - id (path, required): Device login request ID
 headers:
 - enabled: true
   name: X-Device-Token
   value: REPLACE_DEVICE_TOKEN
   id: null
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
 method: POST
-name: Exchange device login request
-sortPriority: 1000.0
+name: '[Pocket ID] Exchange device login request (unimplemented)'
+sortPriority: 333.3333333333333
 url: ${[ apiBaseURL ]}/api/device-login/requests/:id/exchange
 urlParameters:
 - enabled: true
-  name: :id
-  value: dummy
-  id: l83g0a99dx
-- enabled: true
-  name: ''
-  value: ''
-  id: qWppdWPDXK
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

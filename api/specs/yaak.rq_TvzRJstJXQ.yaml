@@ -2,14 +2,17 @@ type: http_request
 model: http_request
 id: rq_TvzRJstJXQ
 createdAt: 2026-09-25T10:24:47.267979
-updatedAt: 2026-09-25T10:24:47.267982
+updatedAt: 2026-09-26T14:50:55.957282
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_RCex2QKoSF
+folderId: fl_dp4vR24das
 authentication: {}
 authenticationType: null
 body: {}
 bodyType: null
-description: 'Readiness probe the transport owns. Kept: a tango built-in the health endpoint publishes, no Pocket ID counterpart.'
+description: |-
+  Readiness probe at /api/healthz: the aggregated availability of the dependencies the process runs on, with one entry per check in check-name order.
+
+  tango built-in; no Pocket ID counterpart.
 headers: []
 method: GET
 name: '[Tango] System Health Check via REST'

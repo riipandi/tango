@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_LdVEQTxE6V
 createdAt: 2026-09-19T12:31:46.271298
-updatedAt: 2026-09-19T18:12:13.565479
+updatedAt: 2026-09-26T14:38:41.486826
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_WNyJqCXLvz
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
@@ -14,7 +14,13 @@ body:
       "callback_urls": ["${[ faker.internet.url() ]}/callback"]
     }
 bodyType: application/json
-description: Name and callback URL are generated per run with Faker, so repeated sends do not collide on the client name.
+description: |-
+  Create a new OIDC client
+
+  Mirror of Pocket ID `POST /api/oidc/clients`.
+
+  Parameters:
+  - client (body, required): Client information
 headers:
 - enabled: true
   name: Content-Type
@@ -25,8 +31,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Create OIDC client
-sortPriority: 0.0
+name: '[Pocket ID] Create OIDC client (unimplemented)'
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/CreateClient
 urlParameters: []
 settingSendCookies:

@@ -295,6 +295,7 @@ func (c Config) Validate() error {
 	check(c.Server.WriteTimeout > 0, "server.write_timeout: must be positive")
 	check(c.Server.IdleTimeout > 0, "server.idle_timeout: must be positive")
 	check(c.Server.ShutdownTimeout > 0, "server.shutdown_timeout: must be positive")
+	check(c.Server.MaxRequestBytes > 0, "server.max_request_bytes: must be positive")
 	// An empty list is the direct case, so only the entries have to be header
 	// names. A header name is a token, the same rule the CORS header list
 	// applies, and a duplicate would make the order meaningless.

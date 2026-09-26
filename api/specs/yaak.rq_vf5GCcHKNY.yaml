@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_vf5GCcHKNY
 createdAt: 2026-09-18T23:54:46.763293
-updatedAt: 2026-09-25T23:27:20.617115
+updatedAt: 2026-09-26T14:34:08.433990
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_LLg3fisc5c
 authentication: {}
@@ -20,6 +20,8 @@ description: |-
   Guard: Admin.
 
   Mirror of Pocket ID `GET /api/audit-logs/all`.
+
+  The `user_id` field is the account's wire TypeID (`user_...`), not the row's UUID - the UUID never leaves the server. A record's `resource_id` is the resource's own UUID form (a session's, a group's), not the account's TypeID.
 headers:
 - enabled: true
   name: Content-Type
@@ -31,7 +33,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] List all audit logs'
-sortPriority: 0.0
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/rpc/tango.auditlog.v1.AuditLogService/ListAll
 urlParameters:
 - enabled: false

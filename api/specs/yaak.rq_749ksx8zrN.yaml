@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_749ksx8zrN
 createdAt: 2026-09-19T12:32:22.291930
-updatedAt: 2026-09-19T14:57:57.141674
+updatedAt: 2026-09-26T14:38:41.496961
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_dMv3SV2esq
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
@@ -13,7 +13,13 @@ body:
       "id": "REPLACE_CLIENT_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  List the secrets of an OIDC client, without disclosing their values
+
+  Mirror of Pocket ID `GET /api/oidc/clients/{id}/secrets`.
+
+  Parameters:
+  - id (path, required): Client ID
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +30,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: List client secrets
-sortPriority: 0.0
+name: '[Pocket ID] List client secrets (unimplemented)'
+sortPriority: 13000.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/ListSecrets
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

@@ -111,10 +111,15 @@ func otelInterceptor() connect.Interceptor {
 // procedures receives them and passes them to every generated handler it
 // registers, so a module's procedure answers exactly like the transport's
 // own — the codec, the panic boundary, and the telemetry included.
-func rpcHandlerOptions() []connect.HandlerOption {
+//
+// The read bound rides the same options, so a request body larger than
+// server.max_request_bytes is refused before any procedure — or the
+// authentication wrap in front of them — decodes it.
+func rpcHandlerOptions(maxRequestBytes int) []connect.HandlerOption {
 	return []connect.HandlerOption{
 		connect.WithCodec(rpcJSONCodec{name: rpcCodecJSON}),
 		connect.WithCodec(rpcJSONCodec{name: rpcCodecJSONCharsetUTF8}),
+		connect.WithReadMaxBytes(maxRequestBytes),
 		// Authorization runs before the contract is enforced, so a caller who
 		// may not run a procedure is refused without the request body being
 		// judged: the answer is the same whether the body was well-formed or
@@ -143,10 +148,10 @@ func rpcHandlerOptions() []connect.HandlerOption {
 // exactly what the surface serves — the checker, the authenticator, and the
 // modules — so the RPC registration never reads how the router got its
 // dependencies.
-func mountRPC(r chi.Router, checker *health.Checker, auth Authenticator, modules []kernel.Module) {
+func mountRPC(r chi.Router, checker *health.Checker, auth Authenticator, modules []kernel.Module, maxRequestBytes int) {
 	// The prefix is stripped because chi only shifts its own route context: a
 	// generated Connect handler matches its procedure path exactly.
-	r.Mount(RPCPath, http.StripPrefix(RPCPath, rpcRouter(checker, auth, modules)))
+	r.Mount(RPCPath, http.StripPrefix(RPCPath, rpcRouter(checker, auth, modules, maxRequestBytes)))
 }
 
 // rpcRouter builds the Connect handler tree served below RPCPath.
@@ -161,10 +166,10 @@ func mountRPC(r chi.Router, checker *health.Checker, auth Authenticator, modules
 // (no procedure in this contract declares `idempotency_level =
 // NO_SIDE_EFFECTS`, which is what would make a GET legal), and the generated
 // handler is what refuses another method with `405` and `Allow: POST`.
-func rpcRouter(checker *health.Checker, auth Authenticator, modules []kernel.Module) http.Handler {
+func rpcRouter(checker *health.Checker, auth Authenticator, modules []kernel.Module, maxRequestBytes int) http.Handler {
 	r := chi.NewRouter()
 
-	options := rpcHandlerOptions()
+	options := rpcHandlerOptions(maxRequestBytes)
 	_, healthHandler := systemv1connect.NewHealthServiceHandler(
 		newRPCHealthService(checker),
 		options...,
@@ -194,6 +199,15 @@ func rpcRouter(checker *health.Checker, auth Authenticator, modules []kernel.Mod
 	return middleware.BearerAuth(auth, rpcPublicProcedures, options, r)
 }
 
+// rpcRefuseWith answers a limited RPC request in its own protocol. The bound
+// is threaded so the error writer spells refusals with the same options the
+// procedures were registered with.
+func rpcRefuseWith(maxRequestBytes int) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rpcRefuse(w, r, maxRequestBytes)
+	}
+}
+
 // writeRPCError answers a request that reached no procedure, in the protocol the caller used.
 func writeRPCError(writer *connect.ErrorWriter, w http.ResponseWriter, r *http.Request, code connect.Code, message string) {
 	_ = writer.Write(w, r, connect.NewError(code, errors.New(message)))
@@ -206,8 +220,8 @@ func writeRPCError(writer *connect.ErrorWriter, w http.ResponseWriter, r *http.R
 // same handler options the procedures are registered with, so the refusal is
 // serialized under the shared codec, exactly like a refusal from a procedure
 // itself.
-func rpcRefuse(w http.ResponseWriter, r *http.Request) {
-	options := rpcHandlerOptions()
+func rpcRefuse(w http.ResponseWriter, r *http.Request, maxRequestBytes int) {
+	options := rpcHandlerOptions(maxRequestBytes)
 	writer := connect.NewErrorWriter(options...)
 	writeRPCError(writer, w, r, connect.CodeResourceExhausted, "rate limit exceeded")
 }

@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_3inKD39NoH
 createdAt: 2026-09-19T12:32:10.492421
-updatedAt: 2026-09-19T14:58:18.907905
+updatedAt: 2026-09-26T14:38:41.492710
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_WNyJqCXLvz
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
@@ -13,7 +13,13 @@ body:
       "id": "REPLACE_CLIENT_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Force a re-fetch of the OAuth Client ID Metadata Document for a CIMD client
+
+  Mirror of Pocket ID `POST /api/oidc/clients/{id}/refresh`.
+
+  Parameters:
+  - id (path, required): Client ID
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +30,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Refresh client metadata document
-sortPriority: 0.0
+name: '[Pocket ID] Refresh client metadata document (unimplemented)'
+sortPriority: 11000.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/RefreshClient
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

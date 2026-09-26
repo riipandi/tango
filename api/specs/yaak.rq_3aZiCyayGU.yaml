@@ -2,16 +2,26 @@ type: http_request
 model: http_request
 id: rq_3aZiCyayGU
 createdAt: 2026-09-19T00:34:24.838883
-updatedAt: 2026-09-19T14:58:03.442763
+updatedAt: 2026-09-26T14:38:41.484785
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_WNyJqCXLvz
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
   bodyType: application/json
   text: '{}'
 bodyType: application/json
-description: ''
+description: |-
+  Get a paginated list of OIDC clients with optional search and sorting
+
+  Mirror of Pocket ID `GET /api/oidc/clients`.
+
+  Parameters:
+  - search (query, optional): Search term to filter clients by name
+  - pagination[page] (query, optional): Page number for pagination
+  - pagination[limit] (query, optional): Number of items per page
+  - sort[column] (query, optional): Column to sort by
+  - sort[direction] (query, optional): Sort direction (asc or desc)
 headers:
 - enabled: true
   name: Content-Type
@@ -22,10 +32,30 @@ headers:
   value: '1'
   id: null
 method: POST
-name: List OIDC clients
+name: '[Pocket ID] List OIDC clients (unimplemented)'
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/ListClients
-urlParameters: []
+urlParameters:
+- enabled: false
+  name: search
+  value: ''
+  id: null
+- enabled: false
+  name: pagination[page]
+  value: ''
+  id: null
+- enabled: false
+  name: pagination[limit]
+  value: ''
+  id: null
+- enabled: false
+  name: sort[column]
+  value: ''
+  id: null
+- enabled: false
+  name: sort[direction]
+  value: ''
+  id: null
 settingSendCookies:
   enabled: false
   value: true

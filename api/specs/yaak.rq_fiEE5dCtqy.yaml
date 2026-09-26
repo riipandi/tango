@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_fiEE5dCtqy
 createdAt: 2026-09-19T00:36:25.423311
-updatedAt: 2026-09-19T14:54:55.991983
+updatedAt: 2026-09-26T14:51:14.645069
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_Uf3pbN2b4K
 authentication: {}
@@ -15,7 +15,13 @@ body:
       "oidc_client_id": "REPLACE_CLIENT_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Create a new SCIM service provider
+
+  Mirror of Pocket ID `POST /api/scim/service-provider`.
+
+  Parameters:
+  - serviceProvider (body, required): SCIM service provider information
 headers:
 - enabled: true
   name: Content-Type
@@ -26,7 +32,7 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Create SCIM service provider
+name: '[Pocket ID] Create SCIM service provider (unimplemented)'
 sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.ScimProviderService/Upsert
 urlParameters: []

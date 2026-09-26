@@ -2,15 +2,18 @@ type: http_request
 model: http_request
 id: rq_PV9dEDbAaz
 createdAt: 2026-09-19T12:32:34.128996
-updatedAt: 2026-09-19T14:57:36.157171
+updatedAt: 2026-09-26T14:38:45.460532
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_R8Ld3NMbtT
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
   text: '{}'
 bodyType: application/json
-description: ''
+description: |-
+  Get user information based on the access token
+
+  Mirror of Pocket ID `GET /api/oidc/userinfo`.
 headers:
 - enabled: true
   name: Content-Type
@@ -21,8 +24,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Get user information
-sortPriority: 0.0
+name: '[Pocket ID] Get user information (unimplemented)'
+sortPriority: 16111.111111111111
 url: ${[ apiBaseURL ]}/api/oidc/userinfo
 urlParameters: []
 settingSendCookies:

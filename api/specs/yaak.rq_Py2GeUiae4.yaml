@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_Py2GeUiae4
 createdAt: 2026-09-19T12:32:34.122199
-updatedAt: 2026-09-19T14:57:46.409570
+updatedAt: 2026-09-26T14:38:51.223796
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_eXRcxMKbSw
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
@@ -13,7 +13,18 @@ body:
       "user_id": "REPLACE_USER_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Get a paginated list of OIDC clients that a specific user has authorized
+
+  Mirror of Pocket ID `GET /api/oidc/users/{id}/authorized-clients`.
+
+  Parameters:
+  - id (path, required): User ID
+  - pagination[page] (query, optional): Page number for pagination
+  - pagination[limit] (query, optional): Number of items per page
+  - sort[column] (query, optional): Column to sort by
+  - sort[direction] (query, optional): Sort direction (asc or desc)
+  - filters[hasLaunchURL] (query, optional): Filter clients by whether a launch URL is configured
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +35,34 @@ headers:
   value: '1'
   id: null
 method: POST
-name: List authorized clients for a user
-sortPriority: 0.0
+name: '[Pocket ID] List authorized clients for a user (unimplemented)'
+sortPriority: 16185.185185185186
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcConsentService/ListUserAuthorizedClients
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
+- enabled: false
+  name: pagination[page]
+  value: ''
+  id: null
+- enabled: false
+  name: pagination[limit]
+  value: ''
+  id: null
+- enabled: false
+  name: sort[column]
+  value: ''
+  id: null
+- enabled: false
+  name: sort[direction]
+  value: ''
+  id: null
+- enabled: false
+  name: filters[hasLaunchURL]
+  value: ''
+  id: null
 settingSendCookies:
   enabled: false
   value: true

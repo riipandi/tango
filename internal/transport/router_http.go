@@ -132,10 +132,11 @@ func NewRouter(opts Options) chi.Router {
 	// handlers for one path.
 	r.Group(func(throttled chi.Router) {
 		if opts.RateLimiter != nil {
-			throttled.Use(middleware.RateLimit("rpc", opts.RateLimiter, rpcRefuse, rpcRateLimitExclusions...))
+			throttled.Use(middleware.RateLimit("rpc", opts.RateLimiter,
+				rpcRefuseWith(opts.Config.Server.MaxRequestBytes), rpcRateLimitExclusions...))
 		}
 
-		mountRPC(throttled, opts.Checker, opts.Authenticator, opts.Modules)
+		mountRPC(throttled, opts.Checker, opts.Authenticator, opts.Modules, opts.Config.Server.MaxRequestBytes)
 	})
 
 	// The devtool sits outside the throttled and bearer-guarded groups: a
@@ -158,7 +159,7 @@ func NewRouter(opts Options) chi.Router {
 // restRefuse answers a limited REST request with the envelope: a 429 whose
 // metadata carries the X-RateLimit-* headers the middleware wrote, the shape
 // a REST client parses. The Connect surface refuses its calls through
-// rpcRefuse, in its own protocol.
+// rpcRefuseWith, in its own protocol.
 func restRefuse(w http.ResponseWriter, r *http.Request) {
 	responder.Fail(w, r, http.StatusTooManyRequests, "rate limit exceeded")
 }

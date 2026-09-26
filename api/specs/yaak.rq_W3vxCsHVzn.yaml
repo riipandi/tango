@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_W3vxCsHVzn
 createdAt: 2026-09-25T10:33:40.612989
-updatedAt: 2026-09-25T10:33:40.612991
+updatedAt: 2026-09-26T14:49:54.573749
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_i66EfRvD53
 authentication: {}
@@ -15,7 +15,14 @@ body:
       "permission_ids": []
     }
 bodyType: application/json
-description: ''
+description: |-
+  Replace which permissions of an API every client registered through a Client ID Metadata Document may request
+
+  Mirror of Pocket ID `PUT /api/apis/{id}/cimd-access`.
+
+  Parameters:
+  - id (path, required): API ID
+  - access (body, required): Metadata document client access
 headers:
 - enabled: true
   name: Content-Type
@@ -26,10 +33,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Update metadata document client access'
-sortPriority: 0.0
+name: '[Pocket ID] Update metadata document client access (unimplemented)'
+sortPriority: 1191.9422852207488
 url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/SetCimdAccess
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

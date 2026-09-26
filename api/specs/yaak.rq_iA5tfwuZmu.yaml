@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_iA5tfwuZmu
 createdAt: 2026-09-19T12:32:10.485547
-updatedAt: 2026-09-19T14:58:17.291935
+updatedAt: 2026-09-26T14:38:41.496059
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_WNyJqCXLvz
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
@@ -14,7 +14,15 @@ body:
       "user_id": "REPLACE_USER_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Get a preview of the OIDC data (ID token, access token, userinfo) that would be sent to the client for a specific user
+
+  Mirror of Pocket ID `GET /api/oidc/clients/{id}/preview/{userId}`.
+
+  Parameters:
+  - id (path, required): Client ID
+  - userId (path, required): User ID to preview data for
+  - scopes (query, optional): Scopes to include in the preview (comma-separated)
 headers:
 - enabled: true
   name: Content-Type
@@ -25,10 +33,22 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Preview OIDC client data for user
-sortPriority: 0.0
+name: '[Pocket ID] Preview OIDC client data for user (unimplemented)'
+sortPriority: 10000.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/PreviewClient
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
+- enabled: true
+  name: userId
+  value: REPLACE_USERID
+  id: null
+- enabled: false
+  name: scopes
+  value: ''
+  id: null
 settingSendCookies:
   enabled: false
   value: true

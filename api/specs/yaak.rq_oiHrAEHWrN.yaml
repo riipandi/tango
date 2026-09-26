@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_oiHrAEHWrN
 createdAt: 2026-09-19T12:32:10.501420
-updatedAt: 2026-09-19T14:57:52.444010
+updatedAt: 2026-09-26T14:38:41.490174
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_SRs9gwLx8j
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
@@ -13,7 +13,14 @@ body:
       "id": "REPLACE_CLIENT_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Delete the logo for an OIDC client
+
+  Mirror of Pocket ID `DELETE /api/oidc/clients/{id}/logo`.
+
+  Parameters:
+  - id (path, required): Client ID
+  - light (query, optional): Light mode logo (true) or dark mode logo (false)
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +31,18 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Delete client logo
-sortPriority: 0.0
+name: '[Pocket ID] Delete client logo (unimplemented)'
+sortPriority: 6000.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/DeleteLogo
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
+- enabled: false
+  name: light
+  value: ''
+  id: null
 settingSendCookies:
   enabled: false
   value: true

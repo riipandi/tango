@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_JWVZn6Ji9e
 createdAt: 2026-09-25T10:33:40.016243
-updatedAt: 2026-09-25T10:33:40.016245
+updatedAt: 2026-09-26T14:49:25.941141
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_i66EfRvD53
 authentication: {}
@@ -14,7 +14,13 @@ body:
       "resource": "${[ faker.internet.url() ]}"
     }
 bodyType: application/json
-description: The name and resource URL are generated per run with Faker; the API name allows up to 50 characters, so a short word phrase fits.
+description: |-
+  Create a new API resource server
+
+  Mirror of Pocket ID `POST /api/apis`.
+
+  Parameters:
+  - api (body, required): API information
 headers:
 - enabled: true
   name: Content-Type
@@ -25,8 +31,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Create API'
-sortPriority: 0.0
+name: '[Pocket ID] Create API (unimplemented)'
+sortPriority: 604.9382716049382
 url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/CreateAPI
 urlParameters: []
 settingSendCookies:

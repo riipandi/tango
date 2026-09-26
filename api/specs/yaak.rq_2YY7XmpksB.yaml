@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_2YY7XmpksB
 createdAt: 2026-09-19T01:09:32.336397
-updatedAt: 2026-09-19T14:55:11.610894
+updatedAt: 2026-09-26T14:50:44.946912
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_R5pypBKj8u
 authentication: {}
@@ -15,7 +15,13 @@ body:
       "approve": true
     }
 bodyType: application/json
-description: ''
+description: |-
+  Approve or deny a device login request; approval requires fresh passkey reauthentication
+
+  Mirror of Pocket ID `POST /api/device-login/verification/decision`.
+
+  Parameters:
+  - decision (body, required): Device login decision
 headers:
 - enabled: true
   name: Content-Type
@@ -26,8 +32,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Decide device login request
-sortPriority: 0.0
+name: '[Pocket ID] Decide device login request (unimplemented)'
+sortPriority: 1000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.DeviceApprovalService/DecideRequest
 urlParameters: []
 settingSendCookies:

@@ -2,15 +2,15 @@ type: folder
 model: folder
 id: fl_9GjzmC2N4g
 createdAt: 2026-09-25T10:28:52.690205
-updatedAt: 2026-09-25T19:25:50.841091
+updatedAt: 2026-09-26T14:51:41.990788
 workspaceId: wk_kBiMYTkhPP
 folderId: null
 authentication: {}
 authenticationType: null
 description: ''
 headers: []
-name: Storage
-sortPriority: 10000.0
+name: Storage (unplanned)
+sortPriority: 6555.555555555556
 settingSendCookies:
   enabled: false
   value: true

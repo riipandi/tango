@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_MaJSyWTXhF
 createdAt: 2026-09-25T10:33:40.556795
-updatedAt: 2026-09-25T10:33:40.556797
+updatedAt: 2026-09-26T14:50:01.860346
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_i66EfRvD53
 authentication: {}
@@ -14,7 +14,14 @@ body:
       "client_id": "REPLACE_CLIENT_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Remove every permission of this API a single OIDC client was allowed to request
+
+  Mirror of Pocket ID `DELETE /api/apis/{id}/clients/{clientId}`.
+
+  Parameters:
+  - id (path, required): API ID
+  - clientId (path, required): OIDC Client ID
 headers:
 - enabled: true
   name: Content-Type
@@ -25,10 +32,18 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Revoke a client''s access to an API'
-sortPriority: 0.0
+name: '[Pocket ID] Revoke a client''s access to an API (unimplemented)'
+sortPriority: 1993.1920947010112
 url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/RevokeClient
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
+- enabled: true
+  name: clientId
+  value: REPLACE_CLIENTID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

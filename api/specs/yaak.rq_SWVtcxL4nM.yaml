@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_SWVtcxL4nM
 createdAt: 2026-09-19T12:32:22.300974
-updatedAt: 2026-09-19T14:58:00.190605
+updatedAt: 2026-09-26T14:38:41.494204
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_dMv3SV2esq
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
@@ -14,7 +14,14 @@ body:
       "secret_id": "REPLACE_SECRET_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Delete a single secret of an OIDC client, making it immediately unusable
+
+  Mirror of Pocket ID `DELETE /api/oidc/clients/{id}/secrets/{secretId}`.
+
+  Parameters:
+  - id (path, required): Client ID
+  - secretId (path, required): Client secret ID
 headers:
 - enabled: true
   name: Content-Type
@@ -25,10 +32,18 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Delete client secret
-sortPriority: 0.0
+name: '[Pocket ID] Delete client secret (unimplemented)'
+sortPriority: 15000.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/DeleteSecret
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
+- enabled: true
+  name: secretId
+  value: REPLACE_SECRETID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_CRyqj8iv5c
 createdAt: 2026-09-19T12:32:22.296754
-updatedAt: 2026-09-19T14:57:58.598217
+updatedAt: 2026-09-26T14:38:41.493802
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_dMv3SV2esq
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
@@ -13,7 +13,14 @@ body:
       "id": "REPLACE_CLIENT_ID"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Add a new secret to an OIDC client, leaving the existing ones usable. The value is only returned by this endpoint and cannot be retrieved later.
+
+  Mirror of Pocket ID `POST /api/oidc/clients/{id}/secrets`.
+
+  Parameters:
+  - id (path, required): Client ID
+  - payload (body, optional): Client secret
 headers:
 - enabled: true
   name: Content-Type
@@ -24,10 +31,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Create client secret
-sortPriority: 0.0
+name: '[Pocket ID] Create client secret (unimplemented)'
+sortPriority: 14000.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/CreateSecret
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

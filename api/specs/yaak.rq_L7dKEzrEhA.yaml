@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_L7dKEzrEhA
 createdAt: 2026-09-25T10:33:40.123783
-updatedAt: 2026-09-25T10:33:40.123785
+updatedAt: 2026-09-26T14:49:35.077016
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_i66EfRvD53
 authentication: {}
@@ -14,7 +14,14 @@ body:
       "name": "REPLACE_API_NAME"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Update an existing API by ID
+
+  Mirror of Pocket ID `PUT /api/apis/{id}`.
+
+  Parameters:
+  - id (path, required): API ID
+  - api (body, required): API information
 headers:
 - enabled: true
   name: Content-Type
@@ -25,10 +32,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Update API'
-sortPriority: 0.0
+name: '[Pocket ID] Update API (unimplemented)'
+sortPriority: 1128.943758573388
 url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApiService/UpdateAPI
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

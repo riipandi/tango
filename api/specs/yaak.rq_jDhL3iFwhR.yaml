@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_jDhL3iFwhR
 createdAt: 2026-09-18T23:55:13.786761
-updatedAt: 2026-09-19T14:53:49.024429
+updatedAt: 2026-09-26T14:33:57.875461
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_tw8Gigobcd
 authentication: {}
@@ -11,7 +11,10 @@ body:
   bodyType: application/json
   text: '{}'
 bodyType: application/json
-description: ''
+description: |-
+  Get all application configurations including private ones
+
+  Mirror of Pocket ID `GET /api/application-configuration/all`.
 headers:
 - enabled: true
   name: Content-Type
@@ -22,8 +25,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: List all application configurations
-sortPriority: 0.0
+name: '[Pocket ID] List all application configurations (unimplemented)'
+sortPriority: 111.1111111111111
 url: ${[ apiBaseURL ]}/rpc/tango.admin.v1.ApplicationConfigurationService/GetAll
 urlParameters: []
 settingSendCookies:

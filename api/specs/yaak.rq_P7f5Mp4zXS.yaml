@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_P7f5Mp4zXS
 createdAt: 2026-09-19T12:31:58.358897
-updatedAt: 2026-09-19T14:58:10.676243
+updatedAt: 2026-09-26T14:38:41.489256
 workspaceId: wk_kBiMYTkhPP
-folderId: fl_WNyJqCXLvz
+folderId: fl_5R2gfN3X4T
 authentication: {}
 authenticationType: null
 body:
@@ -14,7 +14,14 @@ body:
       "name": "REPLACE_CLIENT_NAME"
     }
 bodyType: application/json
-description: ''
+description: |-
+  Update an existing OIDC client
+
+  Mirror of Pocket ID `PUT /api/oidc/clients/{id}`.
+
+  Parameters:
+  - id (path, required): Client ID
+  - client (body, required): Client information
 headers:
 - enabled: true
   name: Content-Type
@@ -25,10 +32,14 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Update OIDC client
-sortPriority: 0.0
+name: '[Pocket ID] Update OIDC client (unimplemented)'
+sortPriority: 4000.0
 url: ${[ apiBaseURL ]}/rpc/tango.federation.v1.OidcClientService/UpdateClient
-urlParameters: []
+urlParameters:
+- enabled: true
+  name: id
+  value: REPLACE_ID
+  id: null
 settingSendCookies:
   enabled: false
   value: true

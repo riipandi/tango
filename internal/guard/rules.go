@@ -65,6 +65,15 @@ var ProcedureRules = map[string]Entry{
 	authv1connect.OneTimeAccessServiceCreateTokenProcedure:         {Rule: Admin},
 	authv1connect.OneTimeAccessServiceRequestEmailAsAdminProcedure: {Rule: Admin},
 
+	// The refresh is the sign-in a caller makes with the pair's other half:
+	// the credential the procedure spends is the body's refresh token, and
+	// the access token a renewal is fixing may already be expired, so the
+	// bearer header is no requirement of it. The service judges the token
+	// itself — an unknown, spent, or rotated one answers the ended-session
+	// refusal — and a presented bearer is read only to give the procedure
+	// the client facts a record rides with.
+	authv1connect.SessionServiceRefreshProcedure: {Rule: Public},
+
 	// The audit trail. `List` is the caller's own history, so being
 	// authenticated is the whole requirement — except that a delegated
 	// session is refused, which `Self` would express by comparing the
@@ -131,12 +140,12 @@ var ProcedureRules = map[string]Entry{
 	// session the claims name or the account it belongs to, so the session
 	// rule is the whole requirement — a machine credential has no session
 	// behind it and is refused with the keys' surface, and a caller without
-	// the sid claim is not a session at all.
+	// the sid claim is not a session at all. Refresh is the exception, read
+	// with the public surfaces above: its credential is the body's token.
 	authv1connect.SessionServiceSignOutProcedure:              {Rule: Session},
 	authv1connect.SessionServiceGetSessionProcedure:           {Rule: Session},
 	authv1connect.SessionServiceListSessionsProcedure:         {Rule: Session},
 	authv1connect.SessionServiceRevokeSessionProcedure:        {Rule: Session},
-	authv1connect.SessionServiceRefreshProcedure:              {Rule: Session},
 	authv1connect.SessionServiceSignOutOtherSessionsProcedure: {Rule: Session},
 	authv1connect.SessionServiceSignOutAllSessionsProcedure:   {Rule: Session},
 }

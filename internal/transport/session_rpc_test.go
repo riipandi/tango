@@ -247,12 +247,14 @@ func TestTheBulkSignOutsSweepTheAccountSessions(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "the session has ended")
 }
 
-// TestTheSessionGuardIsDeclared pins the five procedures' rule: every one is
-// session-only, so a caller without a credential is refused as
+// TestTheSessionGuardIsDeclared pins the session procedures' rule: every one
+// but Refresh is session-only, so a caller without a credential is refused as
 // unauthenticated, a machine credential is refused with the not-found shape —
 // the surface does not exist for a credential that has no session — and a
 // bearer whose claims carry no session identifier is refused as
-// unauthenticated too, because a token without one is not a session.
+// unauthenticated too, because a token without one is not a session. Refresh
+// is public at the guard and rides the body's token, which the lifecycle test
+// exercises without a header.
 func TestTheSessionGuardIsDeclared(t *testing.T) {
 	pool := sessionPool(t)
 
@@ -309,19 +311,15 @@ func TestTheSessionGuardIsDeclared(t *testing.T) {
 			status:    http.StatusUnauthorized,
 			code:      "unauthenticated",
 		},
-		"refresh without a credential": {
+		"refresh with an expired access token": {
+			// Refresh rides the public surfaces: the credential it spends is
+			// the body's refresh token, so the guard lets a request through
+			// that carries none — the service judges the token itself.
 			procedure: authv1connect.SessionServiceRefreshProcedure,
 			body:      `{"refresh_token":"x"}`,
 			auth:      callerAuthenticator("", false, false),
 			status:    http.StatusUnauthorized,
 			code:      "unauthenticated",
-		},
-		"refresh with a machine credential": {
-			procedure: authv1connect.SessionServiceRefreshProcedure,
-			body:      `{"refresh_token":"x"}`,
-			auth:      machineAuthenticator(hermioneSessionOwner, false),
-			status:    http.StatusNotFound,
-			code:      "not_found",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
