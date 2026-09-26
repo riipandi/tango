@@ -151,8 +151,7 @@ func (s *Service) SignOut(ctx context.Context, callerSession string, callerID st
 			ResourceType: ResourceSession,
 			ResourceID:   sid.UUID(),
 			Payload: map[string]string{
-				"provider":   row.Provider,
-				"session_id": sid.String(),
+				"provider": row.Provider,
 			},
 		})
 		return nil
@@ -288,7 +287,6 @@ func (s *Service) RevokeSession(ctx context.Context, callerSession, callerID, ta
 			ResourceID:   targetID.UUID(),
 			Payload: map[string]string{
 				"provider":    row.Provider,
-				"session_id":  targetID.String(),
 				"was_current": fmt.Sprint(targetID == sid),
 			},
 		})
@@ -358,9 +356,8 @@ func (s *Service) revokeBulk(ctx context.Context, callerSession, callerID, reaso
 				ResourceType: ResourceSession,
 				ResourceID:   row.ID.UUID(),
 				Payload: map[string]string{
-					"provider":   row.Provider,
-					"session_id": row.ID.String(),
-					"reason":     reason,
+					"provider": row.Provider,
+					"reason":   reason,
 				},
 			})
 		}
@@ -469,11 +466,11 @@ func bannedAt(view user.UserView, at time.Time) bool {
 // subject travels in the wire form — the TypeID the token carries — and the
 // rows keep their UUID, so the boundary is this one function.
 func callerUUID(wire string) (uuid.UUID, error) {
-	id, err := user.ParseID(wire)
+	id, err := user.UUIDFromWire(wire)
 	if err != nil {
 		return uuid.Nil(), ErrSessionEnded
 	}
-	return user.IDToUUID(id), nil
+	return id, nil
 }
 
 func parseSessionID(raw string) (SessionID, error) {

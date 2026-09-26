@@ -34,8 +34,9 @@ var sessionColumns = []string{
 }
 
 // scanSession reads one row into the schema. The identifier arrives as the
-// UUID the column stores and leaves as the typed id the callers hold.
-func scanSession(scan func(dest ...any) error) (SessionSchema, uuid.UUID, error) {
+// UUID the column stores and leaves as the typed id the callers hold; the
+// typed id carries the bytes, so nothing parses the text twice.
+func scanSession(scan func(dest ...any) error) (SessionSchema, error) {
 	var row SessionSchema
 	var rawID, rawEnder string
 	err := scan(
@@ -44,25 +45,21 @@ func scanSession(scan func(dest ...any) error) (SessionSchema, uuid.UUID, error)
 		&rawEnder,
 	)
 	if err != nil {
-		return SessionSchema{}, uuid.Nil(), err
+		return SessionSchema{}, err
 	}
 	if rawEnder != "" {
 		ender, parseErr := uuid.Parse(rawEnder)
 		if parseErr != nil {
-			return SessionSchema{}, uuid.Nil(), fmt.Errorf("session: revoked_by: %w", parseErr)
+			return SessionSchema{}, fmt.Errorf("session: revoked_by: %w", parseErr)
 		}
 		row.RevokedBy = &ender
 	}
 	parsed, err := typeid.FromUUID[SessionID](rawID)
 	if err != nil {
-		return SessionSchema{}, uuid.Nil(), fmt.Errorf("session: id: %w", err)
+		return SessionSchema{}, fmt.Errorf("session: id: %w", err)
 	}
 	row.ID = parsed
-	raw, err := uuid.Parse(rawID)
-	if err != nil {
-		return SessionSchema{}, uuid.Nil(), fmt.Errorf("session: id: %w", err)
-	}
-	return row, raw, nil
+	return row, nil
 }
 
 // GetSession reads one session by its identifier.
@@ -73,7 +70,7 @@ func (r *Repository) GetSession(ctx context.Context, db datastore.Querier, id Se
 	sb.Where(sb.Equal("id", id.UUID()))
 
 	query, args := sb.Build()
-	row, _, err := scanSession(func(dest ...any) error {
+	row, err := scanSession(func(dest ...any) error {
 		return db.QueryRow(ctx, query, args...).Scan(dest...)
 	})
 	if errors.Is(err, datastore.ErrNoRows) {
@@ -96,7 +93,7 @@ func (r *Repository) FindActiveByTokenHash(ctx context.Context, db datastore.Que
 	sb.Where(sb.Equal("token_hash", hash), sb.IsNull("revoked_at"), sb.GT("expires_at", now))
 
 	query, args := sb.Build()
-	row, _, err := scanSession(func(dest ...any) error {
+	row, err := scanSession(func(dest ...any) error {
 		return db.QueryRow(ctx, query, args...).Scan(dest...)
 	})
 	if errors.Is(err, datastore.ErrNoRows) {
@@ -180,12 +177,12 @@ func (r *Repository) RevokeLiveForUser(ctx context.Context, db datastore.Querier
 	targets := []SessionSchema{}
 	ids := []any{}
 	for rows.Next() {
-		row, rawID, scanErr := scanSession(rows.Scan)
+		row, scanErr := scanSession(rows.Scan)
 		if scanErr != nil {
 			return nil, fmt.Errorf("session: bulk revoke: %w", scanErr)
 		}
 		targets = append(targets, row)
-		ids = append(ids, rawID)
+		ids = append(ids, row.ID.UUID())
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("session: bulk revoke: %w", err)
@@ -229,7 +226,7 @@ func (r *Repository) ListOwn(ctx context.Context, db datastore.Querier, userID u
 
 	sessions := []SessionSchema{}
 	for rows.Next() {
-		row, _, scanErr := scanSession(rows.Scan)
+		row, scanErr := scanSession(rows.Scan)
 		if scanErr != nil {
 			return nil, 0, fmt.Errorf("session: list: %w", scanErr)
 		}

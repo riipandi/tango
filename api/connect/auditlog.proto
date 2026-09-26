@@ -120,7 +120,10 @@ message AuditLog {
   string city = 14;
 
   // resource_type and resource_id name what was acted on, when that is not
-  // the account itself.
+  // the account itself. The identifier's form is the resource's own: a
+  // session's record carries the session's UUID (the column's key), a
+  // user_group's carries the group's UUID. Neither is the account's wire
+  // TypeID — that is user_id's shape alone.
   string resource_type = 15;
   string resource_id = 16;
 

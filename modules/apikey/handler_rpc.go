@@ -305,9 +305,9 @@ func mapError(err error) error {
 // one function. A malformed identifier names no owner, the not-found the
 // surface answers.
 func parseCallerUUID(wire string) (uuid.UUID, error) {
-	id, err := user.ParseID(wire)
+	id, err := user.UUIDFromWire(wire)
 	if err != nil {
 		return uuid.Nil(), ErrKeyNotFound
 	}
-	return user.IDToUUID(id), nil
+	return id, nil
 }

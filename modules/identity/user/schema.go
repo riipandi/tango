@@ -89,3 +89,14 @@ func ParseID(wire string) (UserID, error) {
 func IDToUUID(id UserID) uuid.UUID {
 	return uuid.UUID(id.UUIDBytes())
 }
+
+// UUIDFromWire is the request boundary in one step: the wire form a request
+// carries in, the key the rows carry out. A malformed identifier names
+// nothing, and the caller refuses it as the not-found it is.
+func UUIDFromWire(wire string) (uuid.UUID, error) {
+	id, err := ParseID(wire)
+	if err != nil {
+		return uuid.Nil(), err
+	}
+	return IDToUUID(id), nil
+}

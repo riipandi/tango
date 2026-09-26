@@ -237,7 +237,8 @@ message SignupResponse {
 // TODO(signup): user_groups joins an account to the groups it belongs to,
 // per the upstream shape; deferred until the usergroup feature lands.
 message User {
-  // id is the account's identifier, a UUID string.
+  // id is the account's identifier in its wire form, a TypeID (`user_…`)
+  // encoded from the row's UUID — the UUID never leaves the server.
   string id = 1;
 
   // username is the account's handle, case preserved as stored.

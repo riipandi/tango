@@ -140,7 +140,8 @@ message SignInResponse {
 // AuthenticatedUser is the account view the tokens were issued for. It carries
 // the fields a client renders, not the row: no password hash, no ban bookkeeping.
 message AuthenticatedUser {
-  // id is the account's identifier, a UUID string.
+  // id is the account's identifier in its wire form, a TypeID (`user_…`)
+  // encoded from the row's UUID — the UUID never leaves the server.
   string id = 1;
 
   // username is the account's handle, case preserved.
