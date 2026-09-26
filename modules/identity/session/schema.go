@@ -57,4 +57,9 @@ type SessionSchema struct {
 	// RevokedBy names the account that ended the session — its own holder,
 	// or nobody yet.
 	RevokedBy *uuid.UUID `db:"revoked_by"`
+	// ImpersonatedBy names the administrator a delegated session acts for —
+	// nil on every session a sign-in opened. The column is the durable fact
+	// a stop request checks the actor claims against, so a delegation is
+	// provable from the row and not from the token alone.
+	ImpersonatedBy *uuid.UUID `db:"impersonated_by"`
 }

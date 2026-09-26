@@ -142,6 +142,29 @@ func seedSession(t *testing.T, pool *datastore.Postgres, userID uuid.UUID, name,
 	return sid, token
 }
 
+// seedAdmin inserts an administrator account and answers its identifier.
+// Impersonation's protections need a target the rules refuse: an
+// administrator is the one account another administrator may not wear.
+func seedAdmin(t *testing.T, pool *datastore.Postgres, username string) uuid.UUID {
+	t.Helper()
+
+	_, err := pool.Exec(t.Context(), `
+		INSERT INTO public.users (username, email, display_name, is_admin)
+		VALUES ($1::citext, $1::text || '@example.com', 'Vittoria Vetra', true)`,
+		username)
+	require.NoError(t, err)
+
+	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	sb.Select("id")
+	sb.From("public.users")
+	sb.Where(sb.Equal("username", username))
+
+	query, args := sb.Build()
+	var id uuid.UUID
+	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&id))
+	return id
+}
+
 // auditCount reads how many records the log holds of one event about one
 // session.
 func auditCount(t *testing.T, pool *datastore.Postgres, event, sessionID string) int {
@@ -447,4 +470,160 @@ func TestRefreshRotatesTheTokenAndKeepsTheSession(t *testing.T) {
 	assert.ErrorIs(t, err, ErrSessionEnded)
 	_, err = service.Refresh(t.Context(), "")
 	assert.ErrorIs(t, err, ErrSessionEnded)
+}
+
+func TestImpersonateUserOpensADelegatedSession(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service, _ := testService(t, pool)
+
+	admin := seedAccount(t, pool, "robert_langdon")
+	target := seedAccount(t, pool, "sophie_neveu")
+
+	out, err := service.ImpersonateUser(t.Context(), wireOf(t, admin), "robert_langdon",
+		wireOf(t, target), "reproducing the vault's missing entry")
+	require.NoError(t, err)
+
+	assert.Equal(t, "fake-token-for-"+wireOf(t, target), out.AccessToken,
+		"the delegated token's subject is the target")
+	assert.Equal(t, int32(ImpersonationTTL.Seconds()), out.RefreshExpiresIn,
+		"the window is the delegation's fixed one, not the account's")
+
+	row, err := service.repo.GetSession(t.Context(), pool, mustSessionID(t, out.SessionID))
+	require.NoError(t, err)
+	require.NotNil(t, row.ImpersonatedBy)
+	assert.Equal(t, admin, *row.ImpersonatedBy, "the row names the administrator behind it")
+	assert.Equal(t, ImpersonationProvider, row.Provider)
+
+	assert.Equal(t, 1, auditCount(t, pool, audit.EventImpersonationStarted, mustSessionID(t, out.SessionID).UUID()))
+}
+
+func TestImpersonateUserRefusesAdminsAndItselfAndTheUnknown(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service, _ := testService(t, pool)
+
+	admin := seedAccount(t, pool, "robert_langdon")
+	fellowAdmin := seedAdmin(t, pool, "vittoria_vetra")
+
+	_, err := service.ImpersonateUser(t.Context(), wireOf(t, admin), "robert_langdon",
+		wireOf(t, fellowAdmin), "checking the ledger")
+	assert.ErrorIs(t, err, ErrTargetAdmin)
+
+	_, err = service.ImpersonateUser(t.Context(), wireOf(t, admin), "robert_langdon",
+		wireOf(t, admin), "checking the ledger")
+	assert.ErrorIs(t, err, ErrTargetAdmin,
+		"impersonating oneself is the same refusal: the delegation would record a fiction")
+
+	unknown := uuid.New()
+	_, err = service.ImpersonateUser(t.Context(), wireOf(t, admin), "robert_langdon",
+		wireOf(t, unknown), "checking the ledger")
+	assert.ErrorIs(t, err, ErrTargetNotFound)
+}
+
+func TestStopImpersonatingEndsTheDelegationAndReissuesTheActor(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service, _ := testService(t, pool)
+
+	admin := seedAccount(t, pool, "robert_langdon")
+	target := seedAccount(t, pool, "sophie_neveu")
+
+	out, err := service.ImpersonateUser(t.Context(), wireOf(t, admin), "robert_langdon",
+		wireOf(t, target), "reproducing the vault's missing entry")
+	require.NoError(t, err)
+
+	caller := &jwtutils.Caller{
+		UserID: wireOf(t, target),
+		AccessClaims: jwtutils.AccessClaims{
+			Username:      "sophie_neveu",
+			SessionID:     out.SessionID,
+			ActorID:       wireOf(t, admin),
+			ActorUsername: "robert_langdon",
+		},
+	}
+
+	stopped, err := service.StopImpersonating(t.Context(), out.SessionID, caller)
+	require.NoError(t, err)
+
+	assert.Equal(t, "fake-token-for-"+wireOf(t, admin), stopped.AccessToken,
+		"the fresh pair names the administrator again")
+
+	// The delegated row is stamped, and the stop is on the record beside the
+	// start: the pair reads together in the log.
+	row, err := service.repo.GetSession(t.Context(), pool, mustSessionID(t, out.SessionID))
+	require.NoError(t, err)
+	require.NotNil(t, row.RevokedAt)
+	assert.Equal(t, 1, auditCount(t, pool, audit.EventImpersonationStopped, mustSessionID(t, out.SessionID).UUID()))
+}
+
+func TestStopImpersonatingRefusesTheNonDelegatedAndTheForeign(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service, _ := testService(t, pool)
+
+	admin := seedAccount(t, pool, "robert_langdon")
+	target := seedAccount(t, pool, "sophie_neveu")
+	bystander := seedAccount(t, pool, "rubeus_hagrid")
+
+	sid, token := seedSession(t, pool, target, "plain", "password", false)
+
+	// A live session that is nobody's delegation refuses the stop even when
+	// its caller carries actor claims — the row is the proof, not the token.
+	forged := &jwtutils.Caller{
+		UserID: wireOf(t, target),
+		AccessClaims: jwtutils.AccessClaims{
+			Username:  "sophie_neveu",
+			SessionID: sid.String(),
+			ActorID:   wireOf(t, admin),
+		},
+	}
+	_, err := service.StopImpersonating(t.Context(), sid.String(), forged)
+	assert.ErrorIs(t, err, ErrNotImpersonating)
+
+	// The administrator's own ordinary session cannot be ended by naming a
+	// delegation that is not theirs.
+	adminSid, _ := seedSession(t, pool, admin, "own", "password", false)
+	selfCaller := &jwtutils.Caller{
+		UserID: wireOf(t, admin),
+		AccessClaims: jwtutils.AccessClaims{
+			Username:  "robert_langdon",
+			SessionID: adminSid.String(),
+		},
+	}
+	_, err = service.StopImpersonating(t.Context(), adminSid.String(), selfCaller)
+	assert.ErrorIs(t, err, ErrNotImpersonating)
+
+	// A delegated caller whose actor names someone else than the row's
+	// recorded administrator is refused too: the actor pair must match the
+	// row, not merely exist.
+	out, err := service.ImpersonateUser(t.Context(), wireOf(t, admin), "robert_langdon",
+		wireOf(t, target), "reproducing the vault's missing entry")
+	require.NoError(t, err)
+
+	stranger := &jwtutils.Caller{
+		UserID: wireOf(t, target),
+		AccessClaims: jwtutils.AccessClaims{
+			Username:  "sophie_neveu",
+			SessionID: out.SessionID,
+			ActorID:   wireOf(t, bystander),
+		},
+	}
+	_, err = service.StopImpersonating(t.Context(), out.SessionID, stranger)
+	assert.ErrorIs(t, err, ErrNotImpersonating)
+
+	_ = token
+}
+
+// mustSessionID parses the wire form a response carries into the typed id the
+// rows hold.
+func mustSessionID(t *testing.T, wire string) SessionID {
+	t.Helper()
+	sid, err := typeid.Parse[SessionID](wire)
+	require.NoError(t, err)
+	return sid
 }

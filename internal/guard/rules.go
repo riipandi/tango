@@ -114,8 +114,8 @@ var ProcedureRules = map[string]Entry{
 	// trail's self listing and the verification mail carry `Authenticated`.
 	// A delegated caller is refused by the rule itself: a session opened for
 	// another account is not the door to that account's own profile.
-	identityv1connect.UserServiceGetCurrentUserProcedure:      {Rule: Authenticated},
-	identityv1connect.UserServiceUpdateCurrentUserProcedure:   {Rule: Authenticated},
+	identityv1connect.UserServiceGetCurrentUserProcedure:    {Rule: Authenticated},
+	identityv1connect.UserServiceUpdateCurrentUserProcedure: {Rule: Authenticated},
 
 	// Administrative, declared explicitly rather than left to the default so
 	// the table reads as the complete policy of the surface. Upstream guards
@@ -159,6 +159,18 @@ var ProcedureRules = map[string]Entry{
 	authv1connect.SessionServiceRevokeSessionProcedure:        {Rule: Session},
 	authv1connect.SessionServiceSignOutOtherSessionsProcedure: {Rule: Session},
 	authv1connect.SessionServiceSignOutAllSessionsProcedure:   {Rule: Session},
+
+	// The delegation pair. ImpersonateUser is administrative work over a
+	// session, so the admin rule is the whole requirement — and the service
+	// beneath it adds what a rule cannot express: the target must exist, must
+	// not be an administrator, and must not be the caller. StopImpersonating
+	// is the one procedure a delegated caller must reach: its rule requires
+	// the delegation instead of refusing it, because the way out of a
+	// borrowed identity must not be closed by the refusals the other rules
+	// keep — and it still refuses a machine credential, which has no session
+	// to end.
+	authv1connect.SessionServiceImpersonateUserProcedure:   {Rule: Admin},
+	authv1connect.SessionServiceStopImpersonatingProcedure: {Rule: StopImpersonating},
 }
 
 // RuleFor answers the rule a procedure gets. A procedure the table does not

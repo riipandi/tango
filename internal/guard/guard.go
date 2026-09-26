@@ -165,6 +165,28 @@ func Admin(caller *jwtutils.Caller, _ Target) error {
 	return nil
 }
 
+// StopImpersonating answers exactly the caller a delegation carries: a
+// session credential whose claims name the administrator behind it. It is
+// the one rule that requires the delegation rather than refusing it — the
+// way out of a borrowed identity must not be closed by the refusals the
+// other rules keep — and it still refuses a machine credential, which has
+// no session to end and could never have opened a delegation.
+func StopImpersonating(caller *jwtutils.Caller, _ Target) error {
+	if caller == nil {
+		return ErrUnauthenticated
+	}
+	if caller.IsMachine() {
+		return ErrMachineCredential
+	}
+	if caller.SessionID == "" {
+		return ErrUnauthenticated
+	}
+	if !caller.IsImpersonating() {
+		return ErrImpersonated
+	}
+	return nil
+}
+
 // Self answers the account the request names, and nobody else.
 //
 // field is the name the identifier travels under: the proto field name of a

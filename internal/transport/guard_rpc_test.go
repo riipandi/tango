@@ -16,6 +16,7 @@ import (
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport"
+	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/signup"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/jwtutils"
@@ -54,6 +55,7 @@ func newGuardedRouter(t *testing.T, auth transport.Authenticator) http.Handler {
 			// fail the test rather than pass it.
 			signup.NewModule(nil),
 			user.NewModule(nil),
+			session.NewModule(nil),
 		},
 	})
 }

@@ -80,6 +80,27 @@ service SessionService {
   // its own expiry — the statelessness the protocol settles — so a client
   // that means to discard its credential should drop the token pair too.
   rpc SignOutAllSessions(SignOutAllSessionsRequest) returns (SignOutAllSessionsResponse);
+
+  // ImpersonateUser opens a NEW session on the target account's behalf. The
+  // subject names the target, the actor claims name the administrator, and
+  // the session row records the delegation in `impersonated_by`. The window
+  // is fixed — one hour, whatever the account's normal lifetime is — and the
+  // refresh rotation keeps the delegation alive inside it. A target that is
+  // itself an administrator answers `permission_denied`: an administrator's
+  // identity is never worn by another, and the refusal does not confirm the
+  // target's role (an unknown target answers the same `not_found` any
+  // unfindable account does). The delegation is refused on self-service
+  // procedures by the guard table, and the whole life of the session is
+  // audited.
+  rpc ImpersonateUser(ImpersonateUserRequest) returns (ImpersonateUserResponse);
+
+  // StopImpersonating ends the delegated session the access token names and
+  // issues a fresh pair on the administrator's own account, so the caller
+  // resumes where their real identity left off. It is callable exactly while
+  // impersonating — the guard's `Authenticated` rule admits the delegated
+  // caller this one time, because refusing the way out would trap the actor
+  // inside the borrowed identity.
+  rpc StopImpersonating(StopImpersonatingRequest) returns (StopImpersonatingResponse);
 }
 
 // SignInRequest carries the credential and the session shape the caller asks
@@ -324,8 +345,7 @@ message RefreshRequest {
 // RefreshResponse is the fresh pair and the session it renews — the shape
 // SignIn answers with, because a client rotating its token treats the two the
 // same way.
-message RefreshResponse {
-  // access_token is the new Bearer JWT.
+message RefreshResponse {  // access_token is the new Bearer JWT.
   string access_token = 1;
 
   // token_type names the authorization scheme, always `Bearer`.
@@ -354,4 +374,91 @@ message RefreshResponse {
 
   // message is the human-readable sentence describing what the call did.
   string message = 8;
+}
+
+// ImpersonateUserRequest carries the target and the reason the audit row
+// keeps.
+message ImpersonateUserRequest {
+  // user is the target account's identifier in its wire form (`user_…`).
+  string user = 1 [(buf.validate.field).string.min_len = 1];
+
+  // reason is the human-readable sentence the audit row stores — what the
+  // administrator was investigating. It is required: a delegation without a
+  // stated purpose is the one an audit trail cannot explain.
+  string reason = 2 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 500
+  ];
+}
+
+// ImpersonateUserResponse is the fresh pair the delegation answers with —
+// the same shape SignIn answers with, because a client entering an
+// impersonated session treats the two the same way.
+message ImpersonateUserResponse {
+  // access_token is the Bearer JWT naming the target as its subject and the
+  // administrator in its actor pair.
+  string access_token = 1;
+
+  // token_type names the authorization scheme, always `Bearer`.
+  string token_type = 2;
+
+  // access_expires_in is the access token's lifetime in seconds.
+  int32 access_expires_in = 3;
+
+  // refresh_expires_in is the delegation's fixed window in seconds — one
+  // hour, whatever the target's normal session lifetimes are.
+  int32 refresh_expires_in = 4;
+
+  // refresh_token is the credential that keeps the delegation alive. It is
+  // stored server-side only as a hash, under the session row the delegation
+  // opened.
+  string refresh_token = 5;
+
+  // session_id is the delegated session's TypeID (`sess_…`).
+  string session_id = 6;
+
+  // user is the target account the tokens name.
+  AuthenticatedUser user = 7;
+
+  // status is the outcome word the client checks — success.
+  string status = 8;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 9;
+}
+
+// StopImpersonatingRequest is empty: the delegation it ends is the one the
+// access token names.
+message StopImpersonatingRequest {}
+
+// StopImpersonatingResponse is the administrator's own fresh pair — the
+// shape SignIn answers with, because leaving a delegation is signing back in
+// to the caller's real account.
+message StopImpersonatingResponse {
+  // access_token is the administrator's new Bearer JWT.
+  string access_token = 1;
+
+  // token_type names the authorization scheme, always `Bearer`.
+  string token_type = 2;
+
+  // access_expires_in is the access token's lifetime in seconds.
+  int32 access_expires_in = 3;
+
+  // refresh_expires_in is the administrator's new session window in seconds.
+  int32 refresh_expires_in = 4;
+
+  // refresh_token is the administrator's new refresh credential.
+  string refresh_token = 5;
+
+  // session_id is the administrator's new session's TypeID (`sess_…`).
+  string session_id = 6;
+
+  // user is the administrator's account the tokens name.
+  AuthenticatedUser user = 7;
+
+  // status is the outcome word the client checks — success.
+  string status = 8;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 9;
 }

@@ -31,6 +31,7 @@ var sessionColumns = []string{
 	// and a nil is the empty string the scan carries rather than a type the
 	// scanner has no plan for.
 	"COALESCE(revoked_by::text, '')",
+	"COALESCE(impersonated_by::text, '')",
 }
 
 // scanSession reads one row into the schema. The identifier arrives as the
@@ -38,11 +39,11 @@ var sessionColumns = []string{
 // typed id carries the bytes, so nothing parses the text twice.
 func scanSession(scan func(dest ...any) error) (SessionSchema, error) {
 	var row SessionSchema
-	var rawID, rawEnder string
+	var rawID, rawEnder, rawActor string
 	err := scan(
 		&rawID, &row.UserID, &row.Provider, &row.UserAgent, &row.IPAddress,
 		&row.Remember, &row.CreatedAt, &row.ExpiresAt, &row.RefreshedAt, &row.RevokedAt,
-		&rawEnder,
+		&rawEnder, &rawActor,
 	)
 	if err != nil {
 		return SessionSchema{}, err
@@ -54,12 +55,35 @@ func scanSession(scan func(dest ...any) error) (SessionSchema, error) {
 		}
 		row.RevokedBy = &ender
 	}
+	if rawActor != "" {
+		actor, parseErr := uuid.Parse(rawActor)
+		if parseErr != nil {
+			return SessionSchema{}, fmt.Errorf("session: impersonated_by: %w", parseErr)
+		}
+		row.ImpersonatedBy = &actor
+	}
 	parsed, err := typeid.FromUUID[SessionID](rawID)
 	if err != nil {
 		return SessionSchema{}, fmt.Errorf("session: id: %w", err)
 	}
 	row.ID = parsed
 	return row, nil
+}
+
+// Create writes a new session row — the sign-in issuer's insert, owned here
+// so every way a session opens (a password, a one-time code, a delegation)
+// writes the same columns. The caller owns the transaction.
+func (r *Repository) Create(ctx context.Context, db datastore.Querier, row SessionSchema) error {
+	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
+	ib.InsertInto(SessionTable)
+	ib.Cols("id", "user_id", "provider", "token_hash", "user_agent", "device_fingerprint", "ip_address", "remember", "created_at", "expires_at", "impersonated_by")
+	ib.Values(row.ID.UUID(), row.UserID, row.Provider, row.TokenHash, row.UserAgent, row.DeviceFingerprint, row.IPAddress, row.Remember, row.CreatedAt, row.ExpiresAt, row.ImpersonatedBy)
+
+	query, args := ib.Build()
+	if _, err := db.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("session: create: %w", err)
+	}
+	return nil
 }
 
 // GetSession reads one session by its identifier.

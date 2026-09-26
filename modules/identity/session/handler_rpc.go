@@ -58,6 +58,8 @@ func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
 	r.Handle(authv1connect.SessionServiceRefreshProcedure, handler)
 	r.Handle(authv1connect.SessionServiceSignOutOtherSessionsProcedure, handler)
 	r.Handle(authv1connect.SessionServiceSignOutAllSessionsProcedure, handler)
+	r.Handle(authv1connect.SessionServiceImpersonateUserProcedure, handler)
+	r.Handle(authv1connect.SessionServiceStopImpersonatingProcedure, handler)
 }
 
 // rpcHandler is the transport mapping of the procedures. The service carries
@@ -253,6 +255,59 @@ func (h *rpcHandler) Refresh(ctx context.Context, req *connect.Request[authv1.Re
 	}), nil
 }
 
+// ImpersonateUser opens a delegated session on the target's behalf. The
+// caller's identity is the actor pair's only source — the request cannot
+// name an actor, because a request that could would be a delegation of an
+// unknown kind.
+func (h *rpcHandler) ImpersonateUser(ctx context.Context, req *connect.Request[authv1.ImpersonateUserRequest]) (*connect.Response[authv1.ImpersonateUserResponse], error) {
+	caller := sessionCaller(ctx)
+	if caller == nil {
+		return nil, connect.NewError(connect.CodeInternal, errors.New("authentication state missing"))
+	}
+
+	refreshed, err := h.service.ImpersonateUser(ctx, caller.UserID, caller.Username, req.Msg.User, req.Msg.Reason)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&authv1.ImpersonateUserResponse{
+		AccessToken:      refreshed.AccessToken,
+		TokenType:        refreshed.TokenType,
+		AccessExpiresIn:  refreshed.AccessExpiresIn,
+		RefreshExpiresIn: refreshed.RefreshExpiresIn,
+		RefreshToken:     refreshed.RefreshToken,
+		SessionId:        refreshed.SessionID,
+		User:             wireUser(refreshed.User),
+		Status:           responder.StatusSuccess,
+		Message:          "the impersonated session was opened",
+	}), nil
+}
+
+// StopImpersonating ends the delegated session and answers the actor's own
+// fresh pair. The rule that admits a delegated caller here — the one place
+// the guard lets one through — is what makes the way out reachable.
+func (h *rpcHandler) StopImpersonating(ctx context.Context, req *connect.Request[authv1.StopImpersonatingRequest]) (*connect.Response[authv1.StopImpersonatingResponse], error) {
+	caller := sessionCaller(ctx)
+	if caller == nil {
+		return nil, connect.NewError(connect.CodeInternal, errors.New("authentication state missing"))
+	}
+
+	refreshed, err := h.service.StopImpersonating(ctx, caller.SessionID, caller)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&authv1.StopImpersonatingResponse{
+		AccessToken:      refreshed.AccessToken,
+		TokenType:        refreshed.TokenType,
+		AccessExpiresIn:  refreshed.AccessExpiresIn,
+		RefreshExpiresIn: refreshed.RefreshExpiresIn,
+		RefreshToken:     refreshed.RefreshToken,
+		SessionId:        refreshed.SessionID,
+		User:             wireUser(refreshed.User),
+		Status:           responder.StatusSuccess,
+		Message:          "the impersonated session was ended",
+	}), nil
+}
+
 // wireSession maps the stored row onto the wire message. The request facts
 // are what the row stored when it was opened, and `current` is the one field
 // the row cannot answer — it is the caller's question, not the row's.
@@ -339,6 +394,12 @@ func mapError(err error) error {
 		return connect.NewError(connect.CodeUnauthenticated, errors.New("the session has ended"))
 	case errors.Is(err, ErrSessionNotFound):
 		return connect.NewError(connect.CodeNotFound, errors.New("session not found"))
+	case errors.Is(err, ErrTargetNotFound):
+		return connect.NewError(connect.CodeNotFound, errors.New("user not found"))
+	case errors.Is(err, ErrTargetAdmin):
+		return connect.NewError(connect.CodePermissionDenied, errors.New("an administrator may not be impersonated"))
+	case errors.Is(err, ErrNotImpersonating):
+		return connect.NewError(connect.CodeFailedPrecondition, errors.New("the caller is not impersonating"))
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("session operation failed"))
 	}

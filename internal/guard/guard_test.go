@@ -215,3 +215,41 @@ func TestEveryDeclaredProcedureExistsInTheContract(t *testing.T) {
 		assert.Contains(t, guard.ContractProcedures(), procedure)
 	}
 }
+
+// TestStopImpersonatingRuleRequiresTheDelegation covers the one rule that
+// must admit an impersonated caller: a session credential carrying an actor
+// pair passes, a machine credential and a plain session are refused, and a
+// caller without a session is refused as unauthenticated.
+func TestStopImpersonatingRuleRequiresTheDelegation(t *testing.T) {
+	delegated := &jwtutils.Caller{
+		UserID: "user_01a0da1ccb4177900000000000",
+		AccessClaims: jwtutils.AccessClaims{
+			Username:  "sophie_neveu",
+			SessionID: "sess_01a0da1ccb4177900000000000",
+			ActorID:   "user_01a0da1ccb4177900000000001",
+		},
+	}
+	assert.NoError(t, guard.StopImpersonating(delegated, guard.Target{}))
+
+	plain := &jwtutils.Caller{
+		UserID: "user_01a0da1ccb4177900000000000",
+		AccessClaims: jwtutils.AccessClaims{
+			Username:  "sophie_neveu",
+			SessionID: "sess_01a0da1ccb4177900000000000",
+		},
+	}
+	assert.ErrorIs(t, guard.StopImpersonating(plain, guard.Target{}), guard.ErrImpersonated)
+
+	machine := &jwtutils.Caller{
+		UserID: "user_01a0da1ccb4177900000000000",
+		AccessClaims: jwtutils.AccessClaims{
+			Username:  "sophie_neveu",
+			SessionID: "sess_01a0da1ccb4177900000000000",
+			ActorID:   "user_01a0da1ccb4177900000000001",
+		},
+		Credential: jwtutils.CredentialAPIKey,
+	}
+	assert.ErrorIs(t, guard.StopImpersonating(machine, guard.Target{}), guard.ErrMachineCredential)
+
+	assert.ErrorIs(t, guard.StopImpersonating(nil, guard.Target{}), guard.ErrUnauthenticated)
+}

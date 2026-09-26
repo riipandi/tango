@@ -111,6 +111,19 @@ const (
 	// EventAPIKeyExpiryEmailSent is the expiry reminder submitted. Like
 	// every email record, it names the delivery, not the message's contents.
 	EventAPIKeyExpiryEmailSent = "api_key_expiry_email_sent"
+
+	// EventImpersonationStarted is a delegated session opened by an
+	// administrator. The record's user_id names the TARGET account — the one
+	// the requests will run as — and the payload's actor fields name the
+	// administrator behind it (merged from the caller by the recorder), with
+	// the reason the delegation exists.
+	EventImpersonationStarted = "impersonation_started"
+
+	// EventImpersonationStopped is a delegated session ended by the
+	// administrator riding in it. The user_id names the target — matching
+	// the started record so the pair reads together — and the payload's
+	// actor fields name who stepped back out.
+	EventImpersonationStopped = "impersonation_stopped"
 )
 
 // The trigger values the trigger_type column's enum allows. A record this
