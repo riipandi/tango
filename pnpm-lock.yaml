@@ -206,6 +206,9 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@types/k6':
+        specifier: ^2.2.1
+        version: 2.2.1
       '@types/node':
         specifier: ^26.6.3
         version: 26.6.3
@@ -1382,6 +1385,9 @@ packages:
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
+
+  '@types/k6@2.2.1':
+    resolution: {integrity: sha512-WgLxx6KgNSZq3KV3HnYYVvo5ZZSxyRz3q9B0byBAY8z6HuYWxcdOr69fRQuvadmUD2NkVVcbDMye8mF+2Wxx/A==}
 
   '@types/node@26.6.2':
     resolution: {integrity: sha512-X1P21scMv4zGKLYqjdGjaKa7COa0RKVYYZZN/NfvLQ1JegxFhdhpZG/Lyn8AXx6CDUavKAd11v6BvfpkDByK8g==}
@@ -3299,6 +3305,8 @@ snapshots:
   '@types/deep-eql@4.0.2': {}
 
   '@types/estree@1.0.9': {}
+
+  '@types/k6@2.2.1': {}
 
   '@types/node@26.6.2':
     dependencies:
