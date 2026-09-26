@@ -25,6 +25,9 @@ import (
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/modules/identity/user"
+	"go.jetify.com/typeid"
+
+	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/testutils"
 )
@@ -171,6 +174,67 @@ func TestTheSessionLifecycleEndsInAStamp(t *testing.T) {
 	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceRefreshProcedure,
 		`{"refresh_token":"`+refreshed.RefreshToken+`"}`))
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+}
+
+// TestTheBulkSignOutsSweepTheAccountSessions runs the two sweeps a holder
+// walks from a client they still trust: the other sessions die first, then
+// the sweep that includes the caller's own row — every step over the real
+// procedure, the counts answering what each sweep actually stamped.
+func TestTheBulkSignOutsSweepTheAccountSessions(t *testing.T) {
+	pool := sessionPool(t)
+
+	// Three live rows: the caller's own — the guard answers the session the
+	// claims name only while its row is live — and two extras the sweep has
+	// something to close.
+	insertSession := func(name string) string {
+		t.Helper()
+		_, err := pool.Exec(t.Context(), `
+			INSERT INTO public.sessions (user_id, provider, token_hash, user_agent, remember, created_at, expires_at)
+			VALUES ($1, 'password', $2, 'test-agent/1.0', false, now() - interval '1 minute', now() + interval '24 hours')`,
+			hermioneSessionOwner, crypto.HashRefreshToken("refresh-token-"+name))
+		require.NoError(t, err)
+		var rawID string
+		require.NoError(t, pool.QueryRow(t.Context(),
+			`SELECT id FROM public.sessions WHERE token_hash = $1`,
+			crypto.HashRefreshToken("refresh-token-"+name)).Scan(&rawID))
+		sid, err := typeid.FromUUID[session.SessionID](rawID)
+		require.NoError(t, err)
+		return sid.String()
+	}
+	current := insertSession("current")
+	insertSession("extra-a")
+	insertSession("extra-b")
+
+	router, _ := newSessionRouter(t, sessionCallerAuthenticator(hermioneSessionOwner, current, false), pool)
+
+	// The other-sessions sweep stamps the two extras and keeps the caller's
+	// own row: the count is what the call ended.
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceSignOutOtherSessionsProcedure, `{}`))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var others struct {
+		RevokedCount int    `json:"revoked_count"`
+		Message      string `json:"message"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &others))
+	assert.Equal(t, 2, others.RevokedCount)
+
+	// The all-sessions sweep stamps the caller's own row, and a second call
+	// finds nothing live: the account is fully swept, and the answer says
+	// so without writing anything.
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceSignOutAllSessionsProcedure, `{}`))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var all struct {
+		RevokedCount int `json:"revoked_count"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &all))
+	assert.Equal(t, 1, all.RevokedCount)
+
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, rpcRequest(t, authv1connect.SessionServiceSignOutAllSessionsProcedure, `{}`))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "you had no live sessions to sign out")
 }
 
 // TestTheSessionGuardIsDeclared pins the five procedures' rule: every one is

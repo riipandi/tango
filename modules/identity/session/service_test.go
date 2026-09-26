@@ -184,6 +184,86 @@ func TestSignOutStampsTheRowAndTheRefreshTokenDies(t *testing.T) {
 	assert.Equal(t, 1, auditCount(t, pool, audit.EventSignOut, sid.UUID()))
 }
 
+func TestSignOutOtherSessionsSweepsEveryLiveRowButTheCallerOwn(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service, _ := testService(t, pool)
+	userID := seedAccount(t, pool, "hermione")
+	current, currentToken := seedSession(t, pool, userID, "current", "password", false)
+	otherA, _ := seedSession(t, pool, userID, "other-a", "password", true)
+	otherB, _ := seedSession(t, pool, userID, "other-b", "one_time_access", false)
+	stranger := seedAccount(t, pool, "vittoria")
+	strangerSID, _ := seedSession(t, pool, stranger, "stranger", "password", false)
+
+	// A row that was stamped before the sweep is outside it: the sweep ends
+	// live rows, and an ended one is not its business.
+	ended, _ := seedSession(t, pool, userID, "ended", "password", false)
+	_, signOutErr := service.SignOut(t.Context(), ended.String(), userID.String())
+	require.NoError(t, signOutErr)
+
+	count, err := service.SignOutOtherSessions(t.Context(), current.String(), userID.String())
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+
+	// The caller's own row stays live, the swept ones do not, and the
+	// account the sweep never names is untouched.
+	_, _, err = service.GetSession(t.Context(), current.String())
+	require.NoError(t, err)
+	_, _, err = service.GetSession(t.Context(), otherA.String())
+	assert.ErrorIs(t, err, ErrSessionEnded)
+	_, _, err = service.GetSession(t.Context(), otherB.String())
+	assert.ErrorIs(t, err, ErrSessionEnded)
+	_, _, err = service.GetSession(t.Context(), strangerSID.String())
+	require.NoError(t, err)
+
+	// Each swept row carries its own record, named with the reason the
+	// sweep answered.
+	assert.Equal(t, 1, auditCount(t, pool, audit.EventSessionRevoked, otherA.UUID()))
+	assert.Equal(t, 1, auditCount(t, pool, audit.EventSessionRevoked, otherB.UUID()))
+	assert.Equal(t, 0, auditCount(t, pool, audit.EventSessionRevoked, current.UUID()))
+
+	// A second sweep finds nothing: the rows it ended are stamped, and the
+	// success is the state the account is already in.
+	count, err = service.SignOutOtherSessions(t.Context(), current.String(), userID.String())
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+
+	// The swept refresh tokens open nothing; the kept one still does.
+	_, err = service.Refresh(t.Context(), "refresh-token-other-a")
+	assert.ErrorIs(t, err, ErrSessionEnded)
+	_, err = service.Refresh(t.Context(), currentToken)
+	require.NoError(t, err)
+}
+
+func TestSignOutAllSessionsEndsTheCallerOwnRowToo(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service, _ := testService(t, pool)
+	userID := seedAccount(t, pool, "vittoria")
+	current, currentToken := seedSession(t, pool, userID, "current", "password", false)
+	other, _ := seedSession(t, pool, userID, "other", "password", true)
+
+	count, err := service.SignOutAllSessions(t.Context(), current.String(), userID.String())
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+
+	// The caller's own row is stamped like the rest: the session it named
+	// answers the ended failure from here on, and its refresh token opens
+	// nothing.
+	_, _, err = service.GetSession(t.Context(), current.String())
+	assert.ErrorIs(t, err, ErrSessionEnded)
+	_, _, err = service.GetSession(t.Context(), other.String())
+	assert.ErrorIs(t, err, ErrSessionEnded)
+	_, err = service.Refresh(t.Context(), currentToken)
+	assert.ErrorIs(t, err, ErrSessionEnded)
+
+	// Each stamped row carries its own record under the all scope's reason.
+	assert.Equal(t, 1, auditCount(t, pool, audit.EventSessionRevoked, current.UUID()))
+	assert.Equal(t, 1, auditCount(t, pool, audit.EventSessionRevoked, other.UUID()))
+}
+
 func TestSignOutOfAnExpiredSessionStampsAndSaysSo(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 

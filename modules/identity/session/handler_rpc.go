@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/jwtutils"
+	"github.com/riipandi/tango/pkg/printext"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -54,6 +56,8 @@ func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
 	r.Handle(authv1connect.SessionServiceListSessionsProcedure, handler)
 	r.Handle(authv1connect.SessionServiceRevokeSessionProcedure, handler)
 	r.Handle(authv1connect.SessionServiceRefreshProcedure, handler)
+	r.Handle(authv1connect.SessionServiceSignOutOtherSessionsProcedure, handler)
+	r.Handle(authv1connect.SessionServiceSignOutAllSessionsProcedure, handler)
 }
 
 // rpcHandler is the transport mapping of the procedures. The service carries
@@ -108,6 +112,63 @@ func (h *rpcHandler) SignOut(ctx context.Context, req *connect.Request[authv1.Si
 		Status:  responder.StatusSuccess,
 		Message: message,
 	}), nil
+}
+
+// SignOutOtherSessions ends every live session of the account except the one
+// the access token names. The message is the holder's: the count is what the
+// sweep actually ended, and an account holding nothing else answers the
+// success its intent already is.
+func (h *rpcHandler) SignOutOtherSessions(ctx context.Context, req *connect.Request[authv1.SignOutOtherSessionsRequest]) (*connect.Response[authv1.SignOutOtherSessionsResponse], error) {
+	count, err := h.revokeBulk(ctx, h.service.SignOutOtherSessions)
+	if err != nil {
+		return nil, err
+	}
+
+	message := fmt.Sprintf("you have been signed out of %d other %s", count, printext.Plural(count, "session"))
+	if count == 0 {
+		message = "you had no other sessions to sign out"
+	}
+	return connect.NewResponse(&authv1.SignOutOtherSessionsResponse{
+		RevokedCount: narrowCount(count),
+		Status:       responder.StatusSuccess,
+		Message:      message,
+	}), nil
+}
+
+// SignOutAllSessions ends every live session of the account, the one the
+// access token names included. The token pair the caller holds is not
+// invalidated by the call — the access token expires on its own — so the
+// message says what was stamped, not what the caller still carries.
+func (h *rpcHandler) SignOutAllSessions(ctx context.Context, req *connect.Request[authv1.SignOutAllSessionsRequest]) (*connect.Response[authv1.SignOutAllSessionsResponse], error) {
+	count, err := h.revokeBulk(ctx, h.service.SignOutAllSessions)
+	if err != nil {
+		return nil, err
+	}
+
+	message := fmt.Sprintf("you have been signed out of all %d %s", count, printext.Plural(count, "session"))
+	if count == 0 {
+		message = "you had no live sessions to sign out"
+	}
+	return connect.NewResponse(&authv1.SignOutAllSessionsResponse{
+		RevokedCount: narrowCount(count),
+		Status:       responder.StatusSuccess,
+		Message:      message,
+	}), nil
+}
+
+// revokeBulk runs the shared sweep and maps its one failure — the caller's
+// session claims not resolving — onto the code the ended session answers.
+func (h *rpcHandler) revokeBulk(ctx context.Context, sweep func(ctx context.Context, callerSession, callerID string) (int, error)) (int, error) {
+	caller := sessionCaller(ctx)
+	if caller == nil {
+		return 0, connect.NewError(connect.CodeInternal, errors.New("authentication state missing"))
+	}
+
+	count, err := sweep(ctx, caller.SessionID, caller.UserID)
+	if err != nil {
+		return 0, mapError(err)
+	}
+	return count, nil
 }
 
 // GetSession answers the session the access token names.
@@ -228,6 +289,16 @@ func wireUser(view user.UserView) *authv1.AuthenticatedUser {
 		DisplayName: view.DisplayName,
 		IsAdmin:     view.IsAdmin,
 	}
+}
+
+// narrowCount narrows the sweep's count onto the wire field. The wire field
+// is int32; a count beyond it saturates rather than wrapping, and no account
+// the rules allow can hold that many sessions.
+func narrowCount(n int) int32 {
+	if n > math.MaxInt32 || n < math.MinInt32 {
+		return math.MaxInt32
+	}
+	return int32(n)
 }
 
 // metadataOf maps the responder's pagination onto the shared block. The

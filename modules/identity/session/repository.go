@@ -153,6 +153,62 @@ func (r *Repository) Rotate(ctx context.Context, db datastore.Querier, id Sessio
 	return tag.RowsAffected() > 0, nil
 }
 
+// RevokeLiveForUser stamps the end of every live session the account holds,
+// except the one the caller asked to keep — a nil `keep` keeps nothing. The
+// read takes row locks before the write, so a session a concurrent actor
+// stamps between the two statements waits and then answers as already ended:
+// every row the caller sees back is one this write stamped. The refresh
+// token of each stamped row dies with it; the access tokens do not, by the
+// statelessness the protocol settles.
+func (r *Repository) RevokeLiveForUser(ctx context.Context, db datastore.Querier, userID uuid.UUID, keep *SessionID, by uuid.UUID, at time.Time) ([]SessionSchema, error) {
+	lb := sqlbuilder.PostgreSQL.NewSelectBuilder()
+	lb.Select(sessionColumns...)
+	lb.From(SessionTable)
+	lb.Where(lb.Equal("user_id", userID), lb.IsNull("revoked_at"))
+	if keep != nil {
+		lb.Where(lb.NE("id", keep.UUID()))
+	}
+	lb.ForUpdate()
+
+	lockQuery, lockArgs := lb.Build()
+	rows, err := db.Query(ctx, lockQuery, lockArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("session: bulk revoke: %w", err)
+	}
+	defer rows.Close()
+
+	targets := []SessionSchema{}
+	ids := []any{}
+	for rows.Next() {
+		row, rawID, scanErr := scanSession(rows.Scan)
+		if scanErr != nil {
+			return nil, fmt.Errorf("session: bulk revoke: %w", scanErr)
+		}
+		targets = append(targets, row)
+		ids = append(ids, rawID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("session: bulk revoke: %w", err)
+	}
+	if len(ids) == 0 {
+		return targets, nil
+	}
+
+	ub := sqlbuilder.PostgreSQL.NewUpdateBuilder()
+	ub.Update(SessionTable)
+	ub.Set(
+		ub.Assign("revoked_at", at),
+		ub.Assign("revoked_by", by),
+	)
+	ub.Where(ub.In("id", ids...), ub.IsNull("revoked_at"))
+
+	query, args := ub.Build()
+	if _, err := db.Exec(ctx, query, args...); err != nil {
+		return nil, fmt.Errorf("session: bulk revoke: %w", err)
+	}
+	return targets, nil
+}
+
 // ListOwn answers one page of the account's sessions, newest first, ended
 // ones included. An ended session stays listed: the stamp is the fact a
 // holder reads, not something to hide.

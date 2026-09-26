@@ -87,6 +87,8 @@ presented one stops resolving. Send the bearer on every protected call. `VerifyP
 | -------- | ------------------------------------------------------------ | ------------ | ----------------------------------- |
 | POST     | `/rpc/tango.identity.v1.AuthService/SignIn`                  | ConnectRPC   | Sign in with password               |
 | POST     | `/rpc/tango.identity.v1.AuthService/SignOut`                 | ConnectRPC   | Sign out                            |
+| POST     | `/rpc/tango.auth.v1.SessionService/SignOutOtherSessions`     | ConnectRPC   | Sign out other sessions             |
+| POST     | `/rpc/tango.auth.v1.SessionService/SignOutAllSessions`       | ConnectRPC   | Sign out all sessions               |
 | POST     | `/rpc/tango.identity.v1.AuthService/GetSession`              | ConnectRPC   | Inspect current session, including the caller's user |
 | POST     | `/rpc/tango.identity.v1.AuthService/ForgotPassword`          | ConnectRPC   | Request a password reset (unimplemented; use the REST route) |
 | POST     | `/rpc/tango.identity.v1.AuthService/ResetPassword`           | ConnectRPC   | Reset a password (unimplemented; use the REST route) |

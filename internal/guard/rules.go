@@ -132,11 +132,13 @@ var ProcedureRules = map[string]Entry{
 	// rule is the whole requirement — a machine credential has no session
 	// behind it and is refused with the keys' surface, and a caller without
 	// the sid claim is not a session at all.
-	authv1connect.SessionServiceSignOutProcedure:       {Rule: Session},
-	authv1connect.SessionServiceGetSessionProcedure:    {Rule: Session},
-	authv1connect.SessionServiceListSessionsProcedure:  {Rule: Session},
-	authv1connect.SessionServiceRevokeSessionProcedure: {Rule: Session},
-	authv1connect.SessionServiceRefreshProcedure:       {Rule: Session},
+	authv1connect.SessionServiceSignOutProcedure:              {Rule: Session},
+	authv1connect.SessionServiceGetSessionProcedure:           {Rule: Session},
+	authv1connect.SessionServiceListSessionsProcedure:         {Rule: Session},
+	authv1connect.SessionServiceRevokeSessionProcedure:        {Rule: Session},
+	authv1connect.SessionServiceRefreshProcedure:              {Rule: Session},
+	authv1connect.SessionServiceSignOutOtherSessionsProcedure: {Rule: Session},
+	authv1connect.SessionServiceSignOutAllSessionsProcedure:   {Rule: Session},
 }
 
 // RuleFor answers the rule a procedure gets. A procedure the table does not

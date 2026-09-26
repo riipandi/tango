@@ -275,6 +275,68 @@ type Refreshed struct {
 	User         user.UserView
 }
 
+// SignOutOtherSessions ends every live session of the account except the one
+// the access token names. Each ended row is stamped and recorded; the count
+// is what the call actually ended, not what it looked at.
+func (s *Service) SignOutOtherSessions(ctx context.Context, callerSession, callerID string) (int, error) {
+	return s.revokeBulk(ctx, callerSession, callerID, "sign_out_others", true)
+}
+
+// SignOutAllSessions ends every live session of the account, the one the
+// access token names included. The access token itself keeps working until
+// its own expiry — the statelessness the protocol settles — so the caller
+// that means to discard its credential drops the token pair too.
+func (s *Service) SignOutAllSessions(ctx context.Context, callerSession, callerID string) (int, error) {
+	return s.revokeBulk(ctx, callerSession, callerID, "sign_out_all", false)
+}
+
+// revokeBulk is the write the two bulk sign-outs share: the reason names the
+// scope in the audit payload, and `keepCurrent` decides whether the session
+// the caller is holding survives the sweep.
+func (s *Service) revokeBulk(ctx context.Context, callerSession, callerID, reason string, keepCurrent bool) (int, error) {
+	sid, err := parseSessionID(callerSession)
+	if err != nil {
+		return 0, ErrSessionEnded
+	}
+	userID, err := uuid.Parse(callerID)
+	if err != nil {
+		return 0, ErrSessionEnded
+	}
+
+	var keep *SessionID
+	if keepCurrent {
+		keep = &sid
+	}
+
+	revoked := 0
+	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		rows, bulkErr := s.repo.RevokeLiveForUser(ctx, tx, userID, keep, userID, s.now())
+		if bulkErr != nil {
+			return bulkErr
+		}
+		for _, row := range rows {
+			s.audit.Record(ctx, tx, audit.Entry{
+				Event:        audit.EventSessionRevoked,
+				Status:       audit.StatusSuccess,
+				UserID:       userID.String(),
+				ResourceType: ResourceSession,
+				ResourceID:   row.ID.UUID(),
+				Payload: map[string]string{
+					"provider":   row.Provider,
+					"session_id": row.ID.String(),
+					"reason":     reason,
+				},
+			})
+		}
+		revoked = len(rows)
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return revoked, nil
+}
+
 // Refresh exchanges a refresh token for a fresh pair. The token is rotated in
 // place — the row keeps its identifier, the secret and the window are
 // replaced — so the session a client opened keeps its identity across

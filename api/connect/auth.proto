@@ -68,6 +68,18 @@ service SessionService {
   // across renewals. A spent, ended, or expired refresh token answers the
   // same failure an unknown one does.
   rpc Refresh(RefreshRequest) returns (RefreshResponse);
+
+  // SignOutOtherSessions ends every live session of the account except the
+  // one the access token names — the holder closes every device but the one
+  // they are using. Each ended row is stamped and recorded; the response
+  // counts what the call actually ended.
+  rpc SignOutOtherSessions(SignOutOtherSessionsRequest) returns (SignOutOtherSessionsResponse);
+
+  // SignOutAllSessions ends every live session of the account, the one the
+  // access token names included. The access token itself keeps working until
+  // its own expiry — the statelessness the protocol settles — so a client
+  // that means to discard its credential should drop the token pair too.
+  rpc SignOutAllSessions(SignOutAllSessionsRequest) returns (SignOutAllSessionsResponse);
 }
 
 // SignInRequest carries the credential and the session shape the caller asks
@@ -258,6 +270,43 @@ message RevokeSessionResponse  {
 
   // message is the human-readable sentence describing what the call did.
   string message = 2;
+}
+
+// SignOutOtherSessionsRequest is empty: the account it acts on is the one
+// the access token names, and the session it keeps is the same one.
+message SignOutOtherSessionsRequest {}
+
+// SignOutOtherSessionsResponse counts what the call ended.
+message SignOutOtherSessionsResponse {
+  // revoked_count is how many sessions the call stamped. A call that found
+  // no other live session answers zero, and it is still a success.
+  int32 revoked_count = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
+}
+
+// SignOutAllSessionsRequest is empty: the account it acts on is the one the
+// access token names.
+message SignOutAllSessionsRequest {}
+
+// SignOutAllSessionsResponse counts what the call ended.
+message SignOutAllSessionsResponse {
+  // revoked_count is how many sessions the call stamped, the caller's own
+  // included when it was still live. The access token is not invalidated by
+  // this count — it expires on its own.
+  int32 revoked_count = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
 }
 
 // RefreshRequest carries the refresh token a sign-in or a renewal answered
