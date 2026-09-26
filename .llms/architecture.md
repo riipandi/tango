@@ -258,7 +258,9 @@ The sign-in feature, the first password credential on the RPC surface: `tango.au
 
 The answer is the token pair the protocol section settles: a stateless access token (signed through the area's `jwks.Service`, so the dual stack is the deployment's decision — the service resolves algorithm and key per call, symmetric to `HMACKey`, asymmetric to `SignKey`) and a refresh token whose only server-side trace is a hashed row in `public.sessions` (SHA-256, 256 bits of base64url randomness). The `remember` flag selects only a lifetime, not a kind of token: `auth.refresh_short_ttl` (twelve hours, the shared-machine window) versus `auth.refresh_long_ttl` (fourteen days, the remembered device), both plain configuration keys with no flag of their own. The session row is the feature's one write-side coupling: the table constants live in the `session` scaffold (`session.SessionTable`, `session.SessionID`), the row is written where the credential is verified, and the id leaves the server as a TypeID (`sess_…`) — the UUID column stores the typed id's UUID, the prefixed form is for clients and log lines. `sid` in the access claims is the same id, so a later rotation or revocation names exactly the row.
 
-Account state is refused after the credential verifies: `disabled` and a live ban window are `permission_denied` details, not `unauthenticated`, so the caller who owns the password learns the real reason; the ban reason text never leaves the database. The `last_login_at` touch commits with the session row, both through the shared `Querier`. The caller's address is captured by the feature's own mount middleware — connect hands a unary handler the request context but no connection — and a proxy deployment reads the proxy's address, the same honest answer the request logger gives.
+Account state is refused after the credential verifies: `disabled` and a live ban window are `permission_denied` details, not `unauthenticated`, so the caller who owns the password learns the real reason; the ban reason text never leaves the database. The `last_login_at` touch commits with the session row, both through the shared `Querier`. The caller's address, agent, and fingerprint are the transport's capture: one middleware read them from the request before the procedure ran, and the handler carries them into the session and the audit record through `audit.ClientFromContext`, so every record of a sign-in names the same address the rate limit keyed on.
+
+Opening the session is `IssueSession`, the issuer the one-time access exchange shares: it takes the query surface its writes run on, so a caller holding a transaction passes its tx and the session and whatever caused it commit together, and it carries the account-state checks every issuer owes. The password verification stays here; the session's shape and the audit record do not.
 
 ### modules/identity/signup
 
@@ -277,6 +279,52 @@ The ban fields are the one place the shape leaves the upstream: the schema carri
 The `User` wire message is the canonical account view the account procedures answer with, mapped once in `user.WireView`: sign-up and the CRUD fill the same shape. The nullable columns are optional on the wire, so an account without a locale or a ban reads as absent rather than as an empty string. `DisplayName` — the given and family names joined — lives here because both creators share it; the list's search term matches the username, the email, and the display name through ILIKE, the columns the trigram indexes exist for. The profile picture is the account's one file: the write is a REST route — a raw-body `PUT`, because a file upload is a browser's form job, not a protocol procedure — that stages the bytes into the storage engine, sniffed off their magic bytes, never a declared type, and syncs in the request, so the read that follows sees them; the reset is an RPC procedure (it carries no file) that deletes the file and clears the row. Both doors are the account owner's.
 
 The picture's key is `avatars/<account-id>.<ext>`: the extension comes from the sniffed bytes, so the object names what it holds wherever it is listed — a bucket browser, a presigned URL, the local deployment's file tree — with no lookup and no dependence on the file name the client sent. That makes the kind part of the identity: an upload of another kind lands under another key, so the replaced picture is deleted **before** the new one is stored. The other order is the one that cannot be repaired — the replaced file would keep its manifest row, and the row is exactly what the garbage collection keeps an object for, so the orphan would never be swept — while losing the race the first order can lose costs nothing visible: the row names the key it always named, and a picture whose object is missing already answers the bundled default, the state a reset produces. The key is recomposed on every update, so no path migration exists and none is needed. The read is the feature's other REST route, because an `<img>` tag fetches a URL rather than speaking the protocol: a stored picture streams with the content type the update recorded, an account without one answers the bundled default by redirect to `/images/default-avatar.png` — a frontend asset under `public/images/`, shipped in the compiled SPA — and the row naming a key the engine has lost lands on the same default rather than an error. The self-service profile edit (`/users/me`) and the group and passkey joins stay planned: they need the self-service shape and the usergroup/webauthn features respectively.
+
+### modules/identity/onetimeaccess
+
+The one-time access codes: a credential an administrator or an emailed message puts in one
+account holder's hands, exchanged for a session without the password. The surface is
+`tango.auth.v1.OneTimeAccessService` — the contract names it under authentication, because the
+exchange is the sign-in a caller makes with a code instead of a password.
+
+The codes live in `public.auth_tokens` under the `one_time_access` purpose, beside the
+email-verification rows the table was created for. The hash-only rule is the same — the raw code
+is shown once and its SHA-256 is the only thing stored — and the unique index on
+`(user_id, purpose)` is the reason the table never needs a cleanup job: one row per account, a
+new code replaces the old, and an expired one sits until then. The expiry refusal deliberately
+does **not** delete the row: the whole exchange is one transaction, and a delete inside it is
+exactly what the refusal's rollback undoes.
+
+The exchange is one transaction end to end: the code's spend (a guarded delete whose
+affected-row count is what a second caller loses the race with), the account read, the session
+row, the last-login stamp, and the audit record commit together. Upstream consumes the token
+first in its actor store and compensates with a best-effort restore when the rest fails; a
+database transaction makes the compensation unnecessary — a rollback returns the code, so a
+holder whose sign-in failed halfway tries again inside the window instead of re-requesting.
+
+The session the exchange opens comes from `signin.IssueSession`, the issuer the password
+sign-in itself calls. That method is the seam: it carries the checks every issuer owes the
+account (disabled, banned), the session row's shape, and the access token's signing, and it
+takes the query surface its writes run on, so a caller holding a transaction passes its tx and
+the code's spend and the session's opening are one fact. The audit event the opening is recorded
+under is the caller's decision — a password sign-in and a code exchange describe different
+happenings — which is why the vocabulary holds `one_time_access_sign_in` beside `sign_in`.
+
+The public email request answers the same success for an address no account holds, and carries a
+16-character device token either way: the shape of the answer is the only thing the caller reads,
+so the response cannot become an address oracle. The device token is the second half of the
+email path's pair — the requester holds it, the mailbox holds the code, and the exchange demands
+both — stored beside the code's hash in the column the migration reserved for it. The
+administrative email send pairs none: its caller is an operator, not a browser, and a device
+token it cannot hold would only lock the code.
+
+The two email paths switch separately
+(`auth.one_time_access_email_as_admin_enabled`,
+`auth.one_time_access_email_as_unauthenticated_enabled`, both off by default), and the refusal is
+`permission_denied` rather than the endpoint pretending the account does not exist: the switch is
+the deployment's own answer about itself. The email rides the `one_time_access_email` queue task
+with a retry schedule tighter than the verification email's — three attempts inside a minute and
+a half — because a code that outlives its own delivery is not a convenience, it is a hole.
 
 ### modules/identity/verification
 

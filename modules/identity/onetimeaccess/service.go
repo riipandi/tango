@@ -1,1 +1,383 @@
 package onetimeaccess
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"log/slog"
+	"math/big"
+	"time"
+
+	"github.com/riipandi/tango/internal/audit"
+	"github.com/riipandi/tango/internal/config"
+	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/jobs"
+	"github.com/riipandi/tango/internal/mailer"
+	"github.com/riipandi/tango/internal/queue"
+	"github.com/riipandi/tango/modules/identity/signin"
+
+	"uuid"
+)
+
+// The failures the flow reports. The handler maps them to connect codes, so
+// the wire form of a refusal lives with the transport, not here.
+var (
+	// ErrUserNotFound is an administrative request whose identifier names no
+	// account.
+	ErrUserNotFound = errors.New("onetimeaccess: account not found")
+
+	// ErrFeatureDisabled is an email request the deployment's configuration
+	// has switched off. The administrative and the public path switch
+	// separately.
+	ErrFeatureDisabled = errors.New("onetimeaccess: the email path is disabled")
+
+	// ErrMailUnavailable is a request the running process cannot serve: no
+	// SMTP host is configured, so enqueuing would only dead-letter a task.
+	ErrMailUnavailable = errors.New("onetimeaccess: mailer is not configured")
+
+	// ErrQueueUnavailable is a request the running process cannot serve: no
+	// queue client is configured, so the message has nowhere to wait.
+	ErrQueueUnavailable = errors.New("onetimeaccess: queue is not configured")
+
+	// ErrTokenInvalid covers an unknown, expired, and spent code: answering
+	// differently would tell a caller which half was wrong.
+	ErrTokenInvalid = errors.New("onetimeaccess: the access code is invalid or expired")
+
+	// ErrDeviceMismatch is an exchange whose device token does not match the
+	// one the email request answered. The code stays spendable: the mistake
+	// is the caller's, not the code's.
+	ErrDeviceMismatch = errors.New("onetimeaccess: the device token does not match")
+)
+
+const (
+	// defaultTTL is the window a request without one asks for: the same
+	// fifteen minutes the upstream feature defaults to and the public email
+	// path fixes.
+	defaultTTL = 15 * time.Minute
+
+	// shortCodeWindow is the boundary between the two code forms. A code that
+	// lives fifteen minutes or less is six characters — short enough to type
+	// from a phone reading the message — and anything longer is twelve,
+	// because a longer-lived credential buys its entropy back.
+	shortCodeWindow = 15 * time.Minute
+
+	// shortCodeLength and longCodeLength are the two code forms.
+	shortCodeLength = 6
+	longCodeLength  = 12
+
+	// deviceTokenLength is the entropy of the device token the public email
+	// request answers with. It is never typed by a human — the frontend holds
+	// it — and it is worthless without the code, which travels by email
+	// alone.
+	deviceTokenLength = 16
+)
+
+// unambiguousAlphabet is the alphabet the codes draw from: no digit or letter
+// a reader mistakes for another. A code is typed from a phone reading an
+// email, and an ambiguous character would send the holder through the refusal
+// loop for nothing.
+const unambiguousAlphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ0123456789"
+
+// alphanumericAlphabet is the alphabet the device tokens draw from. Ambiguity
+// costs nothing in a value the frontend holds whole.
+const alphanumericAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+// Service issues and consumes the codes that sign an account in without its
+// password.
+type Service struct {
+	pool *datastore.Postgres
+	repo *Repository
+	// signin is the issuer the exchange opens the session through. The
+	// session row, the last-login stamp, and the audit record are the
+	// sign-in feature's rules; the exchange contributes the code it consumed
+	// into the same transaction.
+	signin *signin.Service
+	audit  *audit.Recorder
+	mail   *mailer.Service
+	queue  *queue.Client
+	// baseURL is the origin the email's link is built against.
+	baseURL string
+	// emailAsAdminEnabled and emailAsUnauthenticatedEnabled are the two
+	// switches the deployment's configuration holds, read once at
+	// construction: a configuration change is a restart, and a procedure
+	// whose answer depends on a flag should not watch it move mid-request.
+	emailAsAdminEnabled           bool
+	emailAsUnauthenticatedEnabled bool
+	log                           *slog.Logger
+	now                           func() time.Time
+}
+
+// NewService builds the service. The mailer and the queue are the
+// infrastructure the composition root resolves; the signin service is the
+// issuer the exchange opens the session through.
+func NewService(cfg config.Config, pool *datastore.Postgres, issuer *signin.Service, recorder *audit.Recorder, mail *mailer.Service, client *queue.Client, log *slog.Logger) *Service {
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
+	}
+	return &Service{
+		pool:                          pool,
+		repo:                          NewRepository(),
+		signin:                        issuer,
+		audit:                         recorder,
+		mail:                          mail,
+		queue:                         client,
+		baseURL:                       cfg.App.BaseURL,
+		emailAsAdminEnabled:           cfg.Auth.OneTimeAccessEmailAsAdminEnabled,
+		emailAsUnauthenticatedEnabled: cfg.Auth.OneTimeAccessEmailAsUnauthenticatedEnabled,
+		log:                           log,
+		now:                           time.Now,
+	}
+}
+
+// CreateToken issues a code for one account, for an administrator to hand
+// over. The code exists in the return value alone: only its hash is stored,
+// so it cannot be read back, and the caller is the last one to see it.
+func (s *Service) CreateToken(ctx context.Context, userID string, ttlSeconds int32) (string, time.Time, error) {
+	account, err := s.accountByID(ctx, userID)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	ttl := ttlOr(ttlSeconds)
+
+	code, err := generateCode(ttl)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("onetimeaccess: code: %w", err)
+	}
+	expiresAt := s.now().Add(ttl)
+	if err := s.repo.UpsertToken(ctx, s.pool, account.ID, codeSHA256(code), nil, expiresAt, s.now()); err != nil {
+		return "", time.Time{}, err
+	}
+	return code, expiresAt, nil
+}
+
+// Exchange consumes a code and signs its holder in.
+//
+// The whole exchange is one transaction: the code's spend, the session it
+// opens, the last-login stamp, and the audit record commit together, so a
+// rollback returns the code — a holder whose sign-in failed halfway can try
+// again within the window, and a log never describes a session that did not
+// open. A device token the code was issued beside must come back exact; a
+// mismatch leaves the code spendable, because the caller's mistake is not the
+// code's spend.
+func (s *Service) Exchange(ctx context.Context, rawCode, deviceToken string, client audit.ClientInfo) (signin.Result, error) {
+	var result signin.Result
+	err := s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		row, err := s.repo.FindTokenByHash(ctx, tx, codeSHA256(rawCode))
+		if errors.Is(err, datastore.ErrNoRows) {
+			return ErrTokenInvalid
+		}
+		if err != nil {
+			return err
+		}
+		if !row.ExpiresAt.After(s.now()) {
+			return ErrTokenInvalid
+		}
+		if row.DeviceToken != nil && *row.DeviceToken != deviceToken {
+			return ErrDeviceMismatch
+		}
+
+		spent, err := s.repo.DeleteToken(ctx, tx, row.ID)
+		if err != nil {
+			return err
+		}
+		if spent == 0 {
+			// Another exchange reached the delete first: the code is spent,
+			// and this caller answers the same refusal an unknown one does.
+			return ErrTokenInvalid
+		}
+
+		account, err := s.repo.FindAccountByID(ctx, tx, row.UserID)
+		if errors.Is(err, datastore.ErrNoRows) {
+			// The account the code named is gone. The code is already
+			// spent, which is the right outcome — a code for an account
+			// that no longer exists must not survive it.
+			return ErrTokenInvalid
+		}
+		if err != nil {
+			return err
+		}
+
+		result, err = s.signin.IssueSession(ctx, tx, &signin.Account{
+			ID:          account.ID,
+			Username:    account.Username,
+			Email:       account.Email,
+			DisplayName: account.DisplayName,
+			IsAdmin:     account.IsAdmin,
+			Disabled:    account.Disabled,
+			BannedAt:    account.BannedAt,
+			BanExpires:  account.BanExpires,
+		}, signin.ProviderOneTimeAccess, audit.EventOneTimeAccessSignIn, signin.SessionParams{
+			UserAgent:   client.UserAgent,
+			IPAddress:   client.IPAddress,
+			Fingerprint: client.Fingerprint,
+		})
+		return err
+	})
+	if err != nil {
+		return signin.Result{}, err
+	}
+	return result, nil
+}
+
+// RequestEmailAsAdmin sends a code to one account's address, for an
+// administrator whose target cannot reach the sign-in page. The code never
+// passes through the caller: it travels by email alone, so the operator asks
+// for a sign-in for the account rather than receives a credential for it.
+func (s *Service) RequestEmailAsAdmin(ctx context.Context, userID string, ttlSeconds int32) error {
+	if !s.emailAsAdminEnabled {
+		return ErrFeatureDisabled
+	}
+	account, err := s.accountByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.issueEmailCode(ctx, account, "", ttlOr(ttlSeconds), nil)
+}
+
+// RequestEmail sends a code to the address the caller names, from the sign-in
+// page.
+//
+// An address no account holds answers the same success a known one does — the
+// code simply has nowhere to go — so the procedure cannot tell a caller which
+// addresses exist. The device token the answer carries is real either way,
+// because the shape of the answer is the only thing the caller reads.
+func (s *Service) RequestEmail(ctx context.Context, email, redirectPath string) (string, error) {
+	if !s.emailAsUnauthenticatedEnabled {
+		return "", ErrFeatureDisabled
+	}
+
+	deviceToken, err := generateDeviceToken()
+	if err != nil {
+		return "", fmt.Errorf("onetimeaccess: device token: %w", err)
+	}
+
+	account, err := s.repo.FindAccountByEmail(ctx, s.pool, email)
+	if errors.Is(err, datastore.ErrNoRows) {
+		// The refusal that names nothing: the address is unknown, and the
+		// answer says success.
+		return deviceToken, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if err := s.issueEmailCode(ctx, account, redirectPath, defaultTTL, &deviceToken); err != nil {
+		return "", err
+	}
+	return deviceToken, nil
+}
+
+// issueEmailCode issues the code, records it beside the device token the
+// caller holds — nil for the administrative send, which pairs none — and
+// hands the message to the queue. The retry schedule the task carries is
+// tighter than the verification email's, because a code that outlives its own
+// delivery is not a convenience, it is a hole.
+func (s *Service) issueEmailCode(ctx context.Context, account Account, redirectPath string, ttl time.Duration, deviceToken *string) error {
+	if !s.mail.Configured() {
+		return ErrMailUnavailable
+	}
+	if s.queue == nil {
+		return ErrQueueUnavailable
+	}
+
+	code, err := generateCode(ttl)
+	if err != nil {
+		return fmt.Errorf("onetimeaccess: code: %w", err)
+	}
+	now := s.now()
+	if err := s.repo.UpsertToken(ctx, s.pool, account.ID, codeSHA256(code), deviceToken, now.Add(ttl), now); err != nil {
+		return err
+	}
+	if _, err := s.queue.Add(jobs.OneTimeAccessEmailTask{
+		UserID:       account.ID.String(),
+		Email:        account.Email,
+		DisplayName:  account.DisplayName,
+		Token:        code,
+		RedirectPath: redirectPath,
+		TTLSeconds:   int64(ttl.Seconds()),
+	}).Save(); err != nil {
+		return fmt.Errorf("onetimeaccess: enqueue: %w", err)
+	}
+
+	// The message is enqueued and the record is written after the queue
+	// accepted it, on the pool rather than a transaction: the enqueue is
+	// already committed, and a record inside a transaction that rolled back
+	// after it would understate what happened.
+	s.audit.Record(ctx, s.pool, audit.Entry{
+		Event:  audit.EventOneTimeAccessEmailSent,
+		Status: audit.StatusSuccess,
+		UserID: account.ID.String(),
+		Payload: map[string]string{
+			"email": account.Email,
+		},
+	})
+	s.log.InfoContext(ctx, "onetimeaccess: access code emailed",
+		slog.String("user_id", account.ID.String()), slog.Duration("ttl", ttl))
+	return nil
+}
+
+// accountByID reads the account an administrative request names.
+func (s *Service) accountByID(ctx context.Context, userID string) (Account, error) {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return Account{}, ErrUserNotFound
+	}
+	account, err := s.repo.FindAccountByID(ctx, s.pool, id)
+	if errors.Is(err, datastore.ErrNoRows) {
+		return Account{}, ErrUserNotFound
+	}
+	if err != nil {
+		return Account{}, err
+	}
+	return account, nil
+}
+
+// ttlOr answers the window the request carried, or the default when it
+// carried none.
+func ttlOr(ttlSeconds int32) time.Duration {
+	if ttlSeconds <= 0 {
+		return defaultTTL
+	}
+	return time.Duration(ttlSeconds) * time.Second
+}
+
+// codeSHA256 hashes the raw code the caller presented, the form the token
+// table stores. The code is a credential shown once, so its hash is the whole
+// defense against a database leak.
+func codeSHA256(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+// generateCode draws a code from the unambiguous alphabet, six characters for
+// a code that lives fifteen minutes or less and twelve for anything longer.
+func generateCode(ttl time.Duration) (string, error) {
+	length := longCodeLength
+	if ttl <= shortCodeWindow {
+		length = shortCodeLength
+	}
+	return randomString(length, unambiguousAlphabet)
+}
+
+// generateDeviceToken draws the device token the public email request answers
+// with.
+func generateDeviceToken() (string, error) {
+	return randomString(deviceTokenLength, alphanumericAlphabet)
+}
+
+// randomString draws length characters from the alphabet with the crypto
+// source, so a short code is still a real draw and not a modulo bias.
+func randomString(length int, alphabet string) (string, error) {
+	out := make([]byte, length)
+	max := big.NewInt(int64(len(alphabet)))
+	for i := range out {
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", fmt.Errorf("onetimeaccess: random: %w", err)
+		}
+		out[i] = alphabet[n.Int64()]
+	}
+	return string(out), nil
+}

@@ -135,8 +135,6 @@ type Result struct {
 // sessions table, so a later procedure can rotate and revoke it without the
 // access token ever depending on a lookup.
 func (s *Service) SignIn(ctx context.Context, params Params) (Result, error) {
-	now := s.now()
-
 	account, err := s.repo.FindAccountByIdentity(ctx, params.Identity)
 	if errors.Is(err, datastore.ErrNoRows) {
 		// The same cost runs here as on a password mismatch, so the
@@ -160,6 +158,55 @@ func (s *Service) SignIn(ctx context.Context, params Params) (Result, error) {
 		return Result{}, ErrInvalidCredentials
 	}
 
+	// The account's state is the issuer's check: a disabled or banned account
+	// is refused there, so every way of opening a session refuses the same.
+	var result Result
+	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		var issueErr error
+		result, issueErr = s.IssueSession(ctx, tx, account, ProviderPassword, audit.EventSignIn, SessionParams{
+			UserAgent:   params.UserAgent,
+			IPAddress:   params.IPAddress,
+			Fingerprint: params.Fingerprint,
+			Remember:    params.Remember,
+		})
+		return issueErr
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	return result, nil
+}
+
+// SessionParams carries what a session records about the request that opened
+// it. IPAddress is the caller's address as the transport read it, empty when
+// it is unknown; Fingerprint is the browser fingerprint the transport read
+// from the request header, opaque and stored beside the session and the audit
+// record, never interpreted.
+type SessionParams struct {
+	UserAgent   string
+	IPAddress   string
+	Fingerprint string
+	Remember    bool
+}
+
+// IssueSession opens a session for an account the caller has proven by another
+// means than the primary credential — a password verified a moment ago, a
+// one-time access code. It refuses a switched-off or banned account the way
+// any issuer must, writes the session row, the last-login stamp, and the audit
+// record, and signs the access token.
+//
+// db is the query surface the writes run on: a caller holding an open
+// transaction passes its tx, so the session and whatever caused it commit
+// together — a consumed code and the session it opened are one fact, and a
+// rollback returns the code — and a caller holding none passes the pool.
+//
+// event is the audit event the opening is recorded under — the vocabulary's
+// decision, not this method's: a password sign-in and a code exchange describe
+// different happenings and name themselves. Only a successful opening is
+// recorded, so the log's growth stays tied to accounts that exist rather than
+// to requests anyone can send.
+func (s *Service) IssueSession(ctx context.Context, db datastore.Querier, account *Account, provider, event string, params SessionParams) (Result, error) {
+	now := s.now()
 	switch {
 	case account.Disabled:
 		return Result{}, ErrAccountDisabled
@@ -179,7 +226,7 @@ func (s *Service) SignIn(ctx context.Context, params Params) (Result, error) {
 	sessionRow := session.SessionSchema{
 		ID:                sessionID,
 		UserID:            account.ID,
-		Provider:          ProviderPassword,
+		Provider:          provider,
 		TokenHash:         refresh.hash,
 		UserAgent:         params.UserAgent,
 		DeviceFingerprint: params.Fingerprint,
@@ -188,36 +235,22 @@ func (s *Service) SignIn(ctx context.Context, params Params) (Result, error) {
 		CreatedAt:         now,
 		ExpiresAt:         now.Add(s.sessionTTL(params.Remember)),
 	}
-	// The session row, the last-login touch, and the record of the sign-in
-	// commit together: a record of a sign-in that was rolled back would be a
-	// log describing something that did not happen, which is the one thing a
-	// reader must be able to trust it not to do.
-	if txErr := s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
-		txRepo := s.repo.WithQuerier(tx)
-		if createErr := txRepo.CreateSession(ctx, sessionRow); createErr != nil {
-			return createErr
-		}
-		if touchErr := txRepo.TouchLastLogin(ctx, account.ID, now); touchErr != nil {
-			return touchErr
-		}
-		// A sign-in that failed is deliberately not recorded: the attempt is
-		// unauthenticated, so a caller controls how many rows it writes, and
-		// the rate limiter — not the audit log — is what answers a brute
-		// force. Recording only the successes keeps the log's growth tied to
-		// accounts that exist rather than to requests anyone can send.
-		s.audit.Record(ctx, tx, audit.Entry{
-			Event:  audit.EventSignIn,
-			Status: audit.StatusSuccess,
-			UserID: account.ID.String(),
-			Payload: map[string]string{
-				"provider":   ProviderPassword,
-				"session_id": sessionID.String(),
-			},
-		})
-		return nil
-	}); txErr != nil {
-		return Result{}, txErr
+	repo := s.repo.WithQuerier(db)
+	if createErr := repo.CreateSession(ctx, sessionRow); createErr != nil {
+		return Result{}, createErr
 	}
+	if touchErr := repo.TouchLastLogin(ctx, account.ID, now); touchErr != nil {
+		return Result{}, touchErr
+	}
+	s.audit.Record(ctx, db, audit.Entry{
+		Event:  event,
+		Status: audit.StatusSuccess,
+		UserID: account.ID.String(),
+		Payload: map[string]string{
+			"provider":   provider,
+			"session_id": sessionID.String(),
+		},
+	})
 
 	access, err := s.signAccess(ctx, account, sessionID, now)
 	if err != nil {

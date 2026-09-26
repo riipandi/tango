@@ -65,6 +65,30 @@ purpose-prefixed keys and expire in 15 minutes; a completed reset revokes every 
 the account and issues a fresh session for the requester; audit events cover sign-in, sign-out,
 password changes, and reset requests/completions without logging secrets.
 
+## One-Time Access
+
+The codes that sign an account in without its password, ported from upstream Pocket ID's
+one-time access feature. An administrator issues a code for one account or sends it by email;
+an account holder asks for the email from the sign-in page. The exchange is the procedure the
+frontend reaches with the code the email linked to, and it answers the token pair a password
+sign-in answers with, under a session whose provider names `one_time_access`.
+
+| Method | Procedure / Endpoint | Summary / Yaak Title | Status | Evidence |
+| ------ | -------------------- | -------------------- | ------ | -------- |
+| POST | `/rpc/tango.auth.v1.OneTimeAccessService/CreateToken` | Create one-time access token for user (admin) | done — guard `Admin`; body `{id, ttl_seconds?}` (60..86400, unset 900); the six-character form is a code that lives fifteen minutes or less, twelve above; answers `{token, expires_at}`; only the hash is stored, so the response is the last the code exists | `modules/identity/onetimeaccess.TestCreateTokenIssuesACodeTheExchangeAccepts`, `internal/transport.TestTheOneTimeAccessLoopEndsInASession` |
+| POST | `/rpc/tango.auth.v1.OneTimeAccessService/ExchangeToken` | Exchange one-time access token | done — guard `Public`, the one procedure a caller reaches without a credential; body `{token, device_token?}`; the code's spend, the session it opens, and the audit record commit in one transaction, so a rollback returns the code; a device token the email request paired with the code must come back exact, and a mismatch leaves the code spendable; a disabled or banned account is refused with the code intact; answers the token pair + user view | `modules/identity/onetimeaccess.TestExchangeRefusesADeviceTokenThatDoesNotMatch`, `modules/identity/onetimeaccess.TestExchangeRefusesADisabledOrBannedAccount`, `internal/transport.TestTheOneTimeAccessGuardIsDeclared` |
+| POST | `/rpc/tango.auth.v1.OneTimeAccessService/RequestEmailAsAdmin` | Request one-time access email (admin) | done — guard `Admin`; body `{id, ttl_seconds?}`; refused with `permission_denied` while `auth.one_time_access_email_as_admin_enabled` is off (default); the code travels by email alone, never through the caller; the message rides the `one_time_access_email` queue task (3 attempts, 30s timeout, 15s backoff — tighter than the verification email's, because the code expires) | `modules/identity/onetimeaccess.TestRequestEmailAsAdminSendsWithoutExposingTheCode`, `modules/identity/onetimeaccess.TestRequestEmailRefusesADisabledPath` |
+| POST | `/rpc/tango.auth.v1.OneTimeAccessService/RequestEmail` | Request one-time access email | done — guard `Public`; body `{email, redirect_path?}`; refused with `permission_denied` while `auth.one_time_access_email_as_unauthenticated_enabled` is off (default); an address no account holds answers the same success a known one does, so the response is not the enumeration; the answer carries a 16-character device token the exchange demands back, real whether the address exists or not | `modules/identity/onetimeaccess.TestRequestEmailAnswersTheSameForAnUnknownAddress`, `internal/transport.TestTheOneTimeAccessGuardIsDeclared` |
+
+Shared rules: codes are drawn from an alphabet without ambiguous characters and stored as
+SHA-256 hashes; the unique index on `(user_id, purpose)` keeps an account to one code at a time,
+so a re-request is a re-issue and the table never grows past the account count; an expired code
+is refused and its row stays until the account's next code replaces it — the refusal runs inside
+the transaction a sweep would have to survive, and the sweep is exactly what a rollback undoes.
+The email links to `<base-url>/login-code?code=<token>` (plus `&redirect=` when the ask carried
+a path), and the frontend forwards the code to the exchange. Audit events: `one_time_access_email_sent`
+(the address only — the code is never in the record) and `one_time_access_sign_in`.
+
 ## MFA TOTP (tango-only)
 
 Upstream Pocket ID has no TOTP; this surface is tango-only and follows the database contract in

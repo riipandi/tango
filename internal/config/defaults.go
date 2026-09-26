@@ -224,6 +224,11 @@ func Default() Config {
 			RefreshShortTTL: 12 * time.Hour,
 			RefreshLongTTL:  14 * 24 * time.Hour,
 			SessionDriver:   SessionDB,
+			// Both email paths are opt-in: the administrative one because an
+			// operator's mailer becomes a credential sender, the public one
+			// because anyone reachable can drive it at any address.
+			OneTimeAccessEmailAsAdminEnabled:           false,
+			OneTimeAccessEmailAsUnauthenticatedEnabled: false,
 		},
 		Cache: Cache{
 			// Off by default: a feature that wants caching switches it on

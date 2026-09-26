@@ -94,6 +94,40 @@ presented one stops resolving. Send the bearer on every protected call. `VerifyP
 | POST     | `/api/auth/forgot-password`                                  | HTTP/REST    | Request a password reset            |
 | POST     | `/api/auth/reset-password`                                   | HTTP/REST    | Reset with a reset token            |
 
+## One-Time Access
+
+A one-time access code signs an account in without its password. An administrator issues a code
+for one account — whose credential is lost, or not yet set — or sends it by email; an account
+holder asks for the email from the sign-in page. The exchange answers the token pair a password
+sign-in answers with, under a session whose provider is `one_time_access`.
+
+The code is a credential shown once: only its SHA-256 hash is stored, and the unique index on
+`(user_id, purpose)` keeps an account to one code at a time, so a re-request re-issues rather
+than stacks. Codes are drawn from an alphabet without ambiguous characters — six characters when
+they live fifteen minutes or less, twelve above — because a holder types them from a phone
+reading an email.
+
+Two configuration switches gate the email paths, both off by default:
+`auth.one_time_access_email_as_admin_enabled` and
+`auth.one_time_access_email_as_unauthenticated_enabled`. The public one is off for a reason: it
+turns the deployment's mailer into something anyone on the internet can drive at any address,
+and the anti-enumeration answer (an unknown address succeeds identically) is the only thing that
+keeps it from becoming an address oracle.
+
+The exchange is the procedure the frontend reaches with the code the email linked to
+(`/login-code?code=…`): the frontend holds the code from the link — and the device token the
+email request answered, when there was one — and forwards both here. The email path pairs the
+code with a 16-character device token the requester holds, so a code read out of a mailbox alone
+signs nobody in; a mismatch leaves the code spendable, because the caller's mistake is not the
+code's spend.
+
+| Method   | Procedure / Endpoint                                                        | Protocol     | Summary                                     |
+| -------- | --------------------------------------------------------------------------- | ------------ | ------------------------------------------- |
+| POST     | `/rpc/tango.auth.v1.OneTimeAccessService/CreateToken`                        | ConnectRPC   | Create one-time access token for user (admin) |
+| POST     | `/rpc/tango.auth.v1.OneTimeAccessService/ExchangeToken`                      | ConnectRPC   | Exchange one-time access token               |
+| POST     | `/rpc/tango.auth.v1.OneTimeAccessService/RequestEmailAsAdmin`                | ConnectRPC   | Request one-time access email (admin)        |
+| POST     | `/rpc/tango.auth.v1.OneTimeAccessService/RequestEmail`                       | ConnectRPC   | Request one-time access email                |
+
 ## MFA TOTP
 
 Tango-only; upstream Pocket ID has no TOTP. A confirmed enrollment turns a successful password

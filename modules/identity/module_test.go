@@ -91,6 +91,14 @@ func TestTheAreaForwardsFeatureProcedures(t *testing.T) {
 		"the area must forward its features' procedures to the RPC router")
 	assert.True(t, claimed[identityv1connect.EmailVerificationServiceVerifyEmailProcedure],
 		"the area must forward its features' procedures to the RPC router")
+	assert.True(t, claimed[authv1connect.OneTimeAccessServiceCreateTokenProcedure],
+		"the area must forward its features' procedures to the RPC router")
+	assert.True(t, claimed[authv1connect.OneTimeAccessServiceExchangeTokenProcedure],
+		"the area must forward its features' procedures to the RPC router")
+	assert.True(t, claimed[authv1connect.OneTimeAccessServiceRequestEmailAsAdminProcedure],
+		"the area must forward its features' procedures to the RPC router")
+	assert.True(t, claimed[authv1connect.OneTimeAccessServiceRequestEmailProcedure],
+		"the area must forward its features' procedures to the RPC router")
 }
 
 // TestTheAreaMountsItsFeatures is the reason the area exists: the registry

@@ -2,25 +2,26 @@ type: http_request
 model: http_request
 id: rq_NzPVg4uqqp
 createdAt: 2026-09-25T10:33:42.091565
-updatedAt: 2026-09-25T21:07:16.549665
+updatedAt: 2026-09-26T01:21:24.515885
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
-authentication: {}
-authenticationType: null
+authentication:
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
   text: |-
     {
-      "id": "${[ response.body.path(request='rq_6XVjYSdXiu', behavior='smart', ttl='0', result='first', join=b64'LCA', path=b64'JC51c2Vyc1sxXS5pZA') ]}"
+      "id": "${[ userId ]}"
     }
 bodyType: application/json
 description: |-
-  Request a one-time access email for a specific user (admin only)
+  Send a one-time access code to one account's address. The code never passes through the caller: it travels by email alone. Refused while `auth.one_time_access_email_as_admin_enabled` is off.
 
-  Mirror of Pocket ID `POST /api/users/{id}/one-time-access-email`.
+  Mirror of Pocket ID `POST /api/users/{id}/one-time-access-email`, ported as the RPC procedure `tango.auth.v1.OneTimeAccessService/RequestEmailAsAdmin`.
 
-  Parameters:
-  - id (path, required): User ID
-  - body (body, required): Email request options
+  Body:
+  - id: the account's identifier (uuid)
+  - ttl_seconds: optional, 60..86400; unset means 900
 headers:
 - enabled: true
   name: Content-Type
@@ -31,9 +32,9 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Request one-time access email (admin) (unimplemented)'
+name: '[Pocket ID] Request one-time access email (admin)'
 sortPriority: 12333.333333333334
-url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.OneTimeAccessService/AdminSendEmail
+url: ${[ apiBaseURL ]}/rpc/tango.auth.v1.OneTimeAccessService/RequestEmailAsAdmin
 urlParameters:
 - enabled: true
   name: id

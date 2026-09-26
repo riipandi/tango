@@ -47,6 +47,17 @@ const (
 	// EventProfilePictureUpdated is an account's picture replaced.
 	EventProfilePictureUpdated = "profile_picture_updated"
 
+	// EventOneTimeAccessEmailSent is a one-time access code handed to the
+	// queue for delivery. The code itself is never in the record: it exists
+	// in the message and the hash, so the payload names the address only.
+	EventOneTimeAccessEmailSent = "one_time_access_email_sent"
+
+	// EventOneTimeAccessSignIn is a code exchanged for a session. It is a
+	// sign-in of its own kind — no password was verified — so it is not the
+	// sign_in event with a payload, which would make the log's one filter
+	// unable to tell the two apart.
+	EventOneTimeAccessSignIn = "one_time_access_sign_in"
+
 	// EventProfilePictureReset is an account's picture cleared.
 	EventProfilePictureReset = "profile_picture_reset"
 )

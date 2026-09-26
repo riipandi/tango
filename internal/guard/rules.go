@@ -52,6 +52,17 @@ var ProcedureRules = map[string]Entry{
 	identityv1connect.SignupServiceSignupProcedure:                 {Rule: Public},
 	identityv1connect.EmailVerificationServiceVerifyEmailProcedure: {Rule: Public},
 
+	// The one-time access codes. The exchange is the sign-in a caller makes
+	// with a code instead of a password, so it is reached before any token
+	// exists; the public email ask is reached from the sign-in page for the
+	// same reason. The two administrative procedures hand a credential to an
+	// account's owner or drive the mailer at one address, which is
+	// administrative work on an account.
+	authv1connect.OneTimeAccessServiceExchangeTokenProcedure:       {Rule: Public},
+	authv1connect.OneTimeAccessServiceRequestEmailProcedure:        {Rule: Public},
+	authv1connect.OneTimeAccessServiceCreateTokenProcedure:         {Rule: Admin},
+	authv1connect.OneTimeAccessServiceRequestEmailAsAdminProcedure: {Rule: Admin},
+
 	// The audit trail. `List` is the caller's own history, so being
 	// authenticated is the whole requirement — except that a delegated
 	// session is refused, which `Self` would express by comparing the
@@ -185,6 +196,7 @@ func ContractProcedures() []string {
 	files := []protoreflect.FileDescriptor{
 		auditlogv1.File_auditlog_proto,
 		authv1.File_auth_proto,
+		authv1.File_one_time_access_proto,
 		identityv1.File_identity_proto,
 		systemv1.File_system_proto,
 	}

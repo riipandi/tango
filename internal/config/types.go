@@ -93,6 +93,15 @@ type Auth struct {
 	// serves exactly those tokens, and there is no second session concept to
 	// configure.
 	SessionDriver string `koanf:"session_driver" json:"session_driver"`
+	// OneTimeAccessEmailAsAdminEnabled opens the administrative email path:
+	// an operator may have a one-time access code sent to an account's
+	// address. Off by default, the way the upstream feature ships.
+	OneTimeAccessEmailAsAdminEnabled bool `koanf:"one_time_access_email_as_admin_enabled" json:"one_time_access_email_as_admin_enabled"`
+	// OneTimeAccessEmailAsUnauthenticatedEnabled opens the public email path:
+	// a caller with no session may ask for a code by naming an address. Off
+	// by default, because it turns the mailer into something anyone on the
+	// internet can drive.
+	OneTimeAccessEmailAsUnauthenticatedEnabled bool `koanf:"one_time_access_email_as_unauthenticated_enabled" json:"one_time_access_email_as_unauthenticated_enabled"`
 }
 
 // Cache holds the key-value cache settings.

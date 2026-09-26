@@ -2,39 +2,43 @@ type: http_request
 model: http_request
 id: rq_JBSuwiYqGz
 createdAt: 2026-09-25T10:33:42.197240
-updatedAt: 2026-09-25T23:04:15.934155
+updatedAt: 2026-09-26T01:27:02.277103
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
 authenticationType: null
 body:
-  text: '{}'
+  text: |-
+    {
+      "token": "${[ response.body.path(request='rq_U5vZq9PD9f', behavior='smart', ttl='0', result='first', join=', ', path='$.token') ]}"
+    }
 bodyType: application/json
 description: |-
-  Exchange a one-time access token for a session token
+  Consume a one-time access code and sign its holder in. Anonymous by design: the code is the credential. The response is the token pair a password sign-in answers with.
 
-  Mirror of Pocket ID `POST /api/one-time-access-token/{token}`.
+  Mirror of Pocket ID `POST /api/one-time-access-token/{token}`, ported as the RPC procedure `tango.auth.v1.OneTimeAccessService/ExchangeToken`.
 
-  Parameters:
-  - token (path, required): One-time access token
+  Body:
+  - token: the code the email linked to (6 or 12 characters)
+  - device_token: optional; required when the code came from the public email request
 headers:
 - enabled: true
   name: Content-Type
   value: application/json
   id: null
-method: POST
-name: '[Pocket ID] Exchange one-time access token (unimplemented)'
-sortPriority: 12111.111111111111
-url: ${[ apiBaseURL ]}/api/one-time-access-token/:token
-urlParameters:
 - enabled: true
-  name: :token
-  value: dummy
-  id: path-placeholder:0
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: '[Pocket ID] Exchange one-time access token'
+sortPriority: 12111.111111111111
+url: ${[ apiBaseURL ]}/rpc/tango.auth.v1.OneTimeAccessService/ExchangeToken
+urlParameters:
 - enabled: true
   name: ''
   value: ''
-  id: DDNQ6vcsPD
+  id: VqTSwDstEW
 settingSendCookies:
   enabled: false
   value: true
