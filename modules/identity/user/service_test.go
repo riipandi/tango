@@ -267,7 +267,6 @@ func TestUpdateCurrentUserTouchesOnlyTheProfile(t *testing.T) {
 func TestGetUserRefusesAnUnknownIdentifier(t *testing.T) {
 	testutils.SkipWithoutDocker(t)
 
-
 	pool := migratedPool(t)
 	service := testService(t, pool)
 
@@ -837,4 +836,123 @@ func TestPictureProceduresRefuseARunWithoutTheEngine(t *testing.T) {
 	assert.ErrorIs(t, err, ErrPicturesUnavailable)
 	err = service.ResetProfilePicture(t.Context(), created.ID)
 	assert.ErrorIs(t, err, ErrPicturesUnavailable)
+}
+
+// recordingEnder is the session ender a test observes: it counts the calls
+// and ends nothing, because the ban's transaction is the thing under test.
+type recordingEnder struct {
+	calls []uuid.UUID
+}
+
+func (r *recordingEnder) RevokeAllForUser(_ context.Context, _ datastore.Querier, userID uuid.UUID) (int, error) {
+	r.calls = append(r.calls, userID)
+	return 2, nil
+}
+
+// silentNotifier records the notices a ban and its lift queue.
+type silentNotifier struct {
+	banned, unbanned int
+}
+
+func (s *silentNotifier) UserBanned(_ context.Context, _ string, _ UserView, _ *time.Time) {
+	s.banned++
+}
+
+func (s *silentNotifier) UserUnbanned(_ context.Context, _ string, _ UserView) {
+	s.unbanned++
+}
+
+func TestBanUserAppliesTheTermAndEndsTheSessions(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testService(t, pool)
+	service.now = func() time.Time { return time.Unix(2000000000, 0) }
+
+	ender := &recordingEnder{}
+	notifier := &silentNotifier{}
+	service.sessions = ender
+	service.notify = notifier
+
+	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Sophie", LastName: "Neveu", Username: "sophie", Email: "sophie@example.com"})
+	require.NoError(t, err)
+
+	expires := service.now().Add(24 * time.Hour)
+	outcome, err := service.BanUser(t.Context(), created.ID, BanParams{
+		Reason:    "unruly behaviour",
+		ExpiresAt: &expires,
+	})
+	require.NoError(t, err)
+
+	require.NotNil(t, outcome.User.BannedAt)
+	assert.Equal(t, service.now(), *outcome.User.BannedAt)
+	require.NotNil(t, outcome.User.BanExpires)
+	assert.Equal(t, expires, *outcome.User.BanExpires)
+	require.NotNil(t, outcome.User.BanReason)
+	assert.Equal(t, "unruly behaviour", *outcome.User.BanReason)
+	assert.Equal(t, 2, outcome.EndedSessions)
+	assert.Equal(t, 1, len(ender.calls), "the ban ended the account's live sessions")
+
+	// A re-ban replaces the terms and keeps the start instant: the field
+	// answers "since when", so applying a new expiry does not move it.
+	later := service.now().Add(48 * time.Hour)
+	rebanned, err := service.BanUser(t.Context(), created.ID, BanParams{
+		Reason:    "still unruly",
+		ExpiresAt: &later,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, service.now(), *rebanned.User.BannedAt)
+	assert.Equal(t, "still unruly", *rebanned.User.BanReason)
+	assert.Equal(t, 2, notifier.banned, "the re-ban queued its notice too")
+	assert.Equal(t, 2, len(ender.calls), "the re-ban ended the live sessions again")
+}
+
+func TestBanUserRefusesAPastExpiryAndAnUnknownTarget(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testService(t, pool)
+
+	past := service.now().Add(-time.Hour)
+	_, err := service.BanUser(t.Context(), "user_01a0da1ccb4177900000000000", BanParams{
+		Reason:    "anything",
+		ExpiresAt: &past,
+	})
+	assert.ErrorIs(t, err, ErrBanInPast)
+
+	_, err = service.BanUser(t.Context(), "user_01a0da1ccb4177900000000000", BanParams{
+		Reason: "anything",
+	})
+	assert.ErrorIs(t, err, ErrUserNotFound)
+}
+
+func TestUnbanUserLiftsTheBanAsAUnitAndAnswersTheQuiet(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service := testService(t, pool)
+	service.now = func() time.Time { return time.Unix(2000000000, 0) }
+
+	notifier := &silentNotifier{}
+	service.notify = notifier
+
+	created, err := service.CreateUser(t.Context(), CreateParams{FirstName: "Vittoria", LastName: "Vetra", Username: "vittoria", Email: "vittoria@example.com"})
+	require.NoError(t, err)
+
+	_, err = service.BanUser(t.Context(), created.ID, BanParams{Reason: "cooling off"})
+	require.NoError(t, err)
+
+	lifted, err := service.UnbanUser(t.Context(), created.ID)
+	require.NoError(t, err)
+	assert.Nil(t, lifted.User.BannedAt)
+	assert.Nil(t, lifted.User.BanExpires)
+	assert.Nil(t, lifted.User.BanReason)
+	assert.Equal(t, 1, notifier.unbanned)
+
+	// An account that is not banned is the same success: the state the
+	// caller asked for is the state the row is in.
+	again, err := service.UnbanUser(t.Context(), created.ID)
+	require.NoError(t, err)
+	assert.Nil(t, again.User.BannedAt)
+	assert.Equal(t, 2, notifier.unbanned)
 }

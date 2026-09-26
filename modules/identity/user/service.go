@@ -56,6 +56,29 @@ type Service struct {
 	// nil in the tests that exercise the account procedures only; the
 	// picture procedures refuse while it is absent.
 	pictures *storage.Manager
+
+	// sessions ends the rows a ban withdraws. It is nil in the tests that
+	// exercise the account procedures only; a ban then writes its fields
+	// without ending sessions, and the notification interface answers the
+	// same question for the mail side.
+	sessions sessionEnder
+
+	// notify queues the ban notifications. It is nil where the queue is
+	// absent — a ban still writes, only without a message.
+	notify banNotifier
+}
+
+// banNotifier queues the messages a ban and its lift produce. It is an
+// interface because the delivery is the queue's business: the ban owns what
+// happened, the job owns how it reaches the address. A nil notifier is the
+// state every test without a queue is in — the ban still writes, only
+// silently.
+type banNotifier interface {
+	// UserBanned queues the ban's notification. The expiry is nil for a ban
+	// that never lifts — the message says so rather than naming no date.
+	UserBanned(ctx context.Context, email string, subject UserView, expiresAt *time.Time)
+	// UserUnbanned queues the lift's notification.
+	UserUnbanned(ctx context.Context, email string, subject UserView)
 }
 
 // NewService builds the service. The database writes run in one transaction
@@ -74,6 +97,17 @@ func NewService(pool *datastore.Postgres, recorder *audit.Recorder, log *slog.Lo
 		pictures: pictures,
 		now:      time.Now,
 	}
+}
+
+// WithBanSideEffects answers the same service carrying the ban's two side
+// effects: the session rows a ban ends and the notifications it queues. Both
+// are optional — an absent one degrades the ban to a write — and they are
+// wired after construction because the registry resolves the session service
+// and the queue beside the user service, not before it.
+func (s *Service) WithBanSideEffects(sessions sessionEnder, notify banNotifier) *Service {
+	s.sessions = sessions
+	s.notify = notify
+	return s
 }
 
 // CreateParams carries one administrator-created account.
@@ -421,6 +455,162 @@ func ReadAccount(ctx context.Context, db datastore.Querier, id uuid.UUID) (UserV
 		return UserView{}, err
 	}
 	return view(row), nil
+}
+
+// BanParams carries the terms of a ban: the reason the audit trail and the
+// notification both keep, and the expiry — nil for a ban that never lifts
+// by itself.
+type BanParams struct {
+	Reason    string
+	ExpiresAt *time.Time
+}
+
+// BanOutcome answers the write and its blast radius: the account as the ban
+// left it, and how many live sessions the ban ended.
+type BanOutcome struct {
+	User          UserView
+	EndedSessions int
+}
+
+// ErrBanInPast is an expiry the clock has already passed: it would write a
+// ban that is over the moment it is written, a state the caller cannot have
+// meant.
+var ErrBanInPast = errors.New("user: ban expiry is in the past")
+
+// sessionEnder is the half of the session lifecycle a ban needs: the rows it
+// ends, in the transaction the ban is written in. An interface rather than
+// the session service, because the user package must not import the session
+// package's whole world — the ban owns the policy, the lifecycle owns the
+// rows.
+type sessionEnder interface {
+	RevokeAllForUser(ctx context.Context, tx datastore.Querier, userID uuid.UUID) (int, error)
+}
+
+// BanUser applies the ban in one transaction: the row's ban fields, the
+// end of every live session the account holds, and the audit record that
+// names the reason and the count of ended sessions. The notification is
+// queued after the transaction commits — the queue is durable on its own,
+// and a message the ban rolled back must not exist.
+//
+// The rules the contract carries and the ones it cannot: the identifier
+// must name an account (the not-found failure), the expiry must be in the
+// future, and an already-banned account is the same success — the write
+// replaces the reason and the expiry, which is what re-issuing a term is.
+func (s *Service) BanUser(ctx context.Context, id string, params BanParams) (BanOutcome, error) {
+	userID, err := parseWire(id)
+	if err != nil {
+		return BanOutcome{}, ErrUserNotFound
+	}
+	now := s.now()
+	if params.ExpiresAt != nil && !params.ExpiresAt.After(now) {
+		return BanOutcome{}, ErrBanInPast
+	}
+
+	existing, err := s.repo.GetUser(ctx, s.pool, userID)
+	if errors.Is(err, datastore.ErrNoRows) {
+		return BanOutcome{}, ErrUserNotFound
+	}
+	if err != nil {
+		return BanOutcome{}, err
+	}
+
+	// The ban is applied now unless an earlier one is on record: the start
+	// instant answers "since when", so a re-ban does not move it.
+	bannedAt := now
+	if existing.BannedAt != nil {
+		bannedAt = *existing.BannedAt
+	}
+	row := existing
+	row.BannedAt = &bannedAt
+	row.BanExpires = params.ExpiresAt
+	row.BanReason = &params.Reason
+
+	var ended int
+	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		updated, updateErr := s.repo.UpdateUser(ctx, tx, row)
+		if updateErr != nil {
+			return updateErr
+		}
+		if !updated {
+			return ErrUserNotFound
+		}
+		if s.sessions != nil {
+			ended, updateErr = s.sessions.RevokeAllForUser(ctx, tx, userID)
+			if updateErr != nil {
+				return updateErr
+			}
+		}
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:  audit.EventUserBanned,
+			Status: audit.StatusSuccess,
+			UserID: userID.String(),
+			Payload: map[string]string{
+				"username":       row.Username,
+				"reason":         params.Reason,
+				"ended_sessions": fmt.Sprint(ended),
+			},
+		})
+		return nil
+	})
+	if err != nil {
+		return BanOutcome{}, err
+	}
+
+	if s.notify != nil {
+		s.notify.UserBanned(ctx, row.Email, view(row), params.ExpiresAt)
+	}
+	return BanOutcome{User: view(row), EndedSessions: ended}, nil
+}
+
+// UnbanUser lifts the ban as a unit — start instant, expiry, and reason
+// together — in one transaction with its audit record. An account that is
+// not banned is the same success: the state the caller asked for is the
+// state the row is in, and the answer carries it without a write.
+func (s *Service) UnbanUser(ctx context.Context, id string) (BanOutcome, error) {
+	userID, err := parseWire(id)
+	if err != nil {
+		return BanOutcome{}, ErrUserNotFound
+	}
+
+	existing, err := s.repo.GetUser(ctx, s.pool, userID)
+	if errors.Is(err, datastore.ErrNoRows) {
+		return BanOutcome{}, ErrUserNotFound
+	}
+	if err != nil {
+		return BanOutcome{}, err
+	}
+
+	row := existing
+	row.BannedAt = nil
+	row.BanExpires = nil
+	row.BanReason = nil
+
+	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+		updated, updateErr := s.repo.UpdateUser(ctx, tx, row)
+		if updateErr != nil {
+			return updateErr
+		}
+		if !updated {
+			return ErrUserNotFound
+		}
+		s.audit.Record(ctx, tx, audit.Entry{
+			Event:  audit.EventUserUnbanned,
+			Status: audit.StatusSuccess,
+			UserID: userID.String(),
+			Payload: map[string]string{
+				"username": row.Username,
+			},
+		})
+		return nil
+	})
+	if err != nil {
+		return BanOutcome{}, err
+	}
+
+	if s.notify != nil {
+		s.notify.UserUnbanned(ctx, row.Email, view(row))
+	}
+	return BanOutcome{User: view(row)}, nil
 }
 
 // ViewSchema maps a stored row onto the account view, for the features that

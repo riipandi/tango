@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_vfgPA6zcB4
 createdAt: 2026-09-26T15:42:43.878964
-updatedAt: 2026-09-26T17:03:52.372871
+updatedAt: 2026-09-26T18:47:27.386485
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication:
@@ -20,7 +20,7 @@ description: |-
 headers: []
 method: PUT
 name: '[Pocket ID] Update current user''s profile picture'
-sortPriority: 8800.0
+sortPriority: 13000.0
 url: ${[ apiBaseURL ]}/api/users/me/profile-picture
 urlParameters: []
 settingSendCookies:

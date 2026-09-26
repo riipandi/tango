@@ -14,6 +14,8 @@ const (
 	TemplateOneTimeAccess      = "one-time-access"
 	TemplatePasswordReset      = "password-reset"
 	TemplateTestEmail          = "test-email"
+	TemplateUserBanned         = "user-banned"
+	TemplateUserUnbanned       = "user-unbanned"
 )
 
 // The data each template renders. They are structs rather than maps so the field
@@ -79,5 +81,17 @@ type (
 	// TestEmailData renders TemplateTestEmail.
 	TestEmailData struct {
 		Email string
+	}
+	// UserBannedData renders TemplateUserBanned. ExpiresAt is empty for a
+	// ban that never lifts — the template renders its absence as "without
+	// an end date" rather than naming no date.
+	UserBannedData struct {
+		Name      string
+		Reason    string
+		ExpiresAt string
+	}
+	// UserUnbannedData renders TemplateUserUnbanned.
+	UserUnbannedData struct {
+		Name string
 	}
 )

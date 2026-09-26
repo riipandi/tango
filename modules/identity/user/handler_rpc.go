@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strconv"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/go-chi/chi/v5"
@@ -52,6 +54,8 @@ func (m *Module) MountRPC(r chi.Router, opts ...connect.HandlerOption) {
 	r.Handle(identityv1connect.UserServiceResetProfilePictureProcedure, handler)
 	r.Handle(identityv1connect.UserServiceGetCurrentUserProcedure, handler)
 	r.Handle(identityv1connect.UserServiceUpdateCurrentUserProcedure, handler)
+	r.Handle(identityv1connect.UserServiceBanUserProcedure, handler)
+	r.Handle(identityv1connect.UserServiceUnbanUserProcedure, handler)
 }
 
 // rpcHandler is the transport mapping of the procedures. The service carries
@@ -149,6 +153,53 @@ func (h *rpcHandler) UpdateUser(ctx context.Context, req *connect.Request[identi
 		Status:  responder.StatusSuccess,
 		Message: "the user was updated",
 	}), nil
+}
+
+// BanUser applies a ban to one account.
+func (h *rpcHandler) BanUser(ctx context.Context, req *connect.Request[identityv1.BanUserRequest]) (*connect.Response[identityv1.BanUserResponse], error) {
+	params := BanParams{Reason: req.Msg.Reason}
+	if req.Msg.ExpiresAt != nil {
+		at := req.Msg.ExpiresAt.AsTime()
+		params.ExpiresAt = &at
+	}
+	outcome, err := h.service.BanUser(ctx, req.Msg.Id, params)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.BanUserResponse{
+		User:    WireView(outcome.User),
+		Status:  responder.StatusSuccess,
+		Message: banMessage(outcome.User, outcome.EndedSessions),
+	}), nil
+}
+
+// UnbanUser lifts one account's ban.
+func (h *rpcHandler) UnbanUser(ctx context.Context, req *connect.Request[identityv1.UnbanUserRequest]) (*connect.Response[identityv1.UnbanUserResponse], error) {
+	outcome, err := h.service.UnbanUser(ctx, req.Msg.Id)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return connect.NewResponse(&identityv1.UnbanUserResponse{
+		User:    WireView(outcome.User),
+		Status:  responder.StatusSuccess,
+		Message: "the ban was lifted",
+	}), nil
+}
+
+// banMessage answers the sentence the response carries: the expiry names
+// itself when there is one, and the ended sessions are counted so the
+// caller sees what the ban did beyond the row.
+func banMessage(subject UserView, ended int) string {
+	word := "the ban was applied"
+	if subject.BannedAt != nil && subject.BanExpires != nil {
+		word = "the ban was applied until " + subject.BanExpires.Format(time.RFC3339)
+	} else if subject.BannedAt != nil {
+		word = "the ban was applied without an end date"
+	}
+	if ended > 0 {
+		return word + "; " + strconv.Itoa(ended) + " live session(s) were ended"
+	}
+	return word
 }
 
 // DeleteUser removes an account.
@@ -265,6 +316,8 @@ func mapError(err error) error {
 		return connect.NewError(connect.CodeAlreadyExists, errors.New("account already exists"))
 	case errors.Is(err, ErrSelfDeletion):
 		return connect.NewError(connect.CodeFailedPrecondition, errors.New("an administrator cannot delete the account they are signed in with"))
+	case errors.Is(err, ErrBanInPast):
+		return connect.NewError(connect.CodeInvalidArgument, errors.New("the ban expiry is in the past"))
 	case errors.Is(err, ErrPicturesUnavailable):
 		return connect.NewError(connect.CodeUnavailable, errors.New("picture storage is not available"))
 	case isPasswordPolicy(err):

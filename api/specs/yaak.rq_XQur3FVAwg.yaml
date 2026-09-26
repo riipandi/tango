@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_XQur3FVAwg
 createdAt: 2026-09-25T10:33:40.723878
-updatedAt: 2026-09-25T17:13:18.257492
+updatedAt: 2026-09-26T18:47:27.385270
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication:
@@ -13,11 +13,11 @@ body:
   bodyType: application/json
   text: |-
     {
-      "username": "ada",
-      "email": "ada@example.com",
-      "password": "correct horse",
-      "first_name": "Ada",
-      "last_name": "Lovelace",
+      "username": "hermione",
+      "email": "hermione@example.com",
+      "password": "expecto-patronum",
+      "first_name": "Hermione",
+      "last_name": "Granger",
       "is_admin": false
     }
 bodyType: application/json
@@ -44,7 +44,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Create user'
-sortPriority: 7000.0
+sortPriority: 8000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/CreateUser
 urlParameters: []
 settingSendCookies:

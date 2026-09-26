@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_SsK8Hnwc3J
 createdAt: 2026-09-26T15:42:57.877428
-updatedAt: 2026-09-26T15:52:42.807869
+updatedAt: 2026-09-26T18:47:27.384951
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication:
@@ -12,13 +12,14 @@ authenticationType: bearer
 body:
   text: |-
     {
-      "id": "${[ userId ]}"
+      "id": "${[ userId ]}",
+      "groupIds": ["REPLACE_UGRP_ID"]
     }
 bodyType: application/json
 description: |-
-  Update the groups a specific user belongs to.
+  Update the groups a specific user belongs to. The replacement is whole: `groupIds` names every group the account belongs to after the call, and an empty list removes it from all of them. Every identifier must name an existing group.
 
-  Ported from Pocket ID `PUT /api/users/{id}/user-groups`. Tango assigns membership from the group side (`UserGroupService/SetUserGroupMembers`); the per-user shape has no procedure yet. Placeholder until it ships.
+  Ported from Pocket ID `PUT /api/users/{id}/user-groups` as the `tango.identity.v1.UserGroupService/UpdateUserGroups` procedure. Administrative: the caller must name an administrator.
 
   Parameters:
   - id (path, required): User ID
@@ -32,8 +33,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Update user groups (unimplemented)'
-sortPriority: 19714.285714285714
+name: '[Pocket ID] Update user groups'
+sortPriority: 6000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/UpdateUserGroups
 urlParameters:
 - enabled: true

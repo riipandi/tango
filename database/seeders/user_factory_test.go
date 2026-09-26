@@ -96,7 +96,11 @@ func TestUserSeederCreatesTheDefaultAccount(t *testing.T) {
 
 	require.Len(t, results, 1)
 	assert.Equal(t, seeders.UserSeederName, results[0].Name)
-	assert.Equal(t, []string{seeders.DefaultUser.Email}, results[0].Created)
+	// The default account leads the list; the scenario accounts follow it.
+	assert.Equal(t, []string{seeders.DefaultUser.Email,
+		"robert.langdon@example.com", "sophie.neveu@example.com",
+		"silas.vetra@example.com", "hermione.granger@example.com",
+		"vittoria.vetra@example.com"}, results[0].Created)
 	assert.Empty(t, results[0].Skipped)
 
 	var (
@@ -178,14 +182,14 @@ func TestUserSeederIsIdempotent(t *testing.T) {
 	pool := newSeededPool(t)
 
 	first := runSeeders(t, pool, false)
-	require.Equal(t, []string{seeders.DefaultUser.Email}, first[0].Created)
+	require.Len(t, first[0].Created, len(seeders.ScenarioEmails)+1)
 	hash := storedHash(t, pool)
 
 	second := runSeeders(t, pool, false)
 
 	assert.Empty(t, second[0].Created)
-	assert.Equal(t, []string{seeders.DefaultUser.Email}, second[0].Skipped)
-	assert.Equal(t, 1, userCount(t, pool))
+	assert.Len(t, second[0].Skipped, len(seeders.ScenarioEmails)+1)
+	assert.Equal(t, len(seeders.ScenarioEmails)+1, userCount(t, pool))
 	assert.Equal(t, hash, storedHash(t, pool), "a skipped account must keep its password")
 }
 
@@ -202,9 +206,9 @@ func TestUserSeederTreatsEmailCaseSensitively(t *testing.T) {
 
 	results := runSeeders(t, pool, false)
 
-	assert.Equal(t, []string{seeders.DefaultUser.Email}, results[0].Created)
+	assert.Len(t, results[0].Created, len(seeders.ScenarioEmails)+1)
 	assert.Empty(t, results[0].Skipped)
-	assert.Equal(t, 2, userCount(t, pool))
+	assert.Equal(t, len(seeders.ScenarioEmails)+2, userCount(t, pool))
 }
 
 // A conflict on the username alone must also leave the existing account in
@@ -219,9 +223,10 @@ func TestUserSeederKeepsAccountWithConflictingUsername(t *testing.T) {
 
 	results := runSeeders(t, pool, false)
 
-	assert.Empty(t, results[0].Created)
-	assert.Equal(t, []string{seeders.DefaultUser.Email}, results[0].Skipped)
-	assert.Equal(t, 1, userCount(t, pool))
+	assert.Len(t, results[0].Created, len(seeders.ScenarioEmails),
+		"only the scenario accounts are new; the conflicting admin stays")
+	assert.Len(t, results[0].Skipped, 1)
+	assert.Equal(t, len(seeders.ScenarioEmails)+1, userCount(t, pool))
 }
 
 // --dry-run must report the work without doing it.
@@ -230,7 +235,7 @@ func TestUserSeederDryRunWritesNothing(t *testing.T) {
 
 	results := runSeeders(t, pool, true)
 
-	assert.Equal(t, []string{seeders.DefaultUser.Email}, results[0].Created)
+	assert.Len(t, results[0].Created, len(seeders.ScenarioEmails)+1)
 	assert.Zero(t, userCount(t, pool), "a dry run must not insert the account")
 
 	// Once the account exists, the dry run reports it as skipped instead.
@@ -238,8 +243,8 @@ func TestUserSeederDryRunWritesNothing(t *testing.T) {
 	results = runSeeders(t, pool, true)
 
 	assert.Empty(t, results[0].Created)
-	assert.Equal(t, []string{seeders.DefaultUser.Email}, results[0].Skipped)
-	assert.Equal(t, 1, userCount(t, pool))
+	assert.Len(t, results[0].Skipped, len(seeders.ScenarioEmails)+1)
+	assert.Equal(t, len(seeders.ScenarioEmails)+1, userCount(t, pool))
 }
 
 // A failing seeder must abort the run and roll back what earlier seeders wrote,
@@ -291,4 +296,35 @@ func TestRunStopsAtTheFailingSeeder(t *testing.T) {
 	require.ErrorIs(t, err, failure)
 	assert.Contains(t, err.Error(), "seeders: boom", "the error must name the seeder")
 	assert.False(t, ran, "a later seeder must not run after a failure")
+}
+
+// The scenario accounts are the ban surface's test bench: one of each state
+// the schema can hold, so a local database exercises every path the ban and
+// unban procedures answer.
+func TestUserSeederWritesEveryBanScenario(t *testing.T) {
+	pool := newSeededPool(t)
+
+	runSeeders(t, pool, false)
+
+	var free, bannedLive, bannedPast int
+	require.NoError(t, pool.QueryRow(t.Context(), `
+		SELECT
+			count(*) FILTER (WHERE banned_at IS NULL),
+			count(*) FILTER (WHERE banned_at IS NOT NULL AND (ban_expires IS NULL OR ban_expires > now())),
+			count(*) FILTER (WHERE banned_at IS NOT NULL AND ban_expires IS NOT NULL AND ban_expires <= now())
+		FROM public.users WHERE email <> $1`,
+		seeders.DefaultUser.Email).Scan(&free, &bannedLive, &bannedPast))
+
+	assert.Equal(t, 2, free, "two scenarios hold no ban at all")
+	assert.Equal(t, 2, bannedLive, "one permanent and one inside its window")
+	assert.Equal(t, 1, bannedPast, "one whose window has passed")
+
+	// Every banned row carries a reason: the column and the notification
+	// read from it, and a ban without one is the kind an audit cannot
+	// explain.
+	var missing int
+	require.NoError(t, pool.QueryRow(t.Context(),
+		"SELECT count(*) FROM public.users WHERE banned_at IS NOT NULL AND ban_reason IS NULL").
+		Scan(&missing))
+	assert.Zero(t, missing)
 }

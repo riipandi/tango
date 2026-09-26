@@ -128,6 +128,8 @@ var ProcedureRules = map[string]Entry{
 	identityv1connect.UserServiceCreateUserProcedure:               {Rule: Admin},
 	identityv1connect.UserServiceUpdateUserProcedure:               {Rule: Admin},
 	identityv1connect.UserServiceDeleteUserProcedure:               {Rule: Admin},
+	identityv1connect.UserServiceBanUserProcedure:                  {Rule: Admin},
+	identityv1connect.UserServiceUnbanUserProcedure:                {Rule: Admin},
 	identityv1connect.UserGroupServiceListUserGroupsProcedure:      {Rule: Admin},
 	identityv1connect.UserGroupServiceGetUserGroupProcedure:        {Rule: Admin},
 	identityv1connect.UserGroupServiceCreateUserGroupProcedure:     {Rule: Admin},

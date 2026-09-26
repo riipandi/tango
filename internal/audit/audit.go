@@ -124,6 +124,17 @@ const (
 	// the started record so the pair reads together — and the payload's
 	// actor fields name who stepped back out.
 	EventImpersonationStopped = "impersonation_stopped"
+
+	// EventUserBanned is an account's access withdrawn for a stated term.
+	// The record names the account it is about and carries the reason and
+	// the expiry in the payload; the sessions the ban ended are counted
+	// there, so a reader sees the blast radius without a second query.
+	EventUserBanned = "user_banned"
+
+	// EventUserUnbanned is a ban lifted. It is not the banned event with a
+	// negative payload: applying a term and lifting it are different
+	// happenings, and the log's one filter cannot see inside a payload.
+	EventUserUnbanned = "user_unbanned"
 )
 
 // The trigger values the trigger_type column's enum allows. A record this

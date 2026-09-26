@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_JBSuwiYqGz
 createdAt: 2026-09-25T10:33:42.197240
-updatedAt: 2026-09-26T01:27:02.277103
+updatedAt: 2026-09-26T18:47:27.387151
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -32,7 +32,7 @@ headers:
   id: null
 method: POST
 name: '[Pocket ID] Exchange one-time access token'
-sortPriority: 12111.111111111111
+sortPriority: 20000.0
 url: ${[ apiBaseURL ]}/rpc/tango.auth.v1.OneTimeAccessService/ExchangeToken
 urlParameters:
 - enabled: true

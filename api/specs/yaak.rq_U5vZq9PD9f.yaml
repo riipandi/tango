@@ -2,25 +2,29 @@ type: http_request
 model: http_request
 id: rq_U5vZq9PD9f
 createdAt: 2026-09-25T10:33:42.143507
-updatedAt: 2026-09-25T17:13:18.284486
+updatedAt: 2026-09-26T18:47:27.389240
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
-authentication: {}
-authenticationType: null
+authentication:
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
   text: |-
     {
-      "id": "REPLACE_USER_ID"
+      "id": "${[ userId ]}",
+      "ttl_seconds": 900
     }
 bodyType: application/json
 description: |-
-  Generate a one-time access token for a specific user (admin only)
+  Issue a one-time access code for one account, for an administrator to hand over. The code exists in the response alone: only its hash is stored.
 
-  Mirror of Pocket ID `POST /api/users/{id}/one-time-access-token`.
+  Mirror of Pocket ID `POST /api/users/{id}/one-time-access-token`, ported as the RPC procedure `tango.auth.v1.OneTimeAccessService/CreateToken`.
 
-  Parameters:
-  - id (path, required): User ID
-  - body (body, required): Token options
+  Body:
+  - id: the account's identifier (uuid)
+  - ttl_seconds: optional, 60..86400; unset means 900 (fifteen minutes, the short six-character form)
+
+  The `id`/`user_id` field is the account's wire TypeID (`user_...`), not the row's UUID - the UUID never leaves the server.
 headers:
 - enabled: true
   name: Content-Type
@@ -31,9 +35,9 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Create one-time access token for user (admin) (unimplemented)'
-sortPriority: 12000.0
-url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.OneTimeAccessService/AdminIssueToken
+name: '[Pocket ID] Create one-time access token for user (admin)'
+sortPriority: 19000.0
+url: ${[ apiBaseURL ]}/rpc/tango.auth.v1.OneTimeAccessService/CreateToken
 urlParameters:
 - enabled: true
   name: id

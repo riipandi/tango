@@ -99,6 +99,23 @@ service UserService {
   // username, the address, and the role are not the caller's to rewrite
   // here — the administrative surface owns them.
   rpc UpdateCurrentUser(UpdateCurrentUserRequest) returns (UpdateCurrentUserResponse);
+
+  // BanUser applies a ban to the named account: the start instant is now,
+  // the reason is required, and the expiry is optional — absent, the ban
+  // never lifts by itself. Every live session the account holds is ended in
+  // the same transaction (the statelessness the protocol settles means an
+  // already-issued access token keeps working until its own expiry, but the
+  // refresh token dies here), and a notification is queued to the account's
+  // address. An unknown or malformed identifier answers the not-found code;
+  // an already-banned account is the same success, with the reason and
+  // expiry replaced — the write is the caller's intent, not a comparison.
+  rpc BanUser(BanUserRequest) returns (BanUserResponse);
+
+  // UnbanUser lifts the named account's ban as a unit — start instant,
+  // expiry, and reason together. An account that is not banned is the same
+  // success: the state the caller asked for is the state the row is in.
+  // A notification is queued to the account's address.
+  rpc UnbanUser(UnbanUserRequest) returns (UnbanUserResponse);
 }
 
 // UserGroupService administers the groups accounts belong to. A group is an
@@ -610,6 +627,58 @@ message ResetProfilePictureResponse {
 
   // message is the human-readable sentence describing what the call did.
   string message = 2;
+}
+
+// BanUserRequest names the account to ban and the terms of the ban.
+message BanUserRequest {
+  // id is the account's identifier in its wire form, a TypeID (`user_…`).
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // reason is why the account is banned. It is required — a ban without a
+  // stated reason is the one an audit trail cannot explain, and the same
+  // sentence travels to the account in the notification.
+  string reason = 2 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 500
+  ];
+
+  // expires_at is when the ban lifts by itself, absent for a ban that never
+  // lifts. An instant in the past is refused by the service: it would write
+  // a ban that is already over, a state the caller cannot have meant.
+  optional google.protobuf.Timestamp expires_at = 3;
+}
+
+// BanUserResponse answers the account as the ban left it.
+message BanUserResponse {
+  // user is the account's view after the write — the ban fields carry the
+  // instant, the expiry, and the reason the request applied.
+  User user = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
+}
+
+// UnbanUserRequest names the account whose ban is lifted.
+message UnbanUserRequest {
+  // id is the account's identifier in its wire form, a TypeID (`user_…`).
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// UnbanUserResponse answers the account as the lift left it.
+message UnbanUserResponse {
+  // user is the account's view after the write — the ban fields are gone.
+  User user = 1;
+
+  // status is the outcome word the client checks — success; a
+  // failure never reaches this body, it is a connect error.
+  string status = 2;
+
+  // message is the human-readable sentence describing what the call did.
+  string message = 3;
 }
 
 // GetCurrentUserRequest is empty: the account is the caller the token names.

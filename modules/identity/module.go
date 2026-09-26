@@ -23,6 +23,7 @@ import (
 	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/internal/jobs"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
@@ -151,7 +152,17 @@ var Package = do.Package(
 		issuer := do.MustInvoke[*signin.Service](i)
 		users := do.MustInvoke[*user.Service](i)
 		recorder := do.MustInvoke[*audit.Recorder](i)
-		return session.NewService(pool, issuer, users, recorder, log), nil
+		service := session.NewService(pool, issuer, users, recorder, log)
+		// The ban's side effects are wired here rather than in the user
+		// provider: the session lifecycle and the queue exist by the time
+		// this builds, and the user service must not depend on either to
+		// construct. A ban ends the account's live sessions through the
+		// service and queues its notices through the notifier.
+		users.WithBanSideEffects(service, jobs.NewBanNotifier(
+			do.MustInvoke[*queue.Client](i),
+			do.MustInvoke[*slog.Logger](i),
+		))
+		return service, nil
 	}),
 
 	do.Lazy(func(i do.Injector) (*signup.Service, error) {

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_YqCUdPXiqY
 createdAt: 2026-09-26T15:42:28.373873
-updatedAt: 2026-09-26T15:52:59.913805
+updatedAt: 2026-09-26T18:47:27.386293
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication:
@@ -15,7 +15,7 @@ bodyType: application/json
 description: |-
   Retrieve information about the currently authenticated user.
 
-  Ported from Pocket ID `GET /api/users/me`. Tango does not answer a `/me` procedure yet — today a client reads its own account via `UserService/GetUser` with the identifier the sign-in answered. The placeholder keeps the checklist honest until the procedure ships.
+  Ported from Pocket ID `GET /api/users/me` as the `tango.identity.v1.UserService/GetCurrentUser` procedure. The target is the token's subject, never something the request names; a delegated session is refused.
 
   Parameters: none
 headers:
@@ -28,8 +28,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Get current user (unimplemented)'
-sortPriority: 14126.984126984127
+name: '[Pocket ID] Get current user'
+sortPriority: 10000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/GetCurrentUser
 urlParameters: []
 settingSendCookies:

@@ -49,9 +49,97 @@ var DefaultUser = UserCredentials{
 	LastName:  "Sistem",
 }
 
-// User returns the seeder for the default user. It writes the identity and its
-// password in one transaction, because a user without a password cannot log in
-// and the two tables are one record conceptually.
+// Scenario accounts the seeder writes beside the default one, one per ban
+// state the surface can answer, so a local database can exercise every path
+// without hand-writing rows. All of them share the default password.
+var scenarioUsers = []scenarioUser{
+	{
+		credentials: UserCredentials{
+			Email:     "robert.langdon@example.com",
+			Username:  "robert_langdon",
+			Password:  "@dmin123",
+			FirstName: "Robert",
+			LastName:  "Langdon",
+		},
+	},
+	{
+		credentials: UserCredentials{
+			Email:     "sophie.neveu@example.com",
+			Username:  "sophie_neveu",
+			Password:  "@dmin123",
+			FirstName: "Sophie",
+			LastName:  "Neveu",
+		},
+	},
+	{
+		// A permanent ban: no expiry, a stated reason. Sign-in and refresh
+		// refuse the account, and the notification names no end date.
+		credentials: UserCredentials{
+			Email:     "silas.vetra@example.com",
+			Username:  "silas_vetra",
+			Password:  "@dmin123",
+			FirstName: "Silas",
+			LastName:  "Vetra",
+		},
+		bannedAt:  true,
+		banReason: "Repeated violations of the community guidelines",
+	},
+	{
+		// A ban still inside its window: refused now, lifting by itself.
+		credentials: UserCredentials{
+			Email:     "hermione.granger@example.com",
+			Username:  "hermione_granger",
+			Password:  "@dmin123",
+			FirstName: "Hermione",
+			LastName:  "Granger",
+		},
+		bannedAt:   true,
+		banExpires: true,
+		banReason:  "Awaiting the moderation review",
+	},
+	{
+		// A ban whose window has passed: the row keeps the history, and the
+		// account can sign in again — the expiry is the lift.
+		credentials: UserCredentials{
+			Email:     "vittoria.vetra@example.com",
+			Username:  "vittoria_vetra",
+			Password:  "@dmin123",
+			FirstName: "Vittoria",
+			LastName:  "Vetra",
+		},
+		bannedAt:   true,
+		banExpires: true,
+		banExpired: true,
+		banReason:  "Outgrown suspension",
+	},
+}
+
+// scenarioUser is one account the seeder writes beside the default one: the
+// credentials it signs in with, and the ban state the scenario exercises.
+type scenarioUser struct {
+	credentials UserCredentials
+	bannedAt    bool
+	// banExpires writes a window; banExpired moves it into the past, so the
+	// row answers "banned once, free now" instead of "banned still".
+	banExpires bool
+	banExpired bool
+	banReason  string
+}
+
+// ScenarioEmails are the addresses the scenario accounts sign in with —
+// the list a test counts against when it asserts the seeder's full output.
+var ScenarioEmails = []string{
+	"robert.langdon@example.com",
+	"sophie.neveu@example.com",
+	"silas.vetra@example.com",
+	"hermione.granger@example.com",
+	"vittoria.vetra@example.com",
+}
+
+// User returns the seeder for the default user and the scenario accounts. It
+// writes each identity and its password in one transaction, because a user
+// without a password cannot log in and the two tables are one record
+// conceptually.
 func User() Seeder {
 	return Seeder{
 		Name:  UserSeederName,
@@ -59,11 +147,12 @@ func User() Seeder {
 	}
 }
 
-// applyDefaultUser creates the default user and its password.
+// applyDefaultUser creates the default user and its password, then the
+// scenario accounts — one per ban state the surface answers.
 //
-// Both inserts are guarded by ON CONFLICT DO NOTHING, so a second run keeps the
-// existing rows and reports them as skipped. The account is looked up by email,
-// the natural key the operator knows.
+// Every insert is guarded by ON CONFLICT DO NOTHING, so a second run keeps
+// the existing rows and reports them as skipped. Accounts are looked up by
+// email, the natural key the operator knows.
 func applyDefaultUser(
 	ctx context.Context,
 	q datastore.Querier,
@@ -74,7 +163,8 @@ func applyDefaultUser(
 	}
 
 	// The password hash is salted at random, so it must not be computed on a
-	// dry run: that work would be thrown away.
+	// dry run: that work would be thrown away. The scenarios share it — one
+	// hash, many rows, the salt protecting each row on its own.
 	hash, err := crypto.NewPasswordHasher().Hash(DefaultUser.Password)
 	if err != nil {
 		return nil, nil, err
@@ -96,29 +186,90 @@ func applyDefaultUser(
 		return nil, nil, err
 	}
 	if !inserted {
-		return nil, []string{DefaultUser.Email}, nil
+		skipped = append(skipped, DefaultUser.Email)
+	} else {
+		if err := insertPassword(ctx, q, row.ID, hash); err != nil {
+			return nil, nil, err
+		}
+		created = append(created, DefaultUser.Email)
 	}
 
-	if err := insertPassword(ctx, q, row.ID, hash); err != nil {
-		return nil, nil, err
+	for i := range scenarioUsers {
+		email, inserted, scenarioErr := applyScenarioUser(ctx, q, scenarioUsers[i], hash)
+		if scenarioErr != nil {
+			return nil, nil, scenarioErr
+		}
+		if inserted {
+			created = append(created, email)
+		} else {
+			skipped = append(skipped, email)
+		}
 	}
-	return []string{DefaultUser.Email}, nil, nil
+	return created, skipped, nil
 }
 
-// plannedDefaultUser reports what a real run would do, without writing anything
-// and without hashing the password.
+// applyScenarioUser writes one scenario account and answers its email plus
+// whether this run created it. The ban state rides the same insert: the
+// columns exist on the row, and a scenario is a row shape, not a second
+// write.
+func applyScenarioUser(ctx context.Context, q datastore.Querier, s scenarioUser, hash string) (string, bool, error) {
+	now := time.Now().UTC()
+	row := user.UserSchema{
+		ID:          uuid.NewV7(),
+		Username:    s.credentials.Username,
+		Email:       s.credentials.Email,
+		FirstName:   s.credentials.FirstName,
+		LastName:    s.credentials.LastName,
+		DisplayName: s.credentials.DisplayName(),
+		CreatedAt:   now,
+	}
+	if s.bannedAt {
+		// The start instant sits a day back, so the two expiry scenarios
+		// read honestly: one window is open (12h from a day ago), one has
+		// passed (48h from a day ago).
+		at := now.Add(-24 * time.Hour)
+		row.BannedAt = &at
+		row.BanReason = &s.banReason
+		if s.banExpires {
+			expires := at.Add(12 * time.Hour)
+			if s.banExpired {
+				expires = at.Add(48 * time.Hour)
+			}
+			row.BanExpires = &expires
+		}
+	}
+
+	inserted, err := insertUser(ctx, q, row)
+	if err != nil {
+		return "", false, err
+	}
+	if !inserted {
+		return s.credentials.Email, false, nil
+	}
+	if err := insertPassword(ctx, q, row.ID, hash); err != nil {
+		return "", false, err
+	}
+	return s.credentials.Email, true, nil
+}
+
+// plannedDefaultUser reports what a real run would do, without writing
+// anything and without hashing the password.
 func plannedDefaultUser(
 	ctx context.Context,
 	q datastore.Querier,
 ) (created, skipped []string, err error) {
-	exists, err := userExists(ctx, q, DefaultUser.Email)
-	if err != nil {
-		return nil, nil, err
+	for _, email := range append([]string{DefaultUser.Email}, ScenarioEmails...) {
+		exists, existsErr := userExists(ctx, q, email)
+		if existsErr != nil {
+			return nil, nil, existsErr
+		}
+		if exists {
+			skipped = append(skipped, email)
+		} else {
+			created = append(created, email)
+		}
 	}
-	if exists {
-		return nil, []string{DefaultUser.Email}, nil
-	}
-	return []string{DefaultUser.Email}, nil, nil
+	return created, skipped, nil
 }
 
 // userExists reports whether an account already uses email.

@@ -1,48 +1,36 @@
 type: http_request
 model: http_request
-id: rq_4xJftYUp4i
-createdAt: 2026-09-25T10:33:40.779504
-updatedAt: 2026-09-26T18:50:06.669826
+id: rq_2awNdBDVaz
+createdAt: 2026-09-26T18:43:37.842667
+updatedAt: 2026-09-26T18:49:24.904521
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
-authentication:
-  prefix: Bearer
-  token: ${[ accessToken ]}
-authenticationType: bearer
+authentication: {}
+authenticationType: null
 body:
-  bodyType: application/json
   text: |-
     {
       "id": "${[ response.body.path(request='rq_6XVjYSdXiu', behavior='smart', ttl='0', result='first', join=', ', path='$.users[1].id') ]}"
     }
 bodyType: application/json
 description: |-
-  Retrieve one account by its identifier.
+  Lifts the named account's ban as a unit — start instant, expiry, and reason together — and queues a reinstatement notice to the account's address. An account that is not banned is the same success: the state the caller asked for is the state the row is in. An unknown or malformed identifier answers `not_found`.
 
-  Ported from Pocket ID `GET /api/users/{id}` as the `tango.identity.v1.UserService/GetUser` procedure.
-
-  Parameters:
-  - id (body, required): User ID
-
-  The `id`/`user_id` field is the account's wire TypeID (`user_...`), not the row's UUID - the UUID never leaves the server.
+  Tango-only surface, modeled on Better Auth's `unban-user` admin operation.
 headers:
 - enabled: true
   name: Content-Type
   value: application/json
-  id: null
+  id: eT9QswW2fV
 - enabled: true
   name: Connect-Protocol-Version
   value: '1'
-  id: null
+  id: txS5q8CCP6
 method: POST
-name: '[Pocket ID] Get user by ID'
-sortPriority: 9000.0
-url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/GetUser
-urlParameters:
-- enabled: true
-  name: id
-  value: REPLACE_ID
-  id: null
+name: '[Tango] Unban user'
+sortPriority: 27000.0
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/UnbanUser
+urlParameters: []
 settingSendCookies:
   enabled: false
   value: true

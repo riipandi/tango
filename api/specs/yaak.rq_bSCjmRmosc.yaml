@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_bSCjmRmosc
 createdAt: 2026-09-25T10:33:41.108464
-updatedAt: 2026-09-25T18:58:13.642415
+updatedAt: 2026-09-26T18:47:27.387380
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 body:
   text: |-
     {
-      "userId": "${[ userId ]}s"
+      "id": "${[ userId ]}"
     }
 bodyType: application/json
 description: |-
@@ -22,7 +22,9 @@ description: |-
   picture the read answers with.
 
   Parameters:
-  - userId (string, required): User ID
+  - id (string, required): User ID
+
+  The `id`/`user_id` field is the account's wire TypeID (`user_...`), not the row's UUID - the UUID never leaves the server.
 headers:
 - enabled: true
   name: Content-Type
@@ -34,7 +36,7 @@ headers:
   id: E0tGzXIfnW
 method: POST
 name: '[Pocket ID] Reset user profile picture'
-sortPriority: 11555.555555555557
+sortPriority: 18000.0
 url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/ResetProfilePicture
 urlParameters:
 - enabled: true

@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_zxNgqGsQff
 createdAt: 2026-09-25T10:33:41.055291
-updatedAt: 2026-09-25T23:52:24.436535
+updatedAt: 2026-09-26T18:47:27.386965
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_xxFhnsiD2K
 authentication: {}
@@ -26,7 +26,7 @@ description: |-
 headers: []
 method: PUT
 name: '[Pocket ID] Update user profile picture'
-sortPriority: 11333.333333333334
+sortPriority: 17000.0
 url: ${[ apiBaseURL ]}/api/users/${[ userId ]}/profile-picture
 urlParameters:
 - enabled: true

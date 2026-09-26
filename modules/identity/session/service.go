@@ -737,6 +737,18 @@ func (s *Service) StopImpersonating(ctx context.Context, callerSession string, c
 	}, nil
 }
 
+// RevokeAllForUser stamps the end of every live session the account holds —
+// the write a ban makes in its own transaction. The ender is recorded as the
+// account itself: the sessions did nothing wrong, the account's standing
+// changed. The count answers the ban's audit record.
+func (s *Service) RevokeAllForUser(ctx context.Context, tx datastore.Querier, userID uuid.UUID) (int, error) {
+	rows, err := s.repo.RevokeLiveForUser(ctx, tx, userID, nil, userID, s.now())
+	if err != nil {
+		return 0, err
+	}
+	return len(rows), nil
+}
+
 // bannedAt reports whether the account sits inside its ban window. A ban
 // without an expiry never lifts by itself — the same rule the sign-in issuer
 // applies.
