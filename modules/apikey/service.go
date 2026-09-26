@@ -15,6 +15,7 @@ import (
 	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/user"
+	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
 )
 
@@ -284,6 +285,30 @@ func (s *Service) Validate(ctx context.Context, presented string) (user.UserSche
 	s.repo.TouchLastUsed(ctx, s.pool, key.ID, now)
 
 	return owner, nil
+}
+
+// AuthenticateAPIKey is the authwall's machine half: the caller a presented
+// key acts as. The claims are the owner's account read live — the role
+// change or the disablement takes effect on the next request — and the
+// session identifier is empty, because no session exists behind the
+// credential: the key is its own proof, and its row is the durable record.
+//
+// The credential kind travels on the caller, which is what the guard's
+// session rule reads when the keys' own surface refuses the credential that
+// would otherwise manage it.
+func (s *Service) AuthenticateAPIKey(ctx context.Context, presented string) (*jwtutils.Caller, error) {
+	owner, err := s.Validate(ctx, presented)
+	if err != nil {
+		return nil, err
+	}
+	return &jwtutils.Caller{
+		Email:       owner.Email,
+		Username:    owner.Username,
+		DisplayName: owner.DisplayName,
+		IsAdmin:     owner.IsAdmin,
+		UserID:      owner.ID.String(),
+		Credential:  jwtutils.CredentialAPIKey,
+	}, nil
 }
 
 // listPage runs one list query and answers the page with its metadata. An

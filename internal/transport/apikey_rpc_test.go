@@ -20,6 +20,7 @@ import (
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport"
+	"github.com/riipandi/tango/internal/transport/middleware"
 	"github.com/riipandi/tango/modules/apikey"
 	"github.com/riipandi/tango/modules/identity"
 	"github.com/riipandi/tango/modules/identity/jwks"
@@ -193,8 +194,9 @@ func TestTheAPIKeyAuthenticatesThroughTheHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// The real authenticator, the composition root's shape: the bearer half
-	// over the key set, the machine half over the key service.
-	auth := identity.Authenticate(jwks.NewService(cfg, nil, nil), cfg, keyService)
+	// over the key set, the machine half over the key service, joined by the
+	// middleware the transport owns.
+	auth := middleware.APIKeyAuth(identity.Authenticate(jwks.NewService(cfg, nil, nil), cfg), keyService)
 	router := transport.NewRouter(transport.Options{
 		Config:        cfg,
 		Checker:       health.NewChecker(),

@@ -230,7 +230,7 @@ func infrastructure(ctx context.Context) func(do.Injector) {
 			c := do.MustInvoke[*config.Config](i)
 			keys := do.MustInvoke[*jwks.Service](i)
 			machine := do.MustInvoke[*apikey.Service](i)
-			return identity.Authenticate(keys, *c, machine), nil
+			return middleware.APIKeyAuth(identity.Authenticate(keys, *c), machine), nil
 		}),
 
 		do.Lazy(func(i do.Injector) (middleware.Limiter, error) {
