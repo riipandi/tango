@@ -11,8 +11,8 @@ import (
 	"github.com/riipandi/tango/database"
 	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/testutils"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // migratedPool opens a database the migrations have built, so the group
@@ -53,7 +53,7 @@ func testService(t *testing.T, pool *datastore.Postgres) *Service {
 // list carries, the shape the request speaks.
 func wireOf(t *testing.T, raw string) string {
 	t.Helper()
-	id, err := userid.FromUUIDString(raw)
+	id, err := user.IDFromUUIDString(raw)
 	require.NoError(t, err)
 	return id.String()
 }

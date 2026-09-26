@@ -17,8 +17,8 @@ import (
 	"github.com/riipandi/tango/internal/config"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/auditlog"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/testutils"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The fixture accounts. Their names come from the test-copywriting convention;
@@ -75,7 +75,7 @@ func record(t *testing.T, pool *datastore.Postgres, entry audit.Entry) {
 // wireOf renders an account's row identifier in the wire form the contract's
 // filter carries, the shape the real caller presents.
 func wireOf(raw string) string {
-	id, err := userid.FromUUIDString(raw)
+	id, err := user.IDFromUUIDString(raw)
 	if err != nil {
 		panic(err)
 	}

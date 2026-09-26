@@ -8,8 +8,8 @@ import (
 
 	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/datastore"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/userid"
 
 	"uuid"
 )
@@ -83,8 +83,8 @@ func (s *Service) List(ctx context.Context, scope Scope, page, limit int) ([]Vie
 	// decode to "no filter" would hand the caller every account's records.
 	filtered := scope.UserID
 	if filtered != "" {
-		if wire, err := userid.Parse(filtered); err == nil {
-			filtered = userid.UUIDOf(wire).String()
+		if wire, err := user.ParseID(filtered); err == nil {
+			filtered = user.IDToUUID(wire).String()
 		} else {
 			filtered = uuid.Nil().String()
 		}

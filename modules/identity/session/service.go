@@ -15,7 +15,6 @@ import (
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/userid"
 
 	"go.jetify.com/typeid"
 )
@@ -470,11 +469,11 @@ func bannedAt(view user.UserView, at time.Time) bool {
 // subject travels in the wire form — the TypeID the token carries — and the
 // rows keep their UUID, so the boundary is this one function.
 func callerUUID(wire string) (uuid.UUID, error) {
-	id, err := userid.Parse(wire)
+	id, err := user.ParseID(wire)
 	if err != nil {
 		return uuid.Nil(), ErrSessionEnded
 	}
-	return userid.UUIDOf(id), nil
+	return user.IDToUUID(id), nil
 }
 
 func parseSessionID(raw string) (SessionID, error) {

@@ -20,8 +20,8 @@ import (
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/signin"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/testutils"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // testSecretHex is the HMAC secret the tests sign with: any 32-byte hex
@@ -124,7 +124,7 @@ func seedUser(t *testing.T, pool *datastore.Postgres, username, email string) st
 // procedures take, the shape the request carries.
 func wireOf(t *testing.T, raw string) string {
 	t.Helper()
-	id, err := userid.FromUUIDString(raw)
+	id, err := user.IDFromUUIDString(raw)
 	require.NoError(t, err)
 	return id.String()
 }

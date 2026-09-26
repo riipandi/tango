@@ -18,7 +18,6 @@ import (
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/testutils"
-	"github.com/riipandi/tango/pkg/userid"
 
 	"go.jetify.com/typeid"
 	"uuid"
@@ -68,7 +67,7 @@ func (f *fakeIssuer) AccessTokenTTL() time.Duration { return 15 * time.Minute }
 // carry, the shape the service procedures take.
 func wireOf(t *testing.T, raw uuid.UUID) string {
 	t.Helper()
-	return userid.Wire(raw)
+	return user.FormatID(raw)
 }
 
 func testService(t *testing.T, pool *datastore.Postgres) (*Service, *time.Time) {

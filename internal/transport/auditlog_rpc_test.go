@@ -19,8 +19,8 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/modules/auditlog"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/testutils"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The fixture accounts, named after the test-copywriting convention.
@@ -87,7 +87,7 @@ func newAuditRouter(t *testing.T, auth transport.Authenticator, pool *datastore.
 // carry, the shape the real issuer signs into the token's subject.
 func wireID(t *testing.T, raw string) string {
 	t.Helper()
-	id, err := userid.FromUUIDString(raw)
+	id, err := user.IDFromUUIDString(raw)
 	require.NoError(t, err)
 	return id.String()
 }

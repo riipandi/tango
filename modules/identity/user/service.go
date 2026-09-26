@@ -16,7 +16,6 @@ import (
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The failures the account procedures report. The handler maps them to
@@ -417,7 +416,7 @@ func (s *Service) DeleteUser(ctx context.Context, id, callerUsername string) err
 // inside the server.
 func view(row UserSchema) UserView {
 	return UserView{
-		ID:            userid.Wire(row.ID),
+		ID:            FormatID(row.ID),
 		Username:      row.Username,
 		Email:         row.Email,
 		DisplayName:   row.DisplayName,
@@ -454,9 +453,9 @@ func DisplayName(firstName, lastName string) string {
 // wire form is the TypeID the responses and the URLs speak; an identifier
 // without the prefix names no account, the same refusal an unknown one earns.
 func parseWire(id string) (uuid.UUID, error) {
-	wire, err := userid.Parse(id)
+	wire, err := ParseID(id)
 	if err != nil {
 		return uuid.Nil(), err
 	}
-	return userid.UUIDOf(wire), nil
+	return IDToUUID(wire), nil
 }

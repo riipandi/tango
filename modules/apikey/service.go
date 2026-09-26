@@ -17,7 +17,6 @@ import (
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The shape of a presented key: an eight-character prefix an operator reads,
@@ -307,7 +306,7 @@ func (s *Service) AuthenticateAPIKey(ctx context.Context, presented string) (*jw
 		Username:    owner.Username,
 		DisplayName: owner.DisplayName,
 		IsAdmin:     owner.IsAdmin,
-		UserID:      userid.Wire(owner.ID),
+		UserID:      user.FormatID(owner.ID),
 		Credential:  jwtutils.CredentialAPIKey,
 	}, nil
 }

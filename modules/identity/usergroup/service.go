@@ -12,7 +12,6 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The failures the service defines. The handler maps them onto the codes the
@@ -326,11 +325,11 @@ func parseGroupID(id string) (uuid.UUID, error) {
 func parseMemberIDs(ids []string) ([]uuid.UUID, error) {
 	parsed := make([]uuid.UUID, 0, len(ids))
 	for _, raw := range ids {
-		wire, err := userid.Parse(raw)
+		wire, err := user.ParseID(raw)
 		if err != nil {
 			return nil, ErrMemberNotFound
 		}
-		parsed = append(parsed, userid.UUIDOf(wire))
+		parsed = append(parsed, user.IDToUUID(wire))
 	}
 	return parsed, nil
 }

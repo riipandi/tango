@@ -15,9 +15,9 @@ import (
 	apikeyv1 "github.com/riipandi/tango/codegen/proto/go/tango/apikey/v1"
 	apikeyv1connect "github.com/riipandi/tango/codegen/proto/go/tango/apikey/v1/apikeyv1connect"
 	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // ModuleName is the name this feature reports under. The area it belongs to
@@ -305,9 +305,9 @@ func mapError(err error) error {
 // one function. A malformed identifier names no owner, the not-found the
 // surface answers.
 func parseCallerUUID(wire string) (uuid.UUID, error) {
-	id, err := userid.Parse(wire)
+	id, err := user.ParseID(wire)
 	if err != nil {
 		return uuid.Nil(), ErrKeyNotFound
 	}
-	return userid.UUIDOf(id), nil
+	return user.IDToUUID(id), nil
 }

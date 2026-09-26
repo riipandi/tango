@@ -18,7 +18,7 @@ import (
 	"github.com/riipandi/tango/internal/mailer"
 	"github.com/riipandi/tango/internal/queue"
 	"github.com/riipandi/tango/modules/identity/signin"
-	"github.com/riipandi/tango/pkg/userid"
+	"github.com/riipandi/tango/modules/identity/user"
 )
 
 // The failures the flow reports. The handler maps them to connect codes, so
@@ -319,11 +319,11 @@ func (s *Service) issueEmailCode(ctx context.Context, account Account, redirectP
 
 // accountByID reads the account an administrative request names.
 func (s *Service) accountByID(ctx context.Context, userID string) (Account, error) {
-	wire, err := userid.Parse(userID)
+	wire, err := user.ParseID(userID)
 	if err != nil {
 		return Account{}, ErrUserNotFound
 	}
-	id := userid.UUIDOf(wire)
+	id := user.IDToUUID(wire)
 	account, err := s.repo.FindAccountByID(ctx, s.pool, id)
 	if errors.Is(err, datastore.ErrNoRows) {
 		return Account{}, ErrUserNotFound

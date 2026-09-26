@@ -24,10 +24,10 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/session"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/testutils"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The HMAC secret a test deployment signs with: 32 bytes of hex, the form
@@ -160,7 +160,7 @@ func TestSignInIssuesTheTokenPair(t *testing.T) {
 		WithIssuer(cfg.Auth.Issuer).
 		Verify(result.AccessToken)
 	require.NoError(t, err)
-	assert.Equal(t, userid.Wire(userID), verified.Subject,
+	assert.Equal(t, user.FormatID(userID), verified.Subject,
 		"the subject is the wire form: the row's UUID never leaves the server")
 	assert.Equal(t, result.SessionID, verified.Private.SessionID)
 	assert.Equal(t, "hermione@example.com", verified.Private.Email)

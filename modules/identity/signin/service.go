@@ -19,9 +19,9 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/session"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The failures a sign-in reports. The handler maps them to connect codes, so
@@ -258,7 +258,7 @@ func (s *Service) IssueSession(ctx context.Context, db datastore.Querier, accoun
 		RefreshToken:     refresh.Plain,
 		SessionID:        sessionID.String(),
 		User: User{
-			ID:          userid.Wire(account.ID),
+			ID:          user.FormatID(account.ID),
 			Username:    account.Username,
 			Email:       account.Email,
 			DisplayName: account.DisplayName,
@@ -297,7 +297,7 @@ func (s *Service) SessionLifetime(remember bool) time.Duration {
 // in `sid`. It is the shape the renewal signs through, and it exists so the
 // two issuers — the opening and the renewal — cannot drift apart.
 func (s *Service) SignAccessToken(ctx context.Context, account *Account, sessionID session.SessionID, now time.Time) (string, error) {
-	return s.SignSessionToken(ctx, userid.Wire(account.ID), jwtutils.AccessClaims{
+	return s.SignSessionToken(ctx, user.FormatID(account.ID), jwtutils.AccessClaims{
 		Email:       account.Email,
 		Username:    account.Username,
 		DisplayName: account.DisplayName,

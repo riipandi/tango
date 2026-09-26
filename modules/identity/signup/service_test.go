@@ -17,9 +17,9 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/signin"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/testutils"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 func migratedPool(t *testing.T) *datastore.Postgres {
@@ -168,7 +168,7 @@ func TestSignupCreatesTheAccount(t *testing.T) {
 // key on.
 func rowID(t *testing.T, wire string) string {
 	t.Helper()
-	id, err := userid.Parse(wire)
+	id, err := user.ParseID(wire)
 	require.NoError(t, err)
 	return id.UUID()
 }

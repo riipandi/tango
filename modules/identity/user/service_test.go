@@ -28,7 +28,6 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/pkg/testutils"
-	"github.com/riipandi/tango/pkg/userid"
 
 	"uuid"
 )
@@ -88,7 +87,7 @@ func testPictureService(t *testing.T, pool *datastore.Postgres) (*Service, *stor
 // and the storage keys are built from.
 func rowID(t *testing.T, wire string) string {
 	t.Helper()
-	id, err := userid.Parse(wire)
+	id, err := ParseID(wire)
 	require.NoError(t, err)
 	return id.UUID()
 }

@@ -13,9 +13,9 @@ import (
 	auditlogv1 "github.com/riipandi/tango/codegen/proto/go/tango/auditlog/v1"
 	auditlogv1connect "github.com/riipandi/tango/codegen/proto/go/tango/auditlog/v1/auditlogv1connect"
 	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // Module serves the audit-log procedures. Everything it answers is an RPC
@@ -219,7 +219,7 @@ func wireUserID(raw string) string {
 	if raw == "" {
 		return ""
 	}
-	wire, err := userid.FromUUIDString(raw)
+	wire, err := user.IDFromUUIDString(raw)
 	if err != nil {
 		return ""
 	}

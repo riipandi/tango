@@ -18,8 +18,8 @@ import (
 	"github.com/riipandi/tango/internal/health"
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport"
+	"github.com/riipandi/tango/modules/identity/user"
 	"github.com/riipandi/tango/pkg/jwtutils"
-	"github.com/riipandi/tango/pkg/userid"
 )
 
 // stubAuthenticator accepts the one bearer token the tests carry and answers
@@ -121,6 +121,6 @@ func TestRPCNilAuthenticatorLeavesTheSurfaceOpen(t *testing.T) {
 // stubCallerWireID is the stub caller's subject in the wire form the
 // contracts carry, the shape the real issuer signs.
 func stubCallerWireID() string {
-	id, _ := userid.FromUUIDString("01a0da1c-cb41-779d-bd02-99b3eb5da32a")
+	id, _ := user.IDFromUUIDString("01a0da1c-cb41-779d-bd02-99b3eb5da32a")
 	return id.String()
 }
