@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"uuid"
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5/pgconn"
-	"uuid"
+	"go.jetify.com/typeid"
 
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/identity/user"
@@ -37,13 +38,20 @@ func NewRepository() *Repository {
 // groupColumns are the columns the group procedures read, in scan order.
 var groupColumns = []string{"g.id", "g.name", "g.display_name", "g.created_at", "g.updated_at"}
 
-// scanGroup reads one group row into the schema.
+// scanGroup reads one group row into the schema. The identifier arrives as
+// the UUID the column stores and leaves as the typed id the callers hold.
 func scanGroup(scan func(dest ...any) error) (GroupSchema, error) {
 	var row GroupSchema
-	err := scan(&row.ID, &row.Name, &row.DisplayName, &row.CreatedAt, &row.UpdatedAt)
+	var rawID string
+	err := scan(&rawID, &row.Name, &row.DisplayName, &row.CreatedAt, &row.UpdatedAt)
 	if err != nil {
 		return GroupSchema{}, err
 	}
+	parsed, err := typeid.FromUUID[GroupID](rawID)
+	if err != nil {
+		return GroupSchema{}, fmt.Errorf("usergroup: id: %w", err)
+	}
+	row.ID = parsed
 	return row, nil
 }
 
@@ -126,14 +134,20 @@ func applySearch(sb *sqlbuilder.SelectBuilder, search string) {
 // call would read a row that is not there.
 func scanListRow(scan func(dest ...any) error) (GroupRow, error) {
 	var row GroupRow
+	var rawID string
 	var count int
 	err := scan(
-		&row.ID, &row.Name, &row.DisplayName, &row.CreatedAt, &row.UpdatedAt,
+		&rawID, &row.Name, &row.DisplayName, &row.CreatedAt, &row.UpdatedAt,
 		&count,
 	)
 	if err != nil {
 		return GroupRow{}, err
 	}
+	parsed, err := typeid.FromUUID[GroupID](rawID)
+	if err != nil {
+		return GroupRow{}, fmt.Errorf("usergroup: id: %w", err)
+	}
+	row.ID = parsed
 	// A LEFT join answers no joined rows as zero, which is the count a group
 	// without members carries.
 	row.UserCount = count
@@ -142,11 +156,11 @@ func scanListRow(scan func(dest ...any) error) (GroupRow, error) {
 
 // GetGroup reads one group by its identifier. An identifier that names no
 // group is the caller's not-found failure.
-func (r *Repository) GetGroup(ctx context.Context, db datastore.Querier, id uuid.UUID) (GroupSchema, error) {
+func (r *Repository) GetGroup(ctx context.Context, db datastore.Querier, id GroupID) (GroupSchema, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select("id", "name", "display_name", "created_at", "updated_at")
 	sb.From(GroupTable)
-	sb.Where(sb.Equal("id", id))
+	sb.Where(sb.Equal("id", id.UUID()))
 
 	query, args := sb.Build()
 	row, err := scanGroup(func(dest ...any) error {
@@ -164,17 +178,21 @@ func (r *Repository) GetGroup(ctx context.Context, db datastore.Querier, id uuid
 // CreateGroup inserts the group row and answers its identifier. The unique
 // index on the name is the storage of the name rule, and the service reads
 // the write's failure to answer a duplicate.
-func (r *Repository) CreateGroup(ctx context.Context, db datastore.Querier, row GroupSchema) (uuid.UUID, error) {
-	row.ID = uuid.NewV7()
+func (r *Repository) CreateGroup(ctx context.Context, db datastore.Querier, row GroupSchema) (GroupID, error) {
+	id, idErr := typeid.New[GroupID]()
+	if idErr != nil {
+		return GroupID{}, fmt.Errorf("usergroup: id: %w", idErr)
+	}
+	row.ID = id
 
 	ib := sqlbuilder.PostgreSQL.NewInsertBuilder()
 	ib.InsertInto(GroupTable)
 	ib.Cols("id", "name", "display_name")
-	ib.Values(row.ID, row.Name, row.DisplayName)
+	ib.Values(row.ID.UUID(), row.Name, row.DisplayName)
 
 	query, args := ib.Build()
 	if _, err := db.Exec(ctx, query, args...); err != nil {
-		return uuid.Nil(), err
+		return GroupID{}, err
 	}
 	return row.ID, nil
 }
@@ -188,7 +206,7 @@ func (r *Repository) UpdateGroup(ctx context.Context, db datastore.Querier, row 
 		ub.Assign("name", row.Name),
 		ub.Assign("display_name", row.DisplayName),
 	)
-	ub.Where(ub.Equal("id", row.ID))
+	ub.Where(ub.Equal("id", row.ID.UUID()))
 
 	query, args := ub.Build()
 	tag, err := db.Exec(ctx, query, args...)
@@ -200,10 +218,10 @@ func (r *Repository) UpdateGroup(ctx context.Context, db datastore.Querier, row 
 
 // DeleteGroup removes a group and answers whether an identifier named a row.
 // The membership rows die with the group by the foreign keys' cascade.
-func (r *Repository) DeleteGroup(ctx context.Context, db datastore.Querier, id uuid.UUID) (bool, error) {
+func (r *Repository) DeleteGroup(ctx context.Context, db datastore.Querier, id GroupID) (bool, error) {
 	dbl := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	dbl.DeleteFrom(GroupTable)
-	dbl.Where(dbl.Equal("id", id))
+	dbl.Where(dbl.Equal("id", id.UUID()))
 
 	query, args := dbl.Build()
 	tag, err := db.Exec(ctx, query, args...)
@@ -217,12 +235,12 @@ func (r *Repository) DeleteGroup(ctx context.Context, db datastore.Querier, id u
 // username. The join is an INNER one on purpose: a membership row whose
 // account is gone cannot exist, because the foreign key cascades, so a LEFT
 // join would have nothing to preserve.
-func (r *Repository) ListMembers(ctx context.Context, db datastore.Querier, groupID uuid.UUID) ([]user.UserSchema, error) {
+func (r *Repository) ListMembers(ctx context.Context, db datastore.Querier, groupID GroupID) ([]user.UserSchema, error) {
 	sb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	sb.Select(user.UserColumns...)
 	sb.From(user.UserTable + " u")
 	sb.Join(GroupMemberTable+" m", "m.user_id = u.id")
-	sb.Where(sb.Equal("m.user_group_id", groupID))
+	sb.Where(sb.Equal("m.user_group_id", groupID.UUID()))
 	sb.OrderBy("u.username", "u.id")
 
 	query, args := sb.Build()
@@ -254,7 +272,7 @@ func (r *Repository) ListMembers(ctx context.Context, db datastore.Querier, grou
 // The accounts are checked first: every identifier must name an account,
 // because a member that does not exist would make the group wrong rather
 // than merely empty. The caller refuses otherwise.
-func (r *Repository) SetMembers(ctx context.Context, db datastore.Querier, groupID uuid.UUID, userIDs []uuid.UUID) (int, error) {
+func (r *Repository) SetMembers(ctx context.Context, db datastore.Querier, groupID GroupID, userIDs []uuid.UUID) (int, error) {
 	if len(userIDs) > 0 {
 		cb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 		cb.Select("count(*)")
@@ -273,7 +291,7 @@ func (r *Repository) SetMembers(ctx context.Context, db datastore.Querier, group
 
 	dbl := sqlbuilder.PostgreSQL.NewDeleteBuilder()
 	dbl.DeleteFrom(GroupMemberTable)
-	dbl.Where(dbl.Equal("user_group_id", groupID))
+	dbl.Where(dbl.Equal("user_group_id", groupID.UUID()))
 
 	query, args := dbl.Build()
 	if _, err := db.Exec(ctx, query, args...); err != nil {
@@ -288,7 +306,7 @@ func (r *Repository) SetMembers(ctx context.Context, db datastore.Querier, group
 	ib.InsertInto(GroupMemberTable)
 	ib.Cols("user_id", "user_group_id")
 	for _, userID := range userIDs {
-		ib.Values(userID, groupID)
+		ib.Values(userID, groupID.UUID())
 	}
 
 	query, args = ib.Build()

@@ -595,7 +595,7 @@ message ResetProfilePictureResponse  {
 // member count travels with the row — it is not a column, it is the count
 // the query computes, so a list never needs a second round trip per row.
 message UserGroup {
-  // id is the group's identifier, a UUID string.
+  // id is the group's identifier in its wire form, a TypeID (`ugrp_…`).
   string id = 1;
 
   // name is the group's unique handle.
@@ -618,7 +618,7 @@ message UserGroup {
 // UserGroupDetail is the group's full view: the minimal shape plus the
 // members, the accounts the group gathers.
 message UserGroupDetail {
-  // id is the group's identifier, a UUID string.
+  // id is the group's identifier in its wire form, a TypeID (`ugrp_…`).
   string id = 1;
 
   // name is the group's unique handle.
@@ -699,8 +699,9 @@ message ListUserGroupsResponse {
 
 // GetUserGroupRequest names the group to read.
 message GetUserGroupRequest {
-  // id is the group's identifier.
-  string id = 1 [(buf.validate.field).string.uuid = true];
+  // id is the group's identifier in its wire form, a TypeID (`ugrp_…`)
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.pattern = "^ugrp_[0-9a-z]{26}$"];
 }
 
 // GetUserGroupResponse is the group with its members.
@@ -746,8 +747,9 @@ message CreateUserGroupResponse {
 
 // UpdateUserGroupRequest replaces a group's two fields. Both are required.
 message UpdateUserGroupRequest {
-  // id is the group's identifier.
-  string id = 1 [(buf.validate.field).string.uuid = true];
+  // id is the group's identifier in its wire form, a TypeID (`ugrp_…`)
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.pattern = "^ugrp_[0-9a-z]{26}$"];
 
   // name is the group's unique handle: 2-255 characters.
   string name = 2 [
@@ -777,8 +779,9 @@ message UpdateUserGroupResponse {
 
 // DeleteUserGroupRequest names the group to remove.
 message DeleteUserGroupRequest {
-  // id is the group's identifier.
-  string id = 1 [(buf.validate.field).string.uuid = true];
+  // id is the group's identifier in its wire form, a TypeID (`ugrp_…`)
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.pattern = "^ugrp_[0-9a-z]{26}$"];
 }
 
 // DeleteUserGroupResponse is empty: a successful deletion says so with the
@@ -795,8 +798,9 @@ message DeleteUserGroupResponse  {
 
 // SetUserGroupMembersRequest replaces the group's member set.
 message SetUserGroupMembersRequest {
-  // id is the group's identifier.
-  string id = 1 [(buf.validate.field).string.uuid = true];
+  // id is the group's identifier in its wire form, a TypeID (`ugrp_…`)
+  // encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.pattern = "^ugrp_[0-9a-z]{26}$"];
 
   // user_ids are the accounts that belong to the group after the call.
   // An empty list empties the group.

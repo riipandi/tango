@@ -129,7 +129,7 @@ func (s *Service) CreateUserGroup(ctx context.Context, params CreateParams) (Gro
 			Event:        audit.EventGroupCreated,
 			Status:       audit.StatusSuccess,
 			ResourceType: ResourceGroup,
-			ResourceID:   id.String(),
+			ResourceID:   id.UUID(),
 			Payload: map[string]string{
 				"name":         params.Name,
 				"display_name": params.DisplayName,
@@ -180,7 +180,7 @@ func (s *Service) UpdateUserGroup(ctx context.Context, id string, params CreateP
 			Event:        audit.EventGroupUpdated,
 			Status:       audit.StatusSuccess,
 			ResourceType: ResourceGroup,
-			ResourceID:   groupID.String(),
+			ResourceID:   groupID.UUID(),
 			Payload: map[string]string{
 				"name":         existing.Name,
 				"display_name": existing.DisplayName,
@@ -229,7 +229,7 @@ func (s *Service) DeleteUserGroup(ctx context.Context, id string) error {
 			Event:        audit.EventGroupDeleted,
 			Status:       audit.StatusSuccess,
 			ResourceType: ResourceGroup,
-			ResourceID:   groupID.String(),
+			ResourceID:   groupID.UUID(),
 			Payload: map[string]string{
 				"name":       existing.Name,
 				"member_ids": fmt.Sprint(len(members)),
@@ -274,7 +274,7 @@ func (s *Service) SetUserGroupMembers(ctx context.Context, id string, memberIDs 
 			Event:        audit.EventGroupMembersUpdated,
 			Status:       audit.StatusSuccess,
 			ResourceType: ResourceGroup,
-			ResourceID:   groupID.String(),
+			ResourceID:   groupID.UUID(),
 			Payload: map[string]string{
 				"member_ids": fmt.Sprint(len(ids)),
 			},
@@ -288,7 +288,7 @@ func (s *Service) SetUserGroupMembers(ctx context.Context, id string, memberIDs 
 }
 
 // readDetail answers the group and its members over the given query surface.
-func (s *Service) readDetail(ctx context.Context, db datastore.Querier, groupID uuid.UUID) (GroupDetailView, error) {
+func (s *Service) readDetail(ctx context.Context, db datastore.Querier, groupID GroupID) (GroupDetailView, error) {
 	row, err := s.repo.GetGroup(ctx, db, groupID)
 	if errors.Is(err, datastore.ErrNoRows) {
 		return GroupDetailView{}, ErrGroupNotFound
@@ -309,12 +309,12 @@ func (s *Service) readDetail(ctx context.Context, db datastore.Querier, groupID 
 }
 
 // parseGroupID turns the request's identifier into the key the rows carry.
-// A malformed identifier names no group, so it is the not-found failure the
-// same as an unknown one.
-func parseGroupID(id string) (uuid.UUID, error) {
-	parsed, err := uuid.Parse(id)
+// The wire form is the TypeID the responses speak; a malformed identifier
+// names no group, so it is the not-found failure the same as an unknown one.
+func parseGroupID(id string) (GroupID, error) {
+	parsed, err := ParseID(id)
 	if err != nil {
-		return uuid.Nil(), ErrGroupNotFound
+		return GroupID{}, ErrGroupNotFound
 	}
 	return parsed, nil
 }
@@ -325,11 +325,11 @@ func parseGroupID(id string) (uuid.UUID, error) {
 func parseMemberIDs(ids []string) ([]uuid.UUID, error) {
 	parsed := make([]uuid.UUID, 0, len(ids))
 	for _, raw := range ids {
-		wire, err := user.ParseID(raw)
+		id, err := user.UUIDFromWire(raw)
 		if err != nil {
 			return nil, ErrMemberNotFound
 		}
-		parsed = append(parsed, user.IDToUUID(wire))
+		parsed = append(parsed, id)
 	}
 	return parsed, nil
 }

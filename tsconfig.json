@@ -37,5 +37,5 @@
         }
     },
     "include": ["**/*.ts", "**/*.tsx"],
-    "exclude": [".output", ".tanstack", "build", "release", "public", "temp", "web"]
+    "exclude": [".output", ".tanstack", "build", "codegen", "release", "public", "temp", "web"]
 }

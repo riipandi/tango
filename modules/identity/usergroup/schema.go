@@ -1,8 +1,10 @@
 package usergroup
 
 import (
+	"fmt"
 	"time"
 
+	"go.jetify.com/typeid"
 	"uuid"
 )
 
@@ -21,11 +23,66 @@ const GroupMemberTable = "public.user_groups_users"
 // acted-on resource is.
 const ResourceGroup = "user_group"
 
+// GroupIDPrefix is the TypeID prefix of a group's identifier. The id leaves
+// the server in an API response, so the reader of a log line or a support
+// ticket can tell what it names without a lookup.
+type GroupIDPrefix struct{}
+
+// Prefix reports the TypeID prefix.
+func (GroupIDPrefix) Prefix() string { return "ugrp" }
+
+// GroupID is the typed identifier of one row of GroupTable, in its wire
+// form. The column stays a UUID; the conversion lives here and nowhere else.
+type GroupID = typeid.TypeID[GroupIDPrefix]
+
+// IDFromUUID wraps the row's UUID into the wire form.
+func IDFromUUID(raw uuid.UUID) (GroupID, error) {
+	return typeid.FromUUID[GroupID](raw.String())
+}
+
+// FormatID renders the wire form of a row's UUID. Rows read from the
+// database always carry a valid UUID, so the render cannot fail; an invalid
+// one answers the empty string, which no consumer should mistake for an id.
+func FormatID(raw uuid.UUID) string {
+	id, err := IDFromUUID(raw)
+	if err != nil {
+		return ""
+	}
+	return id.String()
+}
+
+// ParseID reads the wire form back. It is the boundary a request crosses: an
+// identifier that arrives without the prefix names no group, the not-found
+// the caller refuses.
+func ParseID(wire string) (GroupID, error) {
+	parsed, err := typeid.Parse[GroupID](wire)
+	if err != nil {
+		return GroupID{}, fmt.Errorf("usergroup: %w", err)
+	}
+	return parsed, nil
+}
+
+// IDToUUID unwraps the wire form into the UUID the column stores. The typed
+// id carries the bytes itself, so nothing re-parses text to get there.
+func IDToUUID(id GroupID) uuid.UUID {
+	return uuid.UUID(id.UUIDBytes())
+}
+
+// UUIDFromWire is the request boundary in one step: the wire form a request
+// carries in, the key the rows carry out.
+func UUIDFromWire(wire string) (uuid.UUID, error) {
+	id, err := ParseID(wire)
+	if err != nil {
+		return uuid.Nil(), err
+	}
+	return IDToUUID(id), nil
+}
+
 // GroupSchema is one row of GroupTable. The updated column is nullable by
 // construction: the trigger fills it on the first update, so a row never
 // updated reads as nil, not as a zero instant.
 type GroupSchema struct {
-	ID          uuid.UUID  `db:"id"`
+	ID          GroupID    `db:"id"`
 	Name        string     `db:"name"`
 	DisplayName string     `db:"display_name"`
 	CreatedAt   time.Time  `db:"created_at"`

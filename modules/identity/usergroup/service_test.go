@@ -120,7 +120,7 @@ func TestCreateGroupStoresTheRowAndRefusesADuplicateName(t *testing.T) {
 	assert.ErrorIs(t, err, ErrGroupExists)
 
 	// The record of the creation is in the log, and it names the group.
-	assert.Equal(t, 1, auditCount(t, pool, audit.EventGroupCreated, created.ID.String()))
+	assert.Equal(t, 1, auditCount(t, pool, audit.EventGroupCreated, rowID(t, created.ID)))
 }
 
 func TestListGroupsSearchesPaginatesAndSorts(t *testing.T) {
@@ -230,8 +230,8 @@ func TestDeleteGroupRemovesTheMemberships(t *testing.T) {
 
 	// The junction rows died with the group by the cascade, and the account
 	// itself is untouched.
-	assert.Equal(t, 0, membershipCount(t, pool, group.ID.String()))
-	assert.Equal(t, 1, auditCount(t, pool, audit.EventGroupDeleted, group.ID.String()))
+	assert.Equal(t, 0, membershipCount(t, pool, rowID(t, group.ID)))
+	assert.Equal(t, 1, auditCount(t, pool, audit.EventGroupDeleted, rowID(t, group.ID)))
 
 	_, err = service.GetGroup(t.Context(), group.ID.String())
 	assert.ErrorIs(t, err, ErrGroupNotFound)
@@ -261,7 +261,7 @@ func TestSetMembersReplacesTheWholeSet(t *testing.T) {
 	assert.Equal(t, 1, updated.UserCount)
 	require.Len(t, updated.Members, 1)
 	assert.Equal(t, "neville", updated.Members[0].Username)
-	assert.Equal(t, 1, membershipCount(t, pool, group.ID.String()))
+	assert.Equal(t, 1, membershipCount(t, pool, rowID(t, group.ID)))
 
 	// A member that does not exist refuses the replacement whole: the set
 	// the group holds is the one it held before.
@@ -274,8 +274,8 @@ func TestSetMembersReplacesTheWholeSet(t *testing.T) {
 	// The empty list empties the group — a group may be emptied.
 	_, err = service.SetUserGroupMembers(t.Context(), group.ID.String(), nil)
 	require.NoError(t, err)
-	assert.Equal(t, 0, membershipCount(t, pool, group.ID.String()))
-	assert.Equal(t, 3, auditCount(t, pool, audit.EventGroupMembersUpdated, group.ID.String()))
+	assert.Equal(t, 0, membershipCount(t, pool, rowID(t, group.ID)))
+	assert.Equal(t, 3, auditCount(t, pool, audit.EventGroupMembersUpdated, rowID(t, group.ID)))
 }
 
 // created is a fixture group with a fixed display name, for the tests that
@@ -293,6 +293,13 @@ func created(t *testing.T, service *Service, name, displayName string) GroupDeta
 
 // auditCount reads how many records the log holds of one event about one
 // group.
+// rowID unwraps the typed identifier the views carry into the UUID string
+// the rows and the audit columns key on.
+func rowID(t *testing.T, id GroupID) string {
+	t.Helper()
+	return id.UUID()
+}
+
 func auditCount(t *testing.T, pool *datastore.Postgres, event, groupID string) int {
 	t.Helper()
 
