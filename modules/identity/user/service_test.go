@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -559,6 +561,46 @@ func TestPictureResetFallsBackToTheDefault(t *testing.T) {
 	// The file left the engine: the sync the update ran holds no copy the
 	// reset forgot.
 	assert.True(t, view.Default, "the read after the reset answers the default")
+}
+
+// TestPictureReadFallsBackWhenTheBytesAreGone covers the manifest that
+// outlives its object — a deployment that switched storage drivers, a bucket
+// emptied underneath the engine. The account has no readable picture, so the
+// read answers the bundled default; a 500 would tell the client its request
+// was wrong when the request was fine.
+func TestPictureReadFallsBackWhenTheBytesAreGone(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	// The backend's root is the test's own, so the object can be taken away
+	// from underneath the engine — the state another driver's tree leaves.
+	root := t.TempDir()
+	manager := storage.NewManager(storage.NewFS(root), pool,
+		t.TempDir(), slog.New(slog.DiscardHandler))
+	service := NewService(pool, nil, nil, manager)
+	created, err := service.CreateUser(t.Context(), CreateParams{
+		Username: "hermione", Email: "hermione@example.com", Password: "expecto-patronum",
+		FirstName: "Hermione", LastName: "Granger",
+	})
+	require.NoError(t, err)
+
+	picture := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 4, 4, 4}
+	require.NoError(t, service.UpdateProfilePicture(t.Context(), created.ID, picture))
+
+	// The object leaves the backend while the manifest row stays: exactly
+	// the state another driver's tree produces.
+	key := storedPictureKey(t, pool, created.ID)
+	require.NoError(t, os.Remove(filepath.Join(root, "files", filepath.FromSlash(key))))
+	_, err = storage.NewManifests().Load(t.Context(), pool, key)
+	require.NoError(t, err, "the manifest row outlives the object")
+
+	view, err := service.ProfilePicture(t.Context(), created.ID)
+	require.NoError(t, err)
+	defer view.Body.Close()
+	assert.True(t, view.Default, "an account whose bytes are gone reads as one without a picture")
+	empty, err := io.ReadAll(view.Body)
+	require.NoError(t, err)
+	assert.Empty(t, empty)
 }
 
 // TestPictureRefusesAnUnknownAccount keeps the not-found boundary on every

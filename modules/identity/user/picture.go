@@ -235,6 +235,12 @@ func (s *Service) ProfilePicture(ctx context.Context, id string) (Picture, error
 	}
 	mime, _ := manifest.Metadata["content_type"].(string)
 	body, err := s.pictures.Open(ctx, *row.AvatarURL)
+	if errors.Is(err, storage.ErrNotFound) {
+		s.log.WarnContext(ctx, "user: the picture is missing from the backend",
+			slog.String("user_id", userID.String()),
+			slog.String("key", *row.AvatarURL))
+		return Picture{Body: io.NopCloser(bytes.NewReader(nil)), Default: true}, nil
+	}
 	if err != nil {
 		return Picture{}, fmt.Errorf("user: open picture: %w", err)
 	}

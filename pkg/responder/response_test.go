@@ -1,6 +1,9 @@
 package responder
 
 import (
+	"bytes"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -8,6 +11,7 @@ import (
 
 	"encoding/json/v2"
 
+	"github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -174,6 +178,51 @@ func TestMethodNotAllowedJSON(t *testing.T) {
 	body := decodeEnvelope(t, w)
 	assert.Equal(t, "error", body["status"])
 	assert.Equal(t, "method not allowed", body["message"])
+}
+
+// TestWriteErrorNamesTheCauseInTheLog pins the one place an unexpected
+// failure becomes a response: the client is told nothing, the operator is
+// told everything. Without the log line a 500 in the record names a status
+// and no cause.
+func TestWriteErrorNamesTheCauseInTheLog(t *testing.T) {
+	var captured bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&captured, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/users/01a0/profile-picture.png", nil)
+	req = req.WithContext(WithRequestID(req.Context(), "req_01m3dfts39e58b4zbtqqyq6aey"))
+
+	WriteError(w, req, errors.New("storage: not found: avatars/01a0.png"))
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	body := decodeEnvelope(t, w)
+	assert.Equal(t, "internal error", body["message"])
+	assert.NotContains(t, w.Body.String(), "storage", "the cause never reaches the client")
+
+	line := captured.String()
+	assert.Contains(t, line, "storage: not found: avatars/01a0.png")
+	assert.Contains(t, line, "req_01m3dfts39e58b4zbtqqyq6aey")
+	assert.Contains(t, line, "/api/users/01a0/profile-picture.png")
+}
+
+// TestWriteErrorKeepsValidationErrorsInTheResponse is the other half: a
+// failure the caller can fix travels to the caller, and is not logged as an
+// internal one.
+func TestWriteErrorKeepsValidationErrorsInTheResponse(t *testing.T) {
+	var captured bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&captured, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/users", nil)
+
+	WriteError(w, req, validation.Errors{"email": errors.New("is required")})
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Empty(t, captured.String(), "a caller's mistake is not an operator's log line")
 }
 
 func TestBadRequestJSON(t *testing.T) {
