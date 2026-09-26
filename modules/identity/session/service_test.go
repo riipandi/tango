@@ -159,7 +159,10 @@ func TestSignOutStampsTheRowAndTheRefreshTokenDies(t *testing.T) {
 	userID := seedAccount(t, pool, "hermione")
 	sid, token := seedSession(t, pool, userID, "one", "password", false)
 
-	require.NoError(t, service.SignOut(t.Context(), sid.String(), userID.String()))
+	outcome, err := service.SignOut(t.Context(), sid.String(), userID.String())
+	require.NoError(t, err)
+	assert.False(t, outcome.Already)
+	assert.False(t, outcome.Expired)
 
 	// The row survives with its stamp: the view carries the instant and the
 	// ender, and the refresh token the row held opens nothing from now on.
@@ -173,8 +176,36 @@ func TestSignOutStampsTheRowAndTheRefreshTokenDies(t *testing.T) {
 	assert.ErrorIs(t, err, datastore.ErrNoRows)
 
 	// A second sign-out is the success it is: the caller's intent is the
-	// state the session is in.
-	assert.NoError(t, service.SignOut(t.Context(), sid.String(), userID.String()))
+	// state the session is in, and the answer says so — nothing was
+	// written, not even the audit record the first sign-out earned.
+	again, err := service.SignOut(t.Context(), sid.String(), userID.String())
+	require.NoError(t, err)
+	assert.True(t, again.Already)
+	assert.Equal(t, 1, auditCount(t, pool, audit.EventSignOut, sid.UUID()))
+}
+
+func TestSignOutOfAnExpiredSessionStampsAndSaysSo(t *testing.T) {
+	testutils.SkipWithoutDocker(t)
+
+	pool := migratedPool(t)
+	service, now := testService(t, pool)
+	userID := seedAccount(t, pool, "hermione")
+	sid, _ := seedSession(t, pool, userID, "one", "password", false)
+
+	// The window closed a day ago; the row was never stamped, because the
+	// expiry refusal is the write that rolls back. The sign-out closes the
+	// book an expiry left open, and the answer says which one happened.
+	jump(t, now, 48*time.Hour)
+	outcome, err := service.SignOut(t.Context(), sid.String(), userID.String())
+	require.NoError(t, err)
+	assert.True(t, outcome.Expired)
+	assert.False(t, outcome.Already)
+
+	// The stamp is the write it always was, and the record says the session
+	// ended under its own event.
+	row, err := service.repo.GetSession(t.Context(), pool, sid)
+	require.NoError(t, err)
+	require.NotNil(t, row.RevokedAt)
 	assert.Equal(t, 1, auditCount(t, pool, audit.EventSignOut, sid.UUID()))
 }
 
@@ -280,7 +311,8 @@ func TestRefreshRotatesTheTokenAndKeepsTheSession(t *testing.T) {
 	// A revoked session answers the same failure an unknown token does:
 	// the rotation's write carries the gate, so a session ended between the
 	// read and the write costs the new secret and nothing else.
-	require.NoError(t, service.SignOut(t.Context(), sid.String(), userID.String()))
+	_, err = service.SignOut(t.Context(), sid.String(), userID.String())
+	require.NoError(t, err)
 	_, err = service.Refresh(t.Context(), refreshed.RefreshToken)
 	assert.ErrorIs(t, err, ErrSessionEnded)
 	_, err = service.Refresh(t.Context(), "not-a-token")

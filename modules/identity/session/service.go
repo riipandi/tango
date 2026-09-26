@@ -88,22 +88,35 @@ func NewService(pool *datastore.Postgres, issuer Issuer, users *user.Service, re
 	}
 }
 
+// SignedOut is what a sign-out answers: the state the session was in, so the
+// response can say something truer than "it worked".
+type SignedOut struct {
+	// Already says the row was stamped before this call: the caller's intent
+	// is the state the session is already in, and nothing was written.
+	Already bool
+
+	// Expired says the window had closed before this call. The stamp is
+	// still written — the sign-out closes the book an expiry left open.
+	Expired bool
+}
+
 // SignOut ends the session the access token names. The stamp is the write,
 // the refresh token dies with it, and the access token keeps working until
 // its own expiry — the statelessness the protocol settles. A session that is
 // already ended is the same success: the caller's intent is the state the
-// session is in.
-func (s *Service) SignOut(ctx context.Context, callerSession string, callerID string) error {
+// session is in, nothing is written, and the answer says so.
+func (s *Service) SignOut(ctx context.Context, callerSession string, callerID string) (SignedOut, error) {
 	sid, err := parseSessionID(callerSession)
 	if err != nil {
-		return ErrSessionEnded
+		return SignedOut{}, ErrSessionEnded
 	}
 	userID, err := uuid.Parse(callerID)
 	if err != nil {
-		return ErrSessionEnded
+		return SignedOut{}, ErrSessionEnded
 	}
 
-	return s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
+	var outcome SignedOut
+	err = s.pool.WithTx(ctx, func(ctx context.Context, tx datastore.Querier) error {
 		row, getErr := s.repo.GetSession(ctx, tx, sid)
 		if errors.Is(getErr, datastore.ErrNoRows) {
 			return ErrSessionEnded
@@ -112,13 +125,24 @@ func (s *Service) SignOut(ctx context.Context, callerSession string, callerID st
 			return getErr
 		}
 
-		ended, revokeErr := s.repo.Revoke(ctx, tx, sid, userID, s.now())
+		// A row that was stamped before this call is the caller's intent
+		// already satisfied: the answer reports it and writes nothing.
+		if row.RevokedAt != nil {
+			outcome = SignedOut{Already: true}
+			return nil
+		}
+
+		now := s.now()
+		ended, revokeErr := s.repo.Revoke(ctx, tx, sid, userID, now)
 		if revokeErr != nil {
 			return revokeErr
 		}
 		if !ended {
+			outcome = SignedOut{Already: true}
 			return nil
 		}
+
+		outcome = SignedOut{Expired: !row.ExpiresAt.After(now)}
 
 		s.audit.Record(ctx, tx, audit.Entry{
 			Event:        audit.EventSignOut,
@@ -133,6 +157,10 @@ func (s *Service) SignOut(ctx context.Context, callerSession string, callerID st
 		})
 		return nil
 	})
+	if err != nil {
+		return SignedOut{}, err
+	}
+	return outcome, nil
 }
 
 // GetSession answers the session the access token names and the account it

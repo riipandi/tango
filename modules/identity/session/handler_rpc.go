@@ -82,19 +82,31 @@ func sessionCaller(ctx context.Context) *jwtutils.Caller {
 	return caller
 }
 
-// SignOut ends the session the access token names.
+// SignOut ends the session the access token names. The message is the
+// holder's, in the second person: a fresh sign-out says they are signed out,
+// an already-ended one says the intent was satisfied without a write, and an
+// expired one says the sign-out closed a book the window had already closed.
 func (h *rpcHandler) SignOut(ctx context.Context, req *connect.Request[authv1.SignOutRequest]) (*connect.Response[authv1.SignOutResponse], error) {
 	caller := sessionCaller(ctx)
 	if caller == nil {
 		return nil, connect.NewError(connect.CodeInternal, errors.New("authentication state missing"))
 	}
 
-	if err := h.service.SignOut(ctx, caller.SessionID, caller.UserID); err != nil {
+	outcome, err := h.service.SignOut(ctx, caller.SessionID, caller.UserID)
+	if err != nil {
 		return nil, mapError(err)
+	}
+
+	message := "you have been signed out"
+	switch {
+	case outcome.Already:
+		message = "you had already been signed out"
+	case outcome.Expired:
+		message = "you have been signed out; the session had already expired"
 	}
 	return connect.NewResponse(&authv1.SignOutResponse{
 		Status:  responder.StatusSuccess,
-		Message: "the session was signed out",
+		Message: message,
 	}), nil
 }
 
