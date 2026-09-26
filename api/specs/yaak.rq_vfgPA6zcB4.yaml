@@ -1,0 +1,43 @@
+type: http_request
+model: http_request
+id: rq_vfgPA6zcB4
+createdAt: 2026-09-26T15:42:43.878964
+updatedAt: 2026-09-26T15:52:42.807328
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_xxFhnsiD2K
+authentication:
+  prefix: Bearer
+  token: ${[ accessToken ]}
+authenticationType: bearer
+body: {}
+bodyType: binary-file
+description: |-
+  Update the currently authenticated user's profile picture.
+
+  Ported from Pocket ID `PUT /api/users/me/profile-picture`. Tango answers the picture write by identifier only — `PUT /api/users/{id}/profile-picture` with the Self rule on `id` — so the `/me` shape is a placeholder until a `/me` route ships.
+
+  Parameters: none
+headers: []
+method: PUT
+name: '[Pocket ID] Update current user''s profile picture (unimplemented)'
+sortPriority: 18571.428571428572
+url: ${[ apiBaseURL ]}/api/users/me/profile-picture
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto

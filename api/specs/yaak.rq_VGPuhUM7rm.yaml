@@ -1,27 +1,27 @@
 type: http_request
 model: http_request
-id: rq_q7eoYu7ykV
-createdAt: 2026-09-19T12:34:22.900272
-updatedAt: 2026-09-26T15:52:55.046989
+id: rq_VGPuhUM7rm
+createdAt: 2026-09-26T15:48:10.454731
+updatedAt: 2026-09-26T15:52:56.045867
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
-authentication: {}
-authenticationType: null
+authentication:
+  prefix: Bearer
+  token: ${[ accessToken ]}
+authenticationType: bearer
 body:
   text: |-
     {
-      "id": "${[ response.body.path(request='rq_UcqfuDYCPx', behavior='smart', ttl='0', result='first', join=', ', path='') ]}",
-      "oidc_client_ids": []
+      "id": "${[ userId ]}"
     }
 bodyType: application/json
 description: |-
-  Update the OIDC clients allowed for a specific user group
+  Retrieve all groups a specific user belongs to.
 
-  Mirror of Pocket ID `PUT /api/user-groups/{id}/allowed-oidc-clients`.
+  Ported from Pocket ID `GET /api/users/{id}/groups`. Tango's UserGroupService answers group CRUD and member assignment per group (`SetUserGroupMembers`), but no per-user read yet. Placeholder until the procedure ships.
 
   Parameters:
-  - id (path, required): User Group ID
-  - groups (body, required): OIDC client IDs to allow
+  - id (path, required): User ID
 headers:
 - enabled: true
   name: Content-Type
@@ -32,9 +32,9 @@ headers:
   value: '1'
   id: null
 method: POST
-name: '[Pocket ID] Update allowed OIDC clients (unimplemented)'
-sortPriority: 5166.666666666667
-url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/ReplaceAllowedOidcClients
+name: '[Pocket ID] Get user groups (unimplemented)'
+sortPriority: 5055.555555555556
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserGroupService/GetUserGroups
 urlParameters:
 - enabled: true
   name: id

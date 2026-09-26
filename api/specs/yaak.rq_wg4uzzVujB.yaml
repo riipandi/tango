@@ -1,0 +1,52 @@
+type: http_request
+model: http_request
+id: rq_wg4uzzVujB
+createdAt: 2026-09-26T15:42:28.424373
+updatedAt: 2026-09-26T15:52:58.728380
+workspaceId: wk_kBiMYTkhPP
+folderId: fl_xxFhnsiD2K
+authentication:
+  prefix: Bearer
+  token: ${[ accessToken ]}
+authenticationType: bearer
+body:
+  text: '{}'
+bodyType: application/json
+description: |-
+  Update the currently authenticated user's information.
+
+  Ported from Pocket ID `PUT /api/users/me`. Tango does not answer a `/me` write yet; an account update rides the administrative `UserService/UpdateUser`. Placeholder until the procedure ships.
+
+  Parameters: none
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
+method: POST
+name: '[Pocket ID] Update current user (unimplemented)'
+sortPriority: 14380.952380952382
+url: ${[ apiBaseURL ]}/rpc/tango.identity.v1.UserService/UpdateCurrentUser
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingHttpVersion:
+  enabled: false
+  value: auto
