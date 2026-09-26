@@ -120,29 +120,29 @@ func TestTheOneTimeAccessGuardIsDeclared(t *testing.T) {
 	}{
 		"create token without a credential": {
 			procedure: authv1connect.OneTimeAccessServiceCreateTokenProcedure,
-			body:      `{"id":"` + hermioneCodeAccount + `"}`,
+			body:      `{"id":"` + wireID(t, hermioneCodeAccount) + `"}`,
 			auth:      callerAuthenticator("", false, false),
 			status:    http.StatusUnauthorized,
 			code:      "unauthenticated",
 		},
 		"create token without the role": {
 			procedure: authv1connect.OneTimeAccessServiceCreateTokenProcedure,
-			body:      `{"id":"` + hermioneCodeAccount + `"}`,
-			auth:      callerAuthenticator(hermioneCodeAccount, false, false),
+			body:      `{"id":"` + wireID(t, hermioneCodeAccount) + `"}`,
+			auth:      callerAuthenticator(wireID(t, hermioneCodeAccount), false, false),
 			status:    http.StatusNotFound,
 			code:      "not_found",
 		},
 		"admin email without a credential": {
 			procedure: authv1connect.OneTimeAccessServiceRequestEmailAsAdminProcedure,
-			body:      `{"id":"` + hermioneCodeAccount + `"}`,
+			body:      `{"id":"` + wireID(t, hermioneCodeAccount) + `"}`,
 			auth:      callerAuthenticator("", false, false),
 			status:    http.StatusUnauthorized,
 			code:      "unauthenticated",
 		},
 		"admin email without the role": {
 			procedure: authv1connect.OneTimeAccessServiceRequestEmailAsAdminProcedure,
-			body:      `{"id":"` + hermioneCodeAccount + `"}`,
-			auth:      callerAuthenticator(hermioneCodeAccount, false, false),
+			body:      `{"id":"` + wireID(t, hermioneCodeAccount) + `"}`,
+			auth:      callerAuthenticator(wireID(t, hermioneCodeAccount), false, false),
 			status:    http.StatusNotFound,
 			code:      "not_found",
 		},
@@ -184,11 +184,11 @@ func TestTheOneTimeAccessGuardIsDeclared(t *testing.T) {
 // answer is the token pair of the session the code opened.
 func TestTheOneTimeAccessLoopEndsInASession(t *testing.T) {
 	pool := oneTimeAccessPool(t)
-	router := newOneTimeAccessRouter(t, callerAuthenticator(hermioneCodeAccount, true, false), pool)
+	router := newOneTimeAccessRouter(t, callerAuthenticator(wireID(t, hermioneCodeAccount), true, false), pool)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, rpcRequest(t, authv1connect.OneTimeAccessServiceCreateTokenProcedure,
-		`{"id":"`+hermioneCodeAccount+`"}`))
+		`{"id":"`+wireID(t, hermioneCodeAccount)+`"}`))
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	var created struct {

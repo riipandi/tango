@@ -15,6 +15,7 @@ import (
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
+	"github.com/riipandi/tango/pkg/userid"
 
 	"go.jetify.com/typeid"
 )
@@ -110,8 +111,8 @@ func (s *Service) SignOut(ctx context.Context, callerSession string, callerID st
 	if err != nil {
 		return SignedOut{}, ErrSessionEnded
 	}
-	userID, err := uuid.Parse(callerID)
-	if err != nil {
+	userID, callerErr := callerUUID(callerID)
+	if callerErr != nil {
 		return SignedOut{}, ErrSessionEnded
 	}
 
@@ -184,7 +185,7 @@ func (s *Service) GetSession(ctx context.Context, callerSession string) (Session
 		return SessionSchema{}, user.UserView{}, ErrSessionEnded
 	}
 
-	view, err := s.users.GetUser(ctx, row.UserID.String())
+	view, err := user.ReadAccount(ctx, s.pool, row.UserID)
 	if err != nil {
 		return SessionSchema{}, user.UserView{}, err
 	}
@@ -225,8 +226,8 @@ func (s *Service) ListSessions(ctx context.Context, callerSession, callerID stri
 		return nil, responder.Pagination{}, liveErr
 	}
 
-	userID, err := uuid.Parse(callerID)
-	if err != nil {
+	userID, callerErr := callerUUID(callerID)
+	if callerErr != nil {
 		return nil, responder.Pagination{}, ErrSessionEnded
 	}
 
@@ -248,8 +249,8 @@ func (s *Service) RevokeSession(ctx context.Context, callerSession, callerID, ta
 	if err != nil {
 		return ErrSessionEnded
 	}
-	userID, err := uuid.Parse(callerID)
-	if err != nil {
+	userID, callerErr := callerUUID(callerID)
+	if callerErr != nil {
 		return ErrSessionEnded
 	}
 	targetID, err := parseSessionID(target)
@@ -299,12 +300,13 @@ func (s *Service) RevokeSession(ctx context.Context, callerSession, callerID, ta
 // Refreshed is what a renewal answers: the fresh pair and the session it
 // kept.
 type Refreshed struct {
-	AccessToken  string
-	TokenType    string
-	ExpiresIn    int32
-	RefreshToken string
-	SessionID    string
-	User         user.UserView
+	AccessToken      string
+	TokenType        string
+	AccessExpiresIn  int32
+	RefreshExpiresIn int32
+	RefreshToken     string
+	SessionID        string
+	User             user.UserView
 }
 
 // SignOutOtherSessions ends every live session of the account except the one
@@ -330,8 +332,8 @@ func (s *Service) revokeBulk(ctx context.Context, callerSession, callerID, reaso
 	if err != nil {
 		return 0, ErrSessionEnded
 	}
-	userID, err := uuid.Parse(callerID)
-	if err != nil {
+	userID, callerErr := callerUUID(callerID)
+	if callerErr != nil {
 		return 0, ErrSessionEnded
 	}
 
@@ -403,7 +405,7 @@ func (s *Service) Refresh(ctx context.Context, presented string) (Refreshed, err
 	// The account's state is the issuer's check, the way every way of
 	// continuing a session refuses the same: a disabled or banned account's
 	// renewal ends here, not at the next request.
-	view, err := s.users.GetUser(ctx, row.UserID.String())
+	view, err := user.ReadAccount(ctx, s.pool, row.UserID)
 	if err != nil {
 		return Refreshed{}, err
 	}
@@ -444,12 +446,13 @@ func (s *Service) Refresh(ctx context.Context, presented string) (Refreshed, err
 	}
 
 	return Refreshed{
-		AccessToken:  access,
-		TokenType:    jwtutils.BearerScheme,
-		ExpiresIn:    int32(s.issuer.AccessTokenTTL().Seconds()),
-		RefreshToken: replacement.Plain,
-		SessionID:    row.ID.String(),
-		User:         view,
+		AccessToken:      access,
+		TokenType:        jwtutils.BearerScheme,
+		AccessExpiresIn:  int32(s.issuer.AccessTokenTTL().Seconds()),
+		RefreshExpiresIn: int32(s.issuer.SessionLifetime(row.Remember).Seconds()),
+		RefreshToken:     replacement.Plain,
+		SessionID:        row.ID.String(),
+		User:             view,
 	}, nil
 }
 
@@ -463,6 +466,17 @@ func bannedAt(view user.UserView, at time.Time) bool {
 // parseSessionID turns the identifier the claims or the request carry into
 // the typed id the rows hold. A malformed identifier names no session, so it
 // is the ended failure the same as an unknown one.
+// callerUUID turns the claims' subject into the key the rows carry. The
+// subject travels in the wire form — the TypeID the token carries — and the
+// rows keep their UUID, so the boundary is this one function.
+func callerUUID(wire string) (uuid.UUID, error) {
+	id, err := userid.Parse(wire)
+	if err != nil {
+		return uuid.Nil(), ErrSessionEnded
+	}
+	return userid.UUIDOf(id), nil
+}
+
 func parseSessionID(raw string) (SessionID, error) {
 	parsed, err := typeid.Parse[SessionID](raw)
 	if err != nil {

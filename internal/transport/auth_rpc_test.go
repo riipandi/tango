@@ -19,6 +19,7 @@ import (
 	"github.com/riipandi/tango/internal/kernel"
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/pkg/jwtutils"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 // stubAuthenticator accepts the one bearer token the tests carry and answers
@@ -30,7 +31,7 @@ func stubAuthenticator() transport.Authenticator {
 			return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
 		}
 		return &jwtutils.Caller{
-			UserID:       "01a0da1c-cb41-779d-bd02-99b3eb5da32a",
+			UserID:       stubCallerWireID(),
 			AccessClaims: jwtutils.AccessClaims{Username: "admin", IsAdmin: true},
 		}, nil
 	}
@@ -115,4 +116,11 @@ func TestRPCNilAuthenticatorLeavesTheSurfaceOpen(t *testing.T) {
 	router.ServeHTTP(rec, rpcRequest(t, "/tango.test.v1.FeatureService/Ping", "{}"))
 
 	assert.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+}
+
+// stubCallerWireID is the stub caller's subject in the wire form the
+// contracts carry, the shape the real issuer signs.
+func stubCallerWireID() string {
+	id, _ := userid.FromUUIDString("01a0da1c-cb41-779d-bd02-99b3eb5da32a")
+	return id.String()
 }

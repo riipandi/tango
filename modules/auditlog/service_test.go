@@ -18,6 +18,7 @@ import (
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/pkg/testutils"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The fixture accounts. Their names come from the test-copywriting convention;
@@ -71,6 +72,16 @@ func record(t *testing.T, pool *datastore.Postgres, entry audit.Entry) {
 	audit.NewRecorder(slog.New(slog.DiscardHandler)).Record(t.Context(), pool, entry)
 }
 
+// wireOf renders an account's row identifier in the wire form the contract's
+// filter carries, the shape the real caller presents.
+func wireOf(raw string) string {
+	id, err := userid.FromUUIDString(raw)
+	if err != nil {
+		panic(err)
+	}
+	return id.String()
+}
+
 func newService(pool *datastore.Postgres) *auditlog.Service {
 	return auditlog.NewService(pool, auditlog.NewRepository(), slog.New(slog.DiscardHandler))
 }
@@ -84,7 +95,7 @@ func TestListAnswersTheCallersOwnActivityOnly(t *testing.T) {
 	record(t, pool, audit.Entry{Event: audit.EventSignIn, UserID: langdonID})
 
 	logs, metadata, err := newService(pool).List(t.Context(),
-		auditlog.Scope{UserID: hermioneID}, 1, 20)
+		auditlog.Scope{UserID: wireOf(hermioneID)}, 1, 20)
 	require.NoError(t, err)
 
 	require.Len(t, logs, 1)
@@ -106,7 +117,7 @@ func TestListOrdersNewestFirst(t *testing.T) {
 		record(t, pool, audit.Entry{Event: event, UserID: hermioneID})
 	}
 
-	logs, _, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: hermioneID}, 1, 20)
+	logs, _, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: wireOf(hermioneID)}, 1, 20)
 	require.NoError(t, err)
 
 	require.Len(t, logs, 3)
@@ -125,7 +136,7 @@ func TestListPagesTheWindow(t *testing.T) {
 		record(t, pool, audit.Entry{Event: audit.EventSignIn, UserID: hermioneID})
 	}
 
-	first, metadata, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: hermioneID}, 1, 2)
+	first, metadata, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: wireOf(hermioneID)}, 1, 2)
 	require.NoError(t, err)
 	require.Len(t, first, 2)
 	require.NotNil(t, metadata.TotalItems)
@@ -133,7 +144,7 @@ func TestListPagesTheWindow(t *testing.T) {
 	require.NotNil(t, metadata.TotalPages)
 	assert.Equal(t, 3, *metadata.TotalPages)
 
-	second, _, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: hermioneID}, 2, 2)
+	second, _, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: wireOf(hermioneID)}, 2, 2)
 	require.NoError(t, err)
 	require.Len(t, second, 2)
 
@@ -157,7 +168,7 @@ func TestTheAdministrativeFiltersNarrowTheList(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, byEvent, 2, "the event filter must narrow to one event")
 
-	byUser, _, err := service.List(t.Context(), auditlog.Scope{UserID: langdonID}, 1, 20)
+	byUser, _, err := service.List(t.Context(), auditlog.Scope{UserID: wireOf(langdonID)}, 1, 20)
 	require.NoError(t, err)
 	assert.Len(t, byUser, 1, "the account filter must narrow to one account")
 
@@ -207,7 +218,7 @@ func TestTheRecordCarriesTheActorTheWriterStored(t *testing.T) {
 		},
 	})
 
-	logs, _, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: hermioneID}, 1, 20)
+	logs, _, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: wireOf(hermioneID)}, 1, 20)
 	require.NoError(t, err)
 
 	require.Len(t, logs, 1)
@@ -229,7 +240,7 @@ func TestTheAddressIsStoredWithoutItsMask(t *testing.T) {
 		Client: audit.ClientInfo{IPAddress: "203.0.113.7", UserAgent: "Mozilla/5.0 Firefox/128.0"},
 	})
 
-	logs, _, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: hermioneID}, 1, 20)
+	logs, _, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: wireOf(hermioneID)}, 1, 20)
 	require.NoError(t, err)
 
 	require.Len(t, logs, 1)
@@ -297,7 +308,7 @@ func TestAnUnsetPageAnswersTheDefaultWindow(t *testing.T) {
 	pool := migratedPool(t)
 	record(t, pool, audit.Entry{Event: audit.EventSignIn, UserID: hermioneID})
 
-	logs, metadata, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: hermioneID}, 0, 0)
+	logs, metadata, err := newService(pool).List(t.Context(), auditlog.Scope{UserID: wireOf(hermioneID)}, 0, 0)
 	require.NoError(t, err)
 
 	assert.Len(t, logs, 1)

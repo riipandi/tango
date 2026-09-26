@@ -115,7 +115,7 @@ func TestTheSessionLifecycleEndsInAStamp(t *testing.T) {
 		audit.EventSignIn, signin.SessionParams{})
 	require.NoError(t, err)
 
-	router, _ := newSessionRouter(t, sessionCallerAuthenticator(hermioneSessionOwner, result.SessionID, false), pool)
+	router, _ := newSessionRouter(t, sessionCallerAuthenticator(wireID(t, hermioneSessionOwner), result.SessionID, false), pool)
 
 	// The session answers: the row the opening wrote, with the caller's own
 	// marked.
@@ -212,7 +212,7 @@ func TestTheBulkSignOutsSweepTheAccountSessions(t *testing.T) {
 	insertSession("extra-a")
 	insertSession("extra-b")
 
-	router, _ := newSessionRouter(t, sessionCallerAuthenticator(hermioneSessionOwner, current, false), pool)
+	router, _ := newSessionRouter(t, sessionCallerAuthenticator(wireID(t, hermioneSessionOwner), current, false), pool)
 
 	// The other-sessions sweep stamps the two extras and keeps the caller's
 	// own row: the count is what the call ended.

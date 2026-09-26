@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_64jEUFwEgw
 createdAt: 2026-09-25T19:19:46.512735
-updatedAt: 2026-09-25T19:19:46.512737
+updatedAt: 2026-09-26T12:44:49.068899
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_DW9SfXAyKe
 authentication: {}
@@ -10,11 +10,19 @@ authenticationType: null
 body:
   text: |-
     {
-      "id": "horcrux_920c1e7bgr2c73309f1231f13c9aae3b"
+      "id": "horcrux_01j861wyyjecr9y4hhy4y9nbhv"
     }
 bodyType: application/json
 description: Debug-build only. Decodes a TypeID string into the prefix and UUID it carries. Refused with a 404 envelope by a release build.
-headers: []
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Connect-Protocol-Version
+  value: '1'
+  id: null
 method: POST
 name: '[Tango] Decode Type ID'
 sortPriority: 0.0

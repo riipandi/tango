@@ -113,7 +113,7 @@ func (s *Service) UpdateProfilePicture(ctx context.Context, id string, data []by
 	if s.pictures == nil {
 		return ErrPicturesUnavailable
 	}
-	userID, err := uuid.Parse(id)
+	userID, err := parseWire(id)
 	if err != nil {
 		return ErrUserNotFound
 	}
@@ -174,7 +174,7 @@ func (s *Service) ResetProfilePicture(ctx context.Context, id string) error {
 	if s.pictures == nil {
 		return ErrPicturesUnavailable
 	}
-	userID, err := uuid.Parse(id)
+	userID, err := parseWire(id)
 	if err != nil {
 		return ErrUserNotFound
 	}
@@ -207,7 +207,7 @@ func (s *Service) ResetProfilePicture(ctx context.Context, id string) error {
 // reset lands in. The content type travels from the manifest's metadata, the
 // value the update recorded when it staged the bytes.
 func (s *Service) ProfilePicture(ctx context.Context, id string) (Picture, error) {
-	userID, err := uuid.Parse(id)
+	userID, err := parseWire(id)
 	if err != nil {
 		return Picture{}, ErrUserNotFound
 	}

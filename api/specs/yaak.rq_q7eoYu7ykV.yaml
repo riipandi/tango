@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_q7eoYu7ykV
 createdAt: 2026-09-19T12:34:22.900272
-updatedAt: 2026-09-26T01:55:38.717355
+updatedAt: 2026-09-26T12:27:57.892746
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
 authentication: {}
@@ -10,7 +10,7 @@ authenticationType: null
 body:
   text: |-
     {
-      "id": "REPLACE_GROUP_ID",
+      "id": "${[ response.body.path(request='rq_UcqfuDYCPx', behavior='smart', ttl='0', result='first', join=', ', path='') ]}",
       "oidc_client_ids": []
     }
 bodyType: application/json

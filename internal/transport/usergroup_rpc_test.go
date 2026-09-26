@@ -95,7 +95,7 @@ func TestTheUserGroupGuardIsDeclared(t *testing.T) {
 				code   string
 			}{
 				"no credential": {auth: callerAuthenticator("", false, false), status: http.StatusUnauthorized, code: "unauthenticated"},
-				"no role":       {auth: callerAuthenticator(hermioneGroupMember, false, false), status: http.StatusNotFound, code: "not_found"},
+				"no role":       {auth: callerAuthenticator(wireID(t, hermioneGroupMember), false, false), status: http.StatusNotFound, code: "not_found"},
 			} {
 				router := newUserGroupRouter(t, want.auth, pool)
 				rec := httptest.NewRecorder()
@@ -114,7 +114,7 @@ func TestTheUserGroupGuardIsDeclared(t *testing.T) {
 // procedure, not a hand-built service.
 func TestTheUserGroupLoopEndsInAMemberList(t *testing.T) {
 	pool := userGroupPool(t)
-	router := newUserGroupRouter(t, callerAuthenticator(hermioneGroupMember, true, false), pool)
+	router := newUserGroupRouter(t, callerAuthenticator(wireID(t, hermioneGroupMember), true, false), pool)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, rpcRequest(t, identityv1connect.UserGroupServiceCreateUserGroupProcedure,
@@ -133,7 +133,7 @@ func TestTheUserGroupLoopEndsInAMemberList(t *testing.T) {
 	// that comes back names it.
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, rpcRequest(t, identityv1connect.UserGroupServiceSetUserGroupMembersProcedure,
-		`{"id":"`+created.Group.ID+`","user_ids":["`+hermioneGroupMember+`"]}`))
+		`{"id":"`+created.Group.ID+`","user_ids":["`+wireID(t, hermioneGroupMember)+`"]}`))
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	var replaced struct {
 		Group struct {

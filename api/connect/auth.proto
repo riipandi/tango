@@ -107,10 +107,15 @@ message SignInResponse {
   // token_type names the authorization scheme, always `Bearer`.
   string token_type = 2;
 
-  // expires_in is the access token's lifetime in seconds. It is a 32-bit
-  // integer on purpose: protobuf's JSON mapping writes a 64-bit integer as
-  // a string, which no client reading a token lifetime expects.
-  int32 expires_in = 3;
+  // access_expires_in is the access token's lifetime in seconds. It is a
+  // 32-bit integer on purpose: protobuf's JSON mapping writes a 64-bit
+  // integer as a string, which no client reading a token lifetime expects.
+  int32 access_expires_in = 3;
+
+  // refresh_expires_in is the refresh token's lifetime in seconds — the
+  // window the session row was written with, the long or the short one by
+  // the remember flag the request carried.
+  int32 refresh_expires_in = 9;
 
   // refresh_token is the long-lived credential that outlives the access
   // token. It is exchanged for a fresh pair (a later procedure) and is
@@ -327,8 +332,12 @@ message RefreshResponse {
   // token_type names the authorization scheme, always `Bearer`.
   string token_type = 2;
 
-  // expires_in is the new access token's lifetime in seconds.
-  int32 expires_in = 3;
+  // access_expires_in is the new access token's lifetime in seconds.
+  int32 access_expires_in = 3;
+
+  // refresh_expires_in is the renewal's refresh token lifetime in seconds —
+  // the window the rotation wrote.
+  int32 refresh_expires_in = 9;
 
   // refresh_token is the replacement credential. The one this request spent
   // is dead the moment this row is written.

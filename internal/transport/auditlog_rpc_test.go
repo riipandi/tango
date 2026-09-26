@@ -20,6 +20,7 @@ import (
 	"github.com/riipandi/tango/internal/transport"
 	"github.com/riipandi/tango/modules/auditlog"
 	"github.com/riipandi/tango/pkg/testutils"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The fixture accounts, named after the test-copywriting convention.
@@ -82,12 +83,21 @@ func newAuditRouter(t *testing.T, auth transport.Authenticator, pool *datastore.
 	})
 }
 
+// wireID renders an account's row identifier in the wire form the contracts
+// carry, the shape the real issuer signs into the token's subject.
+func wireID(t *testing.T, raw string) string {
+	t.Helper()
+	id, err := userid.FromUUIDString(raw)
+	require.NoError(t, err)
+	return id.String()
+}
+
 // TestTheAuditListAnswersTheCallersOwnRecordsOnly is the procedure's contract
 // end to end: the account comes from the caller's token, so the page holds
 // that account's records and no other's.
 func TestTheAuditListAnswersTheCallersOwnRecordsOnly(t *testing.T) {
 	pool := auditPool(t)
-	router := newAuditRouter(t, callerAuthenticator(hermioneAccount, false, false), pool)
+	router := newAuditRouter(t, callerAuthenticator(wireID(t, hermioneAccount), false, false), pool)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, rpcRequest(t, auditlogv1connect.AuditLogServiceListProcedure, `{}`))
@@ -108,7 +118,7 @@ func TestTheAuditListAnswersTheCallersOwnRecordsOnly(t *testing.T) {
 // least.
 func TestTheAuditListRefusesADelegatedCaller(t *testing.T) {
 	pool := auditPool(t)
-	router := newAuditRouter(t, callerAuthenticator(hermioneAccount, false, true), pool)
+	router := newAuditRouter(t, callerAuthenticator(wireID(t, hermioneAccount), false, true), pool)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, rpcRequest(t, auditlogv1connect.AuditLogServiceListProcedure, `{}`))
@@ -123,7 +133,7 @@ func TestTheAuditListRefusesADelegatedCaller(t *testing.T) {
 // from an absent one.
 func TestTheAdministrativeAuditProceduresRefuseACallerWithoutTheRole(t *testing.T) {
 	pool := auditPool(t)
-	router := newAuditRouter(t, callerAuthenticator(hermioneAccount, false, false), pool)
+	router := newAuditRouter(t, callerAuthenticator(wireID(t, hermioneAccount), false, false), pool)
 
 	for name, tc := range map[string]struct {
 		procedure string
@@ -148,7 +158,7 @@ func TestTheAdministrativeAuditProceduresRefuseACallerWithoutTheRole(t *testing.
 // the records they were asked for.
 func TestTheAdministrativeAuditProceduresAnswerAnAdministrator(t *testing.T) {
 	pool := auditPool(t)
-	router := newAuditRouter(t, callerAuthenticator(langdonAccount, true, false), pool)
+	router := newAuditRouter(t, callerAuthenticator(wireID(t, langdonAccount), true, false), pool)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, rpcRequest(t, auditlogv1connect.AuditLogServiceListAllProcedure, `{}`))
@@ -159,7 +169,7 @@ func TestTheAdministrativeAuditProceduresAnswerAnAdministrator(t *testing.T) {
 
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, rpcRequest(t, auditlogv1connect.AuditLogServiceListForUserProcedure,
-		`{"user_id":"`+hermioneAccount+`"}`))
+		`{"user_id":"`+wireID(t, hermioneAccount)+`"}`))
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Contains(t, rec.Body.String(), `"username":"hermione"`)
 	assert.NotContains(t, rec.Body.String(), `"username":"langdon"`)

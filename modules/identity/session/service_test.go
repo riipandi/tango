@@ -18,6 +18,7 @@ import (
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/testutils"
+	"github.com/riipandi/tango/pkg/userid"
 
 	"go.jetify.com/typeid"
 	"uuid"
@@ -63,6 +64,13 @@ func (f *fakeIssuer) AccessTokenTTL() time.Duration { return 15 * time.Minute }
 // testService builds the service with a recorder that writes for real, and
 // answers the clock knob a test moves to put a session past its window
 // without writing an expiry the database's own check refuses.
+// wireOf renders an account's row identifier in the wire form the claims
+// carry, the shape the service procedures take.
+func wireOf(t *testing.T, raw uuid.UUID) string {
+	t.Helper()
+	return userid.Wire(raw)
+}
+
 func testService(t *testing.T, pool *datastore.Postgres) (*Service, *time.Time) {
 	t.Helper()
 
@@ -159,7 +167,7 @@ func TestSignOutStampsTheRowAndTheRefreshTokenDies(t *testing.T) {
 	userID := seedAccount(t, pool, "hermione")
 	sid, token := seedSession(t, pool, userID, "one", "password", false)
 
-	outcome, err := service.SignOut(t.Context(), sid.String(), userID.String())
+	outcome, err := service.SignOut(t.Context(), sid.String(), wireOf(t, userID))
 	require.NoError(t, err)
 	assert.False(t, outcome.Already)
 	assert.False(t, outcome.Expired)
@@ -178,7 +186,7 @@ func TestSignOutStampsTheRowAndTheRefreshTokenDies(t *testing.T) {
 	// A second sign-out is the success it is: the caller's intent is the
 	// state the session is in, and the answer says so — nothing was
 	// written, not even the audit record the first sign-out earned.
-	again, err := service.SignOut(t.Context(), sid.String(), userID.String())
+	again, err := service.SignOut(t.Context(), sid.String(), wireOf(t, userID))
 	require.NoError(t, err)
 	assert.True(t, again.Already)
 	assert.Equal(t, 1, auditCount(t, pool, audit.EventSignOut, sid.UUID()))
@@ -195,28 +203,28 @@ func TestAnEndedSessionCannotManageSessions(t *testing.T) {
 
 	// The stamped row: the holder signed out from this client, and the
 	// surface no longer honours the credential it left behind.
-	_, err := service.SignOut(t.Context(), dead.String(), userID.String())
+	_, err := service.SignOut(t.Context(), dead.String(), wireOf(t, userID))
 	require.NoError(t, err)
 
-	_, _, err = service.ListSessions(t.Context(), dead.String(), userID.String(), 1, 10)
+	_, _, err = service.ListSessions(t.Context(), dead.String(), wireOf(t, userID), 1, 10)
 	assert.ErrorIs(t, err, ErrSessionEnded)
-	_, err = service.SignOutOtherSessions(t.Context(), dead.String(), userID.String())
+	_, err = service.SignOutOtherSessions(t.Context(), dead.String(), wireOf(t, userID))
 	assert.ErrorIs(t, err, ErrSessionEnded)
-	_, err = service.SignOutAllSessions(t.Context(), dead.String(), userID.String())
+	_, err = service.SignOutAllSessions(t.Context(), dead.String(), wireOf(t, userID))
 	assert.ErrorIs(t, err, ErrSessionEnded)
-	assert.ErrorIs(t, service.RevokeSession(t.Context(), dead.String(), userID.String(), live.String()), ErrSessionEnded)
+	assert.ErrorIs(t, service.RevokeSession(t.Context(), dead.String(), wireOf(t, userID), live.String()), ErrSessionEnded)
 
 	// A live row still manages as before, until its own window closes.
-	_, _, err = service.ListSessions(t.Context(), live.String(), userID.String(), 1, 10)
+	_, _, err = service.ListSessions(t.Context(), live.String(), wireOf(t, userID), 1, 10)
 	require.NoError(t, err)
 
 	// The window closing without a stamp is the same refusal: the row is
 	// still unstamped, and no procedure of the surface answers for it.
 	live2, _ := seedSession(t, pool, userID, "live-2", "password", false)
 	jump(t, now, 48*time.Hour)
-	_, _, err = service.ListSessions(t.Context(), live2.String(), userID.String(), 1, 10)
+	_, _, err = service.ListSessions(t.Context(), live2.String(), wireOf(t, userID), 1, 10)
 	assert.ErrorIs(t, err, ErrSessionEnded)
-	_, err = service.SignOutOtherSessions(t.Context(), live2.String(), userID.String())
+	_, err = service.SignOutOtherSessions(t.Context(), live2.String(), wireOf(t, userID))
 	assert.ErrorIs(t, err, ErrSessionEnded)
 }
 
@@ -235,10 +243,10 @@ func TestSignOutOtherSessionsSweepsEveryLiveRowButTheCallerOwn(t *testing.T) {
 	// A row that was stamped before the sweep is outside it: the sweep ends
 	// live rows, and an ended one is not its business.
 	ended, _ := seedSession(t, pool, userID, "ended", "password", false)
-	_, signOutErr := service.SignOut(t.Context(), ended.String(), userID.String())
+	_, signOutErr := service.SignOut(t.Context(), ended.String(), wireOf(t, userID))
 	require.NoError(t, signOutErr)
 
-	count, err := service.SignOutOtherSessions(t.Context(), current.String(), userID.String())
+	count, err := service.SignOutOtherSessions(t.Context(), current.String(), wireOf(t, userID))
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
 
@@ -261,7 +269,7 @@ func TestSignOutOtherSessionsSweepsEveryLiveRowButTheCallerOwn(t *testing.T) {
 
 	// A second sweep finds nothing: the rows it ended are stamped, and the
 	// success is the state the account is already in.
-	count, err = service.SignOutOtherSessions(t.Context(), current.String(), userID.String())
+	count, err = service.SignOutOtherSessions(t.Context(), current.String(), wireOf(t, userID))
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
 
@@ -281,7 +289,7 @@ func TestSignOutAllSessionsEndsTheCallerOwnRowToo(t *testing.T) {
 	current, currentToken := seedSession(t, pool, userID, "current", "password", false)
 	other, _ := seedSession(t, pool, userID, "other", "password", true)
 
-	count, err := service.SignOutAllSessions(t.Context(), current.String(), userID.String())
+	count, err := service.SignOutAllSessions(t.Context(), current.String(), wireOf(t, userID))
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
 
@@ -312,7 +320,7 @@ func TestSignOutOfAnExpiredSessionStampsAndSaysSo(t *testing.T) {
 	// expiry refusal is the write that rolls back. The sign-out closes the
 	// book an expiry left open, and the answer says which one happened.
 	jump(t, now, 48*time.Hour)
-	outcome, err := service.SignOut(t.Context(), sid.String(), userID.String())
+	outcome, err := service.SignOut(t.Context(), sid.String(), wireOf(t, userID))
 	require.NoError(t, err)
 	assert.True(t, outcome.Expired)
 	assert.False(t, outcome.Already)
@@ -357,7 +365,7 @@ func TestRevokeSessionEndsOneOfTheAccountsAndRefusesAnOthers(t *testing.T) {
 	other, _ := seedSession(t, pool, userID, "other", "password", true)
 	theirs, _ := seedSession(t, pool, second, "theirs", "password", false)
 
-	require.NoError(t, service.RevokeSession(t.Context(), current.String(), userID.String(), other.String()))
+	require.NoError(t, service.RevokeSession(t.Context(), current.String(), wireOf(t, userID), other.String()))
 	row, err := service.repo.GetSession(t.Context(), pool, other)
 	require.NoError(t, err)
 	require.NotNil(t, row.RevokedAt)
@@ -366,17 +374,17 @@ func TestRevokeSessionEndsOneOfTheAccountsAndRefusesAnOthers(t *testing.T) {
 	// A session another account holds is the not-found failure, the same
 	// as an unknown identifier: the owner's list is the only way to learn
 	// which sessions exist.
-	assert.ErrorIs(t, service.RevokeSession(t.Context(), current.String(), userID.String(), theirs.String()), ErrSessionNotFound)
-	assert.ErrorIs(t, service.RevokeSession(t.Context(), current.String(), userID.String(), "sess_000000000000000000000000a"), ErrSessionNotFound)
+	assert.ErrorIs(t, service.RevokeSession(t.Context(), current.String(), wireOf(t, userID), theirs.String()), ErrSessionNotFound)
+	assert.ErrorIs(t, service.RevokeSession(t.Context(), current.String(), wireOf(t, userID), "sess_000000000000000000000000a"), ErrSessionNotFound)
 
 	// A caller whose own session has ended cannot manage sessions at all:
 	// the gate is the caller's own row, not the target's.
-	assert.ErrorIs(t, service.RevokeSession(t.Context(), other.String(), userID.String(), theirs.String()), ErrSessionEnded)
+	assert.ErrorIs(t, service.RevokeSession(t.Context(), other.String(), wireOf(t, userID), theirs.String()), ErrSessionEnded)
 
 	// Ending the current session is what SignOut does; the event names the
 	// happening so the log can tell the two apart.
 	third, _ := seedSession(t, pool, userID, "third", "password", false)
-	require.NoError(t, service.RevokeSession(t.Context(), third.String(), userID.String(), current.String()))
+	require.NoError(t, service.RevokeSession(t.Context(), third.String(), wireOf(t, userID), current.String()))
 	assert.Equal(t, 1, auditCount(t, pool, audit.EventSessionRevoked, current.UUID()))
 }
 
@@ -392,7 +400,7 @@ func TestListSessionsAnswersTheAccountsOwnNewestFirst(t *testing.T) {
 	secondOfFirst, _ := seedSession(t, pool, userID, "second", "one_time_access", true)
 	seedSession(t, pool, second, "theirs", "password", false)
 
-	rows, pagination, err := service.ListSessions(t.Context(), first.String(), userID.String(), 1, 10)
+	rows, pagination, err := service.ListSessions(t.Context(), first.String(), wireOf(t, userID), 1, 10)
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
 	assert.Equal(t, 2, *pagination.TotalItems)
@@ -415,7 +423,7 @@ func TestRefreshRotatesTheTokenAndKeepsTheSession(t *testing.T) {
 	// The session keeps its identity: the id is the row's, the answer names
 	// the account, and the row now carries the renewal's secret and stamp.
 	assert.Equal(t, sid.String(), refreshed.SessionID)
-	assert.Equal(t, "fake-token-for-"+userID.String(), refreshed.AccessToken)
+	assert.Equal(t, "fake-token-for-"+wireOf(t, userID), refreshed.AccessToken)
 	assert.Equal(t, "hermione", refreshed.User.Username)
 	row, err := service.repo.GetSession(t.Context(), pool, sid)
 	require.NoError(t, err)
@@ -432,7 +440,7 @@ func TestRefreshRotatesTheTokenAndKeepsTheSession(t *testing.T) {
 	// A revoked session answers the same failure an unknown token does:
 	// the rotation's write carries the gate, so a session ended between the
 	// read and the write costs the new secret and nothing else.
-	_, err = service.SignOut(t.Context(), sid.String(), userID.String())
+	_, err = service.SignOut(t.Context(), sid.String(), wireOf(t, userID))
 	require.NoError(t, err)
 	_, err = service.Refresh(t.Context(), refreshed.RefreshToken)
 	assert.ErrorIs(t, err, ErrSessionEnded)

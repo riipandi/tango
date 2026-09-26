@@ -21,6 +21,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/session"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The failures a sign-in reports. The handler maps them to connect codes, so
@@ -112,12 +113,13 @@ type User struct {
 
 // Result is the token pair and the account it was issued for.
 type Result struct {
-	AccessToken  string
-	TokenType    string
-	ExpiresIn    int32
-	RefreshToken string
-	SessionID    string
-	User         User
+	AccessToken      string
+	TokenType        string
+	AccessExpiresIn  int32
+	RefreshExpiresIn int32
+	RefreshToken     string
+	SessionID        string
+	User             User
 }
 
 // SignIn verifies the credential and issues the access and refresh tokens.
@@ -249,13 +251,14 @@ func (s *Service) IssueSession(ctx context.Context, db datastore.Querier, accoun
 	}
 
 	return Result{
-		AccessToken:  access,
-		TokenType:    TokenType,
-		ExpiresIn:    int32(s.accessTTL.Seconds()),
-		RefreshToken: refresh.Plain,
-		SessionID:    sessionID.String(),
+		AccessToken:      access,
+		TokenType:        TokenType,
+		AccessExpiresIn:  int32(s.accessTTL.Seconds()),
+		RefreshExpiresIn: int32(s.SessionLifetime(params.Remember).Seconds()),
+		RefreshToken:     refresh.Plain,
+		SessionID:        sessionID.String(),
 		User: User{
-			ID:          account.ID.String(),
+			ID:          userid.Wire(account.ID),
 			Username:    account.Username,
 			Email:       account.Email,
 			DisplayName: account.DisplayName,
@@ -294,7 +297,7 @@ func (s *Service) SessionLifetime(remember bool) time.Duration {
 // in `sid`. It is the shape the renewal signs through, and it exists so the
 // two issuers — the opening and the renewal — cannot drift apart.
 func (s *Service) SignAccessToken(ctx context.Context, account *Account, sessionID session.SessionID, now time.Time) (string, error) {
-	return s.SignSessionToken(ctx, account.ID.String(), jwtutils.AccessClaims{
+	return s.SignSessionToken(ctx, userid.Wire(account.ID), jwtutils.AccessClaims{
 		Email:       account.Email,
 		Username:    account.Username,
 		DisplayName: account.DisplayName,

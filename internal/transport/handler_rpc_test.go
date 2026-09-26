@@ -278,8 +278,9 @@ func (stubHealthService) Check(context.Context, *connect.Request[systemv1.CheckR
 
 // TestTheCodecWritesALifetimeAsANumber pins the int32 answer: protobuf's JSON
 // mapping writes a 64-bit integer as a string, and a token lifetime arriving
-// as `"expires_in":"900"` is what a client reading an OpenAPI-shaped response
-// cannot parse. The shared codec serializes the 32-bit field as a number.
+// as `"access_expires_in":"900"` is what a client reading an OpenAPI-shaped
+// response cannot parse. The shared codec serializes the 32-bit field as a
+// number.
 func TestTheCodecWritesALifetimeAsANumber(t *testing.T) {
 	feature := &rpcFeature{}
 	transport.NewRouter(transport.Options{
@@ -299,8 +300,8 @@ func TestTheCodecWritesALifetimeAsANumber(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Contains(t, rec.Body.String(), `"expires_in":900`)
-	assert.NotContains(t, rec.Body.String(), `"expires_in":"900"`)
+	assert.Contains(t, rec.Body.String(), `"access_expires_in":900`)
+	assert.NotContains(t, rec.Body.String(), `"access_expires_in":"900"`)
 }
 
 // stubAuthService answers the smallest SignIn response that carries the field.
@@ -308,8 +309,8 @@ type stubAuthService struct{}
 
 func (stubAuthService) SignIn(context.Context, *connect.Request[authv1.SignInRequest]) (*connect.Response[authv1.SignInResponse], error) {
 	return connect.NewResponse(&authv1.SignInResponse{
-		AccessToken: "token",
-		TokenType:   "Bearer",
-		ExpiresIn:   900,
+		AccessToken:     "token",
+		TokenType:       "Bearer",
+		AccessExpiresIn: 900,
 	}), nil
 }

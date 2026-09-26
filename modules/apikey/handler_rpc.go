@@ -17,6 +17,7 @@ import (
 	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 // ModuleName is the name this feature reports under. The area it belongs to
@@ -85,7 +86,7 @@ func (h *rpcHandler) CreateAPIKey(ctx context.Context, req *connect.Request[apik
 	if req.Msg.ExpiresAt != nil {
 		params.ExpiresAt = req.Msg.ExpiresAt.AsTime()
 	}
-	ownerID, ownerErr := uuid.Parse(caller.UserID)
+	ownerID, ownerErr := parseCallerUUID(caller.UserID)
 	if ownerErr != nil {
 		return nil, mapError(ErrKeyNotFound)
 	}
@@ -108,7 +109,7 @@ func (h *rpcHandler) ListAPIKeys(ctx context.Context, req *connect.Request[apike
 		return nil, err
 	}
 
-	ownerID, ownerErr := uuid.Parse(caller.UserID)
+	ownerID, ownerErr := parseCallerUUID(caller.UserID)
 	if ownerErr != nil {
 		return nil, mapError(ErrKeyNotFound)
 	}
@@ -139,7 +140,7 @@ func (h *rpcHandler) RenewAPIKey(ctx context.Context, req *connect.Request[apike
 	if req.Msg.ExpiresAt != nil {
 		expiresAt = req.Msg.ExpiresAt.AsTime()
 	}
-	ownerID, ownerErr := uuid.Parse(caller.UserID)
+	ownerID, ownerErr := parseCallerUUID(caller.UserID)
 	if ownerErr != nil {
 		return nil, mapError(ErrKeyNotFound)
 	}
@@ -166,7 +167,7 @@ func (h *rpcHandler) RevokeAPIKey(ctx context.Context, req *connect.Request[apik
 	if keyErr != nil {
 		return nil, mapError(keyErr)
 	}
-	ownerID, ownerErr := uuid.Parse(caller.UserID)
+	ownerID, ownerErr := parseCallerUUID(caller.UserID)
 	if ownerErr != nil {
 		return nil, mapError(ErrKeyNotFound)
 	}
@@ -296,4 +297,17 @@ func mapError(err error) error {
 	default:
 		return connect.NewError(connect.CodeInternal, errors.New("API key operation failed"))
 	}
+}
+
+// parseCallerUUID turns the machine caller's owner into the key the rows
+// carry. The subject travels in the wire form — the TypeID the caller's
+// owner is named by — and the rows keep their UUID, so the boundary is this
+// one function. A malformed identifier names no owner, the not-found the
+// surface answers.
+func parseCallerUUID(wire string) (uuid.UUID, error) {
+	id, err := userid.Parse(wire)
+	if err != nil {
+		return uuid.Nil(), ErrKeyNotFound
+	}
+	return userid.UUIDOf(id), nil
 }

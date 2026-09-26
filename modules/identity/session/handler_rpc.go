@@ -241,14 +241,15 @@ func (h *rpcHandler) Refresh(ctx context.Context, req *connect.Request[authv1.Re
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&authv1.RefreshResponse{
-		AccessToken:  refreshed.AccessToken,
-		TokenType:    refreshed.TokenType,
-		ExpiresIn:    refreshed.ExpiresIn,
-		RefreshToken: refreshed.RefreshToken,
-		SessionId:    refreshed.SessionID,
-		User:         wireUser(refreshed.User),
-		Status:       responder.StatusSuccess,
-		Message:      "the token pair was refreshed",
+		AccessToken:      refreshed.AccessToken,
+		TokenType:        refreshed.TokenType,
+		AccessExpiresIn:  refreshed.AccessExpiresIn,
+		RefreshExpiresIn: refreshed.RefreshExpiresIn,
+		RefreshToken:     refreshed.RefreshToken,
+		SessionId:        refreshed.SessionID,
+		User:             wireUser(refreshed.User),
+		Status:           responder.StatusSuccess,
+		Message:          "the token pair was refreshed",
 	}), nil
 }
 

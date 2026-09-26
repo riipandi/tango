@@ -12,6 +12,7 @@ import (
 	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/testutils"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 // migratedPool opens a database the migrations have built, so the group
@@ -48,6 +49,15 @@ func testService(t *testing.T, pool *datastore.Postgres) *Service {
 
 // seedAccount inserts an account directly, the way a fixture does, and
 // answers its identifier. A member must exist before it can be named.
+// wireOf renders an account's row identifier in the wire form the member
+// list carries, the shape the request speaks.
+func wireOf(t *testing.T, raw string) string {
+	t.Helper()
+	id, err := userid.FromUUIDString(raw)
+	require.NoError(t, err)
+	return id.String()
+}
+
 func seedAccount(t *testing.T, pool *datastore.Postgres, username string) string {
 	t.Helper()
 
@@ -127,9 +137,9 @@ func TestListGroupsSearchesPaginatesAndSorts(t *testing.T) {
 	// another one, the last none.
 	hermione := seedAccount(t, pool, "hermione")
 	ron := seedAccount(t, pool, "ron")
-	_, err := service.SetUserGroupMembers(t.Context(), gryffindor.ID.String(), []string{hermione, ron})
+	_, err := service.SetUserGroupMembers(t.Context(), gryffindor.ID.String(), []string{wireOf(t, hermione), wireOf(t, ron)})
 	require.NoError(t, err)
-	_, err = service.SetUserGroupMembers(t.Context(), slytherin.ID.String(), []string{hermione})
+	_, err = service.SetUserGroupMembers(t.Context(), slytherin.ID.String(), []string{wireOf(t, hermione)})
 	require.NoError(t, err)
 
 	// The default order is the display name, ascending.
@@ -213,7 +223,7 @@ func TestDeleteGroupRemovesTheMemberships(t *testing.T) {
 
 	group := created(t, service, "gryffindor", "Gryffindor")
 	hermione := seedAccount(t, pool, "hermione")
-	_, err := service.SetUserGroupMembers(t.Context(), group.ID.String(), []string{hermione})
+	_, err := service.SetUserGroupMembers(t.Context(), group.ID.String(), []string{wireOf(t, hermione)})
 	require.NoError(t, err)
 
 	require.NoError(t, service.DeleteUserGroup(t.Context(), group.ID.String()))
@@ -244,9 +254,9 @@ func TestSetMembersReplacesTheWholeSet(t *testing.T) {
 	// Two members in, one different member in: the replacement is the whole
 	// set, not a delta, so the answer is one member and the junction holds
 	// one row.
-	_, err := service.SetUserGroupMembers(t.Context(), group.ID.String(), []string{hermione, ron})
+	_, err := service.SetUserGroupMembers(t.Context(), group.ID.String(), []string{wireOf(t, hermione), wireOf(t, ron)})
 	require.NoError(t, err)
-	updated, err := service.SetUserGroupMembers(t.Context(), group.ID.String(), []string{neville})
+	updated, err := service.SetUserGroupMembers(t.Context(), group.ID.String(), []string{wireOf(t, neville)})
 	require.NoError(t, err)
 	assert.Equal(t, 1, updated.UserCount)
 	require.Len(t, updated.Members, 1)
@@ -255,7 +265,7 @@ func TestSetMembersReplacesTheWholeSet(t *testing.T) {
 
 	// A member that does not exist refuses the replacement whole: the set
 	// the group holds is the one it held before.
-	_, err = service.SetUserGroupMembers(t.Context(), group.ID.String(), []string{hermione, "01a0da3e-1111-7000-8000-000000000009"})
+	_, err = service.SetUserGroupMembers(t.Context(), group.ID.String(), []string{wireOf(t, hermione), "01a0da3e-1111-7000-8000-000000000009"})
 	assert.ErrorIs(t, err, ErrMemberNotFound)
 	unchanged, err := service.GetGroup(t.Context(), group.ID.String())
 	require.NoError(t, err)

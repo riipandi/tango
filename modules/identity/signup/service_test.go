@@ -19,6 +19,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/testutils"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 func migratedPool(t *testing.T) *datastore.Postgres {
@@ -143,7 +144,7 @@ func TestSignupCreatesTheAccount(t *testing.T) {
 	pb := sqlbuilder.PostgreSQL.NewSelectBuilder()
 	pb.Select("password_hash")
 	pb.From("public.user_passwords")
-	pb.Where(pb.Equal("user_id", user.ID))
+	pb.Where(pb.Equal("user_id", rowID(t, user.ID)))
 	query, args = pb.Build()
 	var passwordHash string
 	require.NoError(t, pool.QueryRow(t.Context(), query, args...).Scan(&passwordHash))
@@ -161,6 +162,15 @@ func TestSignupCreatesTheAccount(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, user.ID, result.User.ID)
+}
+
+// rowID decodes the wire identifier the views carry into the UUID the rows
+// key on.
+func rowID(t *testing.T, wire string) string {
+	t.Helper()
+	id, err := userid.Parse(wire)
+	require.NoError(t, err)
+	return id.UUID()
 }
 
 func testConfig() config.Config {

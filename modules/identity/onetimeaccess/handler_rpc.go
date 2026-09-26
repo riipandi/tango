@@ -91,11 +91,12 @@ func (h *rpcHandler) ExchangeToken(ctx context.Context, req *connect.Request[aut
 		return nil, mapError(err)
 	}
 	return connect.NewResponse(&authv1.ExchangeOneTimeAccessTokenResponse{
-		AccessToken:  result.AccessToken,
-		TokenType:    result.TokenType,
-		ExpiresIn:    result.ExpiresIn,
-		RefreshToken: result.RefreshToken,
-		SessionId:    result.SessionID,
+		AccessToken:      result.AccessToken,
+		TokenType:        result.TokenType,
+		AccessExpiresIn:  result.AccessExpiresIn,
+		RefreshExpiresIn: result.RefreshExpiresIn,
+		RefreshToken:     result.RefreshToken,
+		SessionId:        result.SessionID,
 		User: &authv1.AuthenticatedUser{
 			Id:          result.User.ID,
 			Username:    result.User.Username,

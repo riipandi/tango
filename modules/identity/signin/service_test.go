@@ -27,6 +27,7 @@ import (
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/testutils"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The HMAC secret a test deployment signs with: 32 bytes of hex, the form
@@ -133,7 +134,8 @@ func TestSignInIssuesTheTokenPair(t *testing.T) {
 	assert.Equal(t, TokenType, result.TokenType)
 	assert.Equal(t, "hermione@example.com", result.User.Email)
 	assert.NotEmpty(t, result.RefreshToken)
-	assert.Equal(t, int32(testConfig().Auth.AccessTTL.Seconds()), result.ExpiresIn)
+	assert.Equal(t, int32(testConfig().Auth.AccessTTL.Seconds()), result.AccessExpiresIn)
+	assert.Equal(t, int32(testConfig().Auth.RefreshShortTTL.Seconds()), result.RefreshExpiresIn)
 
 	// The session identifier is the typed id, and the refresh token is
 	// stored under its hash alone.
@@ -158,7 +160,8 @@ func TestSignInIssuesTheTokenPair(t *testing.T) {
 		WithIssuer(cfg.Auth.Issuer).
 		Verify(result.AccessToken)
 	require.NoError(t, err)
-	assert.Equal(t, userID.String(), verified.Subject)
+	assert.Equal(t, userid.Wire(userID), verified.Subject,
+		"the subject is the wire form: the row's UUID never leaves the server")
 	assert.Equal(t, result.SessionID, verified.Private.SessionID)
 	assert.Equal(t, "hermione@example.com", verified.Private.Email)
 	assert.False(t, verified.Private.IsAdmin)

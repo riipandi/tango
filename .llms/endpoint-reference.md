@@ -58,7 +58,12 @@ which refresh token, and — since the lifecycle landed — whether it has ended
 | POST | `/rpc/tango.auth.v1.SessionService/SignOutOtherSessions` | Sign out other sessions | done — guard `Session`; every live session of the account except the caller's own is stamped in one transaction under row locks, each with its own `session_revoked` record carrying the `sign_out_others` reason; the caller's own session must be live; the response counts what the call ended; the kept row and its refresh token survive | `modules/identity/session.TestSignOutOtherSessionsSweepsEveryLiveRowButTheCallerOwn`, `internal/transport.TestTheBulkSignOutsSweepTheAccountSessions` |
 | POST | `/rpc/tango.auth.v1.SessionService/SignOutAllSessions` | Sign out all sessions | done — guard `Session`; every live session of the account, the caller's own included, is stamped in one transaction under row locks, each with its own `session_revoked` record carrying the `sign_out_all` reason; the caller's own session must be live; the access token itself keeps working until its own expiry — the statelessness the protocol settles — so a client that means to discard its credential drops the token pair too | `modules/identity/session.TestSignOutAllSessionsEndsTheCallerOwnRowToo`, `internal/transport.TestTheBulkSignOutsSweepTheAccountSessions` |
 
-Shared rules: the sign-in procedure rides the tight auth rate budget; the sign-in failure never
+Shared rules: the token pair answers two lifetimes — `access_expires_in` for the JWT and
+`refresh_expires_in` for the session window the row was written with; the account's identifier
+travels only in its wire form: the TypeID `user_…` (`pkg/userid`) in the token's subject, in the
+responses, and in the URLs — the row's UUID never leaves the server, and a request that names an
+account without the prefix is refused the same way a malformed one is; the sign-in procedure rides
+the tight auth rate budget; the sign-in failure never
 reveals whether the identity exists; refresh tokens are SHA-256 hashed with 256 bits of base64url
 randomness (`pkg/crypto.NewRefreshTokenPair`, the one draw both the opening and the renewal use);
 the account-state checks are the issuer's, so every way of opening or continuing a session refuses

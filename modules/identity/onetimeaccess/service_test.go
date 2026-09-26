@@ -21,6 +21,7 @@ import (
 	"github.com/riipandi/tango/modules/identity/jwks"
 	"github.com/riipandi/tango/modules/identity/signin"
 	"github.com/riipandi/tango/pkg/testutils"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 // testSecretHex is the HMAC secret the tests sign with: any 32-byte hex
@@ -119,6 +120,15 @@ func seedUser(t *testing.T, pool *datastore.Postgres, username, email string) st
 	return id
 }
 
+// wireOf renders an account's row identifier in the wire form the service
+// procedures take, the shape the request carries.
+func wireOf(t *testing.T, raw string) string {
+	t.Helper()
+	id, err := userid.FromUUIDString(raw)
+	require.NoError(t, err)
+	return id.String()
+}
+
 // countTokens reads how many code rows an account carries.
 func countTokens(t *testing.T, pool *datastore.Postgres, userID string) int {
 	t.Helper()
@@ -153,7 +163,7 @@ func TestCreateTokenIssuesACodeTheExchangeAccepts(t *testing.T) {
 	service := testService(t, pool, false, false)
 	userID := seedUser(t, pool, "hermione", "hermione@example.com")
 
-	code, expiresAt, err := service.CreateToken(t.Context(), userID, 0)
+	code, expiresAt, err := service.CreateToken(t.Context(), wireOf(t, userID), 0)
 	require.NoError(t, err)
 	assert.Len(t, code, shortCodeLength, "a code without a window defaults to fifteen minutes, and that window's form is the short one")
 	assert.True(t, expiresAt.After(time.Now()), "the expiry is in the future")
@@ -170,7 +180,7 @@ func TestCreateTokenIssuesACodeTheExchangeAccepts(t *testing.T) {
 	// codes for one account cannot coexist, and the exchange below needs the
 	// short one still standing.
 	other := seedUser(t, pool, "langdon", "langdon@example.com")
-	long, _, err := service.CreateToken(t.Context(), other, 3600)
+	long, _, err := service.CreateToken(t.Context(), wireOf(t, other), 3600)
 	require.NoError(t, err)
 	assert.Len(t, long, longCodeLength)
 
@@ -188,9 +198,9 @@ func TestCreateTokenReplacesAnOlderCode(t *testing.T) {
 	service := testService(t, pool, false, false)
 	userID := seedUser(t, pool, "hermione", "hermione@example.com")
 
-	first, _, err := service.CreateToken(t.Context(), userID, 0)
+	first, _, err := service.CreateToken(t.Context(), wireOf(t, userID), 0)
 	require.NoError(t, err)
-	second, _, err := service.CreateToken(t.Context(), userID, 0)
+	second, _, err := service.CreateToken(t.Context(), wireOf(t, userID), 0)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, countTokens(t, pool, userID),
@@ -210,7 +220,7 @@ func TestExchangeRefusesAnExpiredCode(t *testing.T) {
 	service := testService(t, pool, false, false)
 	userID := seedUser(t, pool, "hermione", "hermione@example.com")
 
-	code, _, err := service.CreateToken(t.Context(), userID, 0)
+	code, _, err := service.CreateToken(t.Context(), wireOf(t, userID), 0)
 	require.NoError(t, err)
 
 	// The clock moves past the code's window: the code is refused, and the
@@ -308,17 +318,17 @@ func TestRequestEmailRefusesADisabledPath(t *testing.T) {
 
 	_, err := off.RequestEmail(t.Context(), "hermione@example.com", "")
 	assert.ErrorIs(t, err, ErrFeatureDisabled)
-	err = off.RequestEmailAsAdmin(t.Context(), userID, 0)
+	err = off.RequestEmailAsAdmin(t.Context(), wireOf(t, userID), 0)
 	assert.ErrorIs(t, err, ErrFeatureDisabled)
 
-	err = adminOnly.RequestEmailAsAdmin(t.Context(), userID, 0)
+	err = adminOnly.RequestEmailAsAdmin(t.Context(), wireOf(t, userID), 0)
 	assert.NoError(t, err, "the administrative path is open when its switch is")
 	_, err = adminOnly.RequestEmail(t.Context(), "hermione@example.com", "")
 	assert.ErrorIs(t, err, ErrFeatureDisabled, "the public path is closed while the administrative one is open")
 
 	_, err = publicOnly.RequestEmail(t.Context(), "hermione@example.com", "")
 	assert.NoError(t, err)
-	err = publicOnly.RequestEmailAsAdmin(t.Context(), userID, 0)
+	err = publicOnly.RequestEmailAsAdmin(t.Context(), wireOf(t, userID), 0)
 	assert.ErrorIs(t, err, ErrFeatureDisabled)
 }
 
@@ -329,7 +339,7 @@ func TestRequestEmailAsAdminSendsWithoutExposingTheCode(t *testing.T) {
 	service := testService(t, pool, true, false)
 	userID := seedUser(t, pool, "hermione", "hermione@example.com")
 
-	require.NoError(t, service.RequestEmailAsAdmin(t.Context(), userID, 0))
+	require.NoError(t, service.RequestEmailAsAdmin(t.Context(), wireOf(t, userID), 0))
 	assert.Equal(t, int64(1), pendingEmails(t, service.queue))
 
 	// The response carried no code, so the queued message is the only place
@@ -365,7 +375,7 @@ func TestExchangeRefusesADisabledOrBannedAccount(t *testing.T) {
 	_, err := pool.Exec(t.Context(), query, args...)
 	require.NoError(t, err)
 
-	code, _, err := service.CreateToken(t.Context(), disabled, 0)
+	code, _, err := service.CreateToken(t.Context(), wireOf(t, disabled), 0)
 	require.NoError(t, err)
 	_, err = service.Exchange(t.Context(), code, "", audit.ClientInfo{})
 	assert.ErrorIs(t, err, signin.ErrAccountDisabled)

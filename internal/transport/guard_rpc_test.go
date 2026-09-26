@@ -140,11 +140,11 @@ func TestTheGuardRefusesASelfProcedureForAnotherAccount(t *testing.T) {
 // reachable: the caller is the account the request names.
 func TestTheGuardAnswersASelfProcedureForItsOwnAccount(t *testing.T) {
 	const self = "01a0da1c-cb41-779d-bd02-99b3eb5da32a"
-	router := newGuardedRouter(t, callerAuthenticator(self, false, false))
+	router := newGuardedRouter(t, callerAuthenticator(wireID(t, self), false, false))
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, rpcRequest(t, identityv1connect.UserServiceResetProfilePictureProcedure,
-		`{"id":"`+self+`"}`))
+		`{"id":"`+wireID(t, self)+`"}`))
 
 	// The guard allowed it; the nil service is what fails, which is the
 	// proof the request got past the rule.

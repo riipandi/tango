@@ -414,8 +414,9 @@ message ListUsersResponse {
 
 // GetUserRequest names the account to read.
 message GetUserRequest {
-  // id is the account's identifier.
-  string id = 1 [(buf.validate.field).string.uuid = true];
+  // id is the account's identifier in its wire form, a TypeID (`user_…`)
+// encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
 }
 
 // GetUserResponse is the account.
@@ -493,8 +494,9 @@ message CreateUserResponse {
 // always required. The ban fields are one unit — ban_expires present
 // applies the ban, absent lifts it.
 message UpdateUserRequest {
-  // id is the account's identifier.
-  string id = 1 [(buf.validate.field).string.uuid = true];
+  // id is the account's identifier in its wire form, a TypeID (`user_…`)
+// encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
 
   // username is the account's handle: 3-32 characters of ASCII letters,
   // digits, and underscores, matched case-insensitively.
@@ -555,8 +557,9 @@ message UpdateUserResponse {
 
 // DeleteUserRequest names the account to remove.
 message DeleteUserRequest {
-  // id is the account's identifier.
-  string id = 1 [(buf.validate.field).string.uuid = true];
+  // id is the account's identifier in its wire form, a TypeID (`user_…`)
+// encoded from the row's UUID — the UUID never leaves the server.
+  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
 }
 
 // DeleteUserResponse is empty: a successful deletion says so with the
@@ -574,7 +577,7 @@ message DeleteUserResponse  {
 message ResetProfilePictureRequest {
   // The account whose picture is removed — the same `id` its sibling
   // account procedures (GetUser, UpdateUser, DeleteUser) address it by.
-  string id = 1 [(buf.validate.field).string.uuid = true];
+  string id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
 }
 
 message ResetProfilePictureResponse  {
@@ -798,7 +801,7 @@ message SetUserGroupMembersRequest {
   // An empty list empties the group.
   repeated string user_ids = 2 [
     (buf.validate.field).repeated.unique = true,
-    (buf.validate.field).repeated.items.string.uuid = true
+    (buf.validate.field).repeated.items.string.pattern = "^user_[0-9a-z]{26}$"
   ];
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/riipandi/tango/internal/storage"
 	"github.com/riipandi/tango/pkg/crypto"
 	"github.com/riipandi/tango/pkg/responder"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 // The failures the account procedures report. The handler maps them to
@@ -205,7 +206,7 @@ func (s *Service) CreateUser(ctx context.Context, params CreateParams) (UserView
 
 // GetUser answers one account by its identifier.
 func (s *Service) GetUser(ctx context.Context, id string) (UserView, error) {
-	userID, err := uuid.Parse(id)
+	userID, err := parseWire(id)
 	if err != nil {
 		return UserView{}, ErrUserNotFound
 	}
@@ -240,7 +241,7 @@ func (s *Service) ListUsers(ctx context.Context, search string, page, limit int)
 // first: it is the not-found check, and it supplies the ban's start instant
 // the automatic recording keeps.
 func (s *Service) UpdateUser(ctx context.Context, id string, params UpdateParams) (UserView, error) {
-	userID, err := uuid.Parse(id)
+	userID, err := parseWire(id)
 	if err != nil {
 		return UserView{}, ErrUserNotFound
 	}
@@ -367,7 +368,7 @@ const rfc3339 = "2006-01-02T15:04:05Z07:00"
 // account they are signed in with — the identifier is compared
 // case-insensitively, the way the username column matches.
 func (s *Service) DeleteUser(ctx context.Context, id, callerUsername string) error {
-	userID, err := uuid.Parse(id)
+	userID, err := parseWire(id)
 	if err != nil {
 		return ErrUserNotFound
 	}
@@ -411,10 +412,12 @@ func (s *Service) DeleteUser(ctx context.Context, id, callerUsername string) err
 	})
 }
 
-// view maps a stored row onto the account view.
+// view maps a stored row onto the account view. The identifier is the wire
+// form: a TypeID the responses and the URLs carry, so the row's UUID stays
+// inside the server.
 func view(row UserSchema) UserView {
 	return UserView{
-		ID:            row.ID.String(),
+		ID:            userid.Wire(row.ID),
 		Username:      row.Username,
 		Email:         row.Email,
 		DisplayName:   row.DisplayName,
@@ -445,4 +448,15 @@ func optional(value string) *string {
 // creation name an account the same way.
 func DisplayName(firstName, lastName string) string {
 	return strings.TrimSpace(strings.Join([]string{strings.TrimSpace(firstName), strings.TrimSpace(lastName)}, " "))
+}
+
+// parseWire turns the request's identifier into the key the rows carry. The
+// wire form is the TypeID the responses and the URLs speak; an identifier
+// without the prefix names no account, the same refusal an unknown one earns.
+func parseWire(id string) (uuid.UUID, error) {
+	wire, err := userid.Parse(id)
+	if err != nil {
+		return uuid.Nil(), err
+	}
+	return userid.UUIDOf(wire), nil
 }

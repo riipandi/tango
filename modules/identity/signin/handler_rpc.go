@@ -84,11 +84,12 @@ func (h *rpcHandler) SignIn(ctx context.Context, req *connect.Request[authv1.Sig
 	}
 
 	return connect.NewResponse(&authv1.SignInResponse{
-		AccessToken:  result.AccessToken,
-		TokenType:    result.TokenType,
-		ExpiresIn:    result.ExpiresIn,
-		RefreshToken: result.RefreshToken,
-		SessionId:    result.SessionID,
+		AccessToken:      result.AccessToken,
+		TokenType:        result.TokenType,
+		AccessExpiresIn:  result.AccessExpiresIn,
+		RefreshExpiresIn: result.RefreshExpiresIn,
+		RefreshToken:     result.RefreshToken,
+		SessionId:        result.SessionID,
 		User: &authv1.AuthenticatedUser{
 			Id:          result.User.ID,
 			Username:    result.User.Username,

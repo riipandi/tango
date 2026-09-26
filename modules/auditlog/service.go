@@ -9,6 +9,9 @@ import (
 	"github.com/riipandi/tango/internal/audit"
 	"github.com/riipandi/tango/internal/datastore"
 	"github.com/riipandi/tango/pkg/responder"
+	"github.com/riipandi/tango/pkg/userid"
+
+	"uuid"
 )
 
 // The page the list procedures answer when the request names none. They are
@@ -74,9 +77,22 @@ func (s *Service) List(ctx context.Context, scope Scope, page, limit int) ([]Vie
 	page, limit = normalizePage(page, limit)
 	params := responder.PaginationParams{Page: page, Limit: limit}
 
+	// The filter's identifier travels in the wire form; the rows key on the
+	// UUID the column stores. A wire form that cannot decode filters
+	// nothing — the zero UUID no row carries — because widening a failed
+	// decode to "no filter" would hand the caller every account's records.
+	filtered := scope.UserID
+	if filtered != "" {
+		if wire, err := userid.Parse(filtered); err == nil {
+			filtered = userid.UUIDOf(wire).String()
+		} else {
+			filtered = uuid.Nil().String()
+		}
+	}
+
 	rows, total, err := s.repo.List(ctx, s.pool, Filter{
 		Event:  scope.Event,
-		UserID: scope.UserID,
+		UserID: filtered,
 		Search: scope.Search,
 	}, params.Offset(), limit)
 	if err != nil {

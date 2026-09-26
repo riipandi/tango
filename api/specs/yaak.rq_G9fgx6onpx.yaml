@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_G9fgx6onpx
 createdAt: 2026-09-19T12:34:10.933279
-updatedAt: 2026-09-26T01:55:38.715859
+updatedAt: 2026-09-26T12:27:50.578139
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_iMD6Wv2JMZ
 authentication:
@@ -12,7 +12,7 @@ body:
   bodyType: application/json
   text: |-
     {
-      "id": "${[ userGroupId ]}",
+      "id": "${[ response.body.path(request='rq_UcqfuDYCPx', behavior='smart', ttl='0', result='first', join=', ', path='') ]}",
       "name": "gryffindor",
       "display_name": "Gryffindor"
     }

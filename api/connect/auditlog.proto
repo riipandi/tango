@@ -170,7 +170,7 @@ message ListAllRequest {
 
   // user_id filters by the account the action is about. Absent means every
   // account.
-  optional string user_id = 4 [(buf.validate.field).string.uuid = true];
+  optional string user_id = 4 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
 
   // search filters by a term matched against the account's username and
   // email, so an administrator can find an account's activity by naming it
@@ -196,8 +196,9 @@ message ListAllResponse {
 
 // ListForUserRequest names the account whose records are read.
 message ListForUserRequest {
-  // user_id is the account's identifier.
-  string user_id = 1 [(buf.validate.field).string.uuid = true];
+  // user_id is the account's identifier in its wire form, a TypeID
+// (`user_…`) encoded from the row's UUID.
+  string user_id = 1 [(buf.validate.field).string.pattern = "^user_[0-9a-z]{26}$"];
 
   // page is the one-based page number.
   optional int32 page = 2 [(buf.validate.field).int32.gte = 1];

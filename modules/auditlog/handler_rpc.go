@@ -15,6 +15,7 @@ import (
 	commonv1 "github.com/riipandi/tango/codegen/proto/go/tango/common/v1"
 	"github.com/riipandi/tango/pkg/jwtutils"
 	"github.com/riipandi/tango/pkg/responder"
+	"github.com/riipandi/tango/pkg/userid"
 )
 
 // Module serves the audit-log procedures. Everything it answers is an RPC
@@ -152,7 +153,7 @@ func wireLogs(views []View) []*auditlogv1.AuditLog {
 			Event:             view.Event,
 			TriggerType:       view.TriggerType,
 			ActionStatus:      view.ActionStatus,
-			UserId:            view.UserID,
+			UserId:            wireUserID(view.UserID),
 			Username:          view.Username,
 			ActorId:           view.ActorID,
 			ActorUsername:     view.ActorUsername,
@@ -210,4 +211,17 @@ var errNoCaller = errors.New("authentication required")
 // names a table and a query, which is nothing a client can act on.
 func mapError(err error) error {
 	return connect.NewError(connect.CodeInternal, errors.New("the audit records could not be read"))
+}
+
+// wireUserID renders an audit record's subject in the wire form. A record
+// whose account was deleted carries no subject, and the absent stays absent.
+func wireUserID(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	wire, err := userid.FromUUIDString(raw)
+	if err != nil {
+		return ""
+	}
+	return wire.String()
 }
