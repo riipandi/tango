@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_5SgzmJyWWh
 createdAt: 2026-09-18T19:38:03.314271
-updatedAt: 2026-09-25T10:13:04.452317
+updatedAt: 2026-09-26T18:53:42.939878
 workspaceId: wk_kBiMYTkhPP
 folderId: fl_YFXTtzfvhT
 authentication: {}
@@ -10,12 +10,22 @@ authenticationType: none
 body:
   text: |-
     {
-      "identity": "${[ identity ]}",
-      "password": "${[ password ]}",
+      "identity": "${[ prompt.text(label='Identity', store='none', namespace='${[ctx.workspace()]}', ttl='0', placeholder='Email or username', defaultValue='${[ identity ]}') ]}",
+      "password": "${[ prompt.text(label='Password', store='none', namespace='${[ctx.workspace()]}', ttl='0', defaultValue='${[ password ]}', placeholder='Password', password=true) ]}",
       "remember": ${[ remember ]}
     }
 bodyType: application/json
-description: 'Credentials come from the `identity` and `password` environment variables, so the request needs no editing per environment. `remember` selects the session duration: true issues a long-lived session, false a short one.'
+description: |-
+  Verifies the primary credential — the account's username (case-insensitive) or email (exact) plus its password — and issues the token pair: a stateless Bearer access token (JWT, verified against /.well-known/jwks.json) and a refresh token stored server-side only as a SHA-256 hash.
+
+  tango-only: upstream Pocket ID signs users in with passkeys; password authentication is the tango adaptation.
+
+  Parameters:
+  - identity (body, required): the account's username or email address.
+  - password (body, required): the primary credential, in clear text; TLS only, never logged.
+  - remember (body, optional): selects the refresh lifetime — auth.refresh_short_ttl (12h default) when false, auth.refresh_long_ttl (14 days default) when true.
+
+  A wrong identity and a wrong password answer the same failure (unauthenticated).
 headers:
 - enabled: true
   name: Content-Type
@@ -26,8 +36,8 @@ headers:
   value: '1'
   id: null
 method: POST
-name: Sign in with password
-sortPriority: 333.3333333333333
+name: '[Tango] Sign in with password'
+sortPriority: 0.0
 url: ${[ apiBaseURL ]}/rpc/tango.auth.v1.AuthService/SignIn
 urlParameters: []
 settingSendCookies:
